@@ -17,21 +17,36 @@ export class AgentHostOutputChannel extends Disposable implements IWorkbenchCont
 		const subscriptions = this._register(new DisposableMap<ITerminalInstance, IDisposable>());
 		const add = (instance: ITerminalInstance) => {
 			if (subscriptions.has(instance)) return;
-			subscriptions.set(instance, instance.onDidChangeCommandStatus(data => {
-				if (data.status === 'running') return;
-				this.channel ??= this._register(this.output.createChannel({ id: 'terminal-host', label: localize('terminal.output.host', 'Terminal Host'), kind: 'log', source: 'core' }));
-				this.channel.appendLine({
-					severity: data.status === 'failed' ? 'error' : 'information', category: 'terminal',
-					text: JSON.stringify({
-						terminalId: instance.id, commandId: data.commandId, status: data.status, exitCode: data.exitCode,
-						...(data.isTrusted && !instance.shellIntegration?.commandStorageDisabled ? { command: data.command } : {})
-					}),
-				});
-			}));
+			subscriptions.set(
+				instance,
+				instance.onDidChangeCommandStatus(data => {
+					if (data.status === 'running') return;
+					this.channel ??= this._register(
+						this.output.createChannel({
+							id: 'terminal-host',
+							label: localize('terminal.output.host', 'Terminal Host'),
+							kind: 'log',
+							source: 'core',
+						}),
+					);
+					this.channel.appendLine({
+						severity: data.status === 'failed' ? 'error' : 'information',
+						category: 'terminal',
+						text: JSON.stringify({
+							terminalId: instance.id,
+							commandId: data.commandId,
+							status: data.status,
+							exitCode: data.exitCode,
+							...(data.isTrusted && !instance.shellIntegration?.commandStorageDisabled
+								? { command: data.command }
+								: {}),
+						}),
+					});
+				}),
+			);
 		};
 		for (const instance of terminals.instances) add(instance);
 		this._register(terminals.onDidCreateInstance(add));
 		this._register(terminals.onDidDisposeInstance(instance => subscriptions.deleteAndDispose(instance)));
-
 	}
 }

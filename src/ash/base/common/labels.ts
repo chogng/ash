@@ -1,6 +1,6 @@
-import { isMacintosh, isWindows, OperatingSystem } from "./platform.js";
-import { basename } from "./resources.js";
-import { URI } from "./uri.js";
+import { isMacintosh, isWindows, OperatingSystem } from './platform.js';
+import { basename } from './resources.js';
+import { URI } from './uri.js';
 import { posix, win32 } from './path.js';
 
 /** Inputs used to format a resource as a user-facing path label. */
@@ -14,8 +14,8 @@ export interface IPathLabelFormatting {
 export interface IRelativePathProvider {
 	readonly noPrefix?: boolean;
 
-	getWorkspace(): { readonly folders: readonly { readonly uri: URI; readonly name?: string; }[]; };
-	getWorkspaceFolder(resource: URI): { readonly uri: URI; readonly name?: string; } | null;
+	getWorkspace(): { readonly folders: readonly { readonly uri: URI; readonly name?: string }[] };
+	getWorkspaceFolder(resource: URI): { readonly uri: URI; readonly name?: string } | null;
 }
 
 /** Supplies the home resource used for `~` path shortening. */
@@ -44,7 +44,11 @@ function getRelativePathLabel(resource: URI, provider: IRelativePathProvider, os
 	// Workspace providers may compare resources by scheme. When a caller hands
 	// us a path-only URI, align it with the first workspace scheme just as VS
 	// Code does before asking the provider for ownership.
-	if (resource.scheme !== firstFolder.uri.scheme && resource.path.startsWith('/') && !resource.path.startsWith('//')) {
+	if (
+		resource.scheme !== firstFolder.uri.scheme &&
+		resource.path.startsWith('/') &&
+		!resource.path.startsWith('//')
+	) {
 		resource = firstFolder.uri.with({ path: resource.path });
 	}
 	const folder = provider.getWorkspaceFolder(resource);
@@ -58,8 +62,13 @@ function getRelativePathLabel(resource: URI, provider: IRelativePathProvider, os
 }
 
 function resourcePath(resource: URI, os: OperatingSystem): string {
-	let path = resource.authority && resource.scheme === 'file' ? `//${resource.authority}${resource.path}` : resource.path;
-	if (os === OperatingSystem.Windows && (resource.scheme !== 'file' || !resource.authority) && /^\/[a-z]:/i.test(path)) {
+	let path =
+		resource.authority && resource.scheme === 'file' ? `//${resource.authority}${resource.path}` : resource.path;
+	if (
+		os === OperatingSystem.Windows &&
+		(resource.scheme !== 'file' || !resource.authority) &&
+		/^\/[a-z]:/i.test(path)
+	) {
 		path = `${path[1].toLowerCase()}${path.slice(2)}`;
 	}
 	return os === OperatingSystem.Windows ? path.replaceAll('/', '\\') : path;
@@ -71,7 +80,7 @@ function relativePath(folder: string, resource: string, os: OperatingSystem): st
 	const normalizedResource = normalizePath(resource, os);
 	const comparableFolder = os === OperatingSystem.Windows ? normalizedFolder.toLowerCase() : normalizedFolder;
 	const comparableResource = os === OperatingSystem.Windows ? normalizedResource.toLowerCase() : normalizedResource;
-	if (comparableFolder === comparableResource) return "";
+	if (comparableFolder === comparableResource) return '';
 	const prefix = comparableFolder.endsWith(separator) ? comparableFolder : `${comparableFolder}${separator}`;
 	if (!comparableResource.startsWith(prefix)) return undefined;
 	return normalizedResource.slice(prefix.length);
@@ -106,15 +115,15 @@ export function untildify(path: string, userHome: string): string {
 }
 
 /** Shortens a group of paths while retaining enough unique context to distinguish them. */
-export function shorten(paths: string[], defaultPathSeparator = isWindows ? "\\" : "/"): string[] {
+export function shorten(paths: string[], defaultPathSeparator = isWindows ? '\\' : '/'): string[] {
 	const shortenedPaths: string[] = new Array(paths.length);
 	const urlSchemaRegexp = /^[^:/\\?#]+?:\/\//u;
-	const unc = "\\\\";
-	const ellipsis = "…";
+	const unc = '\\\\';
+	const ellipsis = '…';
 
 	for (let pathIndex = 0; pathIndex < paths.length; pathIndex += 1) {
 		const originalPath = paths[pathIndex];
-		if (originalPath === "") {
+		if (originalPath === '') {
 			shortenedPaths[pathIndex] = `.${defaultPathSeparator}`;
 			continue;
 		}
@@ -124,20 +133,20 @@ export function shorten(paths: string[], defaultPathSeparator = isWindows ? "\\"
 		}
 
 		let pathSeparator = defaultPathSeparator;
-		let prefix = "";
+		let prefix = '';
 		let trimmedPath = originalPath;
 		if (urlSchemaRegexp.test(trimmedPath)) {
-			prefix = trimmedPath.slice(0, trimmedPath.indexOf("//") + 2);
-			trimmedPath = trimmedPath.slice(trimmedPath.indexOf("//") + 2);
-			pathSeparator = "/";
+			prefix = trimmedPath.slice(0, trimmedPath.indexOf('//') + 2);
+			trimmedPath = trimmedPath.slice(trimmedPath.indexOf('//') + 2);
+			pathSeparator = '/';
 		} else if (trimmedPath.startsWith(unc)) {
 			prefix = trimmedPath.slice(0, unc.length);
 			trimmedPath = trimmedPath.slice(unc.length);
 		} else if (trimmedPath.startsWith(pathSeparator)) {
 			prefix = pathSeparator;
 			trimmedPath = trimmedPath.slice(pathSeparator.length);
-		} else if (trimmedPath.startsWith("~")) {
-			prefix = "~";
+		} else if (trimmedPath.startsWith('~')) {
+			prefix = '~';
 			trimmedPath = trimmedPath.slice(1);
 		}
 
@@ -151,16 +160,15 @@ export function shorten(paths: string[], defaultPathSeparator = isWindows ? "\\"
 					const otherPath = paths[otherPathIndex];
 					if (otherPathIndex === pathIndex || !otherPath || !otherPath.includes(subpath)) continue;
 					const isSubpathEnding = start + subpathLength === segments.length;
-					const subpathWithSeparator = start > 0 && otherPath.includes(pathSeparator)
-						? `${pathSeparator}${subpath}`
-						: subpath;
+					const subpathWithSeparator =
+						start > 0 && otherPath.includes(pathSeparator) ? `${pathSeparator}${subpath}` : subpath;
 					const isOtherPathEnding = otherPath.endsWith(subpathWithSeparator);
 					matchesOtherPath = !isSubpathEnding || isOtherPathEnding;
 				}
 				if (matchesOtherPath) continue;
 
-				let result = "";
-				if (segments[0]?.endsWith(":") || prefix !== "") {
+				let result = '';
+				if (segments[0]?.endsWith(':') || prefix !== '') {
 					if (start === 1) {
 						start = 0;
 						subpathLength += 1;
@@ -174,9 +182,10 @@ export function shorten(paths: string[], defaultPathSeparator = isWindows ? "\\"
 				if (start > 0) result += `${ellipsis}${pathSeparator}`;
 				if (!result.endsWith(subpath)) result += subpath;
 				if (start + subpathLength < segments.length) {
-					result += segments[start + subpathLength] === "" && start + subpathLength === segments.length - 1
-						? pathSeparator
-						: `${pathSeparator}${ellipsis}`;
+					result +=
+						segments[start + subpathLength] === '' && start + subpathLength === segments.length - 1
+							? pathSeparator
+							: `${pathSeparator}${ellipsis}`;
 				}
 				shortenedPaths[pathIndex] = result;
 				found = true;
@@ -192,68 +201,80 @@ export interface ISeparator {
 }
 
 /** Expands `${variable}` placeholders and omits separators beside empty values. */
-export function template(value: string, values: Readonly<Record<string, string | ISeparator | undefined | null>> = {}): string {
-	const segments: { readonly value: string; readonly separator: boolean; }[] = [];
-	let current = "";
+export function template(
+	value: string,
+	values: Readonly<Record<string, string | ISeparator | undefined | null>> = {},
+): string {
+	const segments: { readonly value: string; readonly separator: boolean }[] = [];
+	let current = '';
 	let variable = false;
 	for (const character of value) {
-		if (character === "$" || (variable && character === "{")) {
+		if (character === '$' || (variable && character === '{')) {
 			if (current) segments.push({ value: current, separator: false });
-			current = "";
+			current = '';
 			variable = true;
 			continue;
 		}
-		if (character === "}" && variable) {
+		if (character === '}' && variable) {
 			const resolved = values[current];
-			if (typeof resolved === "string") {
+			if (typeof resolved === 'string') {
 				if (resolved) segments.push({ value: resolved, separator: false });
 			} else if (resolved) {
 				if (segments.at(-1)?.separator !== true) segments.push({ value: resolved.label, separator: true });
 			}
-			current = "";
+			current = '';
 			variable = false;
 			continue;
 		}
 		current += character;
 	}
 	if (current && !variable) segments.push({ value: current, separator: false });
-	return segments.filter((segment, index) => {
-		if (!segment.separator) return true;
-		const left = segments[index - 1];
-		const right = segments[index + 1];
-		return Boolean(left?.value && !left.separator && right?.value && !right.separator);
-	}).map(segment => segment.value).join("");
+	return segments
+		.filter((segment, index) => {
+			if (!segment.separator) return true;
+			const left = segments[index - 1];
+			const right = segments[index + 1];
+			return Boolean(left?.value && !left.separator && right?.value && !right.separator);
+		})
+		.map(segment => segment.value)
+		.join('');
 }
 
 /** Applies platform-specific mnemonic escaping to a menu label. */
 export function mnemonicMenuLabel(label: string, forceDisableMnemonics = false): string {
 	if (isMacintosh || forceDisableMnemonics) {
-		return label.replace(/\(&&\w\)|&&/gu, "").replace(/&/gu, isMacintosh ? "&" : "&&");
+		return label.replace(/\(&&\w\)|&&/gu, '').replace(/&/gu, isMacintosh ? '&' : '&&');
 	}
-	return label.replace(/&&|&/gu, match => match === "&" ? "&&" : "&");
+	return label.replace(/&&|&/gu, match => (match === '&' ? '&&' : '&'));
 }
 
 export function mnemonicButtonLabel(label: string, forceDisableMnemonics: true): string;
-export function mnemonicButtonLabel(label: string, forceDisableMnemonics?: false): { readonly withMnemonic: string; readonly withoutMnemonic: string; };
-export function mnemonicButtonLabel(label: string, forceDisableMnemonics = false): { readonly withMnemonic: string; readonly withoutMnemonic: string; } | string {
-	const withoutMnemonic = label.replace(/\(&&\w\)|&&/gu, "");
+export function mnemonicButtonLabel(
+	label: string,
+	forceDisableMnemonics?: false,
+): { readonly withMnemonic: string; readonly withoutMnemonic: string };
+export function mnemonicButtonLabel(
+	label: string,
+	forceDisableMnemonics = false,
+): { readonly withMnemonic: string; readonly withoutMnemonic: string } | string {
+	const withoutMnemonic = label.replace(/\(&&\w\)|&&/gu, '');
 	if (forceDisableMnemonics) return withoutMnemonic;
 	if (isMacintosh) return { withMnemonic: withoutMnemonic, withoutMnemonic };
 	const withMnemonic = isWindows
-		? label.replace(/&&|&/gu, match => match === "&" ? "&&" : "&")
-		: label.replace(/&&/gu, "_");
+		? label.replace(/&&|&/gu, match => (match === '&' ? '&&' : '&'))
+		: label.replace(/&&/gu, '_');
 	return { withMnemonic, withoutMnemonic };
 }
 
 /** Escapes mnemonic markers when a label is displayed outside a native menu. */
 export function unmnemonicLabel(label: string): string {
-	return label.replace(/&/gu, "&&");
+	return label.replace(/&/gu, '&&');
 }
 
 /** Splits a recent workspace label into its visible name and containing path. */
-export function splitRecentLabel(recentLabel: string): { readonly name: string; readonly parentPath: string; } {
-	if (recentLabel.endsWith("]")) {
-		const suffixStart = recentLabel.lastIndexOf(" [", recentLabel.length - 2);
+export function splitRecentLabel(recentLabel: string): { readonly name: string; readonly parentPath: string } {
+	if (recentLabel.endsWith(']')) {
+		const suffixStart = recentLabel.lastIndexOf(' [', recentLabel.length - 2);
 		if (suffixStart !== -1) {
 			const split = splitName(recentLabel.slice(0, suffixStart));
 			return { name: split.name + recentLabel.slice(suffixStart), parentPath: split.parentPath };
@@ -262,23 +283,25 @@ export function splitRecentLabel(recentLabel: string): { readonly name: string; 
 	return splitName(recentLabel);
 }
 
-function splitName(fullPath: string): { readonly name: string; readonly parentPath: string; } {
-	const separator = Math.max(fullPath.lastIndexOf("/"), fullPath.lastIndexOf("\\"));
+function splitName(fullPath: string): { readonly name: string; readonly parentPath: string } {
+	const separator = Math.max(fullPath.lastIndexOf('/'), fullPath.lastIndexOf('\\'));
 	const name = fullPath.slice(separator + 1);
-	const parentPath = separator === -1 ? "" : fullPath.slice(0, separator) || fullPath.slice(0, separator + 1);
-	return name ? { name, parentPath } : { name: parentPath, parentPath: "" };
+	const parentPath = separator === -1 ? '' : fullPath.slice(0, separator) || fullPath.slice(0, separator + 1);
+	return name ? { name, parentPath } : { name: parentPath, parentPath: '' };
 }
 
-function pathSeparator(os: OperatingSystem): "\\" | "/" {
-	return os === OperatingSystem.Windows ? "\\" : "/";
+function pathSeparator(os: OperatingSystem): '\\' | '/' {
+	return os === OperatingSystem.Windows ? '\\' : '/';
 }
 
 function normalizePath(path: string, os: OperatingSystem): string {
 	const rules = os === OperatingSystem.Windows ? win32 : posix;
 	const normalized = rules.normalize(path);
-	return rules.dirname(normalized) === normalized ? normalized : normalized.replace(os === OperatingSystem.Windows ? /[\\/]+$/ : /\/+$/, '');
+	return rules.dirname(normalized) === normalized
+		? normalized
+		: normalized.replace(os === OperatingSystem.Windows ? /[\\/]+$/ : /\/+$/, '');
 }
 
 function trimTrailingSeparators(path: string): string {
-	return path.length > 1 ? path.replace(/\/+$/u, "") : path;
+	return path.length > 1 ? path.replace(/\/+$/u, '') : path;
 }

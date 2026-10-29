@@ -1,13 +1,11 @@
 import type { IconFontDefinition } from './iconRegistry.js';
-import type { Event } from "../../../base/common/event.js";
-import type { IconDefinition } from "../../../base/common/icon.js";
-import type { Color } from "../../../base/common/color.js";
-import {
-	createServiceIdentifier,
-} from "../../instantiation/common/instantiation.js";
-import type { ColorIdentifier, ResolvedColorContribution } from "./colorRegistry.js";
-import type { SizeContribution } from "./sizeRegistry.js";
-import type { SizeValue } from "./sizeUtils.js";
+import type { Event } from '../../../base/common/event.js';
+import type { IconDefinition } from '../../../base/common/icon.js';
+import type { Color } from '../../../base/common/color.js';
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+import type { ColorIdentifier, ResolvedColorContribution } from './colorRegistry.js';
+import type { SizeContribution } from './sizeRegistry.js';
+import type { SizeValue } from './sizeUtils.js';
 import { ColorScheme } from './theme.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { isRecord } from '../../../base/common/types.js';
@@ -18,10 +16,7 @@ export const WINDOW_SPLASH_SAVE_CHANNEL = 'ash:theme:saveWindowSplash';
 /** A disposable startup rendering cache; the live theme and layout remain authoritative. */
 export interface IPartsSplash {
 	readonly baseTheme: ColorScheme;
-	readonly colorInfo: {
-		readonly background: string;
-		readonly foreground: string;
-	};
+	readonly colorInfo: { readonly background: string; readonly foreground: string };
 	readonly layoutInfo?: {
 		readonly version: 2;
 		readonly width: number;
@@ -31,16 +26,12 @@ export interface IPartsSplash {
 			/** Resolved linear-gradient paint; offsets are CSS pixels along the gradient line. */
 			readonly backgroundGradient?: {
 				readonly angle: number;
-				readonly stops: readonly { readonly color: string; readonly offset: number; }[];
+				readonly stops: readonly { readonly color: string; readonly offset: number }[];
 			};
 			/** Clockwise from top-left; each corner keeps its horizontal and vertical radius. */
 			readonly borderRadii: readonly (readonly [number, number])[];
 			/** Clockwise from top, including edges with no visible border. */
-			readonly borders: readonly {
-				readonly width: number;
-				readonly color: string;
-				readonly style: string;
-			}[];
+			readonly borders: readonly { readonly width: number; readonly color: string; readonly style: string }[];
 		})[];
 	};
 }
@@ -54,7 +45,11 @@ export interface IPartsSplashPartBounds {
 
 /** Persistence and IPC accept only resolved, opaque colors, never arbitrary CSS. */
 export function validatePartsSplash(value: unknown): IPartsSplash {
-	if (!isRecord(value) || !Object.values(ColorScheme).includes(value.baseTheme as ColorScheme) || !isRecord(value.colorInfo)) {
+	if (
+		!isRecord(value) ||
+		!Object.values(ColorScheme).includes(value.baseTheme as ColorScheme) ||
+		!isRecord(value.colorInfo)
+	) {
 		throw new TypeError('Invalid window splash');
 	}
 	const { background, foreground } = value.colorInfo;
@@ -68,30 +63,66 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 	}
 	if (value.layoutInfo !== undefined) {
 		const layout = value.layoutInfo;
-		if (!isRecord(layout) || layout.version !== 2 || !validSize(layout.width) || !validSize(layout.height)
-			|| !Array.isArray(layout.partBounds) || layout.partBounds.length > 16) {
+		if (
+			!isRecord(layout) ||
+			layout.version !== 2 ||
+			!validSize(layout.width) ||
+			!validSize(layout.height) ||
+			!Array.isArray(layout.partBounds) ||
+			layout.partBounds.length > 16
+		) {
 			throw new TypeError('Invalid window splash layout');
 		}
 		const width = layout.width;
 		const height = layout.height;
 		const partBounds = layout.partBounds.map(part => {
-			if (!isRecord(part) || !validSize(part.width) || !validSize(part.height)
-				|| !validOffset(part.left) || !validOffset(part.top)
-				|| part.left + part.width > width + 1 || part.top + part.height > height + 1
-				|| !validSplashColor(part.background)
-				|| !Array.isArray(part.borderRadii) || part.borderRadii.length !== 4
-				|| !Array.isArray(part.borders) || part.borders.length !== 4) {
+			if (
+				!isRecord(part) ||
+				!validSize(part.width) ||
+				!validSize(part.height) ||
+				!validOffset(part.left) ||
+				!validOffset(part.top) ||
+				part.left + part.width > width + 1 ||
+				part.top + part.height > height + 1 ||
+				!validSplashColor(part.background) ||
+				!Array.isArray(part.borderRadii) ||
+				part.borderRadii.length !== 4 ||
+				!Array.isArray(part.borders) ||
+				part.borders.length !== 4
+			) {
 				throw new TypeError('Invalid window splash part bounds');
 			}
 			const borderRadii = part.borderRadii.map((radius: unknown): readonly [number, number] => {
-				if (!Array.isArray(radius) || radius.length !== 2 || !validOffset(radius[0]) || !validOffset(radius[1])) {
+				if (
+					!Array.isArray(radius) ||
+					radius.length !== 2 ||
+					!validOffset(radius[0]) ||
+					!validOffset(radius[1])
+				) {
 					throw new TypeError('Invalid window splash corner radius');
 				}
 				return [radius[0], radius[1]];
 			});
 			const borders = part.borders.map((border: unknown) => {
-				if (!isRecord(border) || !validOffset(border.width) || border.width > 4 || !validSplashColor(border.color)
-					|| typeof border.style !== 'string' || !['none', 'hidden', 'solid', 'dotted', 'dashed', 'double', 'groove', 'ridge', 'inset', 'outset'].includes(border.style)) {
+				if (
+					!isRecord(border) ||
+					!validOffset(border.width) ||
+					border.width > 4 ||
+					!validSplashColor(border.color) ||
+					typeof border.style !== 'string' ||
+					![
+						'none',
+						'hidden',
+						'solid',
+						'dotted',
+						'dashed',
+						'double',
+						'groove',
+						'ridge',
+						'inset',
+						'outset',
+					].includes(border.style)
+				) {
 					throw new TypeError('Invalid window splash border');
 				}
 				return { width: border.width, color: border.color, style: border.style };
@@ -99,14 +130,26 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 			let backgroundGradient: NonNullable<IPartsSplash['layoutInfo']>['partBounds'][number]['backgroundGradient'];
 			if (part.backgroundGradient !== undefined) {
 				const gradient = part.backgroundGradient;
-				if (!isRecord(gradient) || typeof gradient.angle !== 'number' || !Number.isFinite(gradient.angle)
-					|| gradient.angle < 0 || gradient.angle >= 360 || !Array.isArray(gradient.stops)
-					|| gradient.stops.length < 2 || gradient.stops.length > 32) {
+				if (
+					!isRecord(gradient) ||
+					typeof gradient.angle !== 'number' ||
+					!Number.isFinite(gradient.angle) ||
+					gradient.angle < 0 ||
+					gradient.angle >= 360 ||
+					!Array.isArray(gradient.stops) ||
+					gradient.stops.length < 2 ||
+					gradient.stops.length > 32
+				) {
 					throw new TypeError('Invalid window splash gradient');
 				}
 				const stops = gradient.stops.map((stop: unknown) => {
-					if (!isRecord(stop) || !validSplashColor(stop.color) || typeof stop.offset !== 'number'
-						|| !Number.isFinite(stop.offset) || Math.abs(stop.offset) > 65536) {
+					if (
+						!isRecord(stop) ||
+						!validSplashColor(stop.color) ||
+						typeof stop.offset !== 'number' ||
+						!Number.isFinite(stop.offset) ||
+						Math.abs(stop.offset) > 65536
+					) {
 						throw new TypeError('Invalid window splash gradient stop');
 					}
 					return { color: stop.color, offset: stop.offset };
@@ -114,8 +157,13 @@ export function validatePartsSplash(value: unknown): IPartsSplash {
 				backgroundGradient = { angle: gradient.angle, stops };
 			}
 			return {
-				top: part.top, left: part.left, width: part.width, height: part.height,
-				background: part.background, borderRadii, borders,
+				top: part.top,
+				left: part.left,
+				width: part.width,
+				height: part.height,
+				background: part.background,
+				borderRadii,
+				borders,
 				...(backgroundGradient ? { backgroundGradient } : {}),
 			};
 		});
@@ -189,7 +237,11 @@ export interface IProductIconTheme {
 	readonly fonts?: readonly IconFontDefinition[];
 }
 
-export const defaultProductIconTheme: IProductIconTheme = Object.freeze({ id: 'default', label: 'Default', icons: new Map() });
+export const defaultProductIconTheme: IProductIconTheme = Object.freeze({
+	id: 'default',
+	label: 'Default',
+	icons: new Map(),
+});
 
 /** Capabilities of the active file icon theme, including the disabled state. */
 export interface IFileIconTheme {
@@ -198,7 +250,11 @@ export interface IFileIconTheme {
 	readonly hidesExplorerArrows: boolean;
 }
 
-export const noFileIconTheme: IFileIconTheme = Object.freeze({ hasFileIcons: false, hasFolderIcons: false, hidesExplorerArrows: false });
+export const noFileIconTheme: IFileIconTheme = Object.freeze({
+	hasFileIcons: false,
+	hasFolderIcons: false,
+	hidesExplorerArrows: false,
+});
 
 /** Window-scoped access to the active frontend color theme. */
 export interface IThemeService {
@@ -211,16 +267,13 @@ export interface IThemeService {
 	getFileIconTheme(): IFileIconTheme;
 }
 
-export const IThemeService =
-	createServiceIdentifier<IThemeService>("themeService");
+export const IThemeService = createServiceIdentifier<IThemeService>('themeService');
 
 /** Keeps a component's resolved theme current for its entire lifetime. */
 export class Themable extends Disposable {
 	protected theme: IColorTheme;
 
-	constructor(
-		protected readonly themeService: IThemeService,
-	) {
+	constructor(protected readonly themeService: IThemeService) {
 		super();
 		this.theme = themeService.getColorTheme();
 		this._register(themeService.onDidColorThemeChange(theme => this.onThemeChange(theme)));
@@ -231,5 +284,5 @@ export class Themable extends Disposable {
 		this.updateStyles();
 	}
 
-	public updateStyles(): void { }
+	public updateStyles(): void {}
 }

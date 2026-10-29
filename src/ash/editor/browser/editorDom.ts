@@ -2,7 +2,14 @@ import { addDisposableListener, getDomNodePagePosition, getWindow, h, isHTMLElem
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
 import { StandardMouseEvent } from '../../base/browser/mouseEvent.js';
 import { RunOnceScheduler } from '../../base/common/async.js';
-import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import {
+	Disposable,
+	DisposableMap,
+	DisposableStore,
+	MutableDisposable,
+	toDisposable,
+	type IDisposable,
+} from '../../base/common/lifecycle.js';
 import { ThemeColor, type ThemeColor as ThemeColorValue } from '../../base/common/themables.js';
 import { colorCssVariable } from '../../platform/theme/common/colorUtils.js';
 import { type ICodeEditor } from './editorBrowser.js';
@@ -15,7 +22,7 @@ export class PageCoordinates {
 	constructor(
 		public readonly x: number,
 		public readonly y: number,
-	) { }
+	) {}
 
 	toClientCoordinates(targetWindow: Window): ClientCoordinates {
 		return new ClientCoordinates(this.x - targetWindow.scrollX, this.y - targetWindow.scrollY);
@@ -29,7 +36,7 @@ export class ClientCoordinates {
 	constructor(
 		public readonly clientX: number,
 		public readonly clientY: number,
-	) { }
+	) {}
 
 	toPageCoordinates(targetWindow: Window): PageCoordinates {
 		return new PageCoordinates(this.clientX + targetWindow.scrollX, this.clientY + targetWindow.scrollY);
@@ -45,7 +52,7 @@ export class EditorPagePosition {
 		public readonly y: number,
 		public readonly width: number,
 		public readonly height: number,
-	) { }
+	) {}
 }
 
 /** Coordinates transformed into the editor's unscaled layout space. */
@@ -55,7 +62,7 @@ export class CoordinatesRelativeToEditor {
 	constructor(
 		public readonly x: number,
 		public readonly y: number,
-	) { }
+	) {}
 }
 
 export function createEditorPagePosition(editorViewDomNode: HTMLElement): EditorPagePosition {
@@ -79,7 +86,7 @@ export function createCoordinatesRelativeToEditor(
 /** A normalized browser event with editor-aware page and relative coordinates. */
 export class EditorMouseEvent extends StandardMouseEvent {
 	declare readonly _editorMouseEventBrand: void;
-	public declare detail: number;
+	declare public detail: number;
 	readonly pos: PageCoordinates;
 	private editorPagePosition: EditorPagePosition | undefined;
 	private relativeEditorPosition: CoordinatesRelativeToEditor | undefined;
@@ -94,17 +101,21 @@ export class EditorMouseEvent extends StandardMouseEvent {
 	}
 
 	get editorPos(): EditorPagePosition {
-		return this.editorPagePosition ??= createEditorPagePosition(this.editorViewDomNode);
+		return (this.editorPagePosition ??= createEditorPagePosition(this.editorViewDomNode));
 	}
 
 	get relativePos(): CoordinatesRelativeToEditor {
-		return this.relativeEditorPosition ??= createCoordinatesRelativeToEditor(this.editorViewDomNode, this.editorPos, this.pos);
+		return (this.relativeEditorPosition ??= createCoordinatesRelativeToEditor(
+			this.editorViewDomNode,
+			this.editorPos,
+			this.pos,
+		));
 	}
 }
 
 /** Creates disposable editor-coordinate mouse listeners. */
 export class EditorMouseEventFactory {
-	constructor(private readonly editorViewDomNode: HTMLElement) { }
+	constructor(private readonly editorViewDomNode: HTMLElement) {}
 
 	onContextMenu(target: HTMLElement, callback: (event: EditorMouseEvent) => void): IDisposable {
 		return this.listen<MouseEvent>(target, 'contextmenu', callback);
@@ -132,7 +143,11 @@ export class EditorMouseEventFactory {
 		return this.listen<MouseEvent>(target, 'mousemove', callback);
 	}
 
-	private listen<T extends MouseEvent>(target: HTMLElement, type: string, callback: (event: EditorMouseEvent) => void): IDisposable {
+	private listen<T extends MouseEvent>(
+		target: HTMLElement,
+		type: string,
+		callback: (event: EditorMouseEvent) => void,
+	): IDisposable {
 		return addDisposableListener<T>(target, type, event => callback(this.create(event)));
 	}
 
@@ -143,7 +158,7 @@ export class EditorMouseEventFactory {
 
 /** Creates disposable editor-coordinate pointer listeners. */
 export class EditorPointerEventFactory {
-	constructor(private readonly editorViewDomNode: HTMLElement) { }
+	constructor(private readonly editorViewDomNode: HTMLElement) {}
 
 	onPointerUp(target: HTMLElement, callback: (event: EditorMouseEvent) => void): IDisposable {
 		return this.listen(target, 'pointerup', callback);
@@ -200,24 +215,37 @@ export class GlobalEditorPointerMoveMonitor extends Disposable {
 			onStopCallback(event);
 		};
 		this.stopCurrent = stop;
-		store.add(addDisposableListener<PointerEvent>(targetWindow, 'pointermove', event => {
-			if (event.pointerId !== pointerId) return;
-			if (initialButtons !== 0 && (event.buttons & initialButtons) === 0) {
-				stop(event);
-				return;
-			}
-			pointerMoveCallback(new EditorMouseEvent(event, true, this.editorViewDomNode));
-		}));
-		store.add(addDisposableListener<PointerEvent>(targetWindow, 'pointerup', event => {
-			if (event.pointerId === pointerId) stop(event);
-		}));
-		store.add(addDisposableListener<PointerEvent>(targetWindow, 'pointercancel', event => {
-			if (event.pointerId === pointerId) stop(event);
-		}));
+		store.add(
+			addDisposableListener<PointerEvent>(targetWindow, 'pointermove', event => {
+				if (event.pointerId !== pointerId) return;
+				if (initialButtons !== 0 && (event.buttons & initialButtons) === 0) {
+					stop(event);
+					return;
+				}
+				pointerMoveCallback(new EditorMouseEvent(event, true, this.editorViewDomNode));
+			}),
+		);
+		store.add(
+			addDisposableListener<PointerEvent>(targetWindow, 'pointerup', event => {
+				if (event.pointerId === pointerId) stop(event);
+			}),
+		);
+		store.add(
+			addDisposableListener<PointerEvent>(targetWindow, 'pointercancel', event => {
+				if (event.pointerId === pointerId) stop(event);
+			}),
+		);
 		store.add(addDisposableListener(targetWindow, 'blur', () => stop(), { once: true }));
-		store.add(addDisposableListener<KeyboardEvent>(initialElement.ownerDocument, 'keydown', event => {
-			if (!isModifierKey(event.key)) stop(event);
-		}, true));
+		store.add(
+			addDisposableListener<KeyboardEvent>(
+				initialElement.ownerDocument,
+				'keydown',
+				event => {
+					if (!isModifierKey(event.key)) stop(event);
+				},
+				true,
+			),
+		);
 		this.monitoring.value = store;
 	}
 
@@ -232,7 +260,8 @@ export class GlobalEditorPointerMoveMonitor extends Disposable {
 }
 
 function positiveScale(renderedSize: number, layoutSize: number): number {
-	if (!Number.isFinite(renderedSize) || !Number.isFinite(layoutSize) || renderedSize <= 0 || layoutSize <= 0) return 1;
+	if (!Number.isFinite(renderedSize) || !Number.isFinite(layoutSize) || renderedSize <= 0 || layoutSize <= 0)
+		return 1;
 	return renderedSize / layoutSize;
 }
 
@@ -274,7 +303,9 @@ export class EditorDom extends Disposable {
 		if (!isHTMLElement(parent)) throw new TypeError('Editor DOM parent must be an HTMLElement');
 		if (this.attached) throw new ReferenceError('Editor DOM has already been attached');
 		const domNode = new FastDomNode(h(parent.ownerDocument, 'div', { className: this.options.rootClassName }));
-		const contentDomNode = new FastDomNode(h(parent.ownerDocument, 'div', { className: this.options.contentClassName }));
+		const contentDomNode = new FastDomNode(
+			h(parent.ownerDocument, 'div', { className: this.options.contentClassName }),
+		);
 		this.domNodeHandle = domNode;
 		this.contentDomNodeHandle = contentDomNode;
 		this._register(toDisposable(() => domNode.domNode.remove()));
@@ -292,8 +323,12 @@ export class EditorDom extends Disposable {
 		contentDomNode.setHeight(height);
 	}
 
-	private requireHandles(): { readonly domNode: FastDomNode<HTMLDivElement>; readonly contentDomNode: FastDomNode<HTMLDivElement>; } {
-		if (!this.domNodeHandle || !this.contentDomNodeHandle) throw new ReferenceError('Editor DOM has not been attached');
+	private requireHandles(): {
+		readonly domNode: FastDomNode<HTMLDivElement>;
+		readonly contentDomNode: FastDomNode<HTMLDivElement>;
+	} {
+		if (!this.domNodeHandle || !this.contentDomNodeHandle)
+			throw new ReferenceError('Editor DOM has not been attached');
 		return { domNode: this.domNodeHandle, contentDomNode: this.contentDomNodeHandle };
 	}
 }
@@ -310,7 +345,7 @@ export class DynamicCssRules implements IDisposable {
 	private readonly garbageCollectionScheduler = new RunOnceScheduler(() => this.garbageCollect(), 1_000);
 	private disposed = false;
 
-	constructor(private readonly editor: ICodeEditor) { }
+	constructor(private readonly editor: ICodeEditor) {}
 
 	dispose(): void {
 		if (this.disposed) return;
@@ -336,7 +371,9 @@ export class DynamicCssRules implements IDisposable {
 				rule.decreaseRefCount();
 				if (!this.disposed) this.garbageCollectionScheduler.schedule();
 			},
-			[Symbol.dispose]() { this.dispose(); },
+			[Symbol.dispose]() {
+				this.dispose();
+			},
 		};
 	}
 
@@ -437,5 +474,7 @@ function cssRule(className: string, properties: CssProperties): string {
 }
 
 function camelToDashes(value: string): string {
-	return value.replace(/(^[A-Z])/u, first => first.toLowerCase()).replace(/([A-Z])/gu, letter => `-${letter.toLowerCase()}`);
+	return value
+		.replace(/(^[A-Z])/u, first => first.toLowerCase())
+		.replace(/([A-Z])/gu, letter => `-${letter.toLowerCase()}`);
 }

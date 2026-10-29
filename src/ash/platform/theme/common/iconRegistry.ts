@@ -4,7 +4,12 @@ import { type Icon, type IconDefinition } from '../../../base/common/icon.js';
 import { getLxiconDefinition } from '../../../base/common/lxiconsUtil.js';
 import { getAllLxicons } from '../../../base/common/lxicons.js';
 
-export interface IconFontDefinition { readonly id: string; readonly src: string; readonly weight?: string; readonly style?: string; }
+export interface IconFontDefinition {
+	readonly id: string;
+	readonly src: string;
+	readonly weight?: string;
+	readonly style?: string;
+}
 
 export type IconDefaults = Icon | IconDefinition;
 
@@ -26,13 +31,17 @@ export interface IIconRegistry {
 class IconRegistry extends Disposable implements IIconRegistry {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChange = this.changed.event;
-	private readonly groups = new Map<symbol, { ids: readonly string[]; fonts: readonly IconFontDefinition[]; }>();
+	private readonly groups = new Map<symbol, { ids: readonly string[]; fonts: readonly IconFontDefinition[] }>();
 	private readonly contributions = new Map<string, IconContribution>();
 
 	constructor() {
 		super();
 		for (const icon of getAllLxicons()) {
-			this.contributions.set(icon.id, { id: icon.id, defaults: getLxiconDefinition(icon.id)!, description: undefined });
+			this.contributions.set(icon.id, {
+				id: icon.id,
+				defaults: getLxiconDefinition(icon.id)!,
+				description: undefined,
+			});
 		}
 	}
 
@@ -44,34 +53,58 @@ class IconRegistry extends Disposable implements IIconRegistry {
 		return { id };
 	}
 
-	public getFonts(): readonly IconFontDefinition[] { return [...this.groups.values()].flatMap(group => group.fonts); }
-	public replaceIcons(owner: symbol, contributions: readonly IconContribution[], fonts: readonly IconFontDefinition[]): void {
+	public getFonts(): readonly IconFontDefinition[] {
+		return [...this.groups.values()].flatMap(group => group.fonts);
+	}
+	public replaceIcons(
+		owner: symbol,
+		contributions: readonly IconContribution[],
+		fonts: readonly IconFontDefinition[],
+	): void {
 		const previous = this.groups.get(owner)?.ids ?? [];
-		if (!previous.length && !contributions.length) { return; }
+		if (!previous.length && !contributions.length) {
+			return;
+		}
 		const next = new Map([...this.contributions].filter(([id]) => !previous.includes(id)));
 		for (const contribution of contributions) {
-			if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u.test(contribution.id) || next.has(contribution.id)) { throw new TypeError(`Invalid or duplicate icon: ${contribution.id}`); }
+			if (!/^[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*$/u.test(contribution.id) || next.has(contribution.id)) {
+				throw new TypeError(`Invalid or duplicate icon: ${contribution.id}`);
+			}
 			next.set(contribution.id, contribution);
 		}
 		for (const contribution of contributions) {
 			let current: IconContribution | undefined = contribution;
 			const visited = new Set<string>();
 			while (!('fontCharacter' in current.defaults)) {
-				if (visited.has(current.id)) { throw new TypeError(`Icon default cycle: ${contribution.id}`); }
+				if (visited.has(current.id)) {
+					throw new TypeError(`Icon default cycle: ${contribution.id}`);
+				}
 				visited.add(current.id);
 				const reference: string = current.defaults.id;
 				current = next.get(reference);
-				if (!current) { throw new TypeError(`Unknown icon default: ${reference}`); }
+				if (!current) {
+					throw new TypeError(`Unknown icon default: ${reference}`);
+				}
 			}
 		}
 		this.contributions.clear();
-		for (const [id, contribution] of next) { this.contributions.set(id, contribution); }
-		if (contributions.length) { this.groups.set(owner, { ids: contributions.map(icon => icon.id), fonts }); } else { this.groups.delete(owner); }
+		for (const [id, contribution] of next) {
+			this.contributions.set(id, contribution);
+		}
+		if (contributions.length) {
+			this.groups.set(owner, { ids: contributions.map(icon => icon.id), fonts });
+		} else {
+			this.groups.delete(owner);
+		}
 		this.changed.fire();
 	}
 
-	public getIcon(id: string): IconContribution | undefined { return this.contributions.get(id); }
-	public getIcons(): readonly IconContribution[] { return [...this.contributions.values()]; }
+	public getIcon(id: string): IconContribution | undefined {
+		return this.contributions.get(id);
+	}
+	public getIcons(): readonly IconContribution[] {
+		return [...this.contributions.values()];
+	}
 }
 
 const registry = new IconRegistry();
@@ -80,14 +113,20 @@ export function registerIcon(id: string, defaults: IconDefaults, description: st
 	return registry.registerIcon(id, defaults, description);
 }
 
-export function getIconRegistry(): IIconRegistry { return registry; }
+export function getIconRegistry(): IIconRegistry {
+	return registry;
+}
 
 /** Resolves product theme glyphs before following a semantic icon's default chain. */
-export function getIconDefinition(icon: Icon, themedDefinitions?: ReadonlyMap<string, IconDefinition>): IconDefinition | undefined {
+export function getIconDefinition(
+	icon: Icon,
+	themedDefinitions?: ReadonlyMap<string, IconDefinition>,
+): IconDefinition | undefined {
 	const visited = new Set<string>();
 	let current = icon;
 	while (true) {
-		if (visited.has(current.id)) throw new Error(`Circular icon defaults: ${[...visited, current.id].join(' -> ')}`);
+		if (visited.has(current.id))
+			throw new Error(`Circular icon defaults: ${[...visited, current.id].join(' -> ')}`);
 		visited.add(current.id);
 		const contribution = registry.getIcon(current.id);
 		if (!contribution) return undefined;
@@ -98,7 +137,10 @@ export function getIconDefinition(icon: Icon, themedDefinitions?: ReadonlyMap<st
 	}
 }
 
-export function resolveIconDefinition(icon: Icon, themedDefinitions?: ReadonlyMap<string, IconDefinition>): IconDefinition {
+export function resolveIconDefinition(
+	icon: Icon,
+	themedDefinitions?: ReadonlyMap<string, IconDefinition>,
+): IconDefinition {
 	const definition = getIconDefinition(icon, themedDefinitions);
 	if (!definition) throw new ReferenceError(`Unknown icon '${icon.id}'`);
 	return definition;

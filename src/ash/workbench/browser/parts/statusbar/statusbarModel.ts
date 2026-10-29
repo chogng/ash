@@ -6,17 +6,19 @@ import { IStorageService, StorageScope, StorageTarget } from '../../../../platfo
 export class StatusbarViewModel extends Disposable {
 	private static readonly HIDDEN_ENTRIES_KEY = 'workbench.statusbar.hidden';
 	private hidden = new Set<string>();
-	private readonly visibilityChanges = this._register(new Emitter<{ id: string; visible: boolean; }>());
+	private readonly visibilityChanges = this._register(new Emitter<{ id: string; visible: boolean }>());
 	readonly onDidChangeEntryVisibility = this.visibilityChanges.event;
 
 	constructor(@IStorageService private readonly storageService: IStorageService) {
 		super();
 		this.readVisibility();
-		this._register(storageService.onDidChangeValue(event => {
-			if (event.scope === StorageScope.PROFILE && event.key === StatusbarViewModel.HIDDEN_ENTRIES_KEY) {
-				this.readVisibility();
-			}
-		}));
+		this._register(
+			storageService.onDidChangeValue(event => {
+				if (event.scope === StorageScope.PROFILE && event.key === StatusbarViewModel.HIDDEN_ENTRIES_KEY) {
+					this.readVisibility();
+				}
+			}),
+		);
 	}
 
 	isHidden(id: string): boolean {
@@ -41,7 +43,12 @@ export class StatusbarViewModel extends Disposable {
 		if (hidden.size === 0) {
 			this.storageService.remove(StatusbarViewModel.HIDDEN_ENTRIES_KEY, StorageScope.PROFILE);
 		} else {
-			this.storageService.store(StatusbarViewModel.HIDDEN_ENTRIES_KEY, JSON.stringify([...hidden]), StorageScope.PROFILE, StorageTarget.USER);
+			this.storageService.store(
+				StatusbarViewModel.HIDDEN_ENTRIES_KEY,
+				JSON.stringify([...hidden]),
+				StorageScope.PROFILE,
+				StorageTarget.USER,
+			);
 		}
 	}
 

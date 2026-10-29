@@ -12,7 +12,12 @@ import { InlayHintsController } from '../../../../../editor/contrib/inlayHints/b
 import { ICodeEditorService } from '../../../../../editor/browser/services/codeEditorService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
-import { AccessibleViewProviderId, AccessibleViewType, IAccessibleViewService, type IAccessibleViewContentProvider } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	AccessibleViewProviderId,
+	AccessibleViewType,
+	IAccessibleViewService,
+	type IAccessibleViewContentProvider,
+} from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import '../../browser/inlayHintsAccessibilty.js';
@@ -27,21 +32,39 @@ test('reads current sorted hints in Chinese without changing text and discards h
 	const features = resources.add(new LanguageFeaturesService());
 	const model = resources.add(new TextModel('call(42);'));
 	let requests = 0;
-	resources.add(features.inlayHintsProvider.register('*', {
-		provideInlayHints: () => {
-			requests++;
-			return [{ position: new Position(1, 9), label: [{ value: ': void' }] }, { position: new Position(1, 6), label: 'value:' }];
-		},
-	}));
+	resources.add(
+		features.inlayHintsProvider.register('*', {
+			provideInlayHints: () => {
+				requests++;
+				return [
+					{ position: new Position(1, 9), label: [{ value: ': void' }] },
+					{ position: new Position(1, 6), label: 'value:' },
+				];
+			},
+		}),
+	);
 	let provider: IAccessibleViewContentProvider | undefined;
 	services.registerInstance(IAccessibleViewService, {
 		show: type => {
-			provider = AccessibleViewRegistry.getImplementations().filter(value => value.type === type).map(value => services.invokeFunction(accessor => value.getProvider(accessor))).find(value => value?.id === AccessibleViewProviderId.InlayHints);
+			provider = AccessibleViewRegistry.getImplementations()
+				.filter(value => value.type === type)
+				.map(value => services.invokeFunction(accessor => value.getProvider(accessor)))
+				.find(value => value?.id === AccessibleViewProviderId.InlayHints);
 			return provider !== undefined;
 		},
-		getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { }, ...toDisposable(() => { }),
+		getOpenAriaHint: () => undefined,
+		disableHint: async () => {},
+		showAccessibleViewHelp: () => {},
+		...toDisposable(() => {}),
 	});
-	const editor = resources.add(createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageFeaturesService: features, instantiationService: services }));
+	const editor = resources.add(
+		createTestCodeEditor({
+			container: dom.window.document.querySelector<HTMLElement>('main')!,
+			model,
+			languageFeaturesService: features,
+			instantiationService: services,
+		}),
+	);
 	editor.layout({ width: 500, height: 160 });
 	editor.focus();
 	assert.equal(services.get(ICodeEditorService).getFocusedCodeEditor(), editor);

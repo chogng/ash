@@ -5,16 +5,30 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { ITextModelService } from '../../../../editor/common/services/resolverService.js';
 import type { ITextModel } from '../../../../editor/common/model.js';
 import { OutputLinkProvider } from './outputLinkProvider.js';
-import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { IStorageService } from "../../../../platform/storage/common/storage.js";
-import { StorageScope, StorageTarget } from "../../../../platform/storage/common/storage.js";
-import { OUTPUT_MODE_ID, LOG_MODE_ID, OutputSeverities, type IOutputViewFilters, type IOutputEntry, type OutputEntrySeverity, type IOutputChannel, type IOutputChannelDescriptor, type IOutputChannelRevealOptions, type IOutputChannelRevealRequest, type IOutputEntryInput, IOutputService, type OutputChannelKind } from "../../../services/output/common/output.js";
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import { StorageScope, StorageTarget } from '../../../../platform/storage/common/storage.js';
+import {
+	OUTPUT_MODE_ID,
+	LOG_MODE_ID,
+	OutputSeverities,
+	type IOutputViewFilters,
+	type IOutputEntry,
+	type OutputEntrySeverity,
+	type IOutputChannel,
+	type IOutputChannelDescriptor,
+	type IOutputChannelRevealOptions,
+	type IOutputChannelRevealRequest,
+	type IOutputEntryInput,
+	IOutputService,
+	type OutputChannelKind,
+} from '../../../services/output/common/output.js';
 import { windowLogId } from '../../../services/log/common/logConstants.js';
-import { InMemoryOutputChannelModel } from "../common/outputChannelModel.js";
+import { InMemoryOutputChannelModel } from '../common/outputChannelModel.js';
 
-const ActiveChannelStorageKey = "output.activeChannel";
-const DefaultRevealOptions: IOutputChannelRevealOptions = Object.freeze({ focus: "take" });
+const ActiveChannelStorageKey = 'output.activeChannel';
+const DefaultRevealOptions: IOutputChannelRevealOptions = Object.freeze({ focus: 'take' });
 
 /** Default Output registry with caller-owned channels and workspace selection. */
 export class OutputService extends Disposable implements IOutputService {
@@ -46,17 +60,21 @@ export class OutputService extends Disposable implements IOutputService {
 		}
 		this.filters = this._register(new OutputFilterState(storageService));
 		this._register(instantiationService.createInstance(OutputLinkProvider));
-		this._register(textModelService.registerTextModelContentProvider('output', {
-			provideTextContent: async resource => {
-				const channel = this.channelsById.get(resource.path.slice(1));
-				return channel?.uri.toString() === resource.toString() ? channel.loadModel() : null;
-			},
-		}));
-		this._register(toDisposable(() => {
-			for (const channel of [...this.channelsById.values()]) channel.dispose();
-			this.channelsById.clear();
-			this.activeChannelId = undefined;
-		}));
+		this._register(
+			textModelService.registerTextModelContentProvider('output', {
+				provideTextContent: async resource => {
+					const channel = this.channelsById.get(resource.path.slice(1));
+					return channel?.uri.toString() === resource.toString() ? channel.loadModel() : null;
+				},
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				for (const channel of [...this.channelsById.values()]) channel.dispose();
+				this.channelsById.clear();
+				this.activeChannelId = undefined;
+			}),
+		);
 	}
 
 	get channels(): readonly IOutputChannel[] {
@@ -70,10 +88,21 @@ export class OutputService extends Disposable implements IOutputService {
 	createChannel(descriptor: IOutputChannelDescriptor): IOutputChannel {
 		this.assertAvailable();
 		const normalized = normalizeDescriptor(descriptor);
-		if (this.channelsById.has(normalized.id)) throw new Error(`Output channel is already registered: ${normalized.id}`);
+		if (this.channelsById.has(normalized.id))
+			throw new Error(`Output channel is already registered: ${normalized.id}`);
 		const uri = URI.from({ scheme: 'output', path: `/${normalized.id}` });
-		const model = this.instantiationService.createInstance(InMemoryOutputChannelModel, uri, normalized.languageId ?? (normalized.kind === 'log' ? LOG_MODE_ID : OUTPUT_MODE_ID));
-		const channel = new OutputChannel(uri, normalized, model, () => this.unregisterChannel(normalized.id), options => this.showChannel(normalized.id, options));
+		const model = this.instantiationService.createInstance(
+			InMemoryOutputChannelModel,
+			uri,
+			normalized.languageId ?? (normalized.kind === 'log' ? LOG_MODE_ID : OUTPUT_MODE_ID),
+		);
+		const channel = new OutputChannel(
+			uri,
+			normalized,
+			model,
+			() => this.unregisterChannel(normalized.id),
+			options => this.showChannel(normalized.id, options),
+		);
 		this.channelsById.set(normalized.id, channel);
 		const shouldRestorePreferred = this.preferredChannelId === normalized.id;
 		const shouldSelectFirst = this.activeChannel === undefined;
@@ -96,7 +125,8 @@ export class OutputService extends Disposable implements IOutputService {
 	}
 
 	showChannel(id: string, options: IOutputChannelRevealOptions = DefaultRevealOptions): void {
-		if (options.focus !== "take" && options.focus !== "preserve") throw new TypeError(`Unsupported Output reveal focus: ${String(options.focus)}`);
+		if (options.focus !== 'take' && options.focus !== 'preserve')
+			throw new TypeError(`Unsupported Output reveal focus: ${String(options.focus)}`);
 		this.selectChannel(id);
 		const channel = this.activeChannel;
 		if (channel) this.requestShowChannelEmitter.fire(Object.freeze({ channel, focus: options.focus }));
@@ -123,7 +153,7 @@ export class OutputService extends Disposable implements IOutputService {
 	}
 
 	private assertAvailable(): void {
-		if (this.isDisposed) throw new ReferenceError("OutputService is already disposed");
+		if (this.isDisposed) throw new ReferenceError('OutputService is already disposed');
 	}
 }
 
@@ -132,28 +162,65 @@ class OutputChannel extends Disposable implements IOutputChannel {
 	private readonly disposeEmitter = this._register(new Emitter<void>());
 	readonly onDidDispose = this.disposeEmitter.event;
 
-	constructor(readonly uri: URI, readonly descriptor: IOutputChannelDescriptor, private readonly model: InMemoryOutputChannelModel, unregister: () => void, private readonly reveal: (options?: IOutputChannelRevealOptions) => void) {
+	constructor(
+		readonly uri: URI,
+		readonly descriptor: IOutputChannelDescriptor,
+		private readonly model: InMemoryOutputChannelModel,
+		unregister: () => void,
+		private readonly reveal: (options?: IOutputChannelRevealOptions) => void,
+	) {
 		super();
 		this.onDidChange = model.onDidChange;
 		this._register(model);
-		this._register(toDisposable(() => {
-			this.disposeEmitter.fire();
-			unregister();
-		}));
+		this._register(
+			toDisposable(() => {
+				this.disposeEmitter.fire();
+				unregister();
+			}),
+		);
 	}
 
-	get id(): string { return this.descriptor.id; }
-	get label(): string { return this.descriptor.label; }
-	get kind(): OutputChannelKind { return this.descriptor.kind ?? "output"; }
-	get entries() { return this.model.entries; }
+	get id(): string {
+		return this.descriptor.id;
+	}
+	get label(): string {
+		return this.descriptor.label;
+	}
+	get kind(): OutputChannelKind {
+		return this.descriptor.kind ?? 'output';
+	}
+	get entries() {
+		return this.model.entries;
+	}
 
-	loadModel(): Promise<ITextModel> { this.assertAvailable(); return this.model.loadModel(); }
-	append(entry: IOutputEntryInput): void { this.assertAvailable(); this.model.append(entry); }
-	appendLine(entry: IOutputEntryInput): void { this.assertAvailable(); this.model.appendLine(entry); }
-	replace(entries: IOutputEntryInput | readonly IOutputEntryInput[]): void { this.assertAvailable(); this.model.replace(entries); }
-	clear(): void { this.assertAvailable(); this.model.clear(); }
-	getText(): string { this.assertAvailable(); return this.model.getText(); }
-	show(options?: IOutputChannelRevealOptions): void { this.assertAvailable(); this.reveal(options); }
+	loadModel(): Promise<ITextModel> {
+		this.assertAvailable();
+		return this.model.loadModel();
+	}
+	append(entry: IOutputEntryInput): void {
+		this.assertAvailable();
+		this.model.append(entry);
+	}
+	appendLine(entry: IOutputEntryInput): void {
+		this.assertAvailable();
+		this.model.appendLine(entry);
+	}
+	replace(entries: IOutputEntryInput | readonly IOutputEntryInput[]): void {
+		this.assertAvailable();
+		this.model.replace(entries);
+	}
+	clear(): void {
+		this.assertAvailable();
+		this.model.clear();
+	}
+	getText(): string {
+		this.assertAvailable();
+		return this.model.getText();
+	}
+	show(options?: IOutputChannelRevealOptions): void {
+		this.assertAvailable();
+		this.reveal(options);
+	}
 
 	private assertAvailable(): void {
 		if (this.isDisposed) throw new ReferenceError(`Output channel is already disposed: ${this.id}`);
@@ -162,34 +229,56 @@ class OutputChannel extends Disposable implements IOutputChannel {
 
 function normalizeDescriptor(descriptor: IOutputChannelDescriptor): IOutputChannelDescriptor {
 	const id = validateChannelId(descriptor.id);
-	const label = validateIdentity(descriptor.label, "Output channel label");
-	const kind = descriptor.kind ?? "output";
-	if (kind !== "output" && kind !== "log") throw new TypeError(`Unsupported Output channel kind: ${String(kind)}`);
-	const source = descriptor.source ?? "core";
-	if (source !== "core" && source !== "extension" && source !== "user") throw new TypeError(`Unsupported Output channel source: ${String(source)}`);
-	const extensionId = descriptor.extensionId === undefined ? undefined : validateIdentity(descriptor.extensionId, "Output extension id");
-	const languageId = descriptor.languageId === undefined ? undefined : validateIdentity(descriptor.languageId, "Output language id");
-	if (source === "extension" && !extensionId) throw new TypeError("Extension Output channels require an extension id");
-	return Object.freeze({ id, label, kind, source, ...(extensionId ? { extensionId } : {}), ...(languageId ? { languageId } : {}), ...(descriptor.logger ? { logger: descriptor.logger } : {}) });
+	const label = validateIdentity(descriptor.label, 'Output channel label');
+	const kind = descriptor.kind ?? 'output';
+	if (kind !== 'output' && kind !== 'log') throw new TypeError(`Unsupported Output channel kind: ${String(kind)}`);
+	const source = descriptor.source ?? 'core';
+	if (source !== 'core' && source !== 'extension' && source !== 'user')
+		throw new TypeError(`Unsupported Output channel source: ${String(source)}`);
+	const extensionId =
+		descriptor.extensionId === undefined
+			? undefined
+			: validateIdentity(descriptor.extensionId, 'Output extension id');
+	const languageId =
+		descriptor.languageId === undefined ? undefined : validateIdentity(descriptor.languageId, 'Output language id');
+	if (source === 'extension' && !extensionId)
+		throw new TypeError('Extension Output channels require an extension id');
+	return Object.freeze({
+		id,
+		label,
+		kind,
+		source,
+		...(extensionId ? { extensionId } : {}),
+		...(languageId ? { languageId } : {}),
+		...(descriptor.logger ? { logger: descriptor.logger } : {}),
+	});
 }
 
 function validateIdentity(value: string, label: string): string {
 	const normalized = value.trim();
-	if (!normalized || normalized.includes("\0")) throw new TypeError(`${label} must be non-empty and cannot contain null bytes`);
+	if (!normalized || normalized.includes('\0'))
+		throw new TypeError(`${label} must be non-empty and cannot contain null bytes`);
 	if (normalized !== value) throw new TypeError(`${label} cannot contain leading or trailing whitespace`);
 	return value;
 }
 
 function validateChannelId(value: string): string {
-	const id = validateIdentity(value, "Output channel id");
-	if (/\s/.test(id)) throw new TypeError("Output channel id cannot contain whitespace");
+	const id = validateIdentity(value, 'Output channel id');
+	if (/\s/.test(id)) throw new TypeError('Output channel id cannot contain whitespace');
 	return id;
 }
 
-const OutputFilterStorageKey = "output.filterState";
+const OutputFilterStorageKey = 'output.filterState';
 const CurrentTextSyntaxVersion = 2;
 
-const SeverityRanks: Readonly<Record<OutputEntrySeverity, number>> = Object.freeze({ trace: 0, debug: 1, information: 2, log: 2, warning: 3, error: 4 });
+const SeverityRanks: Readonly<Record<OutputEntrySeverity, number>> = Object.freeze({
+	trace: 0,
+	debug: 1,
+	information: 2,
+	log: 2,
+	warning: 3,
+	error: 4,
+});
 
 interface StoredOutputFilterState {
 	readonly syntaxVersion: 1 | 2;
@@ -203,7 +292,7 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 	private readonly changeEmitter = this._register(new Emitter<void>());
 	private readonly hiddenSeverities = new Set<OutputEntrySeverity>();
 	private readonly hiddenCategories = new Set<string>();
-	private _text = "";
+	private _text = '';
 	private textSyntaxVersion: 1 | 2 = CurrentTextSyntaxVersion;
 	private preserveStoredState = false;
 
@@ -214,16 +303,22 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 		this.restore();
 	}
 
-	get text(): string { return this._text; }
+	get text(): string {
+		return this._text;
+	}
 
 	get textFilterNotice(): IOutputViewFilters['textFilterNotice'] {
-		if (this.preserveStoredState) { return 'unsupported'; }
+		if (this.preserveStoredState) {
+			return 'unsupported';
+		}
 		return this.textSyntaxVersion === 1 && this._text.length > 0 ? 'restored' : undefined;
 	}
 
 	setText(text: string): void {
 		if (this._text === text && this.textSyntaxVersion === CurrentTextSyntaxVersion) {
-			if (this.preserveNewerStoredState()) { this.changeEmitter.fire(); }
+			if (this.preserveNewerStoredState()) {
+				this.changeEmitter.fire();
+			}
 			return;
 		}
 		// Only restoration can enter the older grammar. Explicit input always leaves it,
@@ -247,17 +342,21 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 		if (!OutputSeverities.includes(minimum)) throw new TypeError(`Unsupported Output severity: ${minimum}`);
 		const rank = SeverityRanks[minimum];
 		let changed = false;
-		for (const severity of OutputSeverities) changed = updateHiddenSet(this.hiddenSeverities, severity, SeverityRanks[severity] >= rank) || changed;
+		for (const severity of OutputSeverities)
+			changed = updateHiddenSet(this.hiddenSeverities, severity, SeverityRanks[severity] >= rank) || changed;
 		if (changed) this.persistAndFire();
 	}
 
 	isCategoryVisible(category: string, channelId: string): boolean {
-		return !this.hiddenCategories.has(category) && !this.hiddenCategories.has(channelCategoryKey(category, channelId));
+		return (
+			!this.hiddenCategories.has(category) && !this.hiddenCategories.has(channelCategoryKey(category, channelId))
+		);
 	}
 
 	setCategoryVisible(category: string, visible: boolean, channelId: string): void {
 		const normalized = category.trim();
-		if (!normalized || normalized.includes('\0')) throw new TypeError("Output category must be non-empty and cannot contain null bytes");
+		if (!normalized || normalized.includes('\0'))
+			throw new TypeError('Output category must be non-empty and cannot contain null bytes');
 		const key = channelCategoryKey(normalized, validateChannelId(channelId));
 		// An old category has no channel identity. Only explicit input can move
 		// that choice; restoration and unrelated filters keep its global effect.
@@ -267,23 +366,36 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 	}
 
 	reset(): void {
-		if (!this._text && this.hiddenSeverities.size === 0 && this.hiddenCategories.size === 0 && this.textSyntaxVersion === CurrentTextSyntaxVersion) {
-			if (this.preserveNewerStoredState()) { this.changeEmitter.fire(); }
+		if (
+			!this._text &&
+			this.hiddenSeverities.size === 0 &&
+			this.hiddenCategories.size === 0 &&
+			this.textSyntaxVersion === CurrentTextSyntaxVersion
+		) {
+			if (this.preserveNewerStoredState()) {
+				this.changeEmitter.fire();
+			}
 			return;
 		}
 		this.textSyntaxVersion = CurrentTextSyntaxVersion;
-		this._text = "";
+		this._text = '';
 		this.hiddenSeverities.clear();
 		this.hiddenCategories.clear();
 		this.persistAndFire();
 	}
 
 	matches(entry: IOutputEntry, channelId: string): boolean {
-		if (this.hiddenSeverities.has(entry.severity) || (entry.category && !this.isCategoryVisible(entry.category, channelId))) return false;
+		if (
+			this.hiddenSeverities.has(entry.severity) ||
+			(entry.category && !this.isCategoryVisible(entry.category, channelId))
+		)
+			return false;
 		const restored = this.textSyntaxVersion === 1;
-		const haystack = (restored ? `${entry.category ?? ""} ${entry.text}` : entry.text).toLocaleLowerCase();
+		const haystack = (restored ? `${entry.category ?? ''} ${entry.text}` : entry.text).toLocaleLowerCase();
 		const terms = restored ? parseRestoredFilterTerms(this._text) : parseFilterTerms(this._text);
-		const included = restored ? terms.includes.every(term => haystack.includes(term)) : terms.includes.length === 0 || terms.includes.some(term => haystack.includes(term));
+		const included = restored
+			? terms.includes.every(term => haystack.includes(term))
+			: terms.includes.length === 0 || terms.includes.some(term => haystack.includes(term));
 		return included && terms.excludes.every(term => !haystack.includes(term));
 	}
 
@@ -299,12 +411,16 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 				this.preserveStoredState = true;
 				return;
 			}
-			if (typeof stored.text === "string") {
+			if (typeof stored.text === 'string') {
 				this._text = stored.text;
-				this.textSyntaxVersion = stored.syntaxVersion === CurrentTextSyntaxVersion || stored.text.length === 0 ? CurrentTextSyntaxVersion : 1;
+				this.textSyntaxVersion =
+					stored.syntaxVersion === CurrentTextSyntaxVersion || stored.text.length === 0
+						? CurrentTextSyntaxVersion
+						: 1;
 			}
 			if (Array.isArray(stored.hiddenSeverities)) {
-				for (const severity of stored.hiddenSeverities) if (OutputSeverities.includes(severity)) this.hiddenSeverities.add(severity);
+				for (const severity of stored.hiddenSeverities)
+					if (OutputSeverities.includes(severity)) this.hiddenSeverities.add(severity);
 			}
 			if (Array.isArray(stored.hiddenCategories)) {
 				let migrated = false;
@@ -316,11 +432,18 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 					if (key.startsWith('\0')) {
 						try {
 							const tuple: unknown = JSON.parse(key.slice(1));
-							if (Array.isArray(tuple) && tuple.length === 2 && tuple[0] === 'window' && typeof tuple[1] === 'string') {
+							if (
+								Array.isArray(tuple) &&
+								tuple.length === 2 &&
+								tuple[0] === 'window' &&
+								typeof tuple[1] === 'string'
+							) {
 								key = channelCategoryKey(tuple[1], windowLogId);
 								migrated = true;
 							}
-						} catch { /* Leave unrelated category keys intact. */ }
+						} catch {
+							/* Leave unrelated category keys intact. */
+						}
 					}
 					this.hiddenCategories.add(key);
 				}
@@ -334,25 +457,45 @@ class OutputFilterState extends Disposable implements IOutputViewFilters {
 		}
 		// A failed write must not be mistaken for malformed persisted input.
 		if (migratedState !== undefined) {
-			this.storageService.store(OutputFilterStorageKey, migratedState, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			this.storageService.store(
+				OutputFilterStorageKey,
+				migratedState,
+				StorageScope.WORKSPACE,
+				StorageTarget.MACHINE,
+			);
 		}
 	}
 
 	private preserveNewerStoredState(): boolean {
-		if (this.preserveStoredState) { return false; }
+		if (this.preserveStoredState) {
+			return false;
+		}
 		// Another window can publish a newer schema after this owner restored.
 		// Check before writes and no-op input so the protection notice stays accurate.
 		const raw = this.storageService.get(OutputFilterStorageKey, StorageScope.WORKSPACE);
-		try { this.preserveStoredState = raw !== undefined && hasUnknownTextSyntaxVersion(JSON.parse(raw)); }
-		catch { /* Malformed JSON has no usable schema; this owner can replace it. */ }
+		try {
+			this.preserveStoredState = raw !== undefined && hasUnknownTextSyntaxVersion(JSON.parse(raw));
+		} catch {
+			/* Malformed JSON has no usable schema; this owner can replace it. */
+		}
 		return this.preserveStoredState;
 	}
 
 	private persistAndFire(): void {
 		this.preserveNewerStoredState();
 		if (!this.preserveStoredState) {
-			const stored: StoredOutputFilterState = { syntaxVersion: this.textSyntaxVersion, text: this._text, hiddenSeverities: [...this.hiddenSeverities], hiddenCategories: [...this.hiddenCategories] };
-			this.storageService.store(OutputFilterStorageKey, JSON.stringify(stored), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			const stored: StoredOutputFilterState = {
+				syntaxVersion: this.textSyntaxVersion,
+				text: this._text,
+				hiddenSeverities: [...this.hiddenSeverities],
+				hiddenCategories: [...this.hiddenCategories],
+			};
+			this.storageService.store(
+				OutputFilterStorageKey,
+				JSON.stringify(stored),
+				StorageScope.WORKSPACE,
+				StorageTarget.MACHINE,
+			);
 		}
 		this.changeEmitter.fire();
 	}
@@ -372,12 +515,17 @@ function updateHiddenSet<T>(set: Set<T>, value: T, visible: boolean): boolean {
 }
 
 function hasUnknownTextSyntaxVersion(value: unknown): boolean {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) { return false; }
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+		return false;
+	}
 	const version = (value as Record<string, unknown>).syntaxVersion;
 	return version !== undefined && version !== 1 && version !== CurrentTextSyntaxVersion;
 }
 
-function parseFilterTerms(value: string): { readonly includes: readonly string[]; readonly excludes: readonly string[]; } {
+function parseFilterTerms(value: string): {
+	readonly includes: readonly string[];
+	readonly excludes: readonly string[];
+} {
 	const includes: string[] = [];
 	const excludes: string[] = [];
 	// Quotes protect commas but remain literal matching characters; backslashes
@@ -386,19 +534,24 @@ function parseFilterTerms(value: string): { readonly includes: readonly string[]
 		const raw = pattern.trim();
 		const excluded = raw.startsWith('!');
 		const term = (excluded ? raw.slice(1).trim() : raw).toLocaleLowerCase();
-		if (term) { (excluded ? excludes : includes).push(term); }
+		if (term) {
+			(excluded ? excludes : includes).push(term);
+		}
 	}
 	return { includes, excludes };
 }
 
 /** Restoration-only adapter; no explicit input can select this grammar. */
-function parseRestoredFilterTerms(value: string): { readonly includes: readonly string[]; readonly excludes: readonly string[]; } {
+function parseRestoredFilterTerms(value: string): {
+	readonly includes: readonly string[];
+	readonly excludes: readonly string[];
+} {
 	const includes: string[] = [];
 	const excludes: string[] = [];
 	for (const match of value.matchAll(/(?:"([^"]+)"|(\S+))/g)) {
-		const raw = (match[1] ?? match[2] ?? "").trim();
+		const raw = (match[1] ?? match[2] ?? '').trim();
 		if (!raw) continue;
-		const excluded = raw.startsWith("!") || raw.startsWith("-");
+		const excluded = raw.startsWith('!') || raw.startsWith('-');
 		const term = (excluded ? raw.slice(1) : raw).toLocaleLowerCase();
 		if (!term) continue;
 		(excluded ? excludes : includes).push(term);

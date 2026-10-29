@@ -5,7 +5,9 @@ import type { URI } from '../../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import type { MultiDiffEditorInput, MultiDiffEditorInputItem, MultiDiffEditorSource } from './multiDiffEditorInput.js';
 
-export const IMultiDiffSourceResolverService = createServiceIdentifier<IMultiDiffSourceResolverService>('multiDiffSourceResolverService');
+export const IMultiDiffSourceResolverService = createServiceIdentifier<IMultiDiffSourceResolverService>(
+	'multiDiffSourceResolverService',
+);
 
 export interface IResolvedMultiDiffSource {
 	readonly resource: URI;
@@ -38,15 +40,22 @@ export class MultiDiffSourceResolverService extends Disposable implements IMulti
 	readonly _serviceBrand = undefined;
 	private readonly changed = this._register(new Emitter<void>());
 	readonly onDidChange = this.changed.event;
-	notifyChanged(): void { this.changed.fire(); }
-	repositoryActions(input: MultiDiffEditorInput): readonly IAction[] { return [...this.resolvers].flatMap(resolver => resolver.repositoryActions?.(input) ?? []); }
+	notifyChanged(): void {
+		this.changed.fire();
+	}
+	repositoryActions(input: MultiDiffEditorInput): readonly IAction[] {
+		return [...this.resolvers].flatMap(resolver => resolver.repositoryActions?.(input) ?? []);
+	}
 	private readonly resolvers = new Set<IMultiDiffSourceResolver>();
 
 	registerResolver(resolver: IMultiDiffSourceResolver): IDisposable {
 		if (this.resolvers.has(resolver)) throw new Error('Multi-diff source resolver is already registered');
 		this.resolvers.add(resolver);
 		this.changed.fire();
-		return toDisposable(() => { this.resolvers.delete(resolver); this.changed.fire(); });
+		return toDisposable(() => {
+			this.resolvers.delete(resolver);
+			this.changed.fire();
+		});
 	}
 
 	async resolve(uri: URI): Promise<IResolvedMultiDiffSource | undefined> {

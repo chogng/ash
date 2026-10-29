@@ -1,12 +1,9 @@
 import { KeyboardLayoutContribution } from './_.contribution.js';
 import { IKeymapInfo } from '../../common/keymapInfo.js';
 
-
 export const EN_US_LINUX_LAYOUT: IKeymapInfo = {
 	layout: { model: 'pc105', group: 0, layout: 'us', variant: '', options: '', rules: 'evdev', isUSStandard: true },
-	secondaryLayouts: [
-		{ model: 'pc105', group: 0, layout: 'cn', variant: '', options: '', rules: 'evdev' },
-	],
+	secondaryLayouts: [{ model: 'pc105', group: 0, layout: 'cn', variant: '', options: '', rules: 'evdev' }],
 	mapping: {
 		Sleep: [],
 		WakeUp: [],
@@ -57,7 +54,7 @@ export const EN_US_LINUX_LAYOUT: IKeymapInfo = {
 		BracketRight: [']', '}', ']', '}', 0],
 		Backslash: ['\\', '|', '\\', '|', 0],
 		Semicolon: [';', ':', ';', ':', 0],
-		Quote: ['\'', '"', '\'', '"', 0],
+		Quote: ["'", '"', "'", '"', 0],
 		Backquote: ['`', '~', '`', '~', 0],
 		Comma: [',', '<', ',', '<', 0],
 		Period: ['.', '>', '.', '>', 0],
@@ -180,10 +177,8 @@ export const EN_US_LINUX_LAYOUT: IKeymapInfo = {
 		BrowserFavorites: [],
 		MailReply: [],
 		MailForward: [],
-		MailSend: []
-	}
-
+		MailSend: [],
+	},
 };
 
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout(EN_US_LINUX_LAYOUT);
-

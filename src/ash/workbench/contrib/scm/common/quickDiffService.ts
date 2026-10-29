@@ -18,11 +18,13 @@ export class QuickDiffService extends Disposable implements IQuickDiffService {
 
 	constructor() {
 		super();
-		this._register(toDisposable(() => {
-			for (const registration of this.registrations) registration.listeners.dispose();
-			this.registrations.length = 0;
-			this.hiddenProviders.clear();
-		}));
+		this._register(
+			toDisposable(() => {
+				for (const registration of this.registrations) registration.listeners.dispose();
+				this.registrations.length = 0;
+				this.hiddenProviders.clear();
+			}),
+		);
 	}
 
 	get providers(): readonly QuickDiffProvider[] {
@@ -69,14 +71,21 @@ export class QuickDiffService extends Disposable implements IQuickDiffService {
 		const providers = this.registrations
 			.map(registration => registration.provider)
 			.filter(provider => this.isProviderVisible(provider.id) && containsResource(provider.rootUri, resource));
-		const results = await Promise.all(providers.map(provider => provider.provideOriginalResource(resource, signal)));
+		const results = await Promise.all(
+			providers.map(provider => provider.provideOriginalResource(resource, signal)),
+		);
 		signal.throwIfAborted();
 		return Object.freeze(results.filter((result): result is QuickDiffOriginalResource => result !== undefined));
 	}
 }
 
 function validateProvider(provider: QuickDiffProvider): void {
-	if (!provider || !provider.id?.trim() || !provider.label?.trim() || typeof provider.provideOriginalResource !== 'function') {
+	if (
+		!provider ||
+		!provider.id?.trim() ||
+		!provider.label?.trim() ||
+		typeof provider.provideOriginalResource !== 'function'
+	) {
 		throw new TypeError('Quick Diff provider is invalid');
 	}
 }

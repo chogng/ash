@@ -6,7 +6,11 @@ import { WebWorkerDescriptor } from '../../../../platform/webWorker/browser/webW
 import { diffWorkerChannel } from '../../../common/diff/diffWorker.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { registerSingleton, InstantiationType } from '../../../../platform/instantiation/common/extensions.js';
-import type { IDocumentDiff, IDocumentDiffProvider, IDocumentDiffProviderOptions } from '../../../common/diff/documentDiffProvider.js';
+import type {
+	IDocumentDiff,
+	IDocumentDiffProvider,
+	IDocumentDiffProviderOptions,
+} from '../../../common/diff/documentDiffProvider.js';
 import type { ITextModel } from '../../../common/model.js';
 import { WorkerDiffComputationService } from '../../services/workerDiffComputationService.js';
 
@@ -16,7 +20,8 @@ export interface IDiffProviderFactoryService {
 	createDiffProvider(): IDocumentDiffProvider & IDisposable;
 }
 
-export const IDiffProviderFactoryService = createServiceIdentifier<IDiffProviderFactoryService>('diffProviderFactoryService');
+export const IDiffProviderFactoryService =
+	createServiceIdentifier<IDiffProviderFactoryService>('diffProviderFactoryService');
 
 /** Creates independently cancellable editor providers over the host's Worker transport. */
 export class WorkerBasedDiffProviderFactoryService extends Disposable implements IDiffProviderFactoryService {
@@ -29,17 +34,28 @@ export class WorkerBasedDiffProviderFactoryService extends Disposable implements
 	}
 
 	private createClient(): IWebWorkerClient<object> {
-		return this.workers.createWorkerClient(new WebWorkerDescriptor({
-			label: 'ash-editor-diff', channel: diffWorkerChannel,
-			createWorker: () => new Worker(new URL('../../../common/diff/diffWorkerMain.ts', import.meta.url), { type: 'module', name: 'ash-editor-diff' }),
-		}));
+		return this.workers.createWorkerClient(
+			new WebWorkerDescriptor({
+				label: 'ash-editor-diff',
+				channel: diffWorkerChannel,
+				createWorker: () =>
+					new Worker(new URL('../../../common/diff/diffWorkerMain.ts', import.meta.url), {
+						type: 'module',
+						name: 'ash-editor-diff',
+					}),
+			}),
+		);
 	}
 
 	private takeClient(): IWebWorkerClient<object> {
 		const prepared = this.preparedClient.clearAndLeak();
 		if (prepared) {
-			try { prepared.ensureAvailable(); return prepared; }
-			catch { prepared.dispose(); }
+			try {
+				prepared.ensureAvailable();
+				return prepared;
+			} catch {
+				prepared.dispose();
+			}
 		}
 		return this.createClient();
 	}
@@ -63,13 +79,20 @@ class WorkerBasedDocumentDiffProvider extends Disposable implements IDocumentDif
 	constructor(private readonly computation: WorkerDiffComputationService) {
 		super();
 		this.onDidChange = computation.onDidChange;
-		this._register(toDisposable(() => {
-			for (const source of this.pending) source.cancel();
-			this.pending.clear();
-		}));
+		this._register(
+			toDisposable(() => {
+				for (const source of this.pending) source.cancel();
+				this.pending.clear();
+			}),
+		);
 	}
 
-	async computeDiff(original: ITextModel, modified: ITextModel, options: IDocumentDiffProviderOptions, cancellationToken: CancellationToken): Promise<IDocumentDiff> {
+	async computeDiff(
+		original: ITextModel,
+		modified: ITextModel,
+		options: IDocumentDiffProviderOptions,
+		cancellationToken: CancellationToken,
+	): Promise<IDocumentDiff> {
 		this.assertNotDisposed();
 		const source = new CancellationTokenSource(cancellationToken);
 		this.pending.add(source);

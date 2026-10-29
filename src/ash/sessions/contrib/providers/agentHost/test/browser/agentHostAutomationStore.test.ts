@@ -4,7 +4,12 @@ import { DeferredPromise } from '../../../../../../base/common/async.js';
 import { Emitter } from '../../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../../base/common/observable.js';
-import type { Automation, AutomationRun, AutomationRunResult, IAutomationBackendService } from '../../../../../../platform/agentHost/common/automation.js';
+import type {
+	Automation,
+	AutomationRun,
+	AutomationRunResult,
+	IAutomationBackendService,
+} from '../../../../../../platform/agentHost/common/automation.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
 import { AgentHostAutomationStore } from '../../browser/agentHostAutomationStore.js';
@@ -12,7 +17,10 @@ import { AgentHostAutomationStore } from '../../browser/agentHostAutomationStore
 function fixture() {
 	const resources = new DisposableStore();
 	const changes = resources.add(new Emitter<void>());
-	const connection = observableValue<'connected' | 'connecting' | 'disconnected'>('automation connection', 'connected');
+	const connection = observableValue<'connected' | 'connecting' | 'disconnected'>(
+		'automation connection',
+		'connected',
+	);
 	const automation: Automation = {
 		id: 'automation',
 		revision: 1,
@@ -50,11 +58,23 @@ function fixture() {
 		onDidChange: changes.event,
 		list: async () => plans,
 		runs: async () => runs,
-		save: async (id, revision, definition, status) => ({ ...automation, id, revision: revision + 1, definition, status }),
-		delete: async () => { },
+		save: async (id, revision, definition, status) => ({
+			...automation,
+			id,
+			revision: revision + 1,
+			definition,
+			status,
+		}),
+		delete: async () => {},
 		run: async () => run,
-		getRun: async id => { reads.push(id); return run; },
-		stop: async id => { stops.push(id); return { ...run, status: 'stopped' }; },
+		getRun: async id => {
+			reads.push(id);
+			return run;
+		},
+		stop: async id => {
+			stops.push(id);
+			return { ...run, status: 'stopped' };
+		},
 		readResult: async () => ({ output: '', files: [] }),
 		preview: async () => [60],
 	};
@@ -62,7 +82,13 @@ function fixture() {
 	services.registerInstance(IRendererHostService, { automation: backend } as IRendererHost);
 	const store = resources.add(services.createInstance(AgentHostAutomationStore, 'host', connection));
 	return {
-		resources, backend, store, automation, run, reads, stops,
+		resources,
+		backend,
+		store,
+		automation,
+		run,
+		reads,
+		stops,
 		async reconnect(nextPlans: readonly Automation[], nextRuns: readonly AutomationRun[] = []): Promise<void> {
 			connection.set('disconnected', undefined);
 			plans = nextPlans;
@@ -80,19 +106,37 @@ for (const operation of ['create', 'update'] as const) {
 		await value.store.refresh();
 		const pending = new DeferredPromise<Automation>();
 		let writes = 0;
-		value.backend.save = () => { writes++; return pending.p; };
+		value.backend.save = () => {
+			writes++;
+			return pending.p;
+		};
 		const current = value.store.automations.get()[0]!;
-		const saving = operation === 'create'
-			? value.store.createAutomation({ ...current, name: 'Saved on old connection' })
-			: value.store.updateAutomation(current.id, { name: 'Saved on old connection' });
-		const replacement = { ...value.automation, revision: 3, definition: { ...value.automation.definition, title: 'Replacement' } };
+		const saving =
+			operation === 'create'
+				? value.store.createAutomation({ ...current, name: 'Saved on old connection' })
+				: value.store.updateAutomation(current.id, { name: 'Saved on old connection' });
+		const replacement = {
+			...value.automation,
+			revision: 3,
+			definition: { ...value.automation.definition, title: 'Replacement' },
+		};
 		await value.reconnect([replacement]);
 		const names: string[][] = [];
 		using listener = value.store.automations.onDidChange(items => names.push(items.map(item => item.name)));
-		await pending.complete({ ...value.automation, revision: 2, definition: { ...value.automation.definition, title: 'Old receipt' } });
+		await pending.complete({
+			...value.automation,
+			revision: 2,
+			definition: { ...value.automation.definition, title: 'Old receipt' },
+		});
 		assert.equal((await saving).name, 'Old receipt', 'a confirmed write remains successful');
-		assert.deepEqual(value.store.automations.get().map(item => [item.name, item.revision]), [['Replacement', 3]]);
-		assert.ok(names.every(snapshot => snapshot.every(name => name === 'Replacement')), 'no observer may see the retired receipt');
+		assert.deepEqual(
+			value.store.automations.get().map(item => [item.name, item.revision]),
+			[['Replacement', 3]],
+		);
+		assert.ok(
+			names.every(snapshot => snapshot.every(name => name === 'Replacement')),
+			'no observer may see the retired receipt',
+		);
 		assert.equal(writes, 1, 'recovery must not replay a write');
 	});
 }
@@ -109,8 +153,14 @@ test('a late delete cannot remove a definition read by the replacement connectio
 	using listener = value.store.automations.onDidChange(items => lengths.push(items.length));
 	await pending.complete();
 	await deleting;
-	assert.deepEqual(value.store.automations.get().map(item => item.revision), [2]);
-	assert.ok(lengths.every(length => length === 1), 'replacement rows must never disappear for a retired delete');
+	assert.deepEqual(
+		value.store.automations.get().map(item => item.revision),
+		[2],
+	);
+	assert.ok(
+		lengths.every(length => length === 1),
+		'replacement rows must never disappear for a retired delete',
+	);
 });
 
 test('a late stop receipt cannot overwrite replacement run history', async () => {
@@ -125,7 +175,10 @@ test('a late stop receipt cannot overwrite replacement run history', async () =>
 	using listener = value.store.runs.onDidChange(runs => states.push(runs.map(run => run.status)));
 	await pending.complete({ ...value.run, status: 'stopped' });
 	await stopping;
-	assert.deepEqual(value.store.runs.get().map(run => run.status), ['completed']);
+	assert.deepEqual(
+		value.store.runs.get().map(run => run.status),
+		['completed'],
+	);
 	assert.ok(states.every(snapshot => snapshot.every(state => state === 'completed')));
 });
 
@@ -184,7 +237,15 @@ test('PR follow-up pause preserves the backend condition and rejects generic edi
 		definition: {
 			...value.automation.definition,
 			session: { type: 'continue', sessionId: 'session', threadId: 'thread' },
-			condition: { type: 'gitHubChecks', host: 'github.com', owner: 'team', repository: 'repo', number: 7, accountId: 'account', credentialRevision: '1' }
+			condition: {
+				type: 'gitHubChecks',
+				host: 'github.com',
+				owner: 'team',
+				repository: 'repo',
+				number: 7,
+				accountId: 'account',
+				credentialRevision: '1',
+			},
 		},
 	};
 	await value.reconnect([plan]);
@@ -195,7 +256,10 @@ test('PR follow-up pause preserves the backend condition and rejects generic edi
 		writes.push({ definition, status });
 		return { ...plan, definition, status, revision: 2 };
 	};
-	await assert.rejects(value.store.updateAutomation(descriptor.id, { prompt: 'Unconditional repair' }), /PR follow-up controls/);
+	await assert.rejects(
+		value.store.updateAutomation(descriptor.id, { prompt: 'Unconditional repair' }),
+		/PR follow-up controls/,
+	);
 	assert.deepEqual(writes, []);
 	await value.store.updateAutomation(descriptor.id, { enabled: false });
 	assert.deepEqual(writes, [{ definition: plan.definition, status: 'paused' }]);

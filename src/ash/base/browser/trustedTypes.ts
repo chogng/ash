@@ -10,13 +10,17 @@ interface TrustedTypesGlobals {
 }
 
 /** Creates one Trusted Types policy through the embedding host or browser realm. */
-export function createTrustedTypesPolicy(policyName: string, policyOptions?: TrustedTypesPolicyOptions): TrustedTypesPolicy | undefined {
+export function createTrustedTypesPolicy(
+	policyName: string,
+	policyOptions?: TrustedTypesPolicyOptions,
+): TrustedTypesPolicy | undefined {
 	if (typeof policyName !== 'string' || policyName.length === 0) {
 		throw new TypeError('Trusted Types policy name must be a non-empty string');
 	}
 	try {
 		const environment = getMonacoEnvironment();
-		if (environment?.createTrustedTypesPolicy) return environment.createTrustedTypesPolicy(policyName, policyOptions);
+		if (environment?.createTrustedTypesPolicy)
+			return environment.createTrustedTypesPolicy(policyName, policyOptions);
 		return (globalThis as TrustedTypesGlobals).trustedTypes?.createPolicy(policyName, policyOptions);
 	} catch (error) {
 		onUnexpectedError(error);

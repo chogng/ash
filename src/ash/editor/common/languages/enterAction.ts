@@ -9,7 +9,7 @@ export function getEnterAction(
 	autoIndent: EditorAutoIndentStrategy,
 	model: ITextModel,
 	range: Range,
-	languageConfigurationService: ILanguageConfigurationService
+	languageConfigurationService: ILanguageConfigurationService,
 ): CompleteEnterAction | null {
 	model.tokenization.forceTokenization(range.startLineNumber);
 	const languageId = model.getLanguageIdAtPosition(range.startLineNumber, range.startColumn);
@@ -34,10 +34,7 @@ export function getEnterAction(
 
 	// Here we add `\t` to appendText first because enterAction is leveraging appendText and removeText to change indentation.
 	if (!appendText) {
-		if (
-			(indentAction === IndentAction.Indent) ||
-			(indentAction === IndentAction.IndentOutdent)
-		) {
+		if (indentAction === IndentAction.Indent || indentAction === IndentAction.IndentOutdent) {
 			appendText = '\t';
 		} else {
 			appendText = '';
@@ -51,10 +48,5 @@ export function getEnterAction(
 		indentation = indentation.substring(0, indentation.length - removeText);
 	}
 
-	return {
-		indentAction: indentAction,
-		appendText: appendText,
-		removeText: removeText,
-		indentation: indentation
-	};
+	return { indentAction: indentAction, appendText: appendText, removeText: removeText, indentation: indentation };
 }

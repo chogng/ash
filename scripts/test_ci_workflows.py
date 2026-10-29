@@ -47,7 +47,6 @@ class CiWorkflowTests(unittest.TestCase):
     def test_formatter_changes_select_their_behavior_test_owners(self) -> None:
         for path in (
             "build/format.ts",
-            "tsfmt.json",
             ".prettierignore",
             ".prettierrc.toml",
             ".editorconfig",

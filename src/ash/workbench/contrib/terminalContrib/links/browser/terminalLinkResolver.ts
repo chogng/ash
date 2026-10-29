@@ -7,7 +7,7 @@ import { withRemoteWorkspacePath } from '../../../../../platform/remote/common/r
 
 /** Resolves terminal output using that process's cwd, home and execution authority. */
 export class TerminalLinkResolver {
-	constructor(@IFileService private readonly files: IFileService) { }
+	constructor(@IFileService private readonly files: IFileService) {}
 
 	async resolveLink(
 		processManager: {
@@ -18,15 +18,25 @@ export class TerminalLinkResolver {
 		},
 		link: string,
 		uri?: URI,
-	): Promise<{ uri: URI; link: string; isDirectory: boolean; } | null> {
+	): Promise<{ uri: URI; link: string; isDirectory: boolean } | null> {
 		const windows = processManager.os === OperatingSystem.Windows;
 		const rules = windows ? win32 : posix;
 		try {
 			let path = link;
 			if (uri) {
-				if (uri.scheme !== Schemas.file || uri.query || uri.fragment || /%2f/i.test(uri.toEncodedComponents().path)) return null;
+				if (
+					uri.scheme !== Schemas.file ||
+					uri.query ||
+					uri.fragment ||
+					/%2f/i.test(uri.toEncodedComponents().path)
+				)
+					return null;
 				if (!windows && uri.authority) return null;
-				path = uri.authority ? `//${uri.authority}${uri.path}` : windows ? uri.path.replace(/^\/(?=[a-z]:\/)/i, '') : uri.path;
+				path = uri.authority
+					? `//${uri.authority}${uri.path}`
+					: windows
+						? uri.path.replace(/^\/(?=[a-z]:\/)/i, '')
+						: uri.path;
 			}
 			if (windows) {
 				if (/^\\\\[?.]\\UNC\\/i.test(path)) path = '\\\\' + path.slice(8);
@@ -35,14 +45,17 @@ export class TerminalLinkResolver {
 				// A terminal link cannot borrow the renderer's per-drive working directory.
 				if (/^[a-z]:(?![\\/])/i.test(path)) return null;
 			}
-			if (path.startsWith('~/') || windows && path.startsWith('~\\')) {
+			if (path.startsWith('~/') || (windows && path.startsWith('~\\'))) {
 				if (!processManager.userHome || !rules.isAbsolute(processManager.userHome)) return null;
 				path = rules.join(processManager.userHome, path.slice(2));
 			}
 			const resolved = rules.resolve(processManager.initialCwd, path);
 			let resource: URI;
 			if (processManager.remoteAuthority) {
-				resource = withRemoteWorkspacePath(URI.from({ scheme: Schemas.ashRemote, authority: processManager.remoteAuthority, path: '/' }), resolved);
+				resource = withRemoteWorkspacePath(
+					URI.from({ scheme: Schemas.ashRemote, authority: processManager.remoteAuthority, path: '/' }),
+					resolved,
+				);
 			} else {
 				const slashes = windows ? resolved.replaceAll('\\', '/') : resolved;
 				const share = windows ? /^\/\/([^/]+)(\/.*)$/.exec(slashes) : null;
@@ -52,6 +65,8 @@ export class TerminalLinkResolver {
 			return stat.kind === FileKind.File || stat.kind === FileKind.Directory
 				? { uri: resource, link, isDirectory: stat.kind === FileKind.Directory }
 				: null;
-		} catch { return null; }
+		} catch {
+			return null;
+		}
 	}
 }

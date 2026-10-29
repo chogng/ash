@@ -14,11 +14,18 @@ test('Disk file provider detects an external edit before saving', async () => {
 		await writeFile(path, 'first', 'utf8');
 		using provider = new DiskFileSystemProvider([URI.file(root)]);
 		const resource = URI.file(path);
-		assert.deepEqual((await provider.readDirectory(URI.file(root))).map(entry => [entry.name, entry.kind]), [['main.ts', FileKind.File]]);
+		assert.deepEqual(
+			(await provider.readDirectory(URI.file(root))).map(entry => [entry.name, entry.kind]),
+			[['main.ts', FileKind.File]],
+		);
 		const original = await provider.readFile(resource);
 		await writeFile(path, 'external edit', 'utf8');
 		await assert.rejects(
-			provider.writeFile(resource, new TextEncoder().encode('editor edit'), { create: true, overwrite: true, expectedRevision: original.revision }),
+			provider.writeFile(resource, new TextEncoder().encode('editor edit'), {
+				create: true,
+				overwrite: true,
+				expectedRevision: original.revision,
+			}),
 			FileRevisionConflictError,
 		);
 		assert.equal(await readFile(path, 'utf8'), 'external edit');

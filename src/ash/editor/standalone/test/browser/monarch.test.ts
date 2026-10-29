@@ -27,7 +27,9 @@ function createTokenizer(resources: DisposableStore, definition: IMonarchLanguag
 	services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	const languages = services.get(ILanguageService);
 	resources.add(languages.registerLanguage({ id: 'monarch-test' }));
-	const tokenizer = resources.add(services.createInstance(MonarchTokenizer, 'monarch-test', compile('monarch-test', definition)));
+	const tokenizer = resources.add(
+		services.createInstance(MonarchTokenizer, 'monarch-test', compile('monarch-test', definition)),
+	);
 	return { tokenizer, languages, configuration: services.get(IConfigurationService) };
 }
 
@@ -44,26 +46,48 @@ test('Monarch carries nested comments across lines and leaves incoming states un
 				[/[{}]/, '@brackets'],
 			],
 			space: [[/\s+/, '']],
-			comment: [[/\/\*/, 'comment', '@push'], [/\*\//, 'comment', '@pop'], [/./, 'comment']],
+			comment: [
+				[/\/\*/, 'comment', '@push'],
+				[/\*\//, 'comment', '@pop'],
+				[/./, 'comment'],
+			],
 		},
 	};
 	const { tokenizer } = createTokenizer(resources, definition);
 	const initial = tokenizer.getInitialState();
 	const first = tokenizer.tokenize('LET x /* one', true, initial);
-	assert.deepEqual(first.tokens.map(token => [token.offset, token.type]), [
-		[0, 'keyword.monarch-test'], [3, ''], [4, 'identifier.monarch-test'], [5, ''], [6, 'comment.monarch-test'],
-	]);
+	assert.deepEqual(
+		first.tokens.map(token => [token.offset, token.type]),
+		[
+			[0, 'keyword.monarch-test'],
+			[3, ''],
+			[4, 'identifier.monarch-test'],
+			[5, ''],
+			[6, 'comment.monarch-test'],
+		],
+	);
 	const second = tokenizer.tokenize('/* two */ end */ x', false, first.endState);
-	assert.deepEqual(second.tokens.map(token => [token.offset, token.type]), [
-		[0, 'comment.monarch-test'], [16, ''], [17, 'identifier.monarch-test'],
-	]);
+	assert.deepEqual(
+		second.tokens.map(token => [token.offset, token.type]),
+		[
+			[0, 'comment.monarch-test'],
+			[16, ''],
+			[17, 'identifier.monarch-test'],
+		],
+	);
 	assert.equal(initial.equals(tokenizer.getInitialState()), true);
 	assert.equal(second.endState.equals(initial), true);
 	definition.keywords.push('x');
 	assert.equal(tokenizer.tokenize('x', false, initial).tokens[0]!.type, 'identifier.monarch-test');
 	const encoded = tokenizer.tokenizeEncoded('LET', false, initial).tokens;
-	assert.equal(TokenMetadata.getLanguageId(encoded[1]!), TokenMetadata.getLanguageId(tokenizer.tokenizeEncoded('x', false, initial).tokens[1]!));
-	assert.notEqual(TokenMetadata.getForeground(encoded[1]!), TokenMetadata.getForeground(tokenizer.tokenizeEncoded('x', false, initial).tokens[1]!));
+	assert.equal(
+		TokenMetadata.getLanguageId(encoded[1]!),
+		TokenMetadata.getLanguageId(tokenizer.tokenizeEncoded('x', false, initial).tokens[1]!),
+	);
+	assert.notEqual(
+		TokenMetadata.getForeground(encoded[1]!),
+		TokenMetadata.getForeground(tokenizer.tokenizeEncoded('x', false, initial).tokens[1]!),
+	);
 });
 
 test('Monarch handles captures, rematching, regex macros and literal state parameters', () => {
@@ -77,20 +101,37 @@ test('Monarch handles captures, rematching, regex macros and literal state param
 				[/(?=<)/, { token: '@rematch', next: '@tag' }],
 				[/ +/, ''],
 			],
-			raw: [[/\)$S2"/, 'string', '@pop'], [/./, 'string']],
+			raw: [
+				[/\)$S2"/, 'string', '@pop'],
+				[/./, 'string'],
+			],
 			tag: [[/<[^>]+>/, 'tag', '@pop']],
 		},
 	});
 	const initial = tokenizer.getInitialState();
 	const groups = tokenizer.tokenize('name=12 <node>', false, initial);
-	assert.deepEqual(groups.tokens.map(token => [token.offset, token.type]), [
-		[0, 'identifier.monarch-test'], [4, 'operator.monarch-test'], [5, 'number.monarch-test'], [7, ''], [8, 'tag.monarch-test'],
-	]);
+	assert.deepEqual(
+		groups.tokens.map(token => [token.offset, token.type]),
+		[
+			[0, 'identifier.monarch-test'],
+			[4, 'operator.monarch-test'],
+			[5, 'number.monarch-test'],
+			[7, ''],
+			[8, 'tag.monarch-test'],
+		],
+	);
 	const raw = tokenizer.tokenize('R"[+(body', true, initial);
 	const closed = tokenizer.tokenize('text)[+" name=1', false, raw.endState);
-	assert.deepEqual(closed.tokens.map(token => [token.offset, token.type]), [
-		[0, 'string.monarch-test'], [8, ''], [9, 'identifier.monarch-test'], [13, 'operator.monarch-test'], [14, 'number.monarch-test'],
-	]);
+	assert.deepEqual(
+		closed.tokens.map(token => [token.offset, token.type]),
+		[
+			[0, 'string.monarch-test'],
+			[8, ''],
+			[9, 'identifier.monarch-test'],
+			[13, 'operator.monarch-test'],
+			[14, 'number.monarch-test'],
+		],
+	);
 	assert.equal(closed.endState.equals(initial), true);
 });
 
@@ -99,8 +140,14 @@ test('Monarch advances empty-line and line-feed transitions and rejects non-prog
 	const { tokenizer } = createTokenizer(resources, {
 		includeLF: true,
 		tokenizer: {
-			root: [[/!/, '', '@line'], [/x/, 'identifier']],
-			line: [[/\n|$/, '', '@pop'], [/[^\n]+/, 'comment']],
+			root: [
+				[/!/, '', '@line'],
+				[/x/, 'identifier'],
+			],
+			line: [
+				[/\n|$/, '', '@pop'],
+				[/[^\n]+/, 'comment'],
+			],
 		},
 	});
 	const initial = tokenizer.getInitialState();
@@ -132,7 +179,10 @@ test('Monarch activates embedded languages and retains their metadata until a ca
 	using resources = new DisposableStore();
 	const { tokenizer, languages } = createTokenizer(resources, {
 		tokenizer: {
-			root: [[/\[\[/, { token: 'delimiter', next: '@code', nextEmbedded: 'embedded-test' }], [/\w+/, 'identifier']],
+			root: [
+				[/\[\[/, { token: 'delimiter', next: '@code', nextEmbedded: 'embedded-test' }],
+				[/\w+/, 'identifier'],
+			],
 			code: [[/\]\]/, { cases: { '@default': { token: 'delimiter', next: '@pop', nextEmbedded: '@pop' } } }]],
 		},
 	});
@@ -142,7 +192,13 @@ test('Monarch activates embedded languages and retains their metadata until a ca
 	const state: IState = { clone: () => state, equals: other => other === state };
 	const languageId = languages.languageIdCodec.encodeLanguageId('embedded-test');
 	let resolve!: (support: ITokenizationSupport) => void;
-	resources.add(TokenizationRegistry.registerFactory('embedded-test', { tokenizationSupport: new Promise(done => { resolve = done; }) }));
+	resources.add(
+		TokenizationRegistry.registerFactory('embedded-test', {
+			tokenizationSupport: new Promise(done => {
+				resolve = done;
+			}),
+		}),
+	);
 	tokenizer.tokenize('[[12]]host', false, tokenizer.getInitialState());
 	assert.deepEqual(encounters, ['embedded-test']);
 	assert.equal(tokenizer.getLoadStatus().loaded, false);
@@ -154,10 +210,15 @@ test('Monarch activates embedded languages and retains their metadata until a ca
 	await tokenizer.embeddedLoaded;
 	assert.equal(tokenizer.getLoadStatus().loaded, true);
 	const plain = tokenizer.tokenize('[[12]]host', false, tokenizer.getInitialState());
-	assert.deepEqual(plain.tokens.map(token => [token.offset, token.type, token.language]), [
-		[0, 'delimiter.monarch-test', 'monarch-test'], [2, 'number', 'embedded-test'],
-		[4, 'delimiter.monarch-test', 'monarch-test'], [6, 'identifier.monarch-test', 'monarch-test'],
-	]);
+	assert.deepEqual(
+		plain.tokens.map(token => [token.offset, token.type, token.language]),
+		[
+			[0, 'delimiter.monarch-test', 'monarch-test'],
+			[2, 'number', 'embedded-test'],
+			[4, 'delimiter.monarch-test', 'monarch-test'],
+			[6, 'identifier.monarch-test', 'monarch-test'],
+		],
+	);
 	const encoded = tokenizer.tokenizeEncoded('[[12]]host', false, tokenizer.getInitialState());
 	assert.equal(TokenMetadata.getLanguageId(encoded.tokens[3]!), languageId);
 	assert.equal(TokenMetadata.getForeground(encoded.tokens[3]!), 3);
@@ -174,16 +235,29 @@ test('Monarch rematches a capture into an embedded language across line boundari
 	});
 	resources.add(languages.registerLanguage({ id: 'calculation' }));
 	const state: IState = { clone: () => state, equals: other => other === state };
-	resources.add(TokenizationRegistry.register('calculation', {
-		getInitialState: () => state,
-		tokenize: () => ({ tokens: [{ offset: 0, type: 'expression', language: 'calculation' }], endState: state }),
-	}));
+	resources.add(
+		TokenizationRegistry.register('calculation', {
+			getInitialState: () => state,
+			tokenize: () => ({ tokens: [{ offset: 0, type: 'expression', language: 'calculation' }], endState: state }),
+		}),
+	);
 	const initial = tokenizer.getInitialState();
 	const first = tokenizer.tokenize('prefix <%calc 2 +', true, initial);
 	const second = tokenizer.tokenize(' 3%> suffix', false, first.endState);
-	assert.deepEqual([first, second].map(result => result.tokens.map(token => [token.offset, token.type, token.language])), [
-		[[0, 'source.monarch-test', 'monarch-test'], [7, 'delimiter.monarch-test', 'monarch-test'], [9, 'expression', 'calculation']],
-		[[0, 'expression', 'calculation'], [2, 'delimiter.monarch-test', 'monarch-test'], [4, 'source.monarch-test', 'monarch-test']],
-	]);
+	assert.deepEqual(
+		[first, second].map(result => result.tokens.map(token => [token.offset, token.type, token.language])),
+		[
+			[
+				[0, 'source.monarch-test', 'monarch-test'],
+				[7, 'delimiter.monarch-test', 'monarch-test'],
+				[9, 'expression', 'calculation'],
+			],
+			[
+				[0, 'expression', 'calculation'],
+				[2, 'delimiter.monarch-test', 'monarch-test'],
+				[4, 'source.monarch-test', 'monarch-test'],
+			],
+		],
+	);
 	assert.equal(second.endState.equals(initial), true);
 });

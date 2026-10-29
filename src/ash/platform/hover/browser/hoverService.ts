@@ -1,13 +1,22 @@
-import "../../../base/browser/ui/hover/hover.css";
-import type { HoverDelegateSetupOptions, IHoverDelegate, IManagedHover as IBaseManagedHover } from "../../../base/browser/ui/hover/hoverDelegate.js";
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
-import { Hover, type HoverContent, type IDelayedHoverOptions, type IHoverLifecycleOptions } from "../../../base/browser/ui/hover/hover.js";
-import { addDisposableListener, isHTMLElement } from "../../../base/browser/dom.js";
-import { Disposable, toDisposable, type IDisposable } from "../../../base/common/lifecycle.js";
-import type { IConfigurationService } from "../../configuration/common/configuration.js";
-import type { IContextMenuService } from "../../contextview/browser/contextView.js";
-import type { IContextViewService } from "../../contextview/browser/contextView.js";
-import { HoverConfiguration, type HoverDelayMode } from "../common/hoverService.js";
+import '../../../base/browser/ui/hover/hover.css';
+import type {
+	HoverDelegateSetupOptions,
+	IHoverDelegate,
+	IManagedHover as IBaseManagedHover,
+} from '../../../base/browser/ui/hover/hoverDelegate.js';
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+import {
+	Hover,
+	type HoverContent,
+	type IDelayedHoverOptions,
+	type IHoverLifecycleOptions,
+} from '../../../base/browser/ui/hover/hover.js';
+import { addDisposableListener, isHTMLElement } from '../../../base/browser/dom.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import type { IConfigurationService } from '../../configuration/common/configuration.js';
+import type { IContextMenuService } from '../../contextview/browser/contextView.js';
+import type { IContextViewService } from '../../contextview/browser/contextView.js';
+import { HoverConfiguration, type HoverDelayMode } from '../common/hoverService.js';
 
 /** Caller-owned description of one target and its managed Hover content. */
 export interface HoverSetupOptions extends HoverDelegateSetupOptions {
@@ -30,7 +39,7 @@ export interface IHoverService extends IHoverDelegate {
 	hideHover(): void;
 }
 
-export const IHoverService = createServiceIdentifier<IHoverService>("hoverService");
+export const IHoverService = createServiceIdentifier<IHoverService>('hoverService');
 
 const InstantHoverWindowMs = 200;
 const PointerHoverResumeDistance = 2;
@@ -43,59 +52,94 @@ export class HoverService extends Disposable implements IHoverService {
 	private activeHover: ManagedHover | undefined;
 	private contextMenuVisible = false;
 	private pointerHoverSuppressed = false;
-	private pointerActivationPosition: { readonly x: number; readonly y: number; } | undefined;
+	private pointerActivationPosition: { readonly x: number; readonly y: number } | undefined;
 	private lastGroupId: string | undefined;
 	private lastHideTime = 0;
 
-	constructor(configurationService: IConfigurationService, contextViewService: IContextViewService, contextMenuService: IContextMenuService) {
+	constructor(
+		configurationService: IConfigurationService,
+		contextViewService: IContextViewService,
+		contextMenuService: IContextMenuService,
+	) {
 		super();
 		this.configurationService = configurationService;
 		this.contextViewService = contextViewService;
 		const ownerDocument = contextViewService.container.ownerDocument;
-		this._register(addDisposableListener(ownerDocument, "pointerdown", (event) => {
-			if (isHTMLElement(event.target) && event.target.closest(".ash-hover")) return;
-			this.pointerHoverSuppressed = true;
-			this.pointerActivationPosition = { x: event.clientX, y: event.clientY };
-			this.hideHover();
-			this.lastGroupId = undefined;
-			this.lastHideTime = 0;
-		}, true));
-		this._register(addDisposableListener(ownerDocument, "pointermove", (event) => {
-			const activationPosition = this.pointerActivationPosition;
-			if (event.buttons !== 0 || !activationPosition) return;
-			const deltaX = event.clientX - activationPosition.x;
-			const deltaY = event.clientY - activationPosition.y;
-			if (deltaX * deltaX + deltaY * deltaY <= PointerHoverResumeDistance * PointerHoverResumeDistance) return;
-			this.pointerHoverSuppressed = false;
-			this.pointerActivationPosition = undefined;
-		}, true));
-		this._register(contextMenuService.onDidShowContextMenu(() => {
-			this.contextMenuVisible = true;
-			this.hideHover();
-		}));
-		this._register(contextMenuService.onDidHideContextMenu(() => {
-			this.contextMenuVisible = false;
-		}));
-		this._register(toDisposable(() => {
-			for (const hover of [...this.managedHovers]) hover.dispose();
-		}));
+		this._register(
+			addDisposableListener(
+				ownerDocument,
+				'pointerdown',
+				event => {
+					if (isHTMLElement(event.target) && event.target.closest('.ash-hover')) return;
+					this.pointerHoverSuppressed = true;
+					this.pointerActivationPosition = { x: event.clientX, y: event.clientY };
+					this.hideHover();
+					this.lastGroupId = undefined;
+					this.lastHideTime = 0;
+				},
+				true,
+			),
+		);
+		this._register(
+			addDisposableListener(
+				ownerDocument,
+				'pointermove',
+				event => {
+					const activationPosition = this.pointerActivationPosition;
+					if (event.buttons !== 0 || !activationPosition) return;
+					const deltaX = event.clientX - activationPosition.x;
+					const deltaY = event.clientY - activationPosition.y;
+					if (deltaX * deltaX + deltaY * deltaY <= PointerHoverResumeDistance * PointerHoverResumeDistance)
+						return;
+					this.pointerHoverSuppressed = false;
+					this.pointerActivationPosition = undefined;
+				},
+				true,
+			),
+		);
+		this._register(
+			contextMenuService.onDidShowContextMenu(() => {
+				this.contextMenuVisible = true;
+				this.hideHover();
+			}),
+		);
+		this._register(
+			contextMenuService.onDidHideContextMenu(() => {
+				this.contextMenuVisible = false;
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				for (const hover of [...this.managedHovers]) hover.dispose();
+			}),
+		);
 	}
 
 	setupHover(options: HoverSetupOptions): IManagedHover {
 		return this.createManagedHover(options);
 	}
 
-	public setupDelayedHover(target: HTMLElement, hoverOptions: (() => IDelayedHoverOptions) | IDelayedHoverOptions, lifecycleOptions?: IHoverLifecycleOptions): IDisposable {
-		return this.createManagedHover({
-			target,
-			content: undefined,
-			groupId: lifecycleOptions?.groupId,
-			delay: lifecycleOptions?.reducedDelay ? 'reduced' : undefined,
-			setupKeyboardEvents: lifecycleOptions?.setupKeyboardEvents,
-		}, typeof hoverOptions === 'function' ? hoverOptions : () => hoverOptions);
+	public setupDelayedHover(
+		target: HTMLElement,
+		hoverOptions: (() => IDelayedHoverOptions) | IDelayedHoverOptions,
+		lifecycleOptions?: IHoverLifecycleOptions,
+	): IDisposable {
+		return this.createManagedHover(
+			{
+				target,
+				content: undefined,
+				groupId: lifecycleOptions?.groupId,
+				delay: lifecycleOptions?.reducedDelay ? 'reduced' : undefined,
+				setupKeyboardEvents: lifecycleOptions?.setupKeyboardEvents,
+			},
+			typeof hoverOptions === 'function' ? hoverOptions : () => hoverOptions,
+		);
 	}
 
-	private createManagedHover(options: HoverSetupOptions, getHoverOptions?: () => IDelayedHoverOptions): IManagedHover {
+	private createManagedHover(
+		options: HoverSetupOptions,
+		getHoverOptions?: () => IDelayedHoverOptions,
+	): IManagedHover {
 		let managed!: ManagedHover;
 		managed = new ManagedHover({
 			hover: new Hover({
@@ -127,7 +171,7 @@ export class HoverService extends Disposable implements IHoverService {
 	}
 
 	showHover(options: HoverSetupOptions): IManagedHover {
-		const hover = this.setupHover({ ...options, delay: "instant" });
+		const hover = this.setupHover({ ...options, delay: 'instant' });
 		hover.show();
 		return hover;
 	}
@@ -137,19 +181,16 @@ export class HoverService extends Disposable implements IHoverService {
 	}
 
 	private resolveDelay(mode: HoverDelayMode | undefined, groupId: string | undefined): number {
-		if (mode === "instant" || this.shouldSkipDelay(groupId)) return 0;
+		if (mode === 'instant' || this.shouldSkipDelay(groupId)) return 0;
 		return this.configurationService.getValue<number>(
-			mode === "reduced"
-				? HoverConfiguration.reducedDelay
-				: HoverConfiguration.delay,
+			mode === 'reduced' ? HoverConfiguration.reducedDelay : HoverConfiguration.delay,
 		);
 	}
 
 	private shouldSkipDelay(groupId: string | undefined): boolean {
 		if (groupId === undefined) return false;
 		if (this.activeHover?.groupId === groupId) return true;
-		return this.lastGroupId === groupId &&
-			Date.now() - this.lastHideTime <= InstantHoverWindowMs;
+		return this.lastGroupId === groupId && Date.now() - this.lastHideTime <= InstantHoverWindowMs;
 	}
 
 	private didShow(hover: ManagedHover): void {

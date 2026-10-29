@@ -112,7 +112,7 @@ Electron Rust watcher 仅把 `crates/app-server-diff/src/` 内的 `.rs` 修改�
 | `just fmt-check --changed <base-ref>`             | 检查相对基准分支共同祖先的提交、暂存、未暂存及未跟踪文件改动               |
 | `just rust-format` / `just rust-format-check`     | 单独格式化或检查 Rust，不需要前端依赖                                      |
 | `pnpm format:ts` / `pnpm format:ts:fix`           | 检查或格式化第一方 TS/JS；可追加文件或目录                                 |
-| `pnpm format:config` / `pnpm format:config:fix`   | 用 Prettier 检查或格式化 JSON、YAML、Markdown、CSS、HTML                   |
+| `pnpm format:config` / `pnpm format:config:fix`   | 用 Bun 检查或格式化 JSON、YAML、Markdown、CSS、HTML                        |
 | `pnpm format` / `pnpm format:fix`                 | 检查或格式化上述前端源码、配置与文档                                       |
 | `pnpm typecheck:build`                            | 检查 TypeScript 构建工具                                                   |
 | `pnpm stylelint`                                  | 只读检查生产 CSS 的变量和选择器，报告文件、行和列；可追加文件、目录或 glob |
@@ -120,9 +120,11 @@ Electron Rust watcher 仅把 `crates/app-server-diff/src/` 内的 `.rs` 修改�
 | `pnpm stylelint:update`                           | 用真实颜色、尺寸注册表更新变量清单，保留组件变量；审阅生成差异后再检查     |
 | `pnpm clean`                                      | 清理本地产物和 Python 缓存                                                 |
 
-格式化工具按语言选择：TS/JS 使用 [`tsfmt.json`](../tsfmt.json)，Rust 使用 [`rustfmt.toml`](../rustfmt.toml)，Python 使用固定版本 Ruff，配置与文档使用仓库锁定的 `bun fmt`，继续读取 [格式规则](../.prettierrc.toml)；全量、增量与编辑器入口均显式读取 [Git 排除规则](../.gitignore)和[格式化排除规则](../.prettierignore)。前端与 Rust 格式化入口只处理第一方源码；检查命令不修改文件。修改后优先检查受影响的文件，完整格式检查见 [Formatting CI](../.github/workflows/format.yml)。
+格式化工具按语言选择：TS/JS、配置与文档使用仓库锁定的 `bun fmt` 和统一的[格式规则](../.prettierrc.toml)，Rust 使用 [`rustfmt.toml`](../rustfmt.toml)，Python 使用固定版本 Ruff。TS/JS 使用 tab、单引号、120 列换行及多行尾逗号；`objectWrap = "collapse"` 避免 Bun 1.4.4 保留对象布局时出现第二遍调用链变化。全量、增量与编辑器入口均读取 [Git 排除规则](../.gitignore)和[格式化排除规则](../.prettierignore)。前端与 Rust 格式化入口只处理第一方源码；检查命令不修改文件。修改后优先检查受影响的文件，格式不符时运行对应 `:fix` 命令，完整格式检查见 [Formatting CI](../.github/workflows/format.yml)。
 
-VS Code 配置与文档的保存格式化使用工作区推荐的 [Simple LSP Client](https://marketplace.visualstudio.com/items?itemName=wdomitrz.simple-lsp-client) 扩展的外部 formatter，以独立参数和 stdin 调用 `node_modules/bun/` 中的原生 Bun，文件名不经过 shell 解释。安装推荐扩展并完成 `pnpm install` 后，编辑器、增量脚本和 CI 使用同一 Bun 版本与规则；Markdown 内嵌代码保持原样，TS/JS 继续使用 TypeScript formatter。`pnpm test:format` 验证编辑器命令与 CI 的 JSON、JSONC、YAML、Markdown、CSS、HTML 输出一致。
+已提交的语言注册表和图标库由生成器在写入前使用相同 Bun 规则格式化，因此重新生成后可直接通过检查，不需要另跑修复命令。`.build/protocol` 中的协议 types 由 Rust 导出器管理，生成缓存保留内容和时间戳未变的文件；这些构建产物保留 Rust 导出格式。
+
+VS Code 的 TS/JS、配置与文档保存格式化使用工作区推荐的 [Simple LSP Client](https://marketplace.visualstudio.com/items?itemName=wdomitrz.simple-lsp-client) 扩展的外部 formatter，以独立参数和 stdin 调用 `node_modules/bun/` 中的原生 Bun，文件名不经过 shell 解释。安装推荐扩展并完成 `pnpm install` 后，编辑器、增量脚本和 CI 使用同一 Bun 版本与规则；Markdown 内嵌代码保持原样。`pnpm test:format` 验证编辑器命令与 CI 的 TS、TSX、JS、JSX、JSON、JSONC、YAML、Markdown、CSS、HTML 输出一致。
 
 真实保存接线由 [`build/formatEditor.test.ts`](../build/formatEditor.test.ts) 验证：使用独立 VS Code profile 打开合成工作区，修改未保存内容后执行保存，并比较编辑器、磁盘与 Bun 的输出，同时验证忽略文件保持原样、空结果和大段中文正确保存，以及带 shell 语法的文件名不会执行命令。先用 VS Code CLI 的 `--extensions-dir <隔离目录> --install-extension wdomitrz.simple-lsp-client@0.1.22` 安装扩展，再设置 `ASH_VSCODE_EXECUTABLE` 为桌面可执行文件、`ASH_FORMATTER_EXTENSIONS` 为该扩展目录，运行 `node --test build/formatEditor.test.ts`。未指定 VS Code 时该测试显式跳过；报告、截图与 trace 写入 `.build/formatter-editor-validation/`。
 

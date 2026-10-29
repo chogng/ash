@@ -20,7 +20,12 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 	private readonly hover: Hover;
 	private readonly maturityDomNode: HTMLSpanElement;
 
-	constructor(container: HTMLElement, contextViewProvider: IContextViewProvider, hoverDelay: () => number, configuredText = configuredLabel()) {
+	constructor(
+		container: HTMLElement,
+		contextViewProvider: IContextViewProvider,
+		hoverDelay: () => number,
+		configuredText = configuredLabel(),
+	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'span');
 		this.domNode.className = 'ash-settings-indicators';
@@ -48,7 +53,15 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 		container.append(this.markerDomNode);
 		this._register(toDisposable(() => this.markerDomNode.remove()));
 		// Sessions supplies its modal ContextView; a window hover would be outside the dialog's top layer.
-		this.hover = this._register(new Hover({ target: this.markerDomNode, content: configuredText, contextViewProvider, delayMs: hoverDelay, enabled: () => !this.markerDomNode.hidden }));
+		this.hover = this._register(
+			new Hover({
+				target: this.markerDomNode,
+				content: configuredText,
+				contextViewProvider,
+				delayMs: hoverDelay,
+				enabled: () => !this.markerDomNode.hidden,
+			}),
+		);
 	}
 
 	public get configuredDescriptionId(): string {
@@ -65,10 +78,20 @@ export class SettingsTreeIndicatorsLabel extends Disposable {
 		this.maturityDomNode.hidden = !experimental && !preview;
 		this.maturityDomNode.textContent = experimental
 			? localize({ bundle: 'ash.settings', key: 'status.experimental' }, 'Experimental')
-			: preview ? localize({ bundle: 'ash.settings', key: 'status.preview' }, 'Preview') : '';
+			: preview
+				? localize({ bundle: 'ash.settings', key: 'status.preview' }, 'Preview')
+				: '';
 		this.maturityDomNode.title = experimental
-			? localize({ bundle: 'ash.settings', key: 'status.experimentalDescription' }, 'This feature is experimental and may change or be removed.')
-			: preview ? localize({ bundle: 'ash.settings', key: 'status.previewDescription' }, 'This feature is in preview and may change.') : '';
+			? localize(
+					{ bundle: 'ash.settings', key: 'status.experimentalDescription' },
+					'This feature is experimental and may change or be removed.',
+				)
+			: preview
+				? localize(
+						{ bundle: 'ash.settings', key: 'status.previewDescription' },
+						'This feature is in preview and may change.',
+					)
+				: '';
 	}
 
 	public update(state: SettingsTreeIndicatorsState): void {

@@ -18,16 +18,23 @@ export class ChatEditorInput extends EditorInput {
 	readonly readOnly = true;
 	readonly showBreadcrumbs = false;
 
-	getName(): string { return localize({ bundle: 'ash.views', key: 'chat' }, 'Chat'); }
+	getName(): string {
+		return localize({ bundle: 'ash.views', key: 'chat' }, 'Chat');
+	}
 }
 
 /** Editor restoration carries only canvas identity; the conversation owner restores its drafts. */
 export class ChatEditorInputSerializer implements EditorInputSerializer {
 	readonly typeId = ChatEditorInput.TypeID;
-	canSerialize(input: IResourceEditorInput): boolean { return input instanceof ChatEditorInput; }
-	serialize(): unknown { return { version: 1 }; }
+	canSerialize(input: IResourceEditorInput): boolean {
+		return input instanceof ChatEditorInput;
+	}
+	serialize(): unknown {
+		return { version: 1 };
+	}
 	deserialize(value: unknown): ChatEditorInput {
-		if (!value || typeof value !== 'object' || !('version' in value) || value.version !== 1) throw new TypeError('Invalid Chat editor input');
+		if (!value || typeof value !== 'object' || !('version' in value) || value.version !== 1)
+			throw new TypeError('Invalid Chat editor input');
 		return new ChatEditorInput();
 	}
 }

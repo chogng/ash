@@ -1,7 +1,17 @@
-import "./links.css";
-import { EditorAction, registerEditorAction, registerEditorContribution, type ServicesAccessor } from "../../../browser/editorFeatureRegistration.js";
-import { addDisposableListener, stopEvent, ModifierKeyEmitter, type IModifierKeyStatus } from "../../../../base/browser/dom.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import './links.css';
+import {
+	EditorAction,
+	registerEditorAction,
+	registerEditorContribution,
+	type ServicesAccessor,
+} from '../../../browser/editorFeatureRegistration.js';
+import {
+	addDisposableListener,
+	stopEvent,
+	ModifierKeyEmitter,
+	type IModifierKeyStatus,
+} from '../../../../base/browser/dom.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
@@ -9,13 +19,16 @@ import { isMacintosh } from '../../../../base/common/platform.js';
 import { Range } from '../../../common/core/range.js';
 import { computeLinks } from '../../../common/languages/linkComputer.js';
 import { createLanguageFeatureRequest, isLanguageFeatureRequestCurrent } from '../../../common/languages.js';
-import type { LanguageLink } from "../../../common/languages.js";
-import { Position } from "../../../common/core/position.js";
-import { type View } from "../../../browser/view.js";
+import type { LanguageLink } from '../../../common/languages.js';
+import { Position } from '../../../common/core/position.js';
+import { type View } from '../../../browser/view.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { localize2 } from '../../../../nls.js';
-import { ILanguageFeatureDebounceService, type IFeatureDebounceInformation } from '../../../common/services/languageFeatureDebounce.js';
+import {
+	ILanguageFeatureDebounceService,
+	type IFeatureDebounceInformation,
+} from '../../../common/services/languageFeatureDebounce.js';
 import { StopWatch } from '../../../../base/common/stopwatch.js';
 
 /** Resolves document links and opens them through the editor's service scope. */
@@ -49,36 +62,66 @@ export class LinkDetector extends Disposable {
 		this.recompute = this._register(new RunOnceScheduler(() => this.computeLinksNow(), 0));
 		this.modifierKeys = ModifierKeyEmitter.getInstance(viewport.domNode.domNode.ownerDocument.defaultView!);
 		this._register(this.modifierKeys.event(() => this.updateLinkClass()));
-		this._register(editor.onDidChangeConfiguration(event => {
-			if (event.hasChanged(EditorOption.links) || event.hasChanged(EditorOption.multiCursorModifier)) this.invalidate();
-		}));
-		this._register(toDisposable(() => {
-			this.clear();
-			this.builtinLinks = undefined;
-			this.dirtyBuiltinLines.clear();
-		}));
-		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointermove", event => this.update(event)));
-		this._register(addDisposableListener(viewport.domNode.domNode, "pointerleave", () => this.clearHover()));
-		this._register(addDisposableListener<PointerEvent>(viewport.domNode.domNode, "pointerdown", event => {
-			if (event.button !== 0 || !this.editor.getOption(EditorOption.links) || !this.isTrigger(event) || event.getModifierState('AltGraph')) return;
-			const target = viewport.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
-			const link = target?.kind === 'text' ? this.links?.find(link => link.range.containsPosition(target.position)) : undefined;
-			if (!link) return;
-			stopEvent(event);
-			const openToSide = this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
-				? event.altKey
-				: (isMacintosh ? event.metaKey : event.ctrlKey);
-			this.openLinkOccurrence(link, openToSide, true);
-		}));
-		this._register(viewport.textModel.onDidChangeContent(change => {
-			if (change.changes.some(edit => edit.range.startLineNumber !== edit.range.endLineNumber || /[\r\n]/u.test(edit.text))) {
+		this._register(
+			editor.onDidChangeConfiguration(event => {
+				if (event.hasChanged(EditorOption.links) || event.hasChanged(EditorOption.multiCursorModifier))
+					this.invalidate();
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				this.clear();
 				this.builtinLinks = undefined;
 				this.dirtyBuiltinLines.clear();
-			} else {
-				for (const edit of change.changes) this.dirtyBuiltinLines.add(edit.range.startLineNumber);
-			}
-			this.invalidate(this.debounceInformation.get(viewport.textModel));
-		}));
+			}),
+		);
+		this._register(
+			addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointermove', event => this.update(event)),
+		);
+		this._register(addDisposableListener(viewport.domNode.domNode, 'pointerleave', () => this.clearHover()));
+		this._register(
+			addDisposableListener<PointerEvent>(viewport.domNode.domNode, 'pointerdown', event => {
+				if (
+					event.button !== 0 ||
+					!this.editor.getOption(EditorOption.links) ||
+					!this.isTrigger(event) ||
+					event.getModifierState('AltGraph')
+				)
+					return;
+				const target = viewport.getNearestTargetAtClientPoint({
+					clientX: event.clientX,
+					clientY: event.clientY,
+				});
+				const link =
+					target?.kind === 'text'
+						? this.links?.find(link => link.range.containsPosition(target.position))
+						: undefined;
+				if (!link) return;
+				stopEvent(event);
+				const openToSide =
+					this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
+						? event.altKey
+						: isMacintosh
+							? event.metaKey
+							: event.ctrlKey;
+				this.openLinkOccurrence(link, openToSide, true);
+			}),
+		);
+		this._register(
+			viewport.textModel.onDidChangeContent(change => {
+				if (
+					change.changes.some(
+						edit => edit.range.startLineNumber !== edit.range.endLineNumber || /[\r\n]/u.test(edit.text),
+					)
+				) {
+					this.builtinLinks = undefined;
+					this.dirtyBuiltinLines.clear();
+				} else {
+					for (const edit of change.changes) this.dirtyBuiltinLines.add(edit.range.startLineNumber);
+				}
+				this.invalidate(this.debounceInformation.get(viewport.textModel));
+			}),
+		);
 		this._register(viewport.textModel.onDidChangeLanguage(() => this.invalidate()));
 		this._register(languageFeatures.linkProvider.onDidChange(() => this.invalidate()));
 		// Keyboard opening needs the same provider results without a preceding pointer hover.
@@ -91,27 +134,30 @@ export class LinkDetector extends Disposable {
 	}
 
 	public openLinkOccurrence(occurrence: LanguageLink, openToSide: boolean, fromUserGesture = false): void {
-		void this.openerService.open(occurrence.target, {
-			openToSide,
-			fromUserGesture,
-			allowContributedOpeners: true,
-		}).catch(this.onError);
+		void this.openerService
+			.open(occurrence.target, { openToSide, fromUserGesture, allowContributedOpeners: true })
+			.catch(this.onError);
 	}
 
 	private isTrigger(event: IModifierKeyStatus): boolean {
 		return this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
-			? (isMacintosh ? event.metaKey : event.ctrlKey)
+			? isMacintosh
+				? event.metaKey
+				: event.ctrlKey
 			: event.altKey;
 	}
 
 	private updateLinkClass(): void {
-		this.viewport.domNode.domNode.classList.toggle('stanza-editor-link-target', this.activeLink !== undefined && this.isTrigger(this.modifierKeys.keyStatus));
+		this.viewport.domNode.domNode.classList.toggle(
+			'stanza-editor-link-target',
+			this.activeLink !== undefined && this.isTrigger(this.modifierKeys.keyStatus),
+		);
 	}
 
 	private update(event: PointerEvent): void {
 		if (!this.editor.getOption(EditorOption.links)) return;
 		const target = this.viewport.getNearestTargetAtClientPoint({ clientX: event.clientX, clientY: event.clientY });
-		if (!target || target.kind !== "text") {
+		if (!target || target.kind !== 'text') {
 			this.clearHover();
 			return;
 		}
@@ -123,7 +169,7 @@ export class LinkDetector extends Disposable {
 
 	private computeLinksNow(): void {
 		if (!this.editor.getOption(EditorOption.links) || this.links !== undefined || this.request) return;
-		const request = this.request = new AbortController();
+		const request = (this.request = new AbortController());
 		void this.load(request);
 	}
 
@@ -157,11 +203,17 @@ export class LinkDetector extends Disposable {
 			const result = await provider.provideLinks(request, signal);
 			if (!isLanguageFeatureRequestCurrent(request)) return Object.freeze([]);
 			for (const link of result) {
-				if (typeof link.target !== "string" || link.target.length === 0) continue;
+				if (typeof link.target !== 'string' || link.target.length === 0) continue;
 				const key = `${model.offsetAt(link.range.getStartPosition())}:${model.offsetAt(link.range.getEndPosition())}:${link.target}`;
 				if (seen.has(key)) continue;
 				seen.add(key);
-				links.push(Object.freeze({ range: link.range, target: link.target, ...(link.tooltip !== undefined ? { tooltip: link.tooltip } : {}) }));
+				links.push(
+					Object.freeze({
+						range: link.range,
+						target: link.target,
+						...(link.tooltip !== undefined ? { tooltip: link.tooltip } : {}),
+					}),
+				);
 			}
 		}
 		if (!isLanguageFeatureRequestCurrent(request) || this.isDisposed) return Object.freeze([]);
@@ -172,7 +224,11 @@ export class LinkDetector extends Disposable {
 		const providerRanges = links.map(link => link.range).sort(Range.compareRangesUsingStarts);
 		let providerIndex = 0;
 		for (const link of detected) {
-			while (providerIndex < providerRanges.length && Position.compare(providerRanges[providerIndex].getEndPosition(), link.range.getStartPosition()) <= 0) providerIndex++;
+			while (
+				providerIndex < providerRanges.length &&
+				Position.compare(providerRanges[providerIndex].getEndPosition(), link.range.getStartPosition()) <= 0
+			)
+				providerIndex++;
 			const candidate = providerRanges[providerIndex];
 			if (!candidate || !Range.areIntersecting(candidate, link.range)) links.push(link);
 		}
@@ -180,13 +236,17 @@ export class LinkDetector extends Disposable {
 	}
 
 	private async computeBuiltinLinks(signal: AbortSignal): Promise<readonly LanguageLink[]> {
-		const model = this.viewport.textModel, version = model.version;
+		const model = this.viewport.textModel,
+			version = model.version;
 		if (this.builtinLinks && this.dirtyBuiltinLines.size === 0) return this.builtinLinks;
 		const previous = this.builtinLinks;
 		const dirty = new Set(this.dirtyBuiltinLines);
 		const result: LanguageLink[] = previous ? previous.filter(link => !dirty.has(link.range.startLineNumber)) : [];
 		const scan = (start: number, end: number): void => {
-			for (const link of computeLinks({ getLineCount: () => end - start + 1, getLineContent: line => model.getLineContent(start + line - 1) })) {
+			for (const link of computeLinks({
+				getLineCount: () => end - start + 1,
+				getLineContent: line => model.getLineContent(start + line - 1),
+			})) {
 				const range = Range.lift(link.range).delta(start - 1);
 				result.push(Object.freeze({ range, target: String(link.url) }));
 			}
@@ -217,7 +277,7 @@ export class LinkDetector extends Disposable {
 	private clearHover(): void {
 		this.activeLink = undefined;
 		this.hoverPosition = undefined;
-		this.viewport.domNode.domNode.classList.remove("stanza-editor-link-target");
+		this.viewport.domNode.domNode.classList.remove('stanza-editor-link-target');
 	}
 
 	private clear(): void {
@@ -249,9 +309,15 @@ class OpenLinkAction extends EditorAction {
 }
 
 registerEditorContribution({
-	id: LinkDetector.ID, install: context => {
-		if (context.kind !== "text") return;
-		return context.instantiationService.createInstance(LinkDetector, context.view, context.editor, context.onLanguageError);
-	}
+	id: LinkDetector.ID,
+	install: context => {
+		if (context.kind !== 'text') return;
+		return context.instantiationService.createInstance(
+			LinkDetector,
+			context.view,
+			context.editor,
+			context.onLanguageError,
+		);
+	},
 });
 registerEditorAction(OpenLinkAction);

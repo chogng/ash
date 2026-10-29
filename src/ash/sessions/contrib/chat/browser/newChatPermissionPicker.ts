@@ -33,15 +33,25 @@ export class NewChatPermissionPicker extends Disposable {
 		@IInstantiationService private readonly services: IInstantiationService,
 	) {
 		super();
-		this._register(model.onDidChange(() => { if (this.visible) this.views.hide(); }));
-		this._register(addDisposableListener(button, 'click', () => this.visible ? this.views.hide() : this.show()));
-		this._register(addDisposableListener(button, 'keydown', event => {
-			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-				event.preventDefault();
-				this.show();
-			}
-		}));
-		this._register(toDisposable(() => { if (this.visible) this.views.hide(); }));
+		this._register(
+			model.onDidChange(() => {
+				if (this.visible) this.views.hide();
+			}),
+		);
+		this._register(addDisposableListener(button, 'click', () => (this.visible ? this.views.hide() : this.show())));
+		this._register(
+			addDisposableListener(button, 'keydown', event => {
+				if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+					event.preventDefault();
+					this.show();
+				}
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				if (this.visible) this.views.hide();
+			}),
+		);
 	}
 
 	private show(): void {
@@ -56,8 +66,14 @@ export class NewChatPermissionPicker extends Disposable {
 		menu.append(heading);
 		const buttons: HTMLButtonElement[] = [];
 		let focusedItem: HTMLButtonElement;
-		this.listeners.add(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(menu, () => focusedItem.focus())));
-		this.listeners.add(addDisposableListener(menu, 'focusin', event => { focusedItem = event.target as HTMLButtonElement; }));
+		this.listeners.add(
+			AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(menu, () => focusedItem.focus())),
+		);
+		this.listeners.add(
+			addDisposableListener(menu, 'focusin', event => {
+				focusedItem = event.target as HTMLButtonElement;
+			}),
+		);
 		const activate = (command: string): void => {
 			this.views.hide();
 			void this.commands.executeCommand(command, this.model).catch(error => this.notifications.error(error));
@@ -89,14 +105,18 @@ export class NewChatPermissionPicker extends Disposable {
 			check.setAttribute('aria-hidden', 'true');
 			appendIcon(Lxicon.check, check);
 			item.append(text, check);
-			const shortcut = this.listeners.add(new KeybindingLabel(item, {
-				...defaultKeybindingLabelStyles,
-				keybinding: resolveKeybinding(Keybinding.single(logicalKey(String(index + 1)))),
-				presentation: 'keycap',
-			}));
+			const shortcut = this.listeners.add(
+				new KeybindingLabel(item, {
+					...defaultKeybindingLabelStyles,
+					keybinding: resolveKeybinding(Keybinding.single(logicalKey(String(index + 1)))),
+					presentation: 'keycap',
+				}),
+			);
 			shortcut.element.classList.add('ash-sessions-permission-shortcut');
 			shortcut.element.setAttribute('aria-hidden', 'true');
-			this.listeners.add(addDisposableListener(item, 'click', () => activate(`sessions.chat.permission.${definition.id}`)));
+			this.listeners.add(
+				addDisposableListener(item, 'click', () => activate(`sessions.chat.permission.${definition.id}`)),
+			);
 			menu.append(item);
 			buttons.push(item);
 		}
@@ -106,7 +126,9 @@ export class NewChatPermissionPicker extends Disposable {
 		settings.className = 'ash-sessions-permission-settings';
 		settings.setAttribute('role', 'menuitem');
 		settings.textContent = localize('sessions.chat.permission.reviewModel', 'Review model…');
-		this.listeners.add(addDisposableListener(settings, 'click', () => activate('sessions.chat.permission.reviewModel')));
+		this.listeners.add(
+			addDisposableListener(settings, 'click', () => activate('sessions.chat.permission.reviewModel')),
+		);
 		menu.append(settings);
 		buttons.push(settings);
 		if (this.services.getOptional(IApprovalEnvironmentService)) {
@@ -116,35 +138,60 @@ export class NewChatPermissionPicker extends Disposable {
 			environment.className = 'ash-sessions-permission-settings';
 			environment.setAttribute('role', 'menuitem');
 			environment.textContent = localize('approvalEnvironment.title', 'Prepare review environment…');
-			this.listeners.add(addDisposableListener(environment, 'click', () => activate(OPEN_GUARDIAN_SETUP_COMMAND_ID)));
+			this.listeners.add(
+				addDisposableListener(environment, 'click', () => activate(OPEN_GUARDIAN_SETUP_COMMAND_ID)),
+			);
 			menu.append(environment);
 			buttons.push(environment);
 		}
-		this.listeners.add(addDisposableListener(menu, 'keydown', event => {
-			if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
-			const index = buttons.indexOf(menu.ownerDocument.activeElement as HTMLButtonElement);
-			if (/^[123]$/u.test(event.key)) {
-				event.preventDefault(); event.stopPropagation();
-				buttons[Number(event.key) - 1]!.click();
-			} else if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
-				event.preventDefault(); event.stopPropagation();
-				const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
-					: (index + (event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length;
-				buttons[next]!.focus();
-			} else if (event.key === 'Tab') {
-				event.stopPropagation(); this.views.hide();
-			} else if (event.key === 'Escape') {
-				event.preventDefault(); event.stopPropagation(); this.views.hide();
-			}
-		}));
+		this.listeners.add(
+			addDisposableListener(menu, 'keydown', event => {
+				if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return;
+				const index = buttons.indexOf(menu.ownerDocument.activeElement as HTMLButtonElement);
+				if (/^[123]$/u.test(event.key)) {
+					event.preventDefault();
+					event.stopPropagation();
+					buttons[Number(event.key) - 1]!.click();
+				} else if (
+					event.key === 'ArrowDown' ||
+					event.key === 'ArrowUp' ||
+					event.key === 'Home' ||
+					event.key === 'End'
+				) {
+					event.preventDefault();
+					event.stopPropagation();
+					const next =
+						event.key === 'Home'
+							? 0
+							: event.key === 'End'
+								? buttons.length - 1
+								: (index + (event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length;
+					buttons[next]!.focus();
+				} else if (event.key === 'Tab') {
+					event.stopPropagation();
+					this.views.hide();
+				} else if (event.key === 'Escape') {
+					event.preventDefault();
+					event.stopPropagation();
+					this.views.hide();
+				}
+			}),
+		);
 		this.visible = this.views.show({
-			anchor: this.button, content: menu, presentation: 'menu', focusRestore: ContextViewFocusRestore.Previous, onHide: () => {
+			anchor: this.button,
+			content: menu,
+			presentation: 'menu',
+			focusRestore: ContextViewFocusRestore.Previous,
+			onHide: () => {
 				this.visible = false;
 				this.button.setAttribute('aria-expanded', 'false');
 				this.listeners.clear();
-			}
+			},
 		});
 		this.button.setAttribute('aria-expanded', String(this.visible));
-		if (this.visible) buttons[approvalModeDefinitions.findIndex(definition => definition.id === this.model.inputState.approvalMode)]!.focus();
+		if (this.visible)
+			buttons[
+				approvalModeDefinitions.findIndex(definition => definition.id === this.model.inputState.approvalMode)
+			]!.focus();
 	}
 }

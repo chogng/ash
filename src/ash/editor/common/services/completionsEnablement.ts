@@ -12,5 +12,8 @@ export function isCompletionsEnabledFromObject(enablement: CompletionsEnablement
 }
 
 export function isCompletionsEnablement(value: unknown): value is CompletionsEnablement {
-	return typeof value === 'boolean' || (isRecord(value) && Object.values(value).every(entry => typeof entry === 'boolean'));
+	return (
+		typeof value === 'boolean' ||
+		(isRecord(value) && Object.values(value).every(entry => typeof entry === 'boolean'))
+	);
 }

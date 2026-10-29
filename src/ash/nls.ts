@@ -26,14 +26,18 @@ export type NlsResolver = (
 ) => string;
 
 let language = 'en';
-const fallbackResolver: NlsResolver = (_bundle, _key, fallback, parameters) =>
-	formatNlsMessage(fallback, parameters);
+const fallbackResolver: NlsResolver = (_bundle, _key, fallback, parameters) => formatNlsMessage(fallback, parameters);
 let resolver: NlsResolver = fallbackResolver;
 
-export function getNLSLanguage(): string { return language; }
+export function getNLSLanguage(): string {
+	return language;
+}
 
 /** Bootstrap must finish before importing modules that register translated metadata. */
-export function setNlsMessages(locale: string, bundles: Readonly<Record<string, Readonly<Record<string, string>>>>): void {
+export function setNlsMessages(
+	locale: string,
+	bundles: Readonly<Record<string, Readonly<Record<string, string>>>>,
+): void {
 	language = locale;
 	resolver = (bundle, key, original, parameters) => formatNlsMessage(bundles[bundle]?.[key] ?? original, parameters);
 }
@@ -41,22 +45,31 @@ export function setNlsMessages(locale: string, bundles: Readonly<Record<string, 
 export function localize(info: ILocalizeInfo, message: string, ...args: LocalizeArgument[]): string;
 export function localize(info: LocalizationKey, message: string, ...args: LocalizeArgument[]): string;
 export function localize(key: string, message: string, ...args: LocalizeArgument[]): string;
-export function localize(info: ILocalizeInfo | LocalizationKey | string, message: string, ...args: LocalizeArgument[]): string {
-	const key = typeof info === "string" ? info : info.key;
-	const bundle = typeof info === "string" || !("bundle" in info) ? "ash" : info.bundle;
-	const parameters = args.length === 0 ? undefined : Object.fromEntries(args.map((value, index) => [String(index), String(value)]));
+export function localize(
+	info: ILocalizeInfo | LocalizationKey | string,
+	message: string,
+	...args: LocalizeArgument[]
+): string {
+	const key = typeof info === 'string' ? info : info.key;
+	const bundle = typeof info === 'string' || !('bundle' in info) ? 'ash' : info.bundle;
+	const parameters =
+		args.length === 0 ? undefined : Object.fromEntries(args.map((value, index) => [String(index), String(value)]));
 	return resolver(bundle, key, message, parameters);
 }
 
 export function localize2(info: ILocalizeInfo, message: string, ...args: LocalizeArgument[]): ILocalizedString;
 export function localize2(info: LocalizationKey, message: string, ...args: LocalizeArgument[]): ILocalizedString;
 export function localize2(key: string, message: string, ...args: LocalizeArgument[]): ILocalizedString;
-export function localize2(info: ILocalizeInfo | LocalizationKey | string, message: string, ...args: LocalizeArgument[]): ILocalizedString {
-	const original = formatNlsMessage(message, Object.fromEntries(args.map((value, index) => [String(index), String(value)])));
-	return {
-		original,
-		value: localize(info as string, message, ...args),
-	};
+export function localize2(
+	info: ILocalizeInfo | LocalizationKey | string,
+	message: string,
+	...args: LocalizeArgument[]
+): ILocalizedString {
+	const original = formatNlsMessage(
+		message,
+		Object.fromEntries(args.map((value, index) => [String(index), String(value)])),
+	);
+	return { original, value: localize(info as string, message, ...args) };
 }
 
 /** Installs the resolver for the current renderer realm. */
@@ -70,10 +83,7 @@ export function resetNlsResolver(): void {
 	language = 'en';
 }
 
-export function formatNlsMessage(
-	message: string,
-	parameters: LocalizationParameters | undefined,
-): string {
+export function formatNlsMessage(message: string, parameters: LocalizationParameters | undefined): string {
 	if (!parameters) return message;
 	return message.replaceAll(/\{([A-Za-z0-9_.-]+)\}/gu, (placeholder, key: string) => {
 		const value = parameters[key];

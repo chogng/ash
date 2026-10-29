@@ -6,7 +6,7 @@ export interface ResolvedChatContext {
 	readonly name: string;
 	readonly content: string;
 	/** UTF-16 offsets in the untrimmed submitted text, replacing the visible attachment label. */
-	readonly reference?: { readonly start: number; readonly end: number; };
+	readonly reference?: { readonly start: number; readonly end: number };
 	/** Images hold a URL; instructions hold an authorized backend path; tool selections hold a JSON array of disabled names. */
 	readonly kind?: 'image' | 'instruction' | 'toolSelection';
 }
@@ -21,7 +21,7 @@ export interface ChatContextAttachment {
 	readonly resource?: URI;
 	readonly name: string;
 	/** Position of the visible reference in the message; older saved drafts may omit it. */
-	readonly reference?: { readonly start: number; readonly end: number; };
+	readonly reference?: { readonly start: number; readonly end: number };
 	resolve(): Promise<ResolvedChatContext>;
 }
 

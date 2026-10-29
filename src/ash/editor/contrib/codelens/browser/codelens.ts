@@ -35,30 +35,36 @@ export class CodeLensModel {
 }
 
 /** Collects CodeLens results and keeps every result owned by its provider. */
-export async function getCodeLensModel(registry: LanguageFeatureRegistry<CodeLensProvider>, model: ITextModel, token: CancellationToken): Promise<CodeLensModel> {
+export async function getCodeLensModel(
+	registry: LanguageFeatureRegistry<CodeLensProvider>,
+	model: ITextModel,
+	token: CancellationToken,
+): Promise<CodeLensModel> {
 	const providers = registry.ordered(model);
 	const ranks = new Map(providers.map((provider, index) => [provider, index] as const));
 	const result = new CodeLensModel();
 
-	await Promise.all(providers.map(async provider => {
-		try {
-			const list = await Promise.resolve(provider.provideCodeLenses(model, token));
-			if (!list) return;
-			if (!Array.isArray(list.lenses)) {
-				list.dispose?.();
-				throw new TypeError('CodeLens provider must return a CodeLensList');
-			}
+	await Promise.all(
+		providers.map(async provider => {
 			try {
-				for (const lens of list.lenses) validateCodeLens(model, lens);
+				const list = await Promise.resolve(provider.provideCodeLenses(model, token));
+				if (!list) return;
+				if (!Array.isArray(list.lenses)) {
+					list.dispose?.();
+					throw new TypeError('CodeLens provider must return a CodeLensList');
+				}
+				try {
+					for (const lens of list.lenses) validateCodeLens(model, lens);
+				} catch (error) {
+					list.dispose?.();
+					throw error;
+				}
+				result.add(list, provider);
 			} catch (error) {
-				list.dispose?.();
-				throw error;
+				onUnexpectedExternalError(error);
 			}
-			result.add(list, provider);
-		} catch (error) {
-			onUnexpectedExternalError(error);
-		}
-	}));
+		}),
+	);
 
 	if (token.isCancellationRequested) {
 		result.dispose();
@@ -76,7 +82,8 @@ export async function getCodeLensModel(registry: LanguageFeatureRegistry<CodeLen
 }
 
 function validateCodeLens(model: ITextModel, lens: CodeLens): void {
-	if (!lens || typeof lens !== 'object' || !Range.isIRange(lens.range)) throw new TypeError('CodeLens must provide a range');
+	if (!lens || typeof lens !== 'object' || !Range.isIRange(lens.range))
+		throw new TypeError('CodeLens must provide a range');
 	model.validateRange(lens.range);
 	if (lens.command && !Command.is(lens.command)) throw new TypeError('CodeLens command must provide an ID and title');
 }

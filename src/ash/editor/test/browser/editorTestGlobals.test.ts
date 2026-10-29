@@ -16,5 +16,8 @@ test('editor DOM globals install only selected constructors and restore their de
 	} finally {
 		dom.window.close();
 	}
-	assert.deepEqual(names.map(name => Object.getOwnPropertyDescriptor(globalThis, name)), before);
+	assert.deepEqual(
+		names.map(name => Object.getOwnPropertyDescriptor(globalThis, name)),
+		before,
+	);
 });

@@ -2,10 +2,21 @@ import type { ITerminalAutoReply } from '../../../../platform/terminal/common/te
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { CancellationError, isCancellationError } from '../../../../base/common/errors.js';
 import { DeferredPromise, raceCancellationError, timeout } from '../../../../base/common/async.js';
-import { CancellationTokenSource, cancelOnDispose, type CancellationToken } from '../../../../base/common/cancellation.js';
+import {
+	CancellationTokenSource,
+	cancelOnDispose,
+	type CancellationToken,
+} from '../../../../base/common/cancellation.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../base/common/lifecycle.js';
-import { ITerminalProcessService, type IProcessDataEvent, type TerminalShellIntegrationEvent, type ITerminalProcessCloseOptions, type TerminalProcessSignal, type ITerminalProcessReadResult } from '../../../../platform/terminal/common/terminal.js';
+import {
+	ITerminalProcessService,
+	type IProcessDataEvent,
+	type TerminalShellIntegrationEvent,
+	type ITerminalProcessCloseOptions,
+	type TerminalProcessSignal,
+	type ITerminalProcessReadResult,
+} from '../../../../platform/terminal/common/terminal.js';
 import { AhpTerminalCommandSource } from './ahpTerminalCommandSource.js';
 import { localize } from '../../../../nls.js';
 
@@ -33,7 +44,7 @@ export class TerminalProcessManager extends Disposable {
 	private readonly pendingInputCompletions: DeferredPromise<void>[] = [];
 	private inputTimer: ReturnType<typeof setTimeout> | undefined;
 	private writeChain = Promise.resolve();
-	private pendingDimensions: { readonly rows: number; readonly cols: number; } | undefined;
+	private pendingDimensions: { readonly rows: number; readonly cols: number } | undefined;
 	private readonly pendingResizeCompletions: DeferredPromise<void>[] = [];
 	private resizeScheduled = false;
 	private nextSequence = 0;
@@ -43,10 +54,18 @@ export class TerminalProcessManager extends Disposable {
 	private pendingUtf8: number[] = [];
 	private suspending = false;
 	private processInvalidated = false;
-	get cwdDetection() { return this.commandSource.cwdDetection; }
-	get promptTypeDetection() { return this.commandSource.promptTypeDetection; }
-	public get shellIntegration() { return this.commandSource.shellIntegration; }
-	public get cwd(): string | undefined { return this.commandSource.cwd; }
+	get cwdDetection() {
+		return this.commandSource.cwdDetection;
+	}
+	get promptTypeDetection() {
+		return this.commandSource.promptTypeDetection;
+	}
+	public get shellIntegration() {
+		return this.commandSource.shellIntegration;
+	}
+	public get cwd(): string | undefined {
+		return this.commandSource.cwd;
+	}
 
 	public readonly onProcessError = this.processErrorEmitter.event;
 	public readonly onProcessData = this.processDataEmitter.event;
@@ -55,17 +74,22 @@ export class TerminalProcessManager extends Disposable {
 	public readonly onProcessExit = this.processExitEmitter.event;
 	public readonly onPtyReconnect = this.ptyReconnectEmitter.event;
 
-	constructor(private readonly identity: ITerminalProcessCloseOptions, @ITerminalProcessService private readonly processService: ITerminalProcessService) {
+	constructor(
+		private readonly identity: ITerminalProcessCloseOptions,
+		@ITerminalProcessService private readonly processService: ITerminalProcessService,
+	) {
 		super();
 		this.inputCancellation.value = new CancellationTokenSource();
-		this._register(processService.onDidInvalidateProcess?.(event => {
-			if (event.terminalId !== this.identity.terminalId) return;
-			// Host readiness cannot revive a retired PTY. Stop pending reads and
-			// input now so the instance can expose its existing relaunch action.
-			this.processInvalidated = true;
-			this.stop();
-			this.processErrorEmitter.fire(new Error(localize('disconnectStatus', 'Lost connection to process')));
-		}) ?? Disposable.None);
+		this._register(
+			processService.onDidInvalidateProcess?.(event => {
+				if (event.terminalId !== this.identity.terminalId) return;
+				// Host readiness cannot revive a retired PTY. Stop pending reads and
+				// input now so the instance can expose its existing relaunch action.
+				this.processInvalidated = true;
+				this.stop();
+				this.processErrorEmitter.fire(new Error(localize('disconnectStatus', 'Lost connection to process')));
+			}) ?? Disposable.None,
+		);
 	}
 
 	public async start(reconnecting = false): Promise<void> {
@@ -85,12 +109,15 @@ export class TerminalProcessManager extends Disposable {
 			await this.waitForCommit(token);
 			this.commandSource.commitThrough(this.nextSequence, token);
 			while (!token.isCancellationRequested) {
-				const result = await raceCancellationError(this.processService.read({
-					...this.identity,
-					afterSequence: this.nextSequence,
-					afterCommandSequence: this.nextCommandSequence,
-					maxChunks: MAX_READ_CHUNKS,
-				}), token);
+				const result = await raceCancellationError(
+					this.processService.read({
+						...this.identity,
+						afterSequence: this.nextSequence,
+						afterCommandSequence: this.nextCommandSequence,
+						maxChunks: MAX_READ_CHUNKS,
+					}),
+					token,
+				);
 				if (token.isCancellationRequested) {
 					return;
 				}
@@ -145,7 +172,11 @@ export class TerminalProcessManager extends Disposable {
 				}
 				// The backend reports OS exit independently of pagination. A full page
 				// may still have a tail, so drain both streams before publishing exit.
-				if (result.exited && result.chunks.length < MAX_READ_CHUNKS && result.commandEvents.length < MAX_READ_CHUNKS) {
+				if (
+					result.exited &&
+					result.chunks.length < MAX_READ_CHUNKS &&
+					result.commandEvents.length < MAX_READ_CHUNKS
+				) {
 					const tail = this.decoder.decode();
 					if (tail) await this.emitProcessData(tail, token);
 					this.stopInput();
@@ -173,11 +204,22 @@ export class TerminalProcessManager extends Disposable {
 		if (!this.acceptingInput || this.suspending) throw new CancellationError();
 		let processSignal: TerminalProcessSignal;
 		switch (signal) {
-			case 'SIGINT': processSignal = 'interrupt'; break;
-			case 'SIGTERM': processSignal = 'terminate'; break;
-			case 'SIGKILL': processSignal = 'kill'; break;
-			case 'SIGHUP': processSignal = 'hangup'; break;
-			default: throw new Error(localize('terminal.signal.unsupported', 'Unsupported terminal process signal: {0}', signal));
+			case 'SIGINT':
+				processSignal = 'interrupt';
+				break;
+			case 'SIGTERM':
+				processSignal = 'terminate';
+				break;
+			case 'SIGKILL':
+				processSignal = 'kill';
+				break;
+			case 'SIGHUP':
+				processSignal = 'hangup';
+				break;
+			default:
+				throw new Error(
+					localize('terminal.signal.unsupported', 'Unsupported terminal process signal: {0}', signal),
+				);
 		}
 		await this.processService.sendSignal({ ...this.identity, signal: processSignal });
 	}
@@ -190,8 +232,12 @@ export class TerminalProcessManager extends Disposable {
 
 	/** Resolves after every UTF-8 batch containing this input is acknowledged by the process. */
 	public write(data: string): Promise<void> {
-		if (!this.acceptingInput || this.suspending || this.isDisposed) { return Promise.reject(new CancellationError()); }
-		if (data.length === 0) { return Promise.resolve(); }
+		if (!this.acceptingInput || this.suspending || this.isDisposed) {
+			return Promise.reject(new CancellationError());
+		}
+		if (data.length === 0) {
+			return Promise.resolve();
+		}
 		const completion = new DeferredPromise<void>();
 		this.pendingInputCompletions.push(completion);
 		this.pendingInput += data;
@@ -218,11 +264,15 @@ export class TerminalProcessManager extends Disposable {
 
 	public setDimensions(cols: number, rows: number): Promise<void> {
 		const dimensions = { cols, rows };
-		if (!this.acceptingInput || this.suspending || this.isDisposed) { return Promise.reject(new CancellationError()); }
+		if (!this.acceptingInput || this.suspending || this.isDisposed) {
+			return Promise.reject(new CancellationError());
+		}
 		const completion = new DeferredPromise<void>();
 		this.pendingResizeCompletions.push(completion);
 		this.pendingDimensions = dimensions;
-		if (this.resizeScheduled) { return completion.p; }
+		if (this.resizeScheduled) {
+			return completion.p;
+		}
 		this.resizeScheduled = true;
 		queueMicrotask(() => {
 			this.resizeScheduled = false;
@@ -231,12 +281,13 @@ export class TerminalProcessManager extends Disposable {
 			const completions = this.pendingResizeCompletions.splice(0);
 			if (!pending || !this.acceptingInput || this.isDisposed) return;
 			const generation = this.inputGeneration;
-			const operation = raceCancellationError(this.processService.resize({
-				...this.identity,
-				rows: pending.rows,
-				cols: pending.cols,
-			}), this.inputCancellation.value!.token);
-			for (const waiter of completions) { waiter.settleWith(operation); }
+			const operation = raceCancellationError(
+				this.processService.resize({ ...this.identity, rows: pending.rows, cols: pending.cols }),
+				this.inputCancellation.value!.token,
+			);
+			for (const waiter of completions) {
+				waiter.settleWith(operation);
+			}
 			void operation.catch(error => {
 				if (generation === this.inputGeneration && this.acceptingInput) {
 					this.processErrorEmitter.fire(error);
@@ -259,8 +310,10 @@ export class TerminalProcessManager extends Disposable {
 			this.pendingInput = this.pendingInput.slice(data.length);
 			operations.push(this.enqueueInput(data));
 		}
-		const acknowledgement = Promise.all(operations).then(() => { });
-		for (const completion of completions) { completion.settleWith(acknowledgement); }
+		const acknowledgement = Promise.all(operations).then(() => {});
+		for (const completion of completions) {
+			completion.settleWith(acknowledgement);
+		}
 	}
 
 	private enqueueInput(data: string | Uint8Array): Promise<void> {
@@ -286,14 +339,18 @@ export class TerminalProcessManager extends Disposable {
 		// Cancel acknowledgements as well as queued data. A hung old transport must
 		// not hold the input queue after this same Shell reconnects.
 		this.inputCancellation.value?.cancel();
-		for (const completion of this.pendingInputCompletions.splice(0)) { void completion.error(new CancellationError()); }
-		for (const completion of this.pendingResizeCompletions.splice(0)) { void completion.error(new CancellationError()); }
+		for (const completion of this.pendingInputCompletions.splice(0)) {
+			void completion.error(new CancellationError());
+		}
+		for (const completion of this.pendingResizeCompletions.splice(0)) {
+			void completion.error(new CancellationError());
+		}
 		this.pendingDimensions = undefined;
 		if (this.inputTimer !== undefined) {
 			clearTimeout(this.inputTimer);
 			this.inputTimer = undefined;
 		}
-		this.pendingInput = "";
+		this.pendingInput = '';
 	}
 
 	public stop(): void {
@@ -303,7 +360,7 @@ export class TerminalProcessManager extends Disposable {
 
 	/** Freeze only after already accepted stdin and screen writes have committed.
 	 * No new read can acknowledge bytes beyond the saved screen checkpoint. */
-	async serializeState(): Promise<{ readonly sequence: number; readonly pendingUtf8: readonly number[]; }> {
+	async serializeState(): Promise<{ readonly sequence: number; readonly pendingUtf8: readonly number[] }> {
 		this.suspending = true;
 		this.reading.clear();
 		this.flushInput();
@@ -312,7 +369,7 @@ export class TerminalProcessManager extends Disposable {
 		return { sequence: this.nextSequence, pendingUtf8: [...this.pendingUtf8] };
 	}
 
-	restoreState(state: { readonly sequence: number; readonly pendingUtf8: readonly number[]; }): void {
+	restoreState(state: { readonly sequence: number; readonly pendingUtf8: readonly number[] }): void {
 		this.nextSequence = state.sequence;
 		this.pendingUtf8 = [...state.pendingUtf8];
 		this.decoder.decode(Uint8Array.from(state.pendingUtf8), { stream: true });
@@ -331,14 +388,20 @@ export class TerminalProcessManager extends Disposable {
 		}
 	}
 
-	private async emitProcessData(data: string, token: CancellationToken, shellIntegration?: TerminalShellIntegrationEvent): Promise<void> {
-		const event: IProcessDataEvent = { data, trackCommit: true, ...(shellIntegration === undefined ? {} : { shellIntegration }) };
+	private async emitProcessData(
+		data: string,
+		token: CancellationToken,
+		shellIntegration?: TerminalShellIntegrationEvent,
+	): Promise<void> {
+		const event: IProcessDataEvent = {
+			data,
+			trackCommit: true,
+			...(shellIntegration === undefined ? {} : { shellIntegration }),
+		};
 		this.processDataEmitter.fire(event);
 		this.pendingCommit = event.writePromise;
 		await this.waitForCommit(token);
 	}
-
-
 }
 
 /** Only an unfinished valid UTF-8 prefix belongs to the decoder across a checkpoint. */
@@ -347,11 +410,19 @@ function utf8Suffix(bytes: readonly number[]): number[] {
 		const index = bytes.length - offset;
 		const lead = bytes[index]!;
 		if ((lead & 0xc0) === 0x80) continue;
-		const length = lead >= 0xc2 && lead <= 0xdf ? 2 : lead >= 0xe0 && lead <= 0xef ? 3 : lead >= 0xf0 && lead <= 0xf4 ? 4 : 0;
+		const length =
+			lead >= 0xc2 && lead <= 0xdf ? 2 : lead >= 0xe0 && lead <= 0xef ? 3 : lead >= 0xf0 && lead <= 0xf4 ? 4 : 0;
 		if (length <= offset) return [];
 		const suffix = bytes.slice(index);
 		if (suffix.slice(1).some(byte => (byte & 0xc0) !== 0x80)) return [];
-		if (suffix.length > 1 && ((lead === 0xe0 && suffix[1]! < 0xa0) || (lead === 0xed && suffix[1]! >= 0xa0) || (lead === 0xf0 && suffix[1]! < 0x90) || (lead === 0xf4 && suffix[1]! >= 0x90))) return [];
+		if (
+			suffix.length > 1 &&
+			((lead === 0xe0 && suffix[1]! < 0xa0) ||
+				(lead === 0xed && suffix[1]! >= 0xa0) ||
+				(lead === 0xf0 && suffix[1]! < 0x90) ||
+				(lead === 0xf4 && suffix[1]! >= 0x90))
+		)
+			return [];
 		return suffix;
 	}
 	return [];

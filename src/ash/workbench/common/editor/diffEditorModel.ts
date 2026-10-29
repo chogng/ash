@@ -15,6 +15,8 @@ export class DiffEditorModel extends EditorModel {
 	}
 
 	override isResolved(): boolean {
-		return !this.isDisposed() && this.originalModel?.isResolved() === true && this.modifiedModel?.isResolved() === true;
+		return (
+			!this.isDisposed() && this.originalModel?.isResolved() === true && this.modifiedModel?.isResolved() === true
+		);
 	}
 }

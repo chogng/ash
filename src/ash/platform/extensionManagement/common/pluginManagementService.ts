@@ -1,7 +1,7 @@
-import type { Event } from "../../../base/common/event.js";
+import type { Event } from '../../../base/common/event.js';
 import type { ExtensionUiTarget } from './extensionManagementService.js';
 import type { IWorkspaceFolder } from '../../workspace/common/workspace.js';
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export interface PluginPackageView {
 	readonly id: string;
@@ -18,9 +18,9 @@ export interface PluginPackageView {
 }
 
 export type PluginPermission =
-	| { readonly type: 'directory'; readonly access: 'read' | 'write'; }
-	| { readonly type: 'process'; readonly executable: string; }
-	| { readonly type: 'network'; readonly hosts: readonly string[]; };
+	| { readonly type: 'directory'; readonly access: 'read' | 'write' }
+	| { readonly type: 'process'; readonly executable: string }
+	| { readonly type: 'network'; readonly hosts: readonly string[] };
 
 export interface PluginInstallation {
 	readonly id: string;
@@ -54,4 +54,4 @@ export interface IPluginManagementService {
 	uninstall(plugin: PluginPackageView, revision: number): Promise<void>;
 }
 
-export const IPluginManagementService = createServiceIdentifier<IPluginManagementService>("pluginManagementService");
+export const IPluginManagementService = createServiceIdentifier<IPluginManagementService>('pluginManagementService');

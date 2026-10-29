@@ -1,12 +1,20 @@
 import type { IViewLineTokens } from '../tokens/lineTokens.js';
 
 /** Serializes one selected line fragment; regular whitespace preserves source tabs. */
-export function tokenizeLineToHTML(text: string, viewLineTokens: IViewLineTokens, colorMap: string[], startOffset: number, endOffset: number, tabSize: number, useNbsp: boolean): string {
+export function tokenizeLineToHTML(
+	text: string,
+	viewLineTokens: IViewLineTokens,
+	colorMap: string[],
+	startOffset: number,
+	endOffset: number,
+	tabSize: number,
+	useNbsp: boolean,
+): string {
 	const fragments: string[] = [];
 	let column = 0;
 	if (useNbsp) {
 		for (let offset = 0; offset < startOffset; offset++) {
-			column += text[offset] === '\t' ? tabSize - column % tabSize : 1;
+			column += text[offset] === '\t' ? tabSize - (column % tabSize) : 1;
 		}
 	}
 	for (let token = viewLineTokens.findTokenIndexAtOffset(startOffset); token < viewLineTokens.getCount(); token++) {
@@ -18,7 +26,7 @@ export function tokenizeLineToHTML(text: string, viewLineTokens: IViewLineTokens
 		let content = text.slice(start, end);
 		if (useNbsp) {
 			content = content.replace(/[\s\S]/g, character => {
-				const width = character === '\t' ? tabSize - column % tabSize : 1;
+				const width = character === '\t' ? tabSize - (column % tabSize) : 1;
 				column += width;
 				return character === '\t' || character === ' ' ? '\u00a0'.repeat(width) : character;
 			});
@@ -31,5 +39,10 @@ export function tokenizeLineToHTML(text: string, viewLineTokens: IViewLineTokens
 }
 
 function escapeHtml(value: string): string {
-	return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+	return value
+		.replaceAll('&', '&amp;')
+		.replaceAll('<', '&lt;')
+		.replaceAll('>', '&gt;')
+		.replaceAll('"', '&quot;')
+		.replaceAll("'", '&#39;');
 }

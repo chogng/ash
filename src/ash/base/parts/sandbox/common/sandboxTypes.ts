@@ -12,10 +12,7 @@ export interface ISandboxSubscription {
 export interface ISandboxIpcRenderer {
 	send(channel: string, ...args: unknown[]): void;
 	invoke(channel: string, params?: unknown): Promise<unknown>;
-	on(
-		channel: string,
-		listener: (value: unknown) => void,
-	): ISandboxSubscription;
+	on(channel: string, listener: (value: unknown) => void): ISandboxSubscription;
 }
 
 /** Registers one MessagePort response and releases the registration when cancelled. */

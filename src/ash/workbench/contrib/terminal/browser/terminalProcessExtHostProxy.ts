@@ -16,7 +16,9 @@ export interface ExtensionTerminalPty {
 /** The instance owns its screen; this child owns only an extension's bounded opaque PTY stream. */
 export class TerminalProcessExtHostProxy extends BasePty {
 	private readonly sendInput = (data: string) => this.dispatch('inputTaskTerminal', { data });
-	get input(): ((data: string) => Promise<void>) | undefined { return this.acceptsInput ? this.sendInput : undefined; }
+	get input(): ((data: string) => Promise<void>) | undefined {
+		return this.acceptsInput ? this.sendInput : undefined;
+	}
 	private readonly queue = new TaskQueue();
 	private readonly controller = new AbortController();
 	private timer: ReturnType<typeof setTimeout> | undefined;
@@ -24,7 +26,16 @@ export class TerminalProcessExtHostProxy extends BasePty {
 	private readonly incomingData = this._register(new Emitter<string>());
 	private readonly bufferer = this._register(new TerminalDataBufferer((_id, data) => this.handleData(data)));
 
-	constructor(id: number, private ptyId: string | undefined, private acceptsInput: boolean, private cols: number, private rows: number, private invoke: ExtensionTerminalPty['invoke'], private readonly releaseOwner: () => void, private readonly createPty?: (signal: AbortSignal) => Promise<ExtensionTerminalPty>) {
+	constructor(
+		id: number,
+		private ptyId: string | undefined,
+		private acceptsInput: boolean,
+		private cols: number,
+		private rows: number,
+		private invoke: ExtensionTerminalPty['invoke'],
+		private readonly releaseOwner: () => void,
+		private readonly createPty?: (signal: AbortSignal) => Promise<ExtensionTerminalPty>,
+	) {
 		super(id, false);
 		this._register(this.bufferer.startBuffering(id, this.incomingData.event));
 	}
@@ -41,7 +52,11 @@ export class TerminalProcessExtHostProxy extends BasePty {
 				throw new CancellationError();
 			}
 		}
-		const result = await this.invoke('openTaskTerminal', { ptyId: this.ptyId, dimensions: { columns: this.cols, rows: this.rows } }, this.controller.signal);
+		const result = await this.invoke(
+			'openTaskTerminal',
+			{ ptyId: this.ptyId, dimensions: { columns: this.cols, rows: this.rows } },
+			this.controller.signal,
+		);
 		if (this.closed) throw new CancellationError();
 		this.handleReady({ pid: -1, cwd: '' });
 		this.consume(result);
@@ -115,21 +130,27 @@ export class TerminalProcessExtHostProxy extends BasePty {
 	private poll(): void {
 		const ptyId = this.ptyId;
 		if (this.closed || ptyId === undefined) return;
-		void this.queue.schedule(async () => {
-			const result = await this.invoke('readTaskTerminal', { ptyId }, this.controller.signal);
-			if (this.closed) return;
-			this.consume(result);
-		}).then(() => {
-			if (!this.closed) this.timer = setTimeout(() => {
-				this.timer = undefined;
-				this.poll();
-			}, 50);
-		}, error => {
-			if (!this.closed) {
-				onUnexpectedError(error);
-				this.shutdown(true);
-			}
-		});
+		void this.queue
+			.schedule(async () => {
+				const result = await this.invoke('readTaskTerminal', { ptyId }, this.controller.signal);
+				if (this.closed) return;
+				this.consume(result);
+			})
+			.then(
+				() => {
+					if (!this.closed)
+						this.timer = setTimeout(() => {
+							this.timer = undefined;
+							this.poll();
+						}, 50);
+				},
+				error => {
+					if (!this.closed) {
+						onUnexpectedError(error);
+						this.shutdown(true);
+					}
+				},
+			);
 	}
 
 	private consume(value: JsonValue): void {
@@ -143,10 +164,16 @@ export class TerminalProcessExtHostProxy extends BasePty {
 			else if (event.type === 'name') {
 				this.bufferer.flushBuffer(this.id);
 				this.handleDidChangeProperty({ type: ProcessPropertyType.Title, value: text(event.name, 256) });
-			}
-			else if (event.type === 'close') {
-				if (event.code !== null && (typeof event.code !== 'number' || !Number.isSafeInteger(event.code) || event.code < 0 || event.code > 2147483647)) throw invalid();
-				this.finish(event.code === null ? undefined : event.code as number);
+			} else if (event.type === 'close') {
+				if (
+					event.code !== null &&
+					(typeof event.code !== 'number' ||
+						!Number.isSafeInteger(event.code) ||
+						event.code < 0 ||
+						event.code > 2147483647)
+				)
+					throw invalid();
+				this.finish(event.code === null ? undefined : (event.code as number));
 			} else throw invalid();
 		}
 	}
@@ -158,16 +185,28 @@ export class TerminalProcessExtHostProxy extends BasePty {
 }
 
 function invalid(): TypeError {
-	return new TypeError(localize('terminal.profile.invalidProviderResult', 'Invalid terminal profile provider response.'));
+	return new TypeError(
+		localize('terminal.profile.invalidProviderResult', 'Invalid terminal profile provider response.'),
+	);
 }
 
 function record(value: unknown, keys?: readonly string[]): Record<string, JsonValue> {
-	if (!value || typeof value !== 'object' || Array.isArray(value) || keys && Object.keys(value).some(key => !keys.includes(key))) throw invalid();
+	if (
+		!value ||
+		typeof value !== 'object' ||
+		Array.isArray(value) ||
+		(keys && Object.keys(value).some(key => !keys.includes(key)))
+	)
+		throw invalid();
 	return value as Record<string, JsonValue>;
 }
 
 function text(value: unknown, maximum: number, allowEmpty = false): string {
-	if (typeof value !== 'string' || value.length > maximum || !allowEmpty && (!value || /[\u0000-\u001f\u007f]/.test(value))) throw invalid();
+	if (
+		typeof value !== 'string' ||
+		value.length > maximum ||
+		(!allowEmpty && (!value || /[\u0000-\u001f\u007f]/.test(value)))
+	)
+		throw invalid();
 	return value;
 }
-

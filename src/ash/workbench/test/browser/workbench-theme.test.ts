@@ -7,7 +7,12 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { ILanguageService } from '../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../editor/common/services/languageService.js';
-import { Disposable, DisposableTracker, installDisposableTracker, toDisposable } from '../../../base/common/lifecycle.js';
+import {
+	Disposable,
+	DisposableTracker,
+	installDisposableTracker,
+	toDisposable,
+} from '../../../base/common/lifecycle.js';
 import { IConfigurationService } from '../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { createColorTheme, highContrastDarkColorTheme } from '../../../platform/theme/common/colorTheme.js';
@@ -34,13 +39,18 @@ class ThemeWindow extends Disposable {
 		this._register(toDisposable(() => this.browser.window.close()));
 		Object.defineProperty(this.browser.window, 'matchMedia', {
 			value: (query: string) => {
-				return query === '(prefers-color-scheme: dark)' ? this.systemTheme : { matches: false, addEventListener() { }, removeEventListener() { } };
-			}
+				return query === '(prefers-color-scheme: dark)'
+					? this.systemTheme
+					: { matches: false, addEventListener() {}, removeEventListener() {} };
+			},
 		});
 		this.services.registerInstance(IConfigurationService, this.configuration);
 		this.services.registerInstance(ITelemetryService, NullTelemetryService);
 		this.services.registerInstance(ILanguageService, this._register(new LanguageService()));
-		this.services.registerInstance(IHostColorSchemeService, this._register(new BrowserHostColorSchemeService(this.browser.window as unknown as Window)));
+		this.services.registerInstance(
+			IHostColorSchemeService,
+			this._register(new BrowserHostColorSchemeService(this.browser.window as unknown as Window)),
+		);
 		this.themes = this._register(this.services.createInstance(WorkbenchThemeService, this.root));
 		this.themes.initialize();
 	}
@@ -49,7 +59,8 @@ class ThemeWindow extends Disposable {
 test('Activity Bar badge theme colors respect profile and theme-specific overrides and reset independently', async () => {
 	using window = new ThemeWindow();
 	const { configuration } = window;
-	const read = (): string[] => ['background', 'foreground'].map(part => window.styles.getPropertyValue(`--ash-activityBarBadge-${part}`));
+	const read = (): string[] =>
+		['background', 'foreground'].map(part => window.styles.getPropertyValue(`--ash-activityBarBadge-${part}`));
 	const defaults = read();
 	await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, {
 		'badge.background': '#111111',
@@ -63,7 +74,10 @@ test('Activity Bar badge theme colors respect profile and theme-specific overrid
 	assert.deepEqual(read(), ['#654321', '#fedcba']);
 	await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-light');
 	assert.deepEqual(read(), ['#123456', '#fedcba']);
-	await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, { 'badge.background': '#111111', 'badge.foreground': '#222222' });
+	await configuration.updateValue(WorkbenchConfiguration.colorCustomizations, {
+		'badge.background': '#111111',
+		'badge.foreground': '#222222',
+	});
 	assert.deepEqual(read(), defaults);
 });
 
@@ -92,13 +106,19 @@ test('workbench colors follow theme changes and keep editor group borders visibl
 		groupBorder: window.styles.getPropertyValue('--ash-editorGroup-border'),
 	});
 	assert.deepEqual(colors(), {
-		workbench: '#ffffff', tab: '#eeeeee', titleBar: '#ffffff',
-		sideBar: '#f8f8f8', groupBorder: '#e5e5e5',
+		workbench: '#ffffff',
+		tab: '#eeeeee',
+		titleBar: '#ffffff',
+		sideBar: '#f8f8f8',
+		groupBorder: '#e5e5e5',
 	});
 	await configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-dark');
 	assert.deepEqual(colors(), {
-		workbench: '#1e1e1e', tab: '#252526', titleBar: '#1e1e1e',
-		sideBar: '#252526', groupBorder: '#2b2b2b',
+		workbench: '#1e1e1e',
+		tab: '#252526',
+		titleBar: '#1e1e1e',
+		sideBar: '#252526',
+		groupBorder: '#2b2b2b',
 	});
 	await configuration.updateValue(WorkbenchConfiguration.colorTheme, highContrastDarkColorTheme.id);
 	assert.equal(colors().groupBorder, '#ffffff');
@@ -106,7 +126,9 @@ test('workbench colors follow theme changes and keep editor group borders visibl
 
 test('remote status item hover follows the status item foreground override', () => {
 	const theme = createColorTheme({
-		id: 'status-hover-override', label: 'Status Hover Override', colorScheme: ColorScheme.Dark,
+		id: 'status-hover-override',
+		label: 'Status Hover Override',
+		colorScheme: ColorScheme.Dark,
 		colorOverrides: { 'statusBarItem.hoverForeground': '#123456' },
 	});
 	assert.equal(theme.getColorCss('statusBarItem.remoteHoverForeground'), '#123456');
@@ -114,7 +136,9 @@ test('remote status item hover follows the status item foreground override', () 
 
 test('editor group border follows the high contrast border override', () => {
 	const theme = createColorTheme({
-		id: 'contrast-border-override', label: 'Contrast Border Override', colorScheme: ColorScheme.HighContrastDark,
+		id: 'contrast-border-override',
+		label: 'Contrast Border Override',
+		colorScheme: ColorScheme.HighContrastDark,
 		colorOverrides: { contrastBorder: '#abcdef' },
 	});
 	assert.equal(theme.getColorCss('editorGroup.border'), '#abcdef');
@@ -131,12 +155,23 @@ test('dynamic theme registration and replacement update the active window withou
 	assert.equal(root.getAttribute('data-color-theme'), 'extension-demo-dark');
 	let changes = 0;
 	using listener = themes.onDidColorThemeChange(() => changes++);
-	registration.replace([createColorTheme({
-		id: 'extension-demo-dark', label: 'Updated', colorScheme: ColorScheme.HighContrastDark,
-		colorOverrides: { 'editor.background': '#123456' },
-	})]);
-	assert.deepEqual([themes.getColorTheme().label, root.getAttribute('data-color-scheme'), window.styles.getPropertyValue('--ash-editor-background'), changes],
-		['Updated', ColorScheme.HighContrastDark, '#123456', 1]);
+	registration.replace([
+		createColorTheme({
+			id: 'extension-demo-dark',
+			label: 'Updated',
+			colorScheme: ColorScheme.HighContrastDark,
+			colorOverrides: { 'editor.background': '#123456' },
+		}),
+	]);
+	assert.deepEqual(
+		[
+			themes.getColorTheme().label,
+			root.getAttribute('data-color-scheme'),
+			window.styles.getPropertyValue('--ash-editor-background'),
+			changes,
+		],
+		['Updated', ColorScheme.HighContrastDark, '#123456', 1],
+	);
 	registration.dispose();
 	assert.equal(root.getAttribute('data-color-theme'), 'ash-light');
 	assert.equal(configuration.getValue(WorkbenchConfiguration.colorTheme), 'extension-demo-dark');
@@ -152,9 +187,13 @@ test('unrelated registrations do not notify colors or file icons and disposal re
 		let icons = 0;
 		using colorListener = themes.onDidColorThemeChange(() => colors++);
 		using iconListener = themes.onDidChangeResourceIcons(() => icons++);
-		using registration = WorkbenchThemesRegistry.registerColorTheme(createColorTheme({
-			id: 'unrelated-high-contrast', label: 'Unrelated High Contrast', colorScheme: ColorScheme.HighContrastDark,
-		}));
+		using registration = WorkbenchThemesRegistry.registerColorTheme(
+			createColorTheme({
+				id: 'unrelated-high-contrast',
+				label: 'Unrelated High Contrast',
+				colorScheme: ColorScheme.HighContrastDark,
+			}),
+		);
 		assert.deepEqual([colors, icons], [0, 0]);
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, highContrastDarkColorTheme.id);
 		assert.deepEqual([colors, icons, root.getAttribute('data-color-scheme')], [1, 1, ColorScheme.HighContrastDark]);
@@ -178,18 +217,28 @@ test('workbench theme creation rejects a missing configuration registration', ()
 
 class TestMediaQueryList {
 	private readonly listeners = new Set<() => void>();
-	constructor(public matches: boolean) { }
-	public get listenerCount(): number { return this.listeners.size; }
+	constructor(public matches: boolean) {}
+	public get listenerCount(): number {
+		return this.listeners.size;
+	}
 	public addEventListener(type: string, listener: () => void): void {
-		if (type === 'change') { this.listeners.add(listener); }
+		if (type === 'change') {
+			this.listeners.add(listener);
+		}
 	}
 	public removeEventListener(type: string, listener: () => void): void {
-		if (type === 'change') { this.listeners.delete(listener); }
+		if (type === 'change') {
+			this.listeners.delete(listener);
+		}
 	}
 	public setMatches(matches: boolean): void {
-		if (matches === this.matches) { return; }
+		if (matches === this.matches) {
+			return;
+		}
 		this.matches = matches;
-		for (const listener of this.listeners) { listener(); }
+		for (const listener of this.listeners) {
+			listener();
+		}
 	}
 }
 

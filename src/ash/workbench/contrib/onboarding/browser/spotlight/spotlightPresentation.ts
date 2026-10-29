@@ -9,9 +9,13 @@ import { onboardingTargetRegistry } from './onboardingTarget.js';
 import '../media/spotlight.css';
 
 export class SpotlightPresentation {
-	constructor(private readonly container: HTMLElement) { }
+	constructor(private readonly container: HTMLElement) {}
 
-	public async show(steps: readonly IOnboardingStep[], token: CancellationToken, scope?: string): Promise<OnboardingOutcome> {
+	public async show(
+		steps: readonly IOnboardingStep[],
+		token: CancellationToken,
+		scope?: string,
+	): Promise<OnboardingOutcome> {
 		if (steps.length === 0) return 'unavailable';
 		const previousFocus = this.container.ownerDocument.activeElement;
 		try {
@@ -29,7 +33,13 @@ export class SpotlightPresentation {
 		}
 	}
 
-	private showStep(step: IOnboardingStep, target: HTMLElement, index: number, total: number, token: CancellationToken): Promise<OnboardingOutcome> {
+	private showStep(
+		step: IOnboardingStep,
+		target: HTMLElement,
+		index: number,
+		total: number,
+		token: CancellationToken,
+	): Promise<OnboardingOutcome> {
 		return new Promise<OnboardingOutcome>(resolve => {
 			const resources = new DisposableStore();
 			let settled = false;
@@ -57,7 +67,10 @@ export class SpotlightPresentation {
 			description.textContent = step.description;
 			const help = document.createElement('p');
 			help.hidden = true;
-			help.textContent = localize('onboarding.help', 'Use Tab to reach Next or Dismiss. Press Escape to close this guide.');
+			help.textContent = localize(
+				'onboarding.help',
+				'Use Tab to reach Next or Dismiss. Press Escape to close this guide.',
+			);
 			const progress = document.createElement('p');
 			progress.className = 'ash-onboarding-spotlight-progress';
 			progress.textContent = localize('onboarding.stepProgress', 'Step {0} of {1}', index + 1, total);
@@ -67,18 +80,23 @@ export class SpotlightPresentation {
 			root.append(frame, card);
 			this.container.append(root);
 			resources.add(toDisposable(() => root.remove()));
-			const dismiss = resources.add(new Button(actions, {
-				...defaultButtonStyles,
-				label: localize('onboarding.dismiss', 'Dismiss'),
-				presentation: 'secondary',
-				onClick: () => finish('dismissed'),
-			}));
-			const next = resources.add(new Button(actions, {
-				...defaultButtonStyles,
-				label: index === total - 1 ? localize('onboarding.done', 'Done') : localize('onboarding.next', 'Next'),
-				presentation: 'primary',
-				onClick: () => finish('completed'),
-			}));
+			const dismiss = resources.add(
+				new Button(actions, {
+					...defaultButtonStyles,
+					label: localize('onboarding.dismiss', 'Dismiss'),
+					presentation: 'secondary',
+					onClick: () => finish('dismissed'),
+				}),
+			);
+			const next = resources.add(
+				new Button(actions, {
+					...defaultButtonStyles,
+					label:
+						index === total - 1 ? localize('onboarding.done', 'Done') : localize('onboarding.next', 'Next'),
+					presentation: 'primary',
+					onClick: () => finish('completed'),
+				}),
+			);
 			const targetWindow = getWindow(this.container);
 			const position = (): void => {
 				if (!target.isConnected) {
@@ -100,16 +118,19 @@ export class SpotlightPresentation {
 			};
 			resources.add(addDisposableListener(targetWindow, 'resize', position));
 			resources.add(addDisposableListener(this.container, 'scroll', position, true));
-			resources.add(addDisposableListener(card, 'keydown', event => {
-				if (event.key === 'Escape') {
-					event.preventDefault();
-					finish('dismissed');
-				} else if (event.key === 'F1') {
-					event.preventDefault();
-					help.hidden = false;
-				}
-			}));
-			if (step.advanceOnTargetClick) resources.add(addDisposableListener(target, 'click', () => finish('completed')));
+			resources.add(
+				addDisposableListener(card, 'keydown', event => {
+					if (event.key === 'Escape') {
+						event.preventDefault();
+						finish('dismissed');
+					} else if (event.key === 'F1') {
+						event.preventDefault();
+						help.hidden = false;
+					}
+				}),
+			);
+			if (step.advanceOnTargetClick)
+				resources.add(addDisposableListener(target, 'click', () => finish('completed')));
 			resources.add(token.onCancellationRequested(() => finish('cancelled')));
 			if (token.isCancellationRequested) {
 				finish('cancelled');

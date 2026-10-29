@@ -8,7 +8,11 @@ import { Selection } from '../../common/core/selection.js';
 import { TextModel } from '../../common/model/textModel.js';
 import { getMapForWordSeparators } from '../../common/core/wordCharacterClassifier.js';
 import { TestLanguageConfigurationService } from './modes/testLanguageConfigurationService.js';
-import { createTestCursorConfiguration, createTestCursorsController, createTestDeleteWordContext } from './testCursorConfiguration.js';
+import {
+	createTestCursorConfiguration,
+	createTestCursorsController,
+	createTestDeleteWordContext,
+} from './testCursorConfiguration.js';
 
 test('WordOperations resolves Unicode words at a position', () => {
 	using model = new TextModel('alpha beta');
@@ -25,9 +29,18 @@ test('WordOperations returns standard word movement and deletion ranges', () => 
 	const config = createTestCursorConfiguration(model, languages);
 	const classifier = getMapForWordSeparators(config.wordSeparators, config.wordSegmenterLocales);
 	using controller = createTestCursorsController(model, [Selection.fromPositions(new Position(1, 11))]);
-	assert.deepEqual(WordOperations.moveWordLeft(classifier, model, new Position(1, 11), WordNavigationType.WordStart, false), new Position(1, 7));
-	assert.deepEqual(WordOperations.moveWordRight(classifier, model, new Position(1, 1), WordNavigationType.WordEnd), new Position(1, 6));
-	const range = WordOperations.deleteWordLeft(createTestDeleteWordContext(config, model, controller.getSelections()[0]!), WordNavigationType.WordStart);
+	assert.deepEqual(
+		WordOperations.moveWordLeft(classifier, model, new Position(1, 11), WordNavigationType.WordStart, false),
+		new Position(1, 7),
+	);
+	assert.deepEqual(
+		WordOperations.moveWordRight(classifier, model, new Position(1, 1), WordNavigationType.WordEnd),
+		new Position(1, 6),
+	);
+	const range = WordOperations.deleteWordLeft(
+		createTestDeleteWordContext(config, model, controller.getSelections()[0]!),
+		WordNavigationType.WordStart,
+	);
 	assert.deepEqual(range, new Range(1, 7, 1, 11));
 	controller.executeCommands([new ReplaceCommand(range!, '')]);
 	assert.equal(model.getText(), 'alpha ');

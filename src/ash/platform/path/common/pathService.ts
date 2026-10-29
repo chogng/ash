@@ -10,8 +10,8 @@ export interface IPathService {
 	readonly path: Promise<IPath>;
 	/** Actual ambient home, absent when the connection has no OS user directory. */
 	readonly resolvedUserHome: URI | undefined;
-	userHome(options: { preferLocal: true; }): URI;
-	userHome(options?: { preferLocal: boolean; }): Promise<URI>;
+	userHome(options: { preferLocal: true }): URI;
+	userHome(options?: { preferLocal: boolean }): Promise<URI>;
 	getPath(resource: URI): Promise<IPath | undefined>;
 	/** Converts an absolute App Server path without applying the renderer's separator rules. */
 	fileURI(path: string): Promise<URI>;

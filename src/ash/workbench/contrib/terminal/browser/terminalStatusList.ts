@@ -28,7 +28,9 @@ export class TerminalStatusList extends Disposable implements ITerminalStatusLis
 	readonly onDidRemoveStatus = this.removed.event;
 	readonly onDidChangePrimaryStatus = this.primaryChanged.event;
 
-	get statuses(): readonly ITerminalStatus[] { return [...this.messages.values()]; }
+	get statuses(): readonly ITerminalStatus[] {
+		return [...this.messages.values()];
+	}
 	get primary(): ITerminalStatus | undefined {
 		let primary: ITerminalStatus | undefined;
 		for (const status of this.messages.values()) {

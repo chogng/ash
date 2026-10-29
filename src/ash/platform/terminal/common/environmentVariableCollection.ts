@@ -1,27 +1,63 @@
 import type { IProcessEnvironment } from '../../../base/common/platform.js';
 import { isWindows } from '../../../base/common/platform.js';
-import { EnvironmentVariableMutatorType, type EnvironmentVariableScope, type IEnvironmentVariableCollection, type IMergedEnvironmentVariableCollection, type IMergedEnvironmentVariableCollectionDiff, type IExtensionOwnedEnvironmentVariableMutator } from './environmentVariable.js';
+import {
+	EnvironmentVariableMutatorType,
+	type EnvironmentVariableScope,
+	type IEnvironmentVariableCollection,
+	type IMergedEnvironmentVariableCollection,
+	type IMergedEnvironmentVariableCollectionDiff,
+	type IExtensionOwnedEnvironmentVariableMutator,
+} from './environmentVariable.js';
 
 /** A launch snapshot; extension synchronization and process inheritance stay with their owners. */
 export class MergedEnvironmentVariableCollection implements IMergedEnvironmentVariableCollection {
 	readonly collections: ReadonlyMap<string, IEnvironmentVariableCollection>;
 
-	constructor(collections: ReadonlyMap<string, IEnvironmentVariableCollection>, private readonly caseSensitive = !isWindows) {
-		this.collections = new Map([...collections].map(([extension, collection]) => [extension, {
-			map: new Map([...collection.map].map(([key, mutator]) => [key, Object.freeze({ ...mutator, ...(mutator.options ? { options: Object.freeze({ ...mutator.options }) } : {}), scope: snapshotScope(mutator.scope) })])),
-			descriptionMap: collection.descriptionMap && new Map([...collection.descriptionMap].map(([key, description]) => [key, Object.freeze({ ...description, scope: snapshotScope(description.scope) })])),
-		}]));
+	constructor(
+		collections: ReadonlyMap<string, IEnvironmentVariableCollection>,
+		private readonly caseSensitive = !isWindows,
+	) {
+		this.collections = new Map(
+			[...collections].map(([extension, collection]) => [
+				extension,
+				{
+					map: new Map(
+						[...collection.map].map(([key, mutator]) => [
+							key,
+							Object.freeze({
+								...mutator,
+								...(mutator.options ? { options: Object.freeze({ ...mutator.options }) } : {}),
+								scope: snapshotScope(mutator.scope),
+							}),
+						]),
+					),
+					descriptionMap:
+						collection.descriptionMap &&
+						new Map(
+							[...collection.descriptionMap].map(([key, description]) => [
+								key,
+								Object.freeze({ ...description, scope: snapshotScope(description.scope) }),
+							]),
+						),
+				},
+			]),
+		);
 	}
 
-	getVariableMap(scope: EnvironmentVariableScope | undefined): Map<string, IExtensionOwnedEnvironmentVariableMutator[]> {
+	getVariableMap(
+		scope: EnvironmentVariableScope | undefined,
+	): Map<string, IExtensionOwnedEnvironmentVariableMutator[]> {
 		const result = new Map<string, IExtensionOwnedEnvironmentVariableMutator[]>();
 		const groups = new Map<string, IExtensionOwnedEnvironmentVariableMutator[]>();
 		for (const [extensionIdentifier, collection] of this.collections) {
 			for (const mutator of collection.map.values()) {
 				if (!inScope(mutator.scope, scope)) continue;
-				const identity = JSON.stringify([this.caseSensitive ? mutator.variable : mutator.variable.toLowerCase(), mutator.scope?.workspaceFolder?.uri.toString()]);
+				const identity = JSON.stringify([
+					this.caseSensitive ? mutator.variable : mutator.variable.toLowerCase(),
+					mutator.scope?.workspaceFolder?.uri.toString(),
+				]);
 				let mutations = groups.get(identity);
-				if (!mutations) groups.set(identity, mutations = []);
+				if (!mutations) groups.set(identity, (mutations = []));
 				// Earlier extensions have priority. Their Replace cuts off lower
 				// priority mutations in the same scope, while scoped entries remain
 				// independent of the global mutation for the variable.
@@ -31,8 +67,10 @@ export class MergedEnvironmentVariableCollection implements IMergedEnvironmentVa
 		}
 		for (const mutations of groups.values()) {
 			const name = mutations[0]!.variable;
-			const key = this.caseSensitive ? name : [...result.keys()].find(key => key.toLowerCase() === name.toLowerCase()) ?? name;
-			result.set(key, [...result.get(key) ?? [], ...mutations]);
+			const key = this.caseSensitive
+				? name
+				: ([...result.keys()].find(key => key.toLowerCase() === name.toLowerCase()) ?? name);
+			result.set(key, [...(result.get(key) ?? []), ...mutations]);
 		}
 		return result;
 	}
@@ -41,19 +79,26 @@ export class MergedEnvironmentVariableCollection implements IMergedEnvironmentVa
 		const result = new Map<string, string | undefined>();
 		for (const [extension, collection] of this.collections) {
 			for (const description of collection.descriptionMap?.values() ?? []) {
-				if (description.scope?.workspaceFolder?.uri.toString() === scope?.workspaceFolder?.uri.toString()) result.set(extension, description.description);
+				if (description.scope?.workspaceFolder?.uri.toString() === scope?.workspaceFolder?.uri.toString())
+					result.set(extension, description.description);
 			}
 		}
 		return result;
 	}
 
-	async applyToProcessEnvironment(env: IProcessEnvironment, scope: EnvironmentVariableScope | undefined, variableResolver?: (value: string) => Promise<string>): Promise<void> {
+	async applyToProcessEnvironment(
+		env: IProcessEnvironment,
+		scope: EnvironmentVariableScope | undefined,
+		variableResolver?: (value: string) => Promise<string>,
+	): Promise<void> {
 		// Resolve into a working copy so cancellation or failed resolution cannot
 		// partially change the caller's launch environment.
 		const result = { ...env };
-		const shellValues = new Map<string, { constant: string | undefined; prefix: string; suffix: string; }>();
+		const shellValues = new Map<string, { constant: string | undefined; prefix: string; suffix: string }>();
 		for (const [name, mutations] of this.getVariableMap(scope)) {
-			const key = this.caseSensitive ? name : Object.keys(result).find(key => key.toLowerCase() === name.toLowerCase()) ?? name;
+			const key = this.caseSensitive
+				? name
+				: (Object.keys(result).find(key => key.toLowerCase() === name.toLowerCase()) ?? name);
 			for (const mutator of mutations) {
 				const creation = mutator.options === undefined || mutator.options.applyAtProcessCreation === true;
 				const shell = mutator.options?.applyAtShellIntegration === true;
@@ -61,9 +106,18 @@ export class MergedEnvironmentVariableCollection implements IMergedEnvironmentVa
 				const value = variableResolver ? await variableResolver(mutator.value) : mutator.value;
 				if (creation) {
 					const current = result[key] ?? '';
-					const next = mutator.type === EnvironmentVariableMutatorType.Replace ? value
-						: mutator.type === EnvironmentVariableMutatorType.Append ? current + value : value + current;
-					Object.defineProperty(result, key, { value: next, enumerable: true, configurable: true, writable: true });
+					const next =
+						mutator.type === EnvironmentVariableMutatorType.Replace
+							? value
+							: mutator.type === EnvironmentVariableMutatorType.Append
+								? current + value
+								: value + current;
+					Object.defineProperty(result, key, {
+						value: next,
+						enumerable: true,
+						configurable: true,
+						writable: true,
+					});
 				}
 				if (shell) {
 					// Compose against an unknown post-RC value. A scoped Replace
@@ -74,7 +128,10 @@ export class MergedEnvironmentVariableCollection implements IMergedEnvironmentVa
 						state.prefix = '';
 						state.suffix = '';
 					} else if (state.constant !== undefined) {
-						state.constant = mutator.type === EnvironmentVariableMutatorType.Append ? state.constant + value : value + state.constant;
+						state.constant =
+							mutator.type === EnvironmentVariableMutatorType.Append
+								? state.constant + value
+								: value + state.constant;
 					} else if (mutator.type === EnvironmentVariableMutatorType.Append) {
 						state.suffix += value;
 					} else {
@@ -108,7 +165,9 @@ export class MergedEnvironmentVariableCollection implements IMergedEnvironmentVa
 			if (entries.length) {
 				Object.defineProperty(result, name, {
 					value: [result[name], ...entries].filter(value => value !== undefined && value !== '').join(':'),
-					enumerable: true, configurable: true, writable: true,
+					enumerable: true,
+					configurable: true,
+					writable: true,
 				});
 			}
 		}
@@ -117,7 +176,10 @@ export class MergedEnvironmentVariableCollection implements IMergedEnvironmentVa
 		}
 	}
 
-	diff(other: IMergedEnvironmentVariableCollection, scope: EnvironmentVariableScope | undefined): IMergedEnvironmentVariableCollectionDiff | undefined {
+	diff(
+		other: IMergedEnvironmentVariableCollection,
+		scope: EnvironmentVariableScope | undefined,
+	): IMergedEnvironmentVariableCollectionDiff | undefined {
 		const before = this.getVariableMap(scope);
 		const after = other.getVariableMap(scope);
 		const added = new Map<string, IExtensionOwnedEnvironmentVariableMutator[]>();
@@ -128,7 +190,13 @@ export class MergedEnvironmentVariableCollection implements IMergedEnvironmentVa
 			const next = after.get(name) ?? [];
 			const additions = next.filter(mutation => !previous.some(old => sameOwner(old, mutation)));
 			const removals = previous.filter(mutation => !next.some(current => sameOwner(current, mutation)));
-			const changes = next.filter(mutation => previous.some(old => sameOwner(old, mutation) && (old.type !== mutation.type || old.value !== mutation.value || !samePhases(old, mutation))));
+			const changes = next.filter(mutation =>
+				previous.some(
+					old =>
+						sameOwner(old, mutation) &&
+						(old.type !== mutation.type || old.value !== mutation.value || !samePhases(old, mutation)),
+				),
+			);
 			if (additions.length) added.set(name, additions);
 			if (removals.length) removed.set(name, removals);
 			if (changes.length) changed.set(name, changes);
@@ -137,21 +205,44 @@ export class MergedEnvironmentVariableCollection implements IMergedEnvironmentVa
 	}
 }
 
-function encodeShellMetadata(value: string): string { return value.replaceAll('\\', '\\\\').replaceAll(':', '\\x3a'); }
-
-function samePhases(a: IExtensionOwnedEnvironmentVariableMutator, b: IExtensionOwnedEnvironmentVariableMutator): boolean {
-	return (a.options === undefined || a.options.applyAtProcessCreation === true) === (b.options === undefined || b.options.applyAtProcessCreation === true)
-		&& (a.options?.applyAtShellIntegration === true) === (b.options?.applyAtShellIntegration === true);
+function encodeShellMetadata(value: string): string {
+	return value.replaceAll('\\', '\\\\').replaceAll(':', '\\x3a');
 }
 
-function sameOwner(a: IExtensionOwnedEnvironmentVariableMutator, b: IExtensionOwnedEnvironmentVariableMutator): boolean {
-	return a.extensionIdentifier === b.extensionIdentifier && a.scope?.workspaceFolder?.uri.toString() === b.scope?.workspaceFolder?.uri.toString();
+function samePhases(
+	a: IExtensionOwnedEnvironmentVariableMutator,
+	b: IExtensionOwnedEnvironmentVariableMutator,
+): boolean {
+	return (
+		(a.options === undefined || a.options.applyAtProcessCreation === true) ===
+			(b.options === undefined || b.options.applyAtProcessCreation === true) &&
+		(a.options?.applyAtShellIntegration === true) === (b.options?.applyAtShellIntegration === true)
+	);
 }
 
-function inScope(mutation: EnvironmentVariableScope | undefined, launch: EnvironmentVariableScope | undefined): boolean {
-	return !mutation?.workspaceFolder || mutation.workspaceFolder.uri.toString() === launch?.workspaceFolder?.uri.toString();
+function sameOwner(
+	a: IExtensionOwnedEnvironmentVariableMutator,
+	b: IExtensionOwnedEnvironmentVariableMutator,
+): boolean {
+	return (
+		a.extensionIdentifier === b.extensionIdentifier &&
+		a.scope?.workspaceFolder?.uri.toString() === b.scope?.workspaceFolder?.uri.toString()
+	);
+}
+
+function inScope(
+	mutation: EnvironmentVariableScope | undefined,
+	launch: EnvironmentVariableScope | undefined,
+): boolean {
+	return (
+		!mutation?.workspaceFolder ||
+		mutation.workspaceFolder.uri.toString() === launch?.workspaceFolder?.uri.toString()
+	);
 }
 
 function snapshotScope(scope: EnvironmentVariableScope | undefined): EnvironmentVariableScope | undefined {
-	return scope && Object.freeze({ workspaceFolder: scope.workspaceFolder && Object.freeze({ ...scope.workspaceFolder }) });
+	return (
+		scope &&
+		Object.freeze({ workspaceFolder: scope.workspaceFolder && Object.freeze({ ...scope.workspaceFolder }) })
+	);
 }

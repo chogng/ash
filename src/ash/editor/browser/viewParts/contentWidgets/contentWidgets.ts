@@ -1,7 +1,12 @@
 import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { h, getClientArea, getDomNodePagePosition } from '../../../../base/browser/dom.js';
 import { Disposable, DisposableMap, toDisposable } from '../../../../base/common/lifecycle.js';
-import { ContentWidgetPositionPreference, type IContentWidget, type IContentWidgetPosition, type IContentWidgetRenderedCoordinate } from '../../editorBrowser.js';
+import {
+	ContentWidgetPositionPreference,
+	type IContentWidget,
+	type IContentWidgetPosition,
+	type IContentWidgetRenderedCoordinate,
+} from '../../editorBrowser.js';
 import { type IPosition, Position } from '../../../common/core/position.js';
 import { type IDimension } from '../../../common/core/2d/dimension.js';
 import { PositionAffinity } from '../../../common/model.js';
@@ -38,7 +43,10 @@ export class ViewContentWidgets extends ViewPart {
 	public readonly overflowingContentWidgetsDomNode: FastDomNode<HTMLDivElement>;
 	private readonly widgets = this._register(new DisposableMap<string, ContentWidget>());
 
-	constructor(context: ViewContext, private readonly viewDomNode: FastDomNode<HTMLElement>) {
+	constructor(
+		context: ViewContext,
+		private readonly viewDomNode: FastDomNode<HTMLElement>,
+	) {
 		super(context);
 		this.domNode = createFastDomNode(h(viewDomNode.domNode.ownerDocument, 'div'));
 		PartFingerprints.write(this.domNode, PartFingerprint.ContentWidgets);
@@ -50,10 +58,12 @@ export class ViewContentWidgets extends ViewPart {
 		PartFingerprints.write(this.overflowingContentWidgetsDomNode, PartFingerprint.OverflowingContentWidgets);
 		this.overflowingContentWidgetsDomNode.setClassName('stanza-editor-overflowing-content-widgets');
 		this.overflowingContentWidgetsDomNode.setAttribute('role', 'presentation');
-		this._register(toDisposable(() => {
-			this.domNode.domNode.remove();
-			this.overflowingContentWidgetsDomNode.domNode.remove();
-		}));
+		this._register(
+			toDisposable(() => {
+				this.domNode.domNode.remove();
+				this.overflowingContentWidgetsDomNode.domNode.remove();
+			}),
+		);
 	}
 
 	public override dispose(): void {
@@ -165,11 +175,16 @@ class ContentWidget extends Disposable {
 	private visible = false;
 	private renderData: RenderData | null = null;
 
-	constructor(private readonly context: ViewContext, private readonly viewDomNode: FastDomNode<HTMLElement>, actual: IContentWidget) {
+	constructor(
+		private readonly context: ViewContext,
+		private readonly viewDomNode: FastDomNode<HTMLElement>,
+		actual: IContentWidget,
+	) {
 		super();
 		this.actual = actual;
 		this.id = actual.getId();
-		this.allowEditorOverflow = Boolean(actual.allowEditorOverflow) && context.configuration.options.get(EditorOption.allowOverflow);
+		this.allowEditorOverflow =
+			Boolean(actual.allowEditorOverflow) && context.configuration.options.get(EditorOption.allowOverflow);
 		this.useDisplayNone = Boolean(actual.useDisplayNone);
 		this.suppressMouseDown = Boolean(actual.suppressMouseDown);
 		this.fixedOverflowWidgets = context.configuration.options.get(EditorOption.fixedOverflowWidgets);
@@ -178,11 +193,13 @@ class ContentWidget extends Disposable {
 		this.domNode.setDisplay('none');
 		this.domNode.setVisibility('hidden');
 		this.domNode.setAttribute('widgetId', this.id);
-		this._register(toDisposable(() => {
-			this.domNode.domNode.remove();
-			this.domNode.removeAttribute('widgetId');
-			this.domNode.removeAttribute('data-stanza-visible-content-widget');
-		}));
+		this._register(
+			toDisposable(() => {
+				this.domNode.domNode.remove();
+				this.domNode.removeAttribute('widgetId');
+				this.domNode.removeAttribute('data-stanza-visible-content-widget');
+			}),
+		);
 	}
 
 	public onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): void {
@@ -196,14 +213,25 @@ class ContentWidget extends Disposable {
 	public onBeforeRender(viewportData: ViewportData): void {
 		const position = this.position?.position;
 		if (!position) return;
-		const viewPosition = this.context.viewModel.coordinatesConverter.convertModelPositionToViewPosition(this.context.viewModel.model.validatePosition(position), this.position?.positionAffinity);
-		if (viewPosition.lineNumber < viewportData.startLineNumber || viewPosition.lineNumber > viewportData.endLineNumber) return;
+		const viewPosition = this.context.viewModel.coordinatesConverter.convertModelPositionToViewPosition(
+			this.context.viewModel.model.validatePosition(position),
+			this.position?.positionAffinity,
+		);
+		if (
+			viewPosition.lineNumber < viewportData.startLineNumber ||
+			viewPosition.lineNumber > viewportData.endLineNumber
+		)
+			return;
 		this.updateMaxWidth();
 	}
 
 	public setPosition(position: IContentWidgetPosition | null): void {
 		this.position = position;
-		const wantsDisplay = !this.useDisplayNone && position?.position !== null && position?.position !== undefined && position.preference.length > 0;
+		const wantsDisplay =
+			!this.useDisplayNone &&
+			position?.position !== null &&
+			position?.position !== undefined &&
+			position.preference.length > 0;
 		this.domNode.setDisplay(wantsDisplay ? 'block' : 'none');
 		this.cachedWidth = -1;
 		this.cachedHeight = -1;
@@ -250,22 +278,49 @@ class ContentWidget extends Disposable {
 				preserveFocus: this.domNode.domNode.contains(this.domNode.domNode.ownerDocument.activeElement),
 			};
 		}
-		const secondary = position.secondaryPosition ? anchorCoordinate(context, this.context, position.secondaryPosition, position.positionAffinity) : null;
+		const secondary = position.secondaryPosition
+			? anchorCoordinate(context, this.context, position.secondaryPosition, position.positionAffinity)
+			: null;
 		this.updateDimensions();
-		const anchor = reduceAnchor(primary, secondary?.visualLineIndex === primary.visualLineIndex ? secondary : null, this.cachedWidth, this.context);
+		const anchor = reduceAnchor(
+			primary,
+			secondary?.visualLineIndex === primary.visualLineIndex ? secondary : null,
+			this.cachedWidth,
+			this.context,
+		);
 		const placement = this.allowEditorOverflow
 			? this.layoutBoxInPage(anchor, context)
 			: layoutBoxInViewport(anchor, this.cachedWidth, this.cachedHeight, context);
 		for (let pass = 1; pass <= 2; pass += 1) {
 			for (const preference of position.preference) {
-				if (preference === ContentWidgetPositionPreference.ABOVE && placement && (pass === 2 || placement.fitsAbove)) {
-					return { kind: 'inViewport', coordinate: new RenderedCoordinate(placement.aboveTop, placement.left), position: preference };
+				if (
+					preference === ContentWidgetPositionPreference.ABOVE &&
+					placement &&
+					(pass === 2 || placement.fitsAbove)
+				) {
+					return {
+						kind: 'inViewport',
+						coordinate: new RenderedCoordinate(placement.aboveTop, placement.left),
+						position: preference,
+					};
 				}
-				if (preference === ContentWidgetPositionPreference.BELOW && placement && (pass === 2 || placement.fitsBelow)) {
-					return { kind: 'inViewport', coordinate: new RenderedCoordinate(placement.belowTop, placement.left), position: preference };
+				if (
+					preference === ContentWidgetPositionPreference.BELOW &&
+					placement &&
+					(pass === 2 || placement.fitsBelow)
+				) {
+					return {
+						kind: 'inViewport',
+						coordinate: new RenderedCoordinate(placement.belowTop, placement.left),
+						position: preference,
+					};
 				}
 				if (preference === ContentWidgetPositionPreference.EXACT) {
-					return { kind: 'inViewport', coordinate: this.exactCoordinate(anchor, context), position: preference };
+					return {
+						kind: 'inViewport',
+						coordinate: this.exactCoordinate(anchor, context),
+						position: preference,
+					};
 				}
 			}
 		}
@@ -307,11 +362,15 @@ class ContentWidget extends Disposable {
 		const viewport = getClientArea(this.viewDomNode.domNode.ownerDocument.body);
 		const fixed = this.fixedOverflowWidgets;
 		const contentLeft = this.context.configuration.options.get(EditorOption.layoutInfo).contentLeft;
-		const anchorLeft = viewPosition.left + contentLeft + anchor.left - context.scrollLeft - (fixed ? windowScrollLeft : 0);
+		const anchorLeft =
+			viewPosition.left + contentLeft + anchor.left - context.scrollLeft - (fixed ? windowScrollLeft : 0);
 		const anchorTop = viewPosition.top + anchor.top - context.scrollTop - (fixed ? windowScrollTop : 0);
 		const minimumLeft = (fixed ? 0 : windowScrollLeft) + 15;
 		const maximumRight = (fixed ? viewport.width : windowScrollLeft + viewport.width) - 15;
-		const left = Math.min(Math.max(anchorLeft, minimumLeft), Math.max(minimumLeft, maximumRight - this.cachedWidth));
+		const left = Math.min(
+			Math.max(anchorLeft, minimumLeft),
+			Math.max(minimumLeft, maximumRight - this.cachedWidth),
+		);
 		const viewportTop = (fixed ? 0 : windowScrollTop) + 22;
 		const viewportBottom = (fixed ? viewport.height : windowScrollTop + viewport.height) - 22;
 		return {
@@ -329,7 +388,10 @@ class ContentWidget extends Disposable {
 		const viewPosition = getDomNodePagePosition(this.viewDomNode.domNode);
 		const ownerWindow = this.viewDomNode.domNode.ownerDocument.defaultView;
 		return new RenderedCoordinate(
-			viewPosition.top + anchor.top - context.scrollTop - (this.fixedOverflowWidgets ? ownerWindow?.scrollY ?? 0 : 0),
+			viewPosition.top +
+				anchor.top -
+				context.scrollTop -
+				(this.fixedOverflowWidgets ? (ownerWindow?.scrollY ?? 0) : 0),
 			placement.left,
 		);
 	}
@@ -341,44 +403,71 @@ class AnchorCoordinate {
 		public readonly left: number,
 		public readonly height: number,
 		public readonly visualLineIndex: number,
-	) { }
+	) {}
 }
 
 class RenderedCoordinate implements IContentWidgetRenderedCoordinate {
 	constructor(
 		public readonly top: number,
 		public readonly left: number,
-	) { }
+	) {}
 }
 
-function anchorCoordinate(context: RenderingContext, viewContext: ViewContext, position: IPosition, affinity: PositionAffinity | undefined): AnchorCoordinate | null {
+function anchorCoordinate(
+	context: RenderingContext,
+	viewContext: ViewContext,
+	position: IPosition,
+	affinity: PositionAffinity | undefined,
+): AnchorCoordinate | null {
 	let validPosition: Position;
 	try {
 		validPosition = viewContext.viewModel.model.validatePosition(Position.lift(position));
 	} catch {
 		return null;
 	}
-	const viewPosition = viewContext.viewModel.coordinatesConverter.convertModelPositionToViewPosition(validPosition, affinity);
+	const viewPosition = viewContext.viewModel.coordinatesConverter.convertModelPositionToViewPosition(
+		validPosition,
+		affinity,
+	);
 	const visualLineIndex = viewPosition.lineNumber - 1;
-	if (viewPosition.lineNumber < context.viewportData.startLineNumber || viewPosition.lineNumber > context.viewportData.endLineNumber) return null;
+	if (
+		viewPosition.lineNumber < context.viewportData.startLineNumber ||
+		viewPosition.lineNumber > context.viewportData.endLineNumber
+	)
+		return null;
 	const renderedPosition = context.visibleRangeForPosition(viewPosition);
 	if (!renderedPosition) return null;
-	const left = viewPosition.column === 1 && affinity === PositionAffinity.LeftOfInjectedText
-		? 0
-		: renderedPosition.left;
-	return new AnchorCoordinate(context.getVerticalOffsetForLineNumber(viewPosition.lineNumber), left, context.getLineHeightForLineNumber(viewPosition.lineNumber), visualLineIndex);
+	const left =
+		viewPosition.column === 1 && affinity === PositionAffinity.LeftOfInjectedText ? 0 : renderedPosition.left;
+	return new AnchorCoordinate(
+		context.getVerticalOffsetForLineNumber(viewPosition.lineNumber),
+		left,
+		context.getLineHeightForLineNumber(viewPosition.lineNumber),
+		visualLineIndex,
+	);
 }
 
-function reduceAnchor(primary: AnchorCoordinate, secondary: AnchorCoordinate | null, width: number, context: ViewContext): AnchorCoordinate {
+function reduceAnchor(
+	primary: AnchorCoordinate,
+	secondary: AnchorCoordinate | null,
+	width: number,
+	context: ViewContext,
+): AnchorCoordinate {
 	if (!secondary) return primary;
 	const clearance = context.configuration.options.get(EditorOption.fontInfo).typicalFullwidthCharacterWidth;
-	const left = secondary.left < primary.left
-		? Math.max(secondary.left, primary.left - width + clearance)
-		: Math.min(secondary.left, primary.left + width - clearance);
+	const left =
+		secondary.left < primary.left
+			? Math.max(secondary.left, primary.left - width + clearance)
+			: Math.min(secondary.left, primary.left + width - clearance);
 	return new AnchorCoordinate(primary.top, left, primary.height, primary.visualLineIndex);
 }
 
-function layoutBoxInViewport(anchor: AnchorCoordinate, width: number, height: number, context: RenderingContext): BoxLayoutResult {
+function layoutBoxInViewport(
+	anchor: AnchorCoordinate,
+	width: number,
+	height: number,
+	context: RenderingContext,
+): BoxLayoutResult {
 	const scrollTop = context.scrollTop;
 	const scrollLeft = context.scrollLeft;
 	const viewportBottom = scrollTop + context.viewportHeight;
@@ -393,10 +482,19 @@ function layoutBoxInViewport(anchor: AnchorCoordinate, width: number, height: nu
 }
 
 function validDimension(dimension: IDimension): boolean {
-	return Number.isFinite(dimension.width) && dimension.width >= 0 && Number.isFinite(dimension.height) && dimension.height >= 0;
+	return (
+		Number.isFinite(dimension.width) &&
+		dimension.width >= 0 &&
+		Number.isFinite(dimension.height) &&
+		dimension.height >= 0
+	);
 }
 
-function safeInvoke<TArguments extends unknown[], TResult>(fn: ((...arguments_: TArguments) => TResult) | undefined, thisArgument: unknown, ...arguments_: TArguments): TResult | null {
+function safeInvoke<TArguments extends unknown[], TResult>(
+	fn: ((...arguments_: TArguments) => TResult) | undefined,
+	thisArgument: unknown,
+	...arguments_: TArguments
+): TResult | null {
 	if (!fn) return null;
 	try {
 		return fn.apply(thisArgument, arguments_);

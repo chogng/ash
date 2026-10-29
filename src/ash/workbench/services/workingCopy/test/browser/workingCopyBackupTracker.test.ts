@@ -1,24 +1,32 @@
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { JSDOM } from "jsdom";
-import { BrowserLifecycleService } from "../../../lifecycle/browser/lifecycleService.js";
-import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
-import { ILogService, NullLoggerService } from "../../../../../platform/log/common/log.js";
-import { IStorageService, WillSaveStateReason } from "../../../../../platform/storage/common/storage.js";
-import { BrowserStorageService } from "../../../storage/browser/storageService.js";
-import { Emitter, Event } from "../../../../../base/common/event.js";
-import { DeferredPromise } from "../../../../../base/common/async.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { URI } from "../../../../../base/common/uri.js";
-import { BrowserWorkingCopyService } from "../../browser/browserWorkingCopyService.js";
-import { WorkingCopyBackupTracker } from "../../browser/workingCopyBackupTracker.js";
-import { IndexedDbWorkingCopyBackupService } from "../../browser/indexedDbWorkingCopyBackupService.js";
-import { type IWorkingCopyBackupService, type WorkingCopyBackup } from "../../common/workingCopyBackupService.js";
-import { type IWorkingCopy } from "../../common/workingCopyService.js";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { BrowserLifecycleService } from '../../../lifecycle/browser/lifecycleService.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
+import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
+import { IStorageService, WillSaveStateReason } from '../../../../../platform/storage/common/storage.js';
+import { BrowserStorageService } from '../../../storage/browser/storageService.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { BrowserWorkingCopyService } from '../../browser/browserWorkingCopyService.js';
+import { WorkingCopyBackupTracker } from '../../browser/workingCopyBackupTracker.js';
+import { IndexedDbWorkingCopyBackupService } from '../../browser/indexedDbWorkingCopyBackupService.js';
+import { type IWorkingCopyBackupService, type WorkingCopyBackup } from '../../common/workingCopyBackupService.js';
+import { type IWorkingCopy } from '../../common/workingCopyService.js';
 import { BrowserTextModelService } from '../../../textmodelResolver/browser/browserTextModelService.js';
-import { TextModelSaveCompletionError, type TextModelReference } from '../../../textmodelResolver/common/textModelResourceService.js';
-import { TextResourceConflictError, type ITextResourceStore, type TextResourceResolveRequest, type TextResourceSaveRequest } from '../../../textmodelResolver/common/textResourceStore.js';
+import {
+	TextModelSaveCompletionError,
+	type TextModelReference,
+} from '../../../textmodelResolver/common/textModelResourceService.js';
+import {
+	TextResourceConflictError,
+	type ITextResourceStore,
+	type TextResourceResolveRequest,
+	type TextResourceSaveRequest,
+} from '../../../textmodelResolver/common/textResourceStore.js';
 
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
@@ -34,7 +42,10 @@ test('save checkpoints resample edits made before file publication', async () =>
 	copy.restoreBackup('newer edit');
 	await checkpoint.release.complete(undefined);
 	await saving;
-	assert.deepEqual([fixture.files.text, copy.backup(), copy.isDirty, (await fixture.backups.list()).map(backup => backup.content)], ['requested save', 'newer edit', true, ['newer edit']]);
+	assert.deepEqual(
+		[fixture.files.text, copy.backup(), copy.isDirty, (await fixture.backups.list()).map(backup => backup.content)],
+		['requested save', 'newer edit', true, ['newer edit']],
+	);
 });
 
 for (const failDiscard of [false, true]) {
@@ -48,28 +59,40 @@ for (const failDiscard of [false, true]) {
 		const discardError = new Error('Injected A-B-A discard failure');
 		if (failDiscard) fixture.backups.failNextDelete = discardError;
 		let atClean: Promise<readonly WorkingCopyBackup[]> | undefined;
-		using listener = copy.onDidChangeDirty(() => { if (!copy.isDirty) atClean = fixture.backups.list(); });
+		using listener = copy.onDidChangeDirty(() => {
+			if (!copy.isDirty) atClean = fixture.backups.list();
+		});
 		const saving = copy.save(new AbortController().signal);
-		const settled = saving.then(() => undefined, error => error);
+		const settled = saving.then(
+			() => undefined,
+			error => error,
+		);
 		await checkpoint.entered.p;
 		copy.restoreBackup('B');
 		await checkpoint.release.complete(undefined);
 		await writing.entered.p;
-		assert.deepEqual((await fixture.backups.list()).map(backup => backup.content), ['B']);
+		assert.deepEqual(
+			(await fixture.backups.list()).map(backup => backup.content),
+			['B'],
+		);
 		copy.restoreBackup('A');
 		await writing.release.complete(undefined);
 		await discard.entered.p;
 		const beforeDiscard = await fixture.backups.list();
 		await discard.release.complete(undefined);
 		const error = await settled;
-		if (failDiscard) assert.ok(error instanceof TextModelSaveCompletionError && error.fileSaved && error.cause === discardError);
+		if (failDiscard)
+			assert.ok(error instanceof TextModelSaveCompletionError && error.fileSaved && error.cause === discardError);
 		else assert.equal(error, undefined);
 		const recovery = failDiscard ? await fixture.backups.list() : atClean ? await atClean : beforeDiscard;
 		using reopened = new SaveBackupFixture();
 		reopened.files.text = fixture.files.text;
 		const restored = await reopened.open();
 		for (const backup of recovery) restored.restoreBackup(backup.content);
-		assert.deepEqual({ file: fixture.files.text, recovered: restored.backup(), dirty: restored.isDirty }, { file: 'A', recovered: 'A', dirty: false });
+		assert.deepEqual(
+			{ file: fixture.files.text, recovered: restored.backup(), dirty: restored.isDirty },
+			{ file: 'A', recovered: 'A', dirty: false },
+		);
 	});
 }
 
@@ -80,7 +103,9 @@ for (const boundary of ['checkpoint', 'completion'] as const) {
 		const other = await fixture.open(URI.file('/save-backup/stream.txt'));
 		copy.restoreBackup('A');
 		let changes = 0;
-		const stream = () => { if (changes < 3) other.restoreBackup(`stream-${++changes}`); };
+		const stream = () => {
+			if (changes < 3) other.restoreBackup(`stream-${++changes}`);
+		};
 		if (boundary === 'checkpoint') fixture.backups.onStore = stream;
 		else fixture.backups.onDelete = stream;
 		await copy.save(new AbortController().signal);
@@ -96,7 +121,10 @@ test('save A-B-A failed post-write checkpoint blocks ordinary leaving and retain
 	const checkpoint = fixture.backups.holdNext('store');
 	const writing = fixture.files.holdNextSave();
 	const saving = copy.save(new AbortController().signal);
-	const settled = saving.then(() => undefined, error => error);
+	const settled = saving.then(
+		() => undefined,
+		error => error,
+	);
 	await checkpoint.entered.p;
 	copy.restoreBackup('B');
 	await checkpoint.release.complete(undefined);
@@ -114,7 +142,10 @@ test('save A-B-A failed post-write checkpoint blocks ordinary leaving and retain
 	await assert.rejects(fixture.models.waitForSaveRecovery(), value => value === result);
 	fixture.clock.runTimers();
 	await fixture.tracker.flush();
-	assert.deepEqual((await fixture.backups.list()).map(backup => backup.content), ['B']);
+	assert.deepEqual(
+		(await fixture.backups.list()).map(backup => backup.content),
+		['B'],
+	);
 	using reopened = new SaveBackupFixture();
 	reopened.files.text = fixture.files.text;
 	const restored = await reopened.open();
@@ -124,7 +155,10 @@ test('save A-B-A failed post-write checkpoint blocks ordinary leaving and retain
 	await copy.save(new AbortController().signal);
 	await fixture.models.waitForSaveRecovery(copy.resource);
 	assert.equal(fixture.models.hasPendingSaveRecovery(), false);
-	assert.deepEqual([fixture.files.saved, copy.backup(), copy.isDirty, await fixture.backups.list()], [['A', 'A'], 'A', false, []]);
+	assert.deepEqual(
+		[fixture.files.saved, copy.backup(), copy.isDirty, await fixture.backups.list()],
+		[['A', 'A'], 'A', false, []],
+	);
 });
 
 test('save recovery wait reports new dirty edits immediately and eventually publishes clean', async () => {
@@ -163,7 +197,10 @@ test('save completion retains edits made while the clean discard is pending', as
 	copy.restoreBackup('edit during discard');
 	await deletion.release.complete(undefined);
 	await saving;
-	assert.deepEqual([fixture.files.text, copy.isDirty, (await fixture.backups.list()).map(backup => backup.content)], ['saved text', true, ['edit during discard']]);
+	assert.deepEqual(
+		[fixture.files.text, copy.isDirty, (await fixture.backups.list()).map(backup => backup.content)],
+		['saved text', true, ['edit during discard']],
+	);
 });
 
 for (const editAfterPublication of [false, true]) {
@@ -175,15 +212,24 @@ for (const editAfterPublication of [false, true]) {
 		const error = new Error('Injected backup discard failure');
 		fixture.backups.failNextDelete = error;
 		const saving = copy.save(new AbortController().signal);
-		const rejected = assert.rejects(saving, value => value instanceof TextModelSaveCompletionError && value.fileSaved && value.cause === error);
+		const rejected = assert.rejects(
+			saving,
+			value => value instanceof TextModelSaveCompletionError && value.fileSaved && value.cause === error,
+		);
 		await deletion.entered.p;
 		if (editAfterPublication) copy.restoreBackup('later edit');
 		await deletion.release.complete(undefined);
 		await rejected;
-		assert.deepEqual([fixture.files.text, copy.isDirty, (await fixture.backups.list()).map(backup => backup.content)], ['published text', editAfterPublication, [editAfterPublication ? 'later edit' : 'published text']]);
+		assert.deepEqual(
+			[fixture.files.text, copy.isDirty, (await fixture.backups.list()).map(backup => backup.content)],
+			['published text', editAfterPublication, [editAfterPublication ? 'later edit' : 'published text']],
+		);
 		copy.restoreBackup('retry current content');
 		await copy.save(new AbortController().signal);
-		assert.deepEqual([fixture.files.saved, copy.backup(), copy.isDirty, await fixture.backups.list()], [['published text', 'retry current content'], 'retry current content', false, []]);
+		assert.deepEqual(
+			[fixture.files.saved, copy.backup(), copy.isDirty, await fixture.backups.list()],
+			[['published text', 'retry current content'], 'retry current content', false, []],
+		);
 	});
 }
 
@@ -200,7 +246,10 @@ test('queued saves publish in order without replaying the first recovery checkpo
 	assert.equal(first.backup(), second.backup());
 	await deletion.release.complete(undefined);
 	await Promise.all([firstSave, secondSave]);
-	assert.deepEqual([fixture.files.saved, first.isDirty, second.isDirty, await fixture.backups.list()], [['first save', 'second save'], false, false, []]);
+	assert.deepEqual(
+		[fixture.files.saved, first.isDirty, second.isDirty, await fixture.backups.list()],
+		[['first save', 'second save'], false, false, []],
+	);
 });
 
 test('file write failure retains the prepared dirty content and its original error', async () => {
@@ -210,25 +259,28 @@ test('file write failure retains the prepared dirty content and its original err
 	fixture.files.failNextSave = error;
 	copy.restoreBackup('failed write');
 	await assert.rejects(copy.save(new AbortController().signal), value => value === error);
-	assert.deepEqual([fixture.files.text, copy.isDirty, (await fixture.backups.list()).map(backup => backup.content)], ['disk baseline', true, ['failed write']]);
+	assert.deepEqual(
+		[fixture.files.text, copy.isDirty, (await fixture.backups.list()).map(backup => backup.content)],
+		['disk baseline', true, ['failed write']],
+	);
 	copy.restoreBackup('retry edit');
 	await copy.save(new AbortController().signal);
 	assert.deepEqual([fixture.files.text, copy.isDirty, await fixture.backups.list()], ['retry edit', false, []]);
 });
 
-test("working-copy backup tracker persists the latest dirty content and deletes clean backups", async () => {
+test('working-copy backup tracker persists the latest dirty content and deletes clean backups', async () => {
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	const backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
 	using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window);
-	using copy = new TestWorkingCopy(URI.file("C:\\project\\main.ts"));
+	using copy = new TestWorkingCopy(URI.file('C:\\project\\main.ts'));
 	using registration = workingCopies.register(copy);
 
-	copy.change("first");
-	copy.change("latest");
+	copy.change('first');
+	copy.change('latest');
 	ownerWindow.runTimers();
 	await tracker.flush();
-	assert.equal((await backups.list())[0]?.content, "latest");
+	assert.equal((await backups.list())[0]?.content, 'latest');
 
 	copy.markClean();
 	ownerWindow.runTimers();
@@ -250,7 +302,7 @@ test('working-copy backup tracker removes a backup when the last owner explicitl
 	assert.deepEqual(await backups.list(), []);
 });
 
-test("working-copy backup tracker keeps another open copy and retains the last dirty draft on unregister", async () => {
+test('working-copy backup tracker keeps another open copy and retains the last dirty draft on unregister', async () => {
 	using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 	using backups = new MemoryBackups();
 	const ownerWindow = new TestWindow();
@@ -273,7 +325,10 @@ test("working-copy backup tracker keeps another open copy and retains the last d
 		secondRegistration.dispose();
 		await tracker.flush();
 		const retained = await backups.list();
-		assert.deepEqual(retained.map(backup => backup.content), ['last edit before unregister']);
+		assert.deepEqual(
+			retained.map(backup => backup.content),
+			['last edit before unregister'],
+		);
 		using restored = new TestWorkingCopy(resource);
 		restored.restoreBackup(retained[0]!.content);
 		assert.equal(restored.backup(), 'last edit before unregister');
@@ -346,10 +401,19 @@ test('working-copy backup shutdown drains before editor unregister and database 
 	const database = new ClosingDatabase();
 	const backups = owner.add(new IndexedDbWorkingCopyBackupService('shutdown-test', database.factory));
 	const errors: unknown[] = [];
-	const tracker = owner.add(new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window, error => errors.push(error)));
+	const tracker = owner.add(
+		new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window, error =>
+			errors.push(error),
+		),
+	);
 	using copy = new TestWorkingCopy(URI.file('/shutdown/settings.json'));
 	const registration = workingCopies.register(copy);
-	owner.add(toDisposable(() => { database.events.push('editor.dispose'); registration.dispose(); }));
+	owner.add(
+		toDisposable(() => {
+			database.events.push('editor.dispose');
+			registration.dispose();
+		}),
+	);
 	copy.change('23');
 	await tracker.flush();
 	copy.markClean();
@@ -359,10 +423,14 @@ test('working-copy backup shutdown drains before editor unregister and database 
 	await tracker.shutdown();
 	tracker.completeShutdown();
 	owner.dispose();
-	const drainError = await tracker.flush().then(() => undefined, error => error as Error);
-	assert.deepEqual({ events: database.events, errors: errors.map(error => (error as Error).name), drainError: drainError?.name }, {
-		events: ['editor.dispose', 'database.close'], errors: [], drainError: undefined,
-	});
+	const drainError = await tracker.flush().then(
+		() => undefined,
+		error => error as Error,
+	);
+	assert.deepEqual(
+		{ events: database.events, errors: errors.map(error => (error as Error).name), drainError: drainError?.name },
+		{ events: ['editor.dispose', 'database.close'], errors: [], drainError: undefined },
+	);
 });
 
 test('working-copy backup shutdown retains edits made while final writes are pending', async () => {
@@ -379,16 +447,23 @@ test('working-copy backup shutdown retains edits made while final writes are pen
 	copy.change('final');
 	const staleTimers = ownerWindow.snapshotTimers();
 	const captured = new DeferredPromise<void>();
-	copy.duringBackup = () => { void captured.complete(undefined); };
+	copy.duringBackup = () => {
+		void captured.complete(undefined);
+	};
 	const shutdown = tracker.shutdown();
 	let settled = false;
-	void shutdown.then(() => { settled = true; });
+	void shutdown.then(() => {
+		settled = true;
+	});
 	assert.equal(tracker.shutdown(), shutdown);
 	assert.equal(tracker.flush(), shutdown);
 	await captured.p;
 	copy.change('late');
 	for (const callback of staleTimers) callback();
-	assert.deepEqual({ settled, timers: ownerWindow.pendingTimers, calls: backups.calls }, { settled: false, timers: 0, calls: ['store:first'] });
+	assert.deepEqual(
+		{ settled, timers: ownerWindow.pendingTimers, calls: backups.calls },
+		{ settled: false, timers: 0, calls: ['store:first'] },
+	);
 	await firstWrite.release.complete(undefined);
 	await shutdown;
 	tracker.completeShutdown();
@@ -396,7 +471,10 @@ test('working-copy backup shutdown retains edits made while final writes are pen
 	tracker.dispose();
 	tracker.dispose();
 	assert.equal(tracker.shutdown(), shutdown);
-	assert.deepEqual({ content: (await backups.list()).map(backup => backup.content), calls: backups.calls }, { content: ['late'], calls: ['store:first', 'store:final', 'store:late'] });
+	assert.deepEqual(
+		{ content: (await backups.list()).map(backup => backup.content), calls: backups.calls },
+		{ content: ['late'], calls: ['store:first', 'store:final', 'store:late'] },
+	);
 });
 
 test('working-copy backup shutdown captures synchronous edits reentered from backup', async () => {
@@ -408,7 +486,10 @@ test('working-copy backup shutdown captures synchronous edits reentered from bac
 	copy.change('captured');
 	copy.duringBackup = () => copy.change('reentrant edit');
 	await tracker.shutdown();
-	assert.deepEqual((await backups.list()).map(backup => backup.content), ['reentrant edit']);
+	assert.deepEqual(
+		(await backups.list()).map(backup => backup.content),
+		['reentrant edit'],
+	);
 });
 
 test('working-copy backup shutdown awaits an in-flight clean delete', async () => {
@@ -426,13 +507,18 @@ test('working-copy backup shutdown awaits an in-flight clean delete', async () =
 	await deletion.entered.p;
 	const shutdown = tracker.shutdown();
 	let settled = false;
-	void shutdown.then(() => { settled = true; });
+	void shutdown.then(() => {
+		settled = true;
+	});
 	assert.equal(settled, false);
 	await deletion.release.complete(undefined);
 	await shutdown;
 	tracker.completeShutdown();
 	registration.dispose();
-	assert.deepEqual({ backups: await backups.list(), calls: backups.calls }, { backups: [], calls: ['store:saved', 'delete'] });
+	assert.deepEqual(
+		{ backups: await backups.list(), calls: backups.calls },
+		{ backups: [], calls: ['store:saved', 'delete'] },
+	);
 });
 
 test('working-copy backup shutdown completes pending clean timers and retains untouched recovery content', async () => {
@@ -444,13 +530,21 @@ test('working-copy backup shutdown completes pending clean timers and retains un
 	using recovery = new TestWorkingCopy(URI.file('/shutdown/recovery.ts'));
 	using savedRegistration = workingCopies.register(saved);
 	using recoveryRegistration = workingCopies.register(recovery);
-	await backups.store({ resource: recovery.resource, kind: 'text', content: 'unrestored crash content', updatedAt: 1 });
+	await backups.store({
+		resource: recovery.resource,
+		kind: 'text',
+		content: 'unrestored crash content',
+		updatedAt: 1,
+	});
 	saved.change('saved');
 	await tracker.flush();
 	saved.markClean();
 	assert.equal(ownerWindow.pendingTimers, 1);
 	await tracker.shutdown();
-	assert.deepEqual({ contents: (await backups.list()).map(backup => backup.content), timers: ownerWindow.pendingTimers }, { contents: ['unrestored crash content'], timers: 0 });
+	assert.deepEqual(
+		{ contents: (await backups.list()).map(backup => backup.content), timers: ownerWindow.pendingTimers },
+		{ contents: ['unrestored crash content'], timers: 0 },
+	);
 });
 
 for (const operation of ['store', 'delete'] as const) {
@@ -459,14 +553,25 @@ for (const operation of ['store', 'delete'] as const) {
 		using backups = new ControlledBackups();
 		const ownerWindow = new TestWindow();
 		const failureObserved = new DeferredPromise<unknown>();
-		using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window, error => { void failureObserved.complete(error); });
+		using tracker = new WorkingCopyBackupTracker(
+			workingCopies,
+			backups,
+			ownerWindow as unknown as Window,
+			error => {
+				void failureObserved.complete(error);
+			},
+		);
 		using failing = new TestWorkingCopy(URI.file('/shutdown/failing.ts'));
 		using pending = new TestWorkingCopy(URI.file('/shutdown/pending.ts'));
 		using failingRegistration = workingCopies.register(failing);
 		using pendingRegistration = workingCopies.register(pending);
-		if (operation === 'delete') { failing.change('saved'); await tracker.flush(); }
+		if (operation === 'delete') {
+			failing.change('saved');
+			await tracker.flush();
+		}
 		const failedOperation = backups.holdNext(operation);
-		if (operation === 'delete') failing.markClean(); else failing.change('failed content');
+		if (operation === 'delete') failing.markClean();
+		else failing.change('failed content');
 		ownerWindow.runTimers();
 		await failedOperation.entered.p;
 		const pendingWrite = backups.holdNext('store');
@@ -476,14 +581,22 @@ for (const operation of ['store', 'delete'] as const) {
 		const error = new Error(`Injected ${operation} failure`);
 		let settled = false;
 		const shutdown = tracker.shutdown();
-		const rejection = assert.rejects(shutdown.finally(() => { settled = true; }), value => value instanceof AggregateError && value.errors.includes(error));
+		const rejection = assert.rejects(
+			shutdown.finally(() => {
+				settled = true;
+			}),
+			value => value instanceof AggregateError && value.errors.includes(error),
+		);
 		await failedOperation.release.error(error);
 		assert.equal(await failureObserved.p, error);
 		assert.equal(settled, false);
 		await pendingWrite.release.complete(undefined);
 		await rejection;
 		assert.equal(tracker.shutdown(), shutdown);
-		assert.equal((await backups.list()).find(backup => backup.resource.toString() === pending.resource.toString())?.content, 'must survive');
+		assert.equal(
+			(await backups.list()).find(backup => backup.resource.toString() === pending.resource.toString())?.content,
+			'must survive',
+		);
 	});
 }
 
@@ -494,13 +607,29 @@ for (const failingJoin of ['backup', 'storage', 'other'] as const) {
 			Object.defineProperty(browser.window.performance, 'getEntriesByType', { value: () => [] });
 			using services = new InstantiationService();
 			services.registerInstance(ILogService, new NullLoggerService());
-			services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'backup-retry', flushInterval: 0 }));
-			using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+			services.registerSingleton(
+				IStorageService,
+				() =>
+					new BrowserStorageService({
+						ownerWindow: browser.window as unknown as Window,
+						workspaceId: 'backup-retry',
+						flushInterval: 0,
+					}),
+			);
+			using lifecycle = services.createInstance(BrowserLifecycleService, {
+				ownerWindow: browser.window as unknown as Window,
+				onError: () => undefined,
+			});
 			using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 			using backups = new ControlledBackups();
 			const ownerWindow = new TestWindow();
 			const errors: unknown[] = [];
-			using tracker = new WorkingCopyBackupTracker(workingCopies, backups, ownerWindow as unknown as Window, error => errors.push(error));
+			using tracker = new WorkingCopyBackupTracker(
+				workingCopies,
+				backups,
+				ownerWindow as unknown as Window,
+				error => errors.push(error),
+			);
 			using copy = new TestWorkingCopy(URI.file('/shutdown/retry.ts'));
 			using registration = workingCopies.register(copy);
 			copy.change('last durable');
@@ -514,11 +643,25 @@ for (const failingJoin of ['backup', 'storage', 'other'] as const) {
 				events.push('overall failure');
 				tracker.cancelShutdown();
 			});
-			lifecycle.onDidShutdown(() => { events.push('completed'); tracker.completeShutdown(); });
+			lifecycle.onDidShutdown(() => {
+				events.push('completed');
+				tracker.completeShutdown();
+			});
 			lifecycle.onWillShutdown(event => {
-				event.join(tracker.shutdown().then(() => { events.push('backup drained'); }), 'backup');
+				event.join(
+					tracker.shutdown().then(() => {
+						events.push('backup drained');
+					}),
+					'backup',
+				);
 				if (shouldFail) {
-					const operation = failingJoin === 'storage' ? services.get(IStorageService).flush(WillSaveStateReason.SHUTDOWN).then(() => pendingJoin.p) : pendingJoin.p;
+					const operation =
+						failingJoin === 'storage'
+							? services
+									.get(IStorageService)
+									.flush(WillSaveStateReason.SHUTDOWN)
+									.then(() => pendingJoin.p)
+							: pendingJoin.p;
 					event.join(operation, failingJoin === 'backup' ? 'pending other join' : failingJoin);
 				}
 			});
@@ -533,7 +676,10 @@ for (const failingJoin of ['backup', 'storage', 'other'] as const) {
 				await tracker.shutdown();
 			}
 			copy.change('while another join waits');
-			assert.deepEqual({ events: events.filter(event => event === 'overall failure'), timers: ownerWindow.pendingTimers }, { events: [], timers: 0 });
+			assert.deepEqual(
+				{ events: events.filter(event => event === 'overall failure'), timers: ownerWindow.pendingTimers },
+				{ events: [], timers: 0 },
+			);
 			if (failedStore) {
 				assert.equal((await backups.list())[0]?.content, 'last durable');
 				await pendingJoin.complete(undefined);
@@ -543,10 +689,24 @@ for (const failingJoin of ['backup', 'storage', 'other'] as const) {
 			await rejection;
 			copy.change('after cancelled close');
 			ownerWindow.runTimers();
-			const flushError = await tracker.flush().then(() => undefined, error => error);
-			assert.deepEqual({ events: events.filter(event => event === 'overall failure'), flushError, content: (await backups.list())[0]?.content, willShutdown: lifecycle.willShutdown }, {
-				events: ['overall failure'], flushError: undefined, content: 'after cancelled close', willShutdown: false,
-			});
+			const flushError = await tracker.flush().then(
+				() => undefined,
+				error => error,
+			);
+			assert.deepEqual(
+				{
+					events: events.filter(event => event === 'overall failure'),
+					flushError,
+					content: (await backups.list())[0]?.content,
+					willShutdown: lifecycle.willShutdown,
+				},
+				{
+					events: ['overall failure'],
+					flushError: undefined,
+					content: 'after cancelled close',
+					willShutdown: false,
+				},
+			);
 			shouldFail = false;
 			await lifecycle.shutdown('windowClose');
 			assert.equal(events.at(-1), 'completed');
@@ -574,7 +734,10 @@ test('working-copy backup cancellation is idempotent and retracks the current re
 		tracker.cancelShutdown();
 		tracker.cancelShutdown();
 		await tracker.flush();
-		assert.deepEqual((await backups.list()).map(backup => backup.content), ['closed draft', 'new draft']);
+		assert.deepEqual(
+			(await backups.list()).map(backup => backup.content),
+			['closed draft', 'new draft'],
+		);
 		const second = tracker.shutdown();
 		assert.equal(tracker.shutdown(), second);
 		await second;
@@ -589,8 +752,19 @@ test('final backup join captures edits through the overall result and stops prod
 		Object.defineProperty(browser.window.performance, 'getEntriesByType', { value: () => [] });
 		using services = new InstantiationService();
 		services.registerInstance(ILogService, new NullLoggerService());
-		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'final-backup', flushInterval: 0 }));
-		using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+		services.registerSingleton(
+			IStorageService,
+			() =>
+				new BrowserStorageService({
+					ownerWindow: browser.window as unknown as Window,
+					workspaceId: 'final-backup',
+					flushInterval: 0,
+				}),
+		);
+		using lifecycle = services.createInstance(BrowserLifecycleService, {
+			ownerWindow: browser.window as unknown as Window,
+			onError: () => undefined,
+		});
 		using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 		using backups = new ControlledBackups();
 		const ownerWindow = new TestWindow();
@@ -600,20 +774,33 @@ test('final backup join captures edits through the overall result and stops prod
 		copy.change('before checks');
 		const joined = new DeferredPromise<void>();
 		const otherJoin = new DeferredPromise<void>();
-		lifecycle.onBeforeShutdown(event => event.veto(tracker.flush().then(() => false), 'backup check'));
+		lifecycle.onBeforeShutdown(event =>
+			event.veto(
+				tracker.flush().then(() => false),
+				'backup check',
+			),
+		);
 		lifecycle.onWillShutdown(event => {
 			event.join(services.get(IStorageService).flush(WillSaveStateReason.SHUTDOWN), 'storage');
 			event.join(otherJoin.p, 'other');
-			event.join(() => tracker.shutdown(), 'final backups', () => tracker.isShutdownCurrent);
+			event.join(
+				() => tracker.shutdown(),
+				'final backups',
+				() => tracker.isShutdownCurrent,
+			);
 			void joined.complete(undefined);
 		});
 		lifecycle.onDidShutdown(() => tracker.completeShutdown());
-		lifecycle.onDidShutdownError(reason => { if (reason !== 'pageHide') tracker.cancelShutdown(); });
+		lifecycle.onDidShutdownError(reason => {
+			if (reason !== 'pageHide') tracker.cancelShutdown();
+		});
 		const shutdown = lifecycle.shutdown('windowClose');
 		await joined.p;
 		copy.change('during other join');
 		const finalWrite = backups.holdNext('store');
-		copy.duringBackup = () => { void tracker.shutdown().then(() => copy.change('after backup drain before outcome')); };
+		copy.duringBackup = () => {
+			void tracker.shutdown().then(() => copy.change('after backup drain before outcome'));
+		};
 		await otherJoin.complete(undefined);
 		await finalWrite.entered.p;
 		copy.change('during final write');
@@ -622,9 +809,23 @@ test('final backup join captures edits through the overall result and stops prod
 		copy.change('after completed close');
 		ownerWindow.runTimers();
 		await tracker.flush();
-		assert.deepEqual({ content: (await backups.list()).map(backup => backup.content), calls: backups.calls, timers: ownerWindow.pendingTimers }, {
-			content: ['after backup drain before outcome'], calls: ['store:before checks', 'store:during other join', 'store:during final write', 'store:after backup drain before outcome'], timers: 0,
-		});
+		assert.deepEqual(
+			{
+				content: (await backups.list()).map(backup => backup.content),
+				calls: backups.calls,
+				timers: ownerWindow.pendingTimers,
+			},
+			{
+				content: ['after backup drain before outcome'],
+				calls: [
+					'store:before checks',
+					'store:during other join',
+					'store:during final write',
+					'store:after backup drain before outcome',
+				],
+				timers: 0,
+			},
+		);
 	} finally {
 		browser.window.close();
 	}
@@ -640,11 +841,16 @@ test('failed backup capture preserves durable content and repeated cancellation 
 	await tracker.flush();
 	copy.change('failed capture');
 	const error = new Error('Injected serialization failure');
-	copy.duringBackup = () => { throw error; };
+	copy.duringBackup = () => {
+		throw error;
+	};
 	const failed = tracker.shutdown();
 	assert.equal(tracker.shutdown(), failed);
 	await assert.rejects(failed, value => value instanceof AggregateError && value.errors.includes(error));
-	assert.deepEqual((await backups.list()).map(backup => backup.content), ['last valid snapshot']);
+	assert.deepEqual(
+		(await backups.list()).map(backup => backup.content),
+		['last valid snapshot'],
+	);
 	tracker.cancelShutdown();
 	tracker.cancelShutdown();
 	copy.change('retry content');
@@ -654,7 +860,10 @@ test('failed backup capture preserves durable content and repeated cancellation 
 	assert.equal(tracker.shutdown(), retried);
 	await retried;
 	tracker.completeShutdown();
-	assert.deepEqual((await backups.list()).map(backup => backup.content), ['retry content']);
+	assert.deepEqual(
+		(await backups.list()).map(backup => backup.content),
+		['retry content'],
+	);
 });
 
 test('backup shutdown retains the existing last registered dirty copy for a shared resource', async () => {
@@ -669,10 +878,16 @@ test('backup shutdown retains the existing last registered dirty copy for a shar
 	first.change('first copy');
 	second.change('second copy');
 	await tracker.flush();
-	assert.deepEqual((await backups.list()).map(backup => backup.content), ['second copy']);
+	assert.deepEqual(
+		(await backups.list()).map(backup => backup.content),
+		['second copy'],
+	);
 	await tracker.shutdown();
 	tracker.completeShutdown();
-	assert.deepEqual((await backups.list()).map(backup => backup.content), ['second copy']);
+	assert.deepEqual(
+		(await backups.list()).map(backup => backup.content),
+		['second copy'],
+	);
 });
 
 test('pagehide before-shutdown backup failure retains the last valid snapshot through forced disposal', async () => {
@@ -681,13 +896,28 @@ test('pagehide before-shutdown backup failure retains the last valid snapshot th
 		Object.defineProperty(browser.window.performance, 'getEntriesByType', { value: () => [] });
 		using services = new InstantiationService();
 		services.registerInstance(ILogService, new NullLoggerService());
-		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'failed-pagehide-check', flushInterval: 0 }));
-		using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+		services.registerSingleton(
+			IStorageService,
+			() =>
+				new BrowserStorageService({
+					ownerWindow: browser.window as unknown as Window,
+					workspaceId: 'failed-pagehide-check',
+					flushInterval: 0,
+				}),
+		);
+		using lifecycle = services.createInstance(BrowserLifecycleService, {
+			ownerWindow: browser.window as unknown as Window,
+			onError: () => undefined,
+		});
 		using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 		using owner = new DisposableStore();
 		using backups = new MemoryBackups();
 		const errors: unknown[] = [];
-		const tracker = owner.add(new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window, error => errors.push(error)));
+		const tracker = owner.add(
+			new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window, error =>
+				errors.push(error),
+			),
+		);
 		using copy = new TestWorkingCopy(URI.file('/shutdown/pagehide-before.ts'));
 		const registration = workingCopies.register(copy);
 		owner.add(registration);
@@ -695,22 +925,48 @@ test('pagehide before-shutdown backup failure retains the last valid snapshot th
 		await tracker.flush();
 		copy.change('cannot capture this version');
 		const captureError = new Error('Injected before-shutdown capture failure');
-		copy.duringBackup = () => { throw captureError; };
+		copy.duringBackup = () => {
+			throw captureError;
+		};
 		const phases: string[] = [];
-		lifecycle.onBeforeShutdown(event => event.veto(tracker.flush().then(() => false), 'working-copy backup flush'));
-		lifecycle.onBeforeShutdownError(event => { phases.push(`before-error:${event.reason}`); if (event.reason === 'pageHide') tracker.completeShutdown(); });
+		lifecycle.onBeforeShutdown(event =>
+			event.veto(
+				tracker.flush().then(() => false),
+				'working-copy backup flush',
+			),
+		);
+		lifecycle.onBeforeShutdownError(event => {
+			phases.push(`before-error:${event.reason}`);
+			if (event.reason === 'pageHide') tracker.completeShutdown();
+		});
 		lifecycle.onWillShutdown(event => {
 			phases.push('will-shutdown');
-			event.join(() => tracker.shutdown(), 'final backup', () => tracker.isShutdownCurrent);
+			event.join(
+				() => tracker.shutdown(),
+				'final backup',
+				() => tracker.isShutdownCurrent,
+			);
 		});
 		lifecycle.onDidShutdown(() => tracker.completeShutdown());
-		lifecycle.onDidShutdownError(reason => { phases.push('joined-error'); if (reason !== 'pageHide') tracker.cancelShutdown(); });
-		const shutdown = lifecycle.shutdown('pageHide').finally(() => owner.dispose());
-		await assert.rejects(shutdown, error => error instanceof AggregateError && error.errors[0].cause === captureError);
-		await tracker.flush();
-		assert.deepEqual({ phases, errors, content: (await backups.list()).map(backup => backup.content), willShutdown: lifecycle.willShutdown }, {
-			phases: ['before-error:pageHide'], errors: [], content: ['last valid snapshot'], willShutdown: false,
+		lifecycle.onDidShutdownError(reason => {
+			phases.push('joined-error');
+			if (reason !== 'pageHide') tracker.cancelShutdown();
 		});
+		const shutdown = lifecycle.shutdown('pageHide').finally(() => owner.dispose());
+		await assert.rejects(
+			shutdown,
+			error => error instanceof AggregateError && error.errors[0].cause === captureError,
+		);
+		await tracker.flush();
+		assert.deepEqual(
+			{
+				phases,
+				errors,
+				content: (await backups.list()).map(backup => backup.content),
+				willShutdown: lifecycle.willShutdown,
+			},
+			{ phases: ['before-error:pageHide'], errors: [], content: ['last valid snapshot'], willShutdown: false },
+		);
 	} finally {
 		browser.window.close();
 	}
@@ -722,30 +978,61 @@ test('failed pagehide drains before forced host disposal without restarting data
 		Object.defineProperty(browser.window.performance, 'getEntriesByType', { value: () => [] });
 		using services = new InstantiationService();
 		services.registerInstance(ILogService, new NullLoggerService());
-		services.registerSingleton(IStorageService, () => new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'forced-pagehide', flushInterval: 0 }));
-		using lifecycle = services.createInstance(BrowserLifecycleService, { ownerWindow: browser.window as unknown as Window, onError: () => undefined });
+		services.registerSingleton(
+			IStorageService,
+			() =>
+				new BrowserStorageService({
+					ownerWindow: browser.window as unknown as Window,
+					workspaceId: 'forced-pagehide',
+					flushInterval: 0,
+				}),
+		);
+		using lifecycle = services.createInstance(BrowserLifecycleService, {
+			ownerWindow: browser.window as unknown as Window,
+			onError: () => undefined,
+		});
 		using workingCopies = uriIdentityServices.createInstance(BrowserWorkingCopyService);
 		using owner = new DisposableStore();
 		const database = new ClosingDatabase();
 		const backups = owner.add(new IndexedDbWorkingCopyBackupService('forced-pagehide', database.factory));
 		const errors: unknown[] = [];
-		const tracker = owner.add(new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window, error => errors.push(error)));
+		const tracker = owner.add(
+			new WorkingCopyBackupTracker(workingCopies, backups, new TestWindow() as unknown as Window, error =>
+				errors.push(error),
+			),
+		);
 		using copy = new TestWorkingCopy(URI.file('/shutdown/pagehide.ts'));
 		const registration = workingCopies.register(copy);
-		owner.add(toDisposable(() => { database.events.push('editor.dispose'); registration.dispose(); }));
+		owner.add(
+			toDisposable(() => {
+				database.events.push('editor.dispose');
+				registration.dispose();
+			}),
+		);
 		copy.change('durable despite another failure');
 		lifecycle.onWillShutdown(event => {
 			event.join(Promise.reject(new Error('Injected other join failure')), 'other');
-			event.join(() => tracker.shutdown(), 'final backup', () => tracker.isShutdownCurrent);
+			event.join(
+				() => tracker.shutdown(),
+				'final backup',
+				() => tracker.isShutdownCurrent,
+			);
 		});
 		lifecycle.onDidShutdown(() => tracker.completeShutdown());
-		lifecycle.onDidShutdownError(reason => { if (reason !== 'pageHide') tracker.cancelShutdown(); });
+		lifecycle.onDidShutdownError(reason => {
+			if (reason !== 'pageHide') tracker.cancelShutdown();
+		});
 		const shutdown = lifecycle.shutdown('pageHide').finally(() => owner.dispose());
 		await assert.rejects(shutdown, /shutdown participants failed/);
 		await tracker.flush();
-		assert.deepEqual({ events: database.events, errors, contents: [...database.records.values()].map(record => record.content) }, {
-			events: ['transaction', 'editor.dispose', 'database.close'], errors: [], contents: ['durable despite another failure'],
-		});
+		assert.deepEqual(
+			{ events: database.events, errors, contents: [...database.records.values()].map(record => record.content) },
+			{
+				events: ['transaction', 'editor.dispose', 'database.close'],
+				errors: [],
+				contents: ['durable despite another failure'],
+			},
+		);
 	} finally {
 		browser.window.close();
 	}
@@ -754,30 +1041,42 @@ test('failed pagehide drains before forced host disposal without restarting data
 /** Exercises the real backup service's await-database/transaction/close boundary without persistent data. */
 class ClosingDatabase {
 	readonly events: string[] = [];
-	readonly records = new Map<string, { readonly key: string; readonly content: string; }>();
+	readonly records = new Map<string, { readonly key: string; readonly content: string }>();
 	private closing = false;
 	readonly factory = {
 		open: () => {
-			const opening: { result: unknown; onsuccess?: () => void; } = {
+			const opening: { result: unknown; onsuccess?: () => void } = {
 				result: {
-					close: () => { this.closing = true; this.events.push('database.close'); },
+					close: () => {
+						this.closing = true;
+						this.events.push('database.close');
+					},
 					transaction: () => {
 						this.events.push(this.closing ? 'transaction.after-close' : 'transaction');
-						if (this.closing) throw new DOMException('The database connection is closing.', 'InvalidStateError');
-						const transaction: { oncomplete?: () => void; objectStore: () => unknown; } = {
+						if (this.closing)
+							throw new DOMException('The database connection is closing.', 'InvalidStateError');
+						const transaction: { oncomplete?: () => void; objectStore: () => unknown } = {
 							objectStore: () => ({
 								get: (key: string) => {
-									const reading: { result: unknown; onsuccess?: () => void; } = { result: this.records.get(key) };
+									const reading: { result: unknown; onsuccess?: () => void } = {
+										result: this.records.get(key),
+									};
 									queueMicrotask(() => reading.onsuccess?.());
 									return reading;
 								},
-								put: (record: { readonly key: string; readonly content: string; }) => { this.records.set(record.key, record); queueMicrotask(() => transaction.oncomplete?.()); },
-								delete: (key: string) => { this.records.delete(key); queueMicrotask(() => transaction.oncomplete?.()); },
+								put: (record: { readonly key: string; readonly content: string }) => {
+									this.records.set(record.key, record);
+									queueMicrotask(() => transaction.oncomplete?.());
+								},
+								delete: (key: string) => {
+									this.records.delete(key);
+									queueMicrotask(() => transaction.oncomplete?.());
+								},
 							}),
 						};
 						return transaction;
 					},
-				}
+				},
 			};
 			queueMicrotask(() => opening.onsuccess?.());
 			return opening;
@@ -789,31 +1088,65 @@ class TestWorkingCopy extends Disposable implements IWorkingCopy {
 	private readonly dirtyChanges = this._register(new Emitter<void>());
 	private readonly contentChanges = this._register(new Emitter<void>());
 	readonly resource;
-	readonly backupKind = "text" as const;
+	readonly backupKind = 'text' as const;
 	readonly onDidChangeDirty = this.dirtyChanges.event;
 	readonly onDidChangeContent = this.contentChanges.event;
-	readonly onDidChangeExternalChange = () => ({ dispose() { }, [Symbol.dispose]() { } });
+	readonly onDidChangeExternalChange = () => ({ dispose() {}, [Symbol.dispose]() {} });
 	isDirty = false;
 	readonly hasExternalChange = false;
-	private content = "";
+	private content = '';
 	duringBackup: (() => void) | undefined;
 
-	constructor(resource: URI) { super(); this.resource = resource; }
-	change(content: string): void { this.content = content; const becameDirty = !this.isDirty; this.isDirty = true; this.contentChanges.fire(); if (becameDirty) this.dirtyChanges.fire(); }
-	markClean(): void { this.isDirty = false; this.dirtyChanges.fire(); }
-	backup(): string { const content = this.content; const callback = this.duringBackup; this.duringBackup = undefined; callback?.(); return content; }
-	restoreBackup(content: string): void { this.change(content); }
-	async save(): Promise<void> { this.markClean(); }
-	async saveAs(): Promise<void> { this.markClean(); }
-	async revert(): Promise<void> { this.markClean(); }
+	constructor(resource: URI) {
+		super();
+		this.resource = resource;
+	}
+	change(content: string): void {
+		this.content = content;
+		const becameDirty = !this.isDirty;
+		this.isDirty = true;
+		this.contentChanges.fire();
+		if (becameDirty) this.dirtyChanges.fire();
+	}
+	markClean(): void {
+		this.isDirty = false;
+		this.dirtyChanges.fire();
+	}
+	backup(): string {
+		const content = this.content;
+		const callback = this.duringBackup;
+		this.duringBackup = undefined;
+		callback?.();
+		return content;
+	}
+	restoreBackup(content: string): void {
+		this.change(content);
+	}
+	async save(): Promise<void> {
+		this.markClean();
+	}
+	async saveAs(): Promise<void> {
+		this.markClean();
+	}
+	async revert(): Promise<void> {
+		this.markClean();
+	}
 }
 
 class MemoryBackups extends Disposable implements IWorkingCopyBackupService {
 	private readonly values = new Map<string, WorkingCopyBackup>();
-	async list(): Promise<readonly WorkingCopyBackup[]> { return [...this.values.values()]; }
-	async store(backup: WorkingCopyBackup): Promise<void> { this.values.set(backup.resource.toString(), backup); }
-	async delete(resource: URI): Promise<void> { this.values.delete(resource.toString()); }
-	switchWorkspace(): void { this.values.clear(); }
+	async list(): Promise<readonly WorkingCopyBackup[]> {
+		return [...this.values.values()];
+	}
+	async store(backup: WorkingCopyBackup): Promise<void> {
+		this.values.set(backup.resource.toString(), backup);
+	}
+	async delete(resource: URI): Promise<void> {
+		this.values.delete(resource.toString());
+	}
+	switchWorkspace(): void {
+		this.values.clear();
+	}
 }
 
 class ControlledBackups extends MemoryBackups {
@@ -822,9 +1155,13 @@ class ControlledBackups extends MemoryBackups {
 	failNextStore: Error | undefined;
 	onStore: (() => void) | undefined;
 	onDelete: (() => void) | undefined;
-	private readonly held: Array<{ kind: 'store' | 'delete'; entered: DeferredPromise<void>; release: DeferredPromise<void>; }> = [];
+	private readonly held: Array<{
+		kind: 'store' | 'delete';
+		entered: DeferredPromise<void>;
+		release: DeferredPromise<void>;
+	}> = [];
 
-	holdNext(kind: 'store' | 'delete'): { entered: DeferredPromise<void>; release: DeferredPromise<void>; } {
+	holdNext(kind: 'store' | 'delete'): { entered: DeferredPromise<void>; release: DeferredPromise<void> } {
 		const block = { kind, entered: new DeferredPromise<void>(), release: new DeferredPromise<void>() };
 		this.held.push(block);
 		return block;
@@ -866,11 +1203,19 @@ class SaveBackupFixture extends Disposable {
 	readonly models = this._register(uriIdentityServices.createInstance(BrowserTextModelService, this.files, {}));
 	private readonly copies = this._register(uriIdentityServices.createInstance(BrowserWorkingCopyService));
 	readonly clock = new TestWindow();
-	readonly tracker = this._register(new WorkingCopyBackupTracker(this.copies, this.backups, this.clock as unknown as Window, undefined, resource => this.models.hasPendingSaveRecovery(resource)));
+	readonly tracker = this._register(
+		new WorkingCopyBackupTracker(this.copies, this.backups, this.clock as unknown as Window, undefined, resource =>
+			this.models.hasPendingSaveRecovery(resource),
+		),
+	);
 
 	constructor() {
 		super();
-		this._register(this.models.addSaveCompletionParticipant({ prepare: (model, signal, recovery) => this.tracker.prepareSave(model, signal, recovery) }));
+		this._register(
+			this.models.addSaveCompletionParticipant({
+				prepare: (model, signal, recovery) => this.tracker.prepareSave(model, signal, recovery),
+			}),
+		);
 	}
 
 	async open(resource = URI.file('/save-backup/file.txt')): Promise<IWorkingCopy> {
@@ -895,16 +1240,36 @@ class FileWorkingCopy extends Disposable implements IWorkingCopy {
 		this._register(reference);
 		this.onDidChangeContent = Event.map(reference.model.onDidChangeContent, () => undefined);
 	}
-	get resource() { return this.reference.resource; }
-	get isDirty() { return this.reference.isDirty; }
-	get hasExternalChange() { return this.reference.hasExternalChange; }
-	get onDidChangeDirty() { return this.reference.onDidChangeDirty; }
-	get onDidChangeExternalChange() { return this.reference.onDidChangeExternalChange; }
-	backup(): string { return this.reference.model.getText(); }
-	restoreBackup(content: string): void { this.reference.model.reset(content); }
-	save(signal: AbortSignal): Promise<void> { return this.reference.save(signal); }
-	saveAs(resource: URI, signal: AbortSignal): Promise<void> { return this.reference.saveAs(resource, signal); }
-	revert(signal: AbortSignal): Promise<void> { return this.reference.revert(signal); }
+	get resource() {
+		return this.reference.resource;
+	}
+	get isDirty() {
+		return this.reference.isDirty;
+	}
+	get hasExternalChange() {
+		return this.reference.hasExternalChange;
+	}
+	get onDidChangeDirty() {
+		return this.reference.onDidChangeDirty;
+	}
+	get onDidChangeExternalChange() {
+		return this.reference.onDidChangeExternalChange;
+	}
+	backup(): string {
+		return this.reference.model.getText();
+	}
+	restoreBackup(content: string): void {
+		this.reference.model.reset(content);
+	}
+	save(signal: AbortSignal): Promise<void> {
+		return this.reference.save(signal);
+	}
+	saveAs(resource: URI, signal: AbortSignal): Promise<void> {
+		return this.reference.saveAs(resource, signal);
+	}
+	revert(signal: AbortSignal): Promise<void> {
+		return this.reference.revert(signal);
+	}
 }
 
 class SaveTestFiles implements ITextResourceStore {
@@ -913,16 +1278,21 @@ class SaveTestFiles implements ITextResourceStore {
 	text = 'disk baseline';
 	failNextSave: Error | undefined;
 	private revision = 1;
-	private held: { entered: DeferredPromise<void>; release: DeferredPromise<void>; } | undefined;
-	holdNextSave(): { entered: DeferredPromise<void>; release: DeferredPromise<void>; } {
-		return this.held = { entered: new DeferredPromise<void>(), release: new DeferredPromise<void>() };
+	private held: { entered: DeferredPromise<void>; release: DeferredPromise<void> } | undefined;
+	holdNextSave(): { entered: DeferredPromise<void>; release: DeferredPromise<void> } {
+		return (this.held = { entered: new DeferredPromise<void>(), release: new DeferredPromise<void>() });
 	}
-	async resolve(request: TextResourceResolveRequest) { return { resource: request.resource, text: this.text, revision: String(this.revision) }; }
+	async resolve(request: TextResourceResolveRequest) {
+		return { resource: request.resource, text: this.text, revision: String(this.revision) };
+	}
 	async save(request: TextResourceSaveRequest) {
 		if (request.expectedRevision !== String(this.revision)) throw new TextResourceConflictError(request.resource);
 		const held = this.held;
 		this.held = undefined;
-		if (held) { await held.entered.complete(undefined); await held.release.p; }
+		if (held) {
+			await held.entered.complete(undefined);
+			await held.release.p;
+		}
 		const error = this.failNextSave;
 		this.failNextSave = undefined;
 		if (error) throw error;
@@ -935,9 +1305,23 @@ class SaveTestFiles implements ITextResourceStore {
 class TestWindow {
 	private nextTimer = 1;
 	private readonly timers = new Map<number, () => void>();
-	setTimeout(callback: () => void): number { const id = this.nextTimer++; this.timers.set(id, callback); return id; }
-	clearTimeout(id: number): void { this.timers.delete(id); }
-	get pendingTimers(): number { return this.timers.size; }
-	snapshotTimers(): readonly (() => void)[] { return [...this.timers.values()]; }
-	runTimers(): void { const callbacks = [...this.timers.values()]; this.timers.clear(); for (const callback of callbacks) callback(); }
+	setTimeout(callback: () => void): number {
+		const id = this.nextTimer++;
+		this.timers.set(id, callback);
+		return id;
+	}
+	clearTimeout(id: number): void {
+		this.timers.delete(id);
+	}
+	get pendingTimers(): number {
+		return this.timers.size;
+	}
+	snapshotTimers(): readonly (() => void)[] {
+		return [...this.timers.values()];
+	}
+	runTimers(): void {
+		const callbacks = [...this.timers.values()];
+		this.timers.clear();
+		for (const callback of callbacks) callback();
+	}
 }

@@ -13,38 +13,45 @@ import type { IGitHubService } from '../../github/common/githubService.js';
 import type { ILocalGitService } from '../../git/common/localGitService.js';
 import type { IBackupService } from '../../backup/common/backup.js';
 import type { INetworkDiagnosticsService } from '../../networkDiagnostics/common/networkDiagnosticsService.js';
-import type { IChannelService } from "../../collab/common/channelService.js";
+import type { IChannelService } from '../../collab/common/channelService.js';
 import type { ICallService } from '../../call/common/callService.js';
 import type { IVoiceCodeTranscriptionBackendService } from './dictation.js';
-import type { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../localTranscription/common/localTranscription.js';
+import type {
+	ILocalTranscriptionService,
+	ILocalTranscriptionModelService,
+} from '../../localTranscription/common/localTranscription.js';
 import type { IApprovalEnvironmentService } from '../../approvalEnvironment/common/approvalEnvironmentService.js';
 import type { IMemoriesService } from '../../memories/common/memoriesService.js';
 import type { IMemoryDiagnosticsService } from '../../memory/common/memoryDiagnosticsService.js';
-import type { IAppServerApi, IResourceApi, IServerEventApi } from "../../agentHost/common/appServerApi.js";
+import type { IAppServerApi, IResourceApi, IServerEventApi } from '../../agentHost/common/appServerApi.js';
 import type { AppServerConnectionState } from '../../agentHost/common/appServerApi.js';
 import type { Event } from '../../../base/common/event.js';
-import type { IExtensionApi } from "../../extensions/common/extensionApi.js";
-import type { IFileApi } from "../../files/common/fileApi.js";
-import type { ISyntaxApi } from "../../syntax/common/syntaxApi.js";
+import type { IExtensionApi } from '../../extensions/common/extensionApi.js';
+import type { IFileApi } from '../../files/common/fileApi.js';
+import type { ISyntaxApi } from '../../syntax/common/syntaxApi.js';
 import type { IContentSearchConfigurationService } from '../../search/common/search.js';
-import type { IContentSearchApi } from "../../search/common/searchApi.js";
-import type { IAgentSessionService, IAgentThreadService, IAgentTurnService } from "../../agentHost/common/agentService.js";
-import type { IAgentModelsService } from "../../agentHost/common/agentModels.js";
-import type { IAppServerSkillApi, IAppServerHookApi } from "../../agentHost/common/appServerApi.js";
-import type { ILanguageServerService } from "../../language/common/languageServerService.js";
-import type { ITerminalProcessService } from "../../terminal/common/terminal.js";
-import type { IDocumentCollaborationApi } from "../../collab/common/documentCollaborationApi.js";
-import type { ICodebaseApi } from "../../codebase/common/codebaseApi.js";
-import type { IConnectorApi } from "../../connectors/common/connectorApi.js";
-import type { IToolSearchApi } from "../../toolSearch/common/toolSearchApi.js";
-import type { ILanguageApi } from "../../language/common/languageApi.js";
-import type { IPluginManagementApi } from "../../extensionManagement/common/pluginManagementApi.js";
-import type { IDebugAdapterProcessService } from "../../debug/common/debugAdapterProcessService.js";
+import type { IContentSearchApi } from '../../search/common/searchApi.js';
+import type {
+	IAgentSessionService,
+	IAgentThreadService,
+	IAgentTurnService,
+} from '../../agentHost/common/agentService.js';
+import type { IAgentModelsService } from '../../agentHost/common/agentModels.js';
+import type { IAppServerSkillApi, IAppServerHookApi } from '../../agentHost/common/appServerApi.js';
+import type { ILanguageServerService } from '../../language/common/languageServerService.js';
+import type { ITerminalProcessService } from '../../terminal/common/terminal.js';
+import type { IDocumentCollaborationApi } from '../../collab/common/documentCollaborationApi.js';
+import type { ICodebaseApi } from '../../codebase/common/codebaseApi.js';
+import type { IConnectorApi } from '../../connectors/common/connectorApi.js';
+import type { IToolSearchApi } from '../../toolSearch/common/toolSearchApi.js';
+import type { ILanguageApi } from '../../language/common/languageApi.js';
+import type { IPluginManagementApi } from '../../extensionManagement/common/pluginManagementApi.js';
+import type { IDebugAdapterProcessService } from '../../debug/common/debugAdapterProcessService.js';
 import type { IExtensionHostApi } from '../../agentHost/common/extensionHostApi.js';
-import type { ICodebaseSymbolsApi } from "../../codebaseSymbols/common/codebaseSymbolsApi.js";
-import type { IRemoteAgentApi } from "../../remote/common/remoteAgentApi.js";
-import type { IRemoteConnectionApi } from "../../remote/common/remoteConnectionService.js";
-import type { IExtensionManagementApi } from "../../extensionManagement/common/extensionManagementApi.js";
+import type { ICodebaseSymbolsApi } from '../../codebaseSymbols/common/codebaseSymbolsApi.js';
+import type { IRemoteAgentApi } from '../../remote/common/remoteAgentApi.js';
+import type { IRemoteConnectionApi } from '../../remote/common/remoteConnectionService.js';
+import type { IExtensionManagementApi } from '../../extensionManagement/common/extensionManagementApi.js';
 import type { IWorkspaceTrustApi } from '../../workspace/common/workspaceTrust.js';
 import type { IAgentCapabilitiesService } from '../../agentCapabilities/common/agentCapabilitiesService.js';
 import type { IAgentToolsApi } from '../../agentHost/common/agentToolsApi.js';
@@ -52,8 +59,8 @@ import type { IMcpServerStatusService } from '../../mcp/common/mcpServerStatusSe
 import type { IMcpServerManagementService } from '../../mcp/common/mcpServerManagementService.js';
 import type { IAgentExecutionSettingsService } from '../../agentHost/common/agentExecutionSettingsService.js';
 import type { ITraceSettingsService } from '../../trace/common/traceSettingsService.js';
-import type { IAccountApi } from "../../accounts/common/accountApi.js";
-import type { ITurnChangesApi } from "../../turnChanges/common/turnChangesApi.js";
+import type { IAccountApi } from '../../accounts/common/accountApi.js';
+import type { ITurnChangesApi } from '../../turnChanges/common/turnChangesApi.js';
 import type { IAutomationBackendService } from '../../agentHost/common/automation.js';
 import type { IAgentVoiceService } from '../../agentHost/common/agentService.js';
 import type { ITeamApi } from '../../teams/common/teamApi.js';
@@ -70,12 +77,15 @@ export interface RendererHostCapabilities {
 }
 
 /** Merges product capabilities while rejecting two contributions that claim the same slot. */
-export function mergeRendererHostCapabilities(capabilities: readonly RendererHostCapabilities[]): RendererHostCapabilities {
+export function mergeRendererHostCapabilities(
+	capabilities: readonly RendererHostCapabilities[],
+): RendererHostCapabilities {
 	const merged: Record<string, unknown> = {};
 	for (const capability of capabilities) {
 		for (const [name, value] of Object.entries(capability)) {
 			if (value === undefined) continue;
-			if (Object.hasOwn(merged, name)) throw new Error(`Renderer host capability '${name}' was contributed more than once`);
+			if (Object.hasOwn(merged, name))
+				throw new Error(`Renderer host capability '${name}' was contributed more than once`);
 			merged[name] = value;
 		}
 	}

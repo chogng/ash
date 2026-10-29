@@ -5,19 +5,60 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('agentTrace browser component', () => {
 	const browserTests = useBrowserTests();
 	const capture = {
-		formatVersion: 3, sessionId: 'theme-fixture', historyPrefixes: [],
-		threads: [{
-			threadId: 'root', events: [
-				{ eventId: 'e-1', sequence: 1, recordedAt: 1, event: { type: 'threadCreated', threadId: 'root', title: 'Theme fixture' } },
-				{ eventId: 'e-2', sequence: 2, recordedAt: 2, event: { type: 'turnCompleted', threadId: 'root', turnId: 'turn' } },
-				{ eventId: 'e-3', sequence: 3, recordedAt: 3, event: { type: 'turnFailed', threadId: 'root', turnId: 'turn', error: { message: 'Fixture failure' } } },
-			]
-		}],
+		formatVersion: 3,
+		sessionId: 'theme-fixture',
+		historyPrefixes: [],
+		threads: [
+			{
+				threadId: 'root',
+				events: [
+					{
+						eventId: 'e-1',
+						sequence: 1,
+						recordedAt: 1,
+						event: { type: 'threadCreated', threadId: 'root', title: 'Theme fixture' },
+					},
+					{
+						eventId: 'e-2',
+						sequence: 2,
+						recordedAt: 2,
+						event: { type: 'turnCompleted', threadId: 'root', turnId: 'turn' },
+					},
+					{
+						eventId: 'e-3',
+						sequence: 3,
+						recordedAt: 3,
+						event: {
+							type: 'turnFailed',
+							threadId: 'root',
+							turnId: 'turn',
+							error: { message: 'Fixture failure' },
+						},
+					},
+				],
+			},
+		],
 		graph: {
 			nodes: {
-				root: { id: 'root', kind: 'thread', label: 'Theme fixture', threadId: 'root', turnId: null, eventKey: 'root:1' },
-				turn: { id: 'turn', kind: 'turn', label: 'Completed turn', threadId: 'root', turnId: 'turn', eventKey: 'root:2' },
-			}, edges: [{ from: 'root', to: 'turn', kind: 'owns' }], warnings: ['Missing causal witness fixture']
+				root: {
+					id: 'root',
+					kind: 'thread',
+					label: 'Theme fixture',
+					threadId: 'root',
+					turnId: null,
+					eventKey: 'root:1',
+				},
+				turn: {
+					id: 'turn',
+					kind: 'turn',
+					label: 'Completed turn',
+					threadId: 'root',
+					turnId: 'turn',
+					eventKey: 'root:2',
+				},
+			},
+			edges: [{ from: 'root', to: 'turn', kind: 'owns' }],
+			warnings: ['Missing causal witness fixture'],
 		},
 	};
 
@@ -30,10 +71,19 @@ suite('agentTrace browser component', () => {
 		await page.goto('/agentTrace.html');
 		await expect.poll(() => page.locator('body').getAttribute('data-ready')).toBe('true');
 		const viewer = page.locator('.ash-agent-trace');
-		await viewer.locator('input[type=file]').setInputFiles({ name: 'themes.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(capture)) });
+		await viewer
+			.locator('input[type=file]')
+			.setInputFiles({
+				name: 'themes.trace.json',
+				mimeType: 'application/json',
+				buffer: Buffer.from(JSON.stringify(capture)),
+			});
 		await expect(viewer.getByRole('status')).toContainText('Imported');
 		await expect(viewer.getByRole('tab')).toHaveCount(5);
-		await expect(viewer.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute('aria-selected', 'true');
+		await expect(viewer.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute(
+			'aria-selected',
+			'true',
+		);
 		await expect(viewer.getByRole('region', { name: 'Saved execution body', exact: true })).toHaveCount(0);
 		const tree = viewer.getByRole('tree');
 		const failure = viewer.locator('[role=treeitem]:has([data-key="root:3"])');
@@ -47,9 +97,12 @@ suite('agentTrace browser component', () => {
 			await expect(viewer.getByRole('tabpanel')).toBeVisible();
 			await expect(viewer.getByRole('tabpanel')).toContainText('Fixture failure');
 			const colors = await failure.evaluate(row => {
-				const span = document.createElement('span'); row.append(span);
-				span.style.color = 'var(--ash-error-foreground)'; const error = getComputedStyle(span).color;
-				span.style.color = 'var(--ash-list-activeSelectionForeground)'; const selected = getComputedStyle(span).color;
+				const span = document.createElement('span');
+				row.append(span);
+				span.style.color = 'var(--ash-error-foreground)';
+				const error = getComputedStyle(span).color;
+				span.style.color = 'var(--ash-list-activeSelectionForeground)';
+				const selected = getComputedStyle(span).color;
 				span.remove();
 				return { error, selected };
 			});
@@ -79,7 +132,9 @@ suite('agentTrace browser component', () => {
 			const sash = viewer.getByRole('separator');
 			await sash.focus();
 			await sash.press('ArrowRight');
-			await expect.poll(async () => (await viewer.locator('.ash-agent-trace-navigation').boundingBox())!.width).toBeGreaterThan(before!.width);
+			await expect
+				.poll(async () => (await viewer.locator('.ash-agent-trace-navigation').boundingBox())!.width)
+				.toBeGreaterThan(before!.width);
 			await testInfo.attach(`${id}-wide`, { body: await viewer.screenshot(), contentType: 'image/png' });
 			await page.evaluate(() => window.agentTraceIntegration.layout(500, 650));
 			await expect(viewer.getByRole('separator')).toHaveAttribute('aria-orientation', 'horizontal');
@@ -101,9 +156,32 @@ suite('agentTrace browser component', () => {
 		await page.goto('/agentTrace.html');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		const viewer = page.locator('.ash-agent-trace');
-		const events = Array.from({ length: 20000 }, (_, i) => ({ eventId: `event-${i}`, sequence: i + 1, recordedAt: i, event: { type: 'itemCompleted', threadId: 'root', turnId: `turn-${Math.floor(i / 200)}`, item: { type: 'agentMessage', text: `message ${i}` } } }));
+		const events = Array.from({ length: 20000 }, (_, i) => ({
+			eventId: `event-${i}`,
+			sequence: i + 1,
+			recordedAt: i,
+			event: {
+				type: 'itemCompleted',
+				threadId: 'root',
+				turnId: `turn-${Math.floor(i / 200)}`,
+				item: { type: 'agentMessage', text: `message ${i}` },
+			},
+		}));
 		const started = Date.now();
-		await viewer.locator('input[type=file]').setInputFiles({ name: 'long.trace.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ formatVersion: 3, sessionId: 'long', historyPrefixes: [], threads: [{ threadId: 'root', events }] })) });
+		await viewer
+			.locator('input[type=file]')
+			.setInputFiles({
+				name: 'long.trace.json',
+				mimeType: 'application/json',
+				buffer: Buffer.from(
+					JSON.stringify({
+						formatVersion: 3,
+						sessionId: 'long',
+						historyPrefixes: [],
+						threads: [{ threadId: 'root', events }],
+					}),
+				),
+			});
 		await expect(viewer.getByRole('status')).toContainText('Imported');
 		const firstMs = Date.now() - started;
 		const mounted = await viewer.locator('.ash-agent-trace-row').count();
@@ -117,7 +195,8 @@ suite('agentTrace browser component', () => {
 		const searchMs = Date.now() - searching;
 		await search.fill('');
 		const content = await page.evaluate(() => window.agentTraceIntegration.accessibleContent());
-		expect(content).toContain('message 0'); expect(content).toContain('message 19999');
+		expect(content).toContain('message 0');
+		expect(content).toContain('message 19999');
 		await viewer.getByRole('tab', { name: 'Raw record', exact: true }).click();
 		await expect(viewer.getByRole('region', { name: 'Saved execution body', exact: true })).toHaveCount(1);
 		await expect(viewer.getByRole('tabpanel')).toBeVisible();
@@ -127,7 +206,10 @@ suite('agentTrace browser component', () => {
 		const beforeClose = await page.evaluate(() => window.agentTraceIntegration.resources());
 		expect(beforeClose).toEqual({ models: 1, editors: 1 });
 		expect(errors).toEqual([]);
-		await testInfo.attach('long-history-measurements', { body: Buffer.from(JSON.stringify({ events: events.length, firstMs, searchMs, mounted, beforeClose })), contentType: 'application/json' });
+		await testInfo.attach('long-history-measurements', {
+			body: Buffer.from(JSON.stringify({ events: events.length, firstMs, searchMs, mounted, beforeClose })),
+			contentType: 'application/json',
+		});
 		await page.evaluate(() => window.agentTraceIntegration.dispose());
 		await expect(viewer).toHaveCount(0);
 		expect(await page.evaluate(() => window.agentTraceIntegration.resources())).toEqual({ models: 0, editors: 0 });
@@ -140,36 +222,110 @@ suite('agentTrace browser component', () => {
 		await page.goto('/agentTrace.html');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		const viewer = page.locator('.ash-agent-trace');
-		const ledger = (invocationId: string, usage: unknown, outcome: string) => ({ type: 'modelInvocationRecorded', record: { invocationId, outcome, usage } });
+		const ledger = (invocationId: string, usage: unknown, outcome: string) => ({
+			type: 'modelInvocationRecorded',
+			record: { invocationId, outcome, usage },
+		});
 		const first = ledger('first', { inputTokens: 100, outputTokens: 20, cachedInputTokens: 80 }, 'completed');
 		const decisions = [
-			{ action: 'executeTools', reason: 'toolRequests', stopReason: { type: 'toolUse' }, messagePhases: ['final_answer'], toolCallCount: 1 },
-			{ action: 'continue', reason: 'nonterminalMessage', stopReason: { type: 'completed' }, messagePhases: ['partial_answer'], toolCallCount: 0 },
-			{ action: 'complete', reason: 'compatibleCompletion', stopReason: { type: 'completed' }, messagePhases: [null], toolCallCount: 0 },
-			{ action: 'fail', reason: 'truncatedOutput', stopReason: { type: 'maxOutputTokens' }, messagePhases: ['partial_answer'], toolCallCount: 0 },
-			{ action: 'superseded', reason: 'newInput', stopReason: { type: 'completed' }, messagePhases: ['final_answer'], toolCallCount: 0 },
+			{
+				action: 'executeTools',
+				reason: 'toolRequests',
+				stopReason: { type: 'toolUse' },
+				messagePhases: ['final_answer'],
+				toolCallCount: 1,
+			},
+			{
+				action: 'continue',
+				reason: 'nonterminalMessage',
+				stopReason: { type: 'completed' },
+				messagePhases: ['partial_answer'],
+				toolCallCount: 0,
+			},
+			{
+				action: 'complete',
+				reason: 'compatibleCompletion',
+				stopReason: { type: 'completed' },
+				messagePhases: [null],
+				toolCallCount: 0,
+			},
+			{
+				action: 'fail',
+				reason: 'truncatedOutput',
+				stopReason: { type: 'maxOutputTokens' },
+				messagePhases: ['partial_answer'],
+				toolCallCount: 0,
+			},
+			{
+				action: 'superseded',
+				reason: 'newInput',
+				stopReason: { type: 'completed' },
+				messagePhases: ['final_answer'],
+				toolCallCount: 0,
+			},
 		];
 		const events = [
-			{ type: 'threadCreated', title: 'Coverage fixture' }, first, first,
+			{ type: 'threadCreated', title: 'Coverage fixture' },
+			first,
+			first,
 			ledger('second', { inputTokens: null, outputTokens: 0, cachedInputTokens: null }, 'failed'),
 			{ type: 'itemCompleted', item: { type: 'toolCall', toolCallId: 'call', name: 'shell-command' } },
-			{ type: 'itemCompleted', item: { type: 'toolResult', toolCallId: 'call', text: 'private output', isError: true } },
+			{
+				type: 'itemCompleted',
+				item: { type: 'toolResult', toolCallId: 'call', text: 'private output', isError: true },
+			},
 			{ type: 'turnFailed', error: { message: 'Failed Turn' } },
 			...decisions.map(decision => ({ type: 'modelResponseEvaluated', sourceThreadSequence: 0, decision })),
-		].map((event, index) => ({ eventId: `coverage-${index}`, sequence: index + 1, recordedAt: Date.UTC(2026, 9, 18, 12) + index, event: { ...event, threadId: 'root', turnId: event.type === 'threadCreated' ? undefined : 't' } }));
-		const metric = (reported: string | null, reportedCalls: number, missingCalls: number) => ({ reported, reportedCalls, missingCalls });
+		].map((event, index) => ({
+			eventId: `coverage-${index}`,
+			sequence: index + 1,
+			recordedAt: Date.UTC(2026, 9, 18, 12) + index,
+			event: { ...event, threadId: 'root', turnId: event.type === 'threadCreated' ? undefined : 't' },
+		}));
+		const metric = (reported: string | null, reportedCalls: number, missingCalls: number) => ({
+			reported,
+			reportedCalls,
+			missingCalls,
+		});
 		const artifact = {
-			formatVersion: 3, sessionId: 'coverage', historyPrefixes: [], threads: [{ threadId: 'root', events }],
+			formatVersion: 3,
+			sessionId: 'coverage',
+			historyPrefixes: [],
+			threads: [{ threadId: 'root', events }],
 			overview: {
-				formatVersion: 1, threadCursors: { root: 12 }, eventCount: 12, modelCalls: 2, toolCalls: 1, failedModelCalls: 1, cancelledModelCalls: 0, excludedModelCalls: 0,
-				inputTokens: metric('100', 1, 1), outputTokens: metric('20', 2, 0), cachedInputTokens: metric('80', 1, 1), totalTokens: metric('120', 1, 1)
+				formatVersion: 1,
+				threadCursors: { root: 12 },
+				eventCount: 12,
+				modelCalls: 2,
+				toolCalls: 1,
+				failedModelCalls: 1,
+				cancelledModelCalls: 0,
+				excludedModelCalls: 0,
+				inputTokens: metric('100', 1, 1),
+				outputTokens: metric('20', 2, 0),
+				cachedInputTokens: metric('80', 1, 1),
+				totalTokens: metric('120', 1, 1),
 			},
-			diagnostics: { formatVersion: 2, captureId: null, recordingStatus: 'incomplete', droppedRecords: 2, pendingRecords: 1, events: [] },
+			diagnostics: {
+				formatVersion: 2,
+				captureId: null,
+				recordingStatus: 'incomplete',
+				droppedRecords: 2,
+				pendingRecords: 1,
+				events: [],
+			},
 		};
-		await viewer.locator('input[type=file]').setInputFiles({ name: 'coverage.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(artifact)) });
+		await viewer
+			.locator('input[type=file]')
+			.setInputFiles({
+				name: 'coverage.json',
+				mimeType: 'application/json',
+				buffer: Buffer.from(JSON.stringify(artifact)),
+			});
 		await expect(viewer.getByRole('status')).toContainText('Imported');
 		const overview = viewer.locator('.ash-chat-debug-overview');
-		const cell = (label: string) => overview.locator('.ash-chat-debug-metrics > div').filter({ has: page.getByText(label, { exact: true }) });
+		const cell = (label: string) =>
+			overview.locator('.ash-chat-debug-metrics > div').filter({ has: page.getByText(label, { exact: true }) });
 		await expect(cell('Committed model calls').locator('dd')).toHaveText('2');
 		await expect(cell('Input tokens').locator('dd')).toHaveText(['100', 'Reported by 1/2 included calls']);
 		await expect(cell('Input + output tokens').locator('dd')).toHaveText(['120', 'Reported by 1/2 included calls']);
@@ -177,7 +333,10 @@ suite('agentTrace browser component', () => {
 		const before = await overview.innerText();
 		await viewer.getByRole('button', { name: 'Models', exact: true }).focus();
 		await page.keyboard.press('Space');
-		await expect(viewer.getByRole('button', { name: 'Models', exact: true })).toHaveAttribute('aria-pressed', 'false');
+		await expect(viewer.getByRole('button', { name: 'Models', exact: true })).toHaveAttribute(
+			'aria-pressed',
+			'false',
+		);
 		const search = viewer.getByRole('textbox', { name: 'Filter execution events' });
 		await search.fill('thread:root turn:t, !private, after:2026-10-18, before:2026-10-18');
 		await expect(viewer.locator('.ash-agent-trace-event')).toHaveCount(2);
@@ -187,23 +346,36 @@ suite('agentTrace browser component', () => {
 		await expect(viewer.locator('.ash-agent-trace-event')).toHaveCount(0);
 		await viewer.getByRole('button', { name: 'Clear filters', exact: true }).click();
 		await expect(search).not.toHaveAttribute('aria-invalid');
-		await expect(viewer.getByRole('button', { name: 'Models', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await expect(viewer.getByRole('button', { name: 'Models', exact: true })).toHaveAttribute(
+			'aria-pressed',
+			'true',
+		);
 		await expect(viewer.locator('.ash-agent-trace-event')).toHaveCount(12);
 		const timeline = viewer.locator('.ash-agent-trace-tree');
-		await expect(timeline).toContainText('Execute tools · Pending tool requests · stop: Tool use · phases: Final answer');
+		await expect(timeline).toContainText(
+			'Execute tools · Pending tool requests · stop: Tool use · phases: Final answer',
+		);
 		await expect(timeline).toContainText('Continue generation · Nonterminal message received');
 		await expect(timeline).toContainText('Complete Turn · Completed without a known phase');
 		await expect(timeline).toContainText('Superseded by new input · New input arrived during generation');
-		await testInfo.attach('chat-debug-overview-wide', { body: await viewer.screenshot(), contentType: 'image/png' });
+		await testInfo.attach('chat-debug-overview-wide', {
+			body: await viewer.screenshot(),
+			contentType: 'image/png',
+		});
 		await page.evaluate(() => window.agentTraceIntegration.layout(500, 650));
 		await expect(overview).not.toHaveAttribute('open');
 		await expect(viewer.getByRole('tree')).toBeVisible();
 		await overview.locator('summary').focus();
 		await page.keyboard.press('Enter');
 		await expect(overview).toHaveAttribute('open', '');
-		await expect.poll(() => viewer.locator('.ash-agent-trace-tree').evaluate(element => element.clientHeight)).toBeGreaterThan(80);
+		await expect
+			.poll(() => viewer.locator('.ash-agent-trace-tree').evaluate(element => element.clientHeight))
+			.toBeGreaterThan(80);
 		await expect(viewer.getByRole('tabpanel')).not.toBeVisible();
-		await testInfo.attach('chat-debug-overview-narrow', { body: await viewer.screenshot(), contentType: 'image/png' });
+		await testInfo.attach('chat-debug-overview-narrow', {
+			body: await viewer.screenshot(),
+			contentType: 'image/png',
+		});
 		await viewer.locator('[data-event-id="coverage-4"]').click();
 		await expect(overview).not.toHaveAttribute('open');
 		await expect(viewer.getByRole('tabpanel')).toBeVisible();

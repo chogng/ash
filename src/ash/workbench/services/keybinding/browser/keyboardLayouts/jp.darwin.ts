@@ -1,6 +1,5 @@
 import { KeyboardLayoutContribution } from './_.contribution.js';
 
-
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 	layout: { id: 'com.apple.inputmethod.Kotoeri.Japanese', lang: 'ja', localizedName: 'Hiragana' },
 	secondaryLayouts: [],
@@ -52,7 +51,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		BracketRight: [']', '}', '‘', '’', 0],
 		Backslash: ['\\', '|', '«', '»', 0],
 		Semicolon: [';', ':', '…', 'Ú', 0],
-		Quote: ['\'', '"', 'æ', 'Æ', 0],
+		Quote: ["'", '"', 'æ', 'Æ', 0],
 		Backquote: ['`', '~', '`', '`', 4],
 		Comma: [',', '<', '≤', '¯', 0],
 		Period: ['.', '>', '≥', '˘', 0],
@@ -122,6 +121,6 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		ControlRight: [],
 		ShiftRight: [],
 		AltRight: [],
-		MetaRight: []
-	}
+		MetaRight: [],
+	},
 });

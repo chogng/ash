@@ -1,4 +1,7 @@
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import {
+	Extensions as ConfigurationExtensions,
+	type IConfigurationRegistry,
+} from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import type { ScmDiffDecorationsIgnoreTrimWhitespace } from '../common/quickDiff.js';
 import { localize2 } from '../../../../nls.js';
@@ -6,7 +9,10 @@ import { Keybinding, logicalKey } from '../../../../base/common/keybindings.js';
 import { type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { EditorOption } from '../../../../editor/common/config/editorOptions.js';
-import { EditorContributionInstantiation, registerEditorContribution } from '../../../../editor/browser/editorExtensions.js';
+import {
+	EditorContributionInstantiation,
+	registerEditorContribution,
+} from '../../../../editor/browser/editorExtensions.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { ActiveEditorContext } from '../../../common/contextkeys.js';
 import { CODE_EDITOR_ID } from '../../../browser/parts/editor/textResourceEditor.js';
@@ -51,7 +57,8 @@ configurationRegistry.registerConfiguration<ScmDiffDecorationsGutterAction>({
 	key: 'scm.diffDecorationsGutterAction',
 	defaultValue: 'diff',
 	parse(value: unknown): ScmDiffDecorationsGutterAction {
-		if (value !== 'diff' && value !== 'none') throw new TypeError('scm.diffDecorationsGutterAction must be diff or none');
+		if (value !== 'diff' && value !== 'none')
+			throw new TypeError('scm.diffDecorationsGutterAction must be diff or none');
 		return value;
 	},
 });
@@ -71,41 +78,61 @@ registerEditorContribution({
 
 const CodeEditorActive = ActiveEditorContext.isEqualTo(CODE_EDITOR_ID);
 
-registerAction2(class extends Action2 {
-	constructor() {
-		super({
-			id: 'scm.quickDiff.next',
-			title: localize2({ bundle: 'ash.workbench', key: 'command.scm.quickDiff.next' }, 'Go to Next Quick Diff Change'),
-			f1: true,
-			precondition: CodeEditorActive,
-			keybinding: { primary: Keybinding.single(logicalKey('F3', { altKey: true })), when: CodeEditorActive },
-		});
-	}
-	override run(accessor: ServicesAccessor): void {
-		accessor.get(IQuickDiffEditorControllerService).activeController?.showNextChange();
-	}
-});
+registerAction2(
+	class extends Action2 {
+		constructor() {
+			super({
+				id: 'scm.quickDiff.next',
+				title: localize2(
+					{ bundle: 'ash.workbench', key: 'command.scm.quickDiff.next' },
+					'Go to Next Quick Diff Change',
+				),
+				f1: true,
+				precondition: CodeEditorActive,
+				keybinding: { primary: Keybinding.single(logicalKey('F3', { altKey: true })), when: CodeEditorActive },
+			});
+		}
+		override run(accessor: ServicesAccessor): void {
+			accessor.get(IQuickDiffEditorControllerService).activeController?.showNextChange();
+		}
+	},
+);
 
-registerAction2(class extends Action2 {
-	constructor() {
-		super({
-			id: 'scm.quickDiff.previous',
-			title: localize2({ bundle: 'ash.workbench', key: 'command.scm.quickDiff.previous' }, 'Go to Previous Quick Diff Change'),
-			f1: true,
-			precondition: CodeEditorActive,
-			keybinding: { primary: Keybinding.single(logicalKey('F3', { altKey: true, shiftKey: true })), when: CodeEditorActive },
-		});
-	}
-	override run(accessor: ServicesAccessor): void {
-		accessor.get(IQuickDiffEditorControllerService).activeController?.showPreviousChange();
-	}
-});
+registerAction2(
+	class extends Action2 {
+		constructor() {
+			super({
+				id: 'scm.quickDiff.previous',
+				title: localize2(
+					{ bundle: 'ash.workbench', key: 'command.scm.quickDiff.previous' },
+					'Go to Previous Quick Diff Change',
+				),
+				f1: true,
+				precondition: CodeEditorActive,
+				keybinding: {
+					primary: Keybinding.single(logicalKey('F3', { altKey: true, shiftKey: true })),
+					when: CodeEditorActive,
+				},
+			});
+		}
+		override run(accessor: ServicesAccessor): void {
+			accessor.get(IQuickDiffEditorControllerService).activeController?.showPreviousChange();
+		}
+	},
+);
 
-registerAction2(class extends Action2 {
-	constructor() {
-		super({ id: 'scm.quickDiff.close', title: localize2({ bundle: 'ash.workbench', key: 'command.scm.quickDiff.close' }, 'Close Quick Diff'), f1: true, precondition: CodeEditorActive });
-	}
-	override run(accessor: ServicesAccessor): void {
-		accessor.get(IQuickDiffEditorControllerService).activeController?.close();
-	}
-});
+registerAction2(
+	class extends Action2 {
+		constructor() {
+			super({
+				id: 'scm.quickDiff.close',
+				title: localize2({ bundle: 'ash.workbench', key: 'command.scm.quickDiff.close' }, 'Close Quick Diff'),
+				f1: true,
+				precondition: CodeEditorActive,
+			});
+		}
+		override run(accessor: ServicesAccessor): void {
+			accessor.get(IQuickDiffEditorControllerService).activeController?.close();
+		}
+	},
+);

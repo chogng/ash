@@ -1,9 +1,13 @@
-import "./lineNumbers.css";
+import './lineNumbers.css';
 import { htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
-import { EditorOption, type InternalEditorRenderLineNumbersOptions, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
-import { type EditorVisualLineProjection } from "../../../common/viewModel/modelLineProjection.js";
+import {
+	EditorOption,
+	type InternalEditorRenderLineNumbersOptions,
+	RenderLineNumbersType,
+} from '../../../common/config/editorOptions.js';
+import { type EditorVisualLineProjection } from '../../../common/viewModel/modelLineProjection.js';
 import { type IViewModel } from '../../../common/viewModel.js';
-import { type RenderingContext } from "../../view/renderingContext.js";
+import { type RenderingContext } from '../../view/renderingContext.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { DynamicViewOverlay } from '../../view/dynamicViewOverlay.js';
 import * as viewEvents from '../../../common/viewEvents.js';
@@ -22,7 +26,10 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 	private readonly viewModel: IViewModel;
 	private readonly readVisualProjection: () => EditorVisualLineProjection;
 
-	constructor(private readonly context: ViewContext, options: LineNumbersOverlayOptions) {
+	constructor(
+		private readonly context: ViewContext,
+		options: LineNumbersOverlayOptions,
+	) {
 		super();
 		this.context.addEventHandler(this);
 		this.lineNumbers = this.context.configuration.options.get(EditorOption.lineNumbers);
@@ -46,16 +53,34 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 		const activeLineNumber = event.modelSelections[0]?.positionLineNumber ?? this.activeLineNumber;
 		const activeLineChanged = activeLineNumber !== this.activeLineNumber;
 		this.activeLineNumber = activeLineNumber;
-		return activeLineChanged || this.lineNumbers.renderType === RenderLineNumbersType.Relative || this.lineNumbers.renderType === RenderLineNumbersType.Interval;
+		return (
+			activeLineChanged ||
+			this.lineNumbers.renderType === RenderLineNumbersType.Relative ||
+			this.lineNumbers.renderType === RenderLineNumbersType.Interval
+		);
 	}
 
-	public override onDecorationsChanged(event: viewEvents.ViewDecorationsChangedEvent): boolean { return event.affectsLineNumber; }
-	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return true; }
-	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean { return true; }
-	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
-	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
-	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean { return event.scrollTopChanged; }
-	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
+	public override onDecorationsChanged(event: viewEvents.ViewDecorationsChangedEvent): boolean {
+		return event.affectsLineNumber;
+	}
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
+		return true;
+	}
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean {
+		return true;
+	}
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean {
+		return true;
+	}
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean {
+		return true;
+	}
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
+		return event.scrollTopChanged;
+	}
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
+		return true;
+	}
 
 	public prepareRender(context: RenderingContext): void {
 		this._renderResult = [];
@@ -64,15 +89,23 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 		}
 		const visualProjection = this.readVisualProjection();
 		const activeLineIndex = this.viewModel.getPrimaryCursorState().modelState.position.lineNumber - 1;
-		for (let lineNumber = context.viewportData.startLineNumber; lineNumber <= context.viewportData.endLineNumber; lineNumber++) {
+		for (
+			let lineNumber = context.viewportData.startLineNumber;
+			lineNumber <= context.viewportData.endLineNumber;
+			lineNumber++
+		) {
 			const visualLine = visualProjection.lineAt(lineNumber - 1);
 			if (!visualLine) {
 				this._renderResult.push('');
 				continue;
 			}
 			const active = visualLine.logicalLineIndex === activeLineIndex ? ' active active-line-number' : '';
-			const label = visualLine.firstForLogicalLine ? renderLineNumber(this.lineNumbers, visualLine.logicalLineIndex, activeLineIndex) : '';
-			this._renderResult.push(`<span class="${LineNumbersOverlay.CLASS_NAME}${active}">${htmlAttributeEncodeValue(String(label))}</span>`);
+			const label = visualLine.firstForLogicalLine
+				? renderLineNumber(this.lineNumbers, visualLine.logicalLineIndex, activeLineIndex)
+				: '';
+			this._renderResult.push(
+				`<span class="${LineNumbersOverlay.CLASS_NAME}${active}">${htmlAttributeEncodeValue(String(label))}</span>`,
+			);
 		}
 	}
 
@@ -81,14 +114,24 @@ export class LineNumbersOverlay extends DynamicViewOverlay {
 	}
 }
 
-function renderLineNumber(options: InternalEditorRenderLineNumbersOptions, lineIndex: number, activeLineIndex: number | undefined): string {
+function renderLineNumber(
+	options: InternalEditorRenderLineNumbersOptions,
+	lineIndex: number,
+	activeLineIndex: number | undefined,
+): string {
 	const lineNumber = lineIndex + 1;
 	switch (options.renderType) {
-		case RenderLineNumbersType.Off: return '';
-		case RenderLineNumbersType.On: return String(lineNumber);
+		case RenderLineNumbersType.Off:
+			return '';
+		case RenderLineNumbersType.On:
+			return String(lineNumber);
 		case RenderLineNumbersType.Relative:
-			return activeLineIndex === undefined || activeLineIndex === lineIndex ? String(lineNumber) : String(Math.abs(lineIndex - activeLineIndex));
-		case RenderLineNumbersType.Interval: return lineNumber % 10 === 0 ? String(lineNumber) : '';
-		case RenderLineNumbersType.Custom: return options.renderFn?.(lineNumber) ?? '';
+			return activeLineIndex === undefined || activeLineIndex === lineIndex
+				? String(lineNumber)
+				: String(Math.abs(lineIndex - activeLineIndex));
+		case RenderLineNumbersType.Interval:
+			return lineNumber % 10 === 0 ? String(lineNumber) : '';
+		case RenderLineNumbersType.Custom:
+			return options.renderFn?.(lineNumber) ?? '';
 	}
 }

@@ -5,7 +5,7 @@ export class LineRangeMapping {
 	constructor(
 		public readonly inputRange: LineRange,
 		public readonly outputRange: LineRange,
-	) { }
+	) {}
 
 	public reverse(): LineRangeMapping {
 		return new LineRangeMapping(this.outputRange, this.inputRange);
@@ -23,7 +23,11 @@ export class DocumentLineRangeMap {
 		const second = new DocumentLineRangeMap(inputToOutput2, inputLineCount);
 		const changes = [...inputToOutput1, ...inputToOutput2]
 			.map(mapping => mapping.inputRange)
-			.sort((left, right) => left.startLineNumber - right.startLineNumber || left.endLineNumberExclusive - right.endLineNumberExclusive);
+			.sort(
+				(left, right) =>
+					left.startLineNumber - right.startLineNumber ||
+					left.endLineNumberExclusive - right.endLineNumberExclusive,
+			);
 		const groups: LineRange[] = [];
 		for (const change of changes) {
 			const previous = groups.at(-1);
@@ -33,7 +37,10 @@ export class DocumentLineRangeMap {
 				groups.push(change);
 			}
 		}
-		return new DocumentLineRangeMap(groups.map(group => new LineRangeMapping(first.mapRange(group), second.mapRange(group))), first.outputLineCount);
+		return new DocumentLineRangeMap(
+			groups.map(group => new LineRangeMapping(first.mapRange(group), second.mapRange(group))),
+			first.outputLineCount,
+		);
 	}
 
 	constructor(
@@ -45,17 +52,24 @@ export class DocumentLineRangeMap {
 			const next = lineRangeMappings[index];
 			const inputGap = next.inputRange.startLineNumber - previous.inputRange.endLineNumberExclusive;
 			const outputGap = next.outputRange.startLineNumber - previous.outputRange.endLineNumberExclusive;
-			if (inputGap < 0 || inputGap !== outputGap) throw new RangeError('Merge line mappings must preserve unchanged lines');
+			if (inputGap < 0 || inputGap !== outputGap)
+				throw new RangeError('Merge line mappings must preserve unchanged lines');
 		}
 	}
 
 	public get outputLineCount(): number {
 		const last = this.lineRangeMappings.at(-1);
-		return this.inputLineCount + (last ? last.outputRange.endLineNumberExclusive - last.inputRange.endLineNumberExclusive : 0);
+		return (
+			this.inputLineCount +
+			(last ? last.outputRange.endLineNumberExclusive - last.inputRange.endLineNumberExclusive : 0)
+		);
 	}
 
 	public reverse(): DocumentLineRangeMap {
-		return new DocumentLineRangeMap(this.lineRangeMappings.map(mapping => mapping.reverse()), this.outputLineCount);
+		return new DocumentLineRangeMap(
+			this.lineRangeMappings.map(mapping => mapping.reverse()),
+			this.outputLineCount,
+		);
 	}
 
 	public project(lineNumber: number): LineRangeMapping {
@@ -71,7 +85,10 @@ export class DocumentLineRangeMap {
 	}
 
 	public mapRange(range: LineRange): LineRange {
-		return new LineRange(this.mapBoundary(range.startLineNumber, 'start'), this.mapBoundary(range.endLineNumberExclusive, 'end'));
+		return new LineRange(
+			this.mapBoundary(range.startLineNumber, 'start'),
+			this.mapBoundary(range.endLineNumberExclusive, 'end'),
+		);
 	}
 
 	private mapBoundary(lineNumber: number, edge: 'start' | 'end'): number {

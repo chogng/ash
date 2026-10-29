@@ -1,4 +1,4 @@
-import { URI } from "./uri.js";
+import { URI } from './uri.js';
 
 /** Returns the value for a key, inserting the supplied value when the key is absent. */
 export function getOrSet<K, V>(map: Map<K, V>, key: K, value: V): V {
@@ -23,7 +23,7 @@ export class LRUCache<K, V> implements Map<K, V> {
 	private mutableLimit: number;
 	private mutableRatio: number;
 
-	readonly [Symbol.toStringTag] = "LRUCache";
+	readonly [Symbol.toStringTag] = 'LRUCache';
 
 	constructor(limit: number, ratio = 1) {
 		this.mutableLimit = validateCacheLimit(limit);
@@ -60,10 +60,7 @@ export class LRUCache<K, V> implements Map<K, V> {
 		return this.entriesByAge.delete(key);
 	}
 
-	forEach(
-		callback: (value: V, key: K, map: Map<K, V>) => void,
-		thisArg?: unknown,
-	): void {
+	forEach(callback: (value: V, key: K, map: Map<K, V>) => void, thisArg?: unknown): void {
 		new Map(this.entriesByAge).forEach((value, key) => {
 			callback.call(thisArg, value, key, this);
 		});
@@ -121,14 +118,14 @@ export class LRUCache<K, V> implements Map<K, V> {
 
 function validateCacheLimit(value: number): number {
 	if (!Number.isSafeInteger(value) || value < 0) {
-		throw new RangeError("LRU cache limit must be a non-negative safe integer");
+		throw new RangeError('LRU cache limit must be a non-negative safe integer');
 	}
 	return value;
 }
 
 function validateCacheRatio(value: number): number {
 	if (!Number.isFinite(value) || value < 0 || value > 1) {
-		throw new RangeError("LRU cache ratio must be between zero and one");
+		throw new RangeError('LRU cache ratio must be between zero and one');
 	}
 	return value;
 }
@@ -156,7 +153,7 @@ export class ResourceMap<T> implements Map<URI, T> {
 	private readonly _entries = new Map<string, ResourceMapEntry<T>>();
 	private readonly toKey: ResourceMapKeyFn;
 
-	readonly [Symbol.toStringTag] = "ResourceMap";
+	readonly [Symbol.toStringTag] = 'ResourceMap';
 
 	constructor(toKey: ResourceMapKeyFn = defaultResourceKey) {
 		this.toKey = toKey;
@@ -187,10 +184,7 @@ export class ResourceMap<T> implements Map<URI, T> {
 		this._entries.clear();
 	}
 
-	forEach(
-		callback: (value: T, key: URI, map: Map<URI, T>) => void,
-		thisArg?: unknown,
-	): void {
+	forEach(callback: (value: T, key: URI, map: Map<URI, T>) => void, thisArg?: unknown): void {
 		for (const entry of this._entries.values()) {
 			callback.call(thisArg, entry.value, entry.resource, this);
 		}
@@ -223,7 +217,7 @@ export class ResourceMap<T> implements Map<URI, T> {
 export class ResourceSet implements Set<URI> {
 	private readonly resources: ResourceMap<URI>;
 
-	readonly [Symbol.toStringTag] = "ResourceSet";
+	readonly [Symbol.toStringTag] = 'ResourceSet';
 
 	constructor(toKey: ResourceMapKeyFn = defaultResourceKey) {
 		this.resources = new ResourceMap(toKey);
@@ -250,10 +244,7 @@ export class ResourceSet implements Set<URI> {
 		this.resources.clear();
 	}
 
-	forEach(
-		callback: (value: URI, value2: URI, set: Set<URI>) => void,
-		thisArg?: unknown,
-	): void {
+	forEach(callback: (value: URI, value2: URI, set: Set<URI>) => void, thisArg?: unknown): void {
 		this.resources.forEach((_value, resource) => {
 			callback.call(thisArg, resource, resource, this);
 		});
@@ -361,8 +352,14 @@ export class NKeyMap<TValue, TKeys extends readonly [NKey, ...NKey[]]> {
 		return node;
 	}
 
-	private getPath(keys: readonly NKey[]): Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue>; }> {
-		const path: Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue>; }> = [];
+	private getPath(
+		keys: readonly NKey[],
+	): Array<{ readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue> }> {
+		const path: Array<{
+			readonly parent: NKeyMapNode<TValue>;
+			readonly key: NKey;
+			readonly node: NKeyMapNode<TValue>;
+		}> = [];
 		let parent = this.root;
 		for (const key of keys) {
 			const node = parent.children.get(key);
@@ -373,7 +370,13 @@ export class NKeyMap<TValue, TKeys extends readonly [NKey, ...NKey[]]> {
 		return path;
 	}
 
-	private prune(path: readonly { readonly parent: NKeyMapNode<TValue>; readonly key: NKey; readonly node: NKeyMapNode<TValue>; }[]): void {
+	private prune(
+		path: readonly {
+			readonly parent: NKeyMapNode<TValue>;
+			readonly key: NKey;
+			readonly node: NKeyMapNode<TValue>;
+		}[],
+	): void {
 		for (let index = path.length - 1; index >= 0; index -= 1) {
 			const entry = path[index]!;
 			if (entry.node.hasValue || entry.node.children.size > 0) return;

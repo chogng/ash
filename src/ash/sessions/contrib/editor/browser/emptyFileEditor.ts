@@ -7,7 +7,10 @@ import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPane.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	IAccessibleViewService,
+	AccessibilityVerbositySettingId,
+} from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 
 /** The file tree remains in Details; the landing tab explains where to open a document. */
@@ -41,15 +44,19 @@ export class EmptyFileEditor extends EditorPane implements IEditorPane {
 				this.domNode.removeAttribute('aria-description');
 			}
 		};
-		this._register(this.configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(AccessibilityVerbositySettingId.Explorer)) {
-				updateHint();
-			}
-		}));
+		this._register(
+			this.configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(AccessibilityVerbositySettingId.Explorer)) {
+					updateHint();
+				}
+			}),
+		);
 		updateHint();
 	}
-	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
-	public override clearInput(): void { }
-	public override layout(_dimension: IDimension): void { }
-	public override focus(): void { this.domNode.focus(); }
+	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> {}
+	public override clearInput(): void {}
+	public override layout(_dimension: IDimension): void {}
+	public override focus(): void {
+		this.domNode.focus();
+	}
 }

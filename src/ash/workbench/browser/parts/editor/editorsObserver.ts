@@ -1,10 +1,10 @@
-import { Disposable } from "../../../../base/common/lifecycle.js";
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import type {
 	EditorIdentifier,
 	EditorInstanceId,
 	EditorPartChangeEvent,
 	IEditorStateSource,
-} from "../../../services/editor/common/editorState.js";
+} from '../../../services/editor/common/editorState.js';
 
 /** Tracks activation order across the editor groups of one editor part. */
 export class EditorsObserver extends Disposable {
@@ -17,28 +17,34 @@ export class EditorsObserver extends Disposable {
 
 	get editors(): readonly EditorIdentifier[] {
 		const editorsById = this.openEditorsById();
-		return Object.freeze(this.recentIds.flatMap(id => {
-			const editor = editorsById.get(id);
-			return editor ? [Object.freeze({
-				groupId: editor.groupId,
-				instanceId: editor.instanceId,
-				paneId: editor.paneId,
-				input: editor.input,
-			})] : [];
-		}));
+		return Object.freeze(
+			this.recentIds.flatMap(id => {
+				const editor = editorsById.get(id);
+				return editor
+					? [
+							Object.freeze({
+								groupId: editor.groupId,
+								instanceId: editor.instanceId,
+								paneId: editor.paneId,
+								input: editor.input,
+							}),
+						]
+					: [];
+			}),
+		);
 	}
 
 	private onEditorChange(event: EditorPartChangeEvent): void {
-		if (event.kind === "groupChanged") {
-			if (event.event.kind === "activeEditorChanged" && event.event.editor) {
+		if (event.kind === 'groupChanged') {
+			if (event.event.kind === 'activeEditorChanged' && event.event.editor) {
 				this.touch(event.event.editor.instanceId);
-			} else if (event.event.kind === "editorClosed") {
+			} else if (event.event.kind === 'editorClosed') {
 				this.pruneClosedEditors();
 			}
-		} else if (event.kind === "activeGroupChanged") {
+		} else if (event.kind === 'activeGroupChanged') {
 			const group = this.source.getEditorState().groups.find(candidate => candidate.id === event.groupId);
 			if (group?.activeEditorInstanceId) this.touch(group.activeEditorInstanceId);
-		} else if (event.kind === "groupRemoved") {
+		} else if (event.kind === 'groupRemoved') {
 			this.pruneClosedEditors();
 		}
 	}
@@ -50,14 +56,20 @@ export class EditorsObserver extends Disposable {
 	}
 
 	private pruneClosedEditors(): void {
-		const openIds = new Set(this.source.getEditorState().groups.flatMap(group => group.editors.map(editor => editor.instanceId)));
+		const openIds = new Set(
+			this.source.getEditorState().groups.flatMap(group => group.editors.map(editor => editor.instanceId)),
+		);
 		for (let index = this.recentIds.length - 1; index >= 0; index -= 1) {
 			if (!openIds.has(this.recentIds[index]!)) this.recentIds.splice(index, 1);
 		}
 	}
 
 	private openEditorsById() {
-		return new Map(this.source.getEditorState().groups.flatMap(group => group.editors)
-			.map(editor => [editor.instanceId, editor] as const));
+		return new Map(
+			this.source
+				.getEditorState()
+				.groups.flatMap(group => group.editors)
+				.map(editor => [editor.instanceId, editor] as const),
+		);
 	}
 }

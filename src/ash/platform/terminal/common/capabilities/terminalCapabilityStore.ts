@@ -1,6 +1,11 @@
 import { Emitter, Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { TerminalCapability, type AnyTerminalCapabilityChangeEvent, type ITerminalCapabilityImplMap, type ITerminalCapabilityStore } from './capabilities.js';
+import {
+	TerminalCapability,
+	type AnyTerminalCapabilityChangeEvent,
+	type ITerminalCapabilityImplMap,
+	type ITerminalCapabilityStore,
+} from './capabilities.js';
 
 /** Registers capability implementations without taking ownership of their domain state or lifetime. */
 abstract class AbstractTerminalCapabilityStore extends Disposable implements ITerminalCapabilityStore {
@@ -9,14 +14,27 @@ abstract class AbstractTerminalCapabilityStore extends Disposable implements ITe
 	private readonly removed = this._register(new Emitter<AnyTerminalCapabilityChangeEvent>());
 	readonly onDidAddCapability = this.added.event;
 	readonly onDidRemoveCapability = this.removed.event;
-	readonly onDidChangeCapabilities = Event.map(Event.any(this.onDidAddCapability, this.onDidRemoveCapability), () => undefined);
-	readonly onDidAddCommandDetectionCapability = this.createOnDidAddCapabilityOfTypeEvent(TerminalCapability.CommandDetection);
-	readonly onDidRemoveCommandDetectionCapability = Event.map(this.createOnDidRemoveCapabilityOfTypeEvent(TerminalCapability.CommandDetection), () => undefined);
+	readonly onDidChangeCapabilities = Event.map(
+		Event.any(this.onDidAddCapability, this.onDidRemoveCapability),
+		() => undefined,
+	);
+	readonly onDidAddCommandDetectionCapability = this.createOnDidAddCapabilityOfTypeEvent(
+		TerminalCapability.CommandDetection,
+	);
+	readonly onDidRemoveCommandDetectionCapability = Event.map(
+		this.createOnDidRemoveCapabilityOfTypeEvent(TerminalCapability.CommandDetection),
+		() => undefined,
+	);
 	readonly onDidAddCwdDetectionCapability = this.createOnDidAddCapabilityOfTypeEvent(TerminalCapability.CwdDetection);
-	readonly onDidRemoveCwdDetectionCapability = Event.map(this.createOnDidRemoveCapabilityOfTypeEvent(TerminalCapability.CwdDetection), () => undefined);
+	readonly onDidRemoveCwdDetectionCapability = Event.map(
+		this.createOnDidRemoveCapabilityOfTypeEvent(TerminalCapability.CwdDetection),
+		() => undefined,
+	);
 
 	get items(): IterableIterator<TerminalCapability> {
-		return Object.keys(this.implementations).map(id => Number(id) as TerminalCapability).values();
+		return Object.keys(this.implementations)
+			.map(id => Number(id) as TerminalCapability)
+			.values();
 	}
 
 	protected registerCapability<T extends TerminalCapability>(id: T, capability: ITerminalCapabilityImplMap[T]): void {
@@ -32,7 +50,9 @@ abstract class AbstractTerminalCapabilityStore extends Disposable implements ITe
 		this.removed.fire({ id, capability } as AnyTerminalCapabilityChangeEvent);
 	}
 
-	has(id: TerminalCapability): boolean { return this.get(id) !== undefined; }
+	has(id: TerminalCapability): boolean {
+		return this.get(id) !== undefined;
+	}
 
 	get<T extends TerminalCapability>(id: T): ITerminalCapabilityImplMap[T] | undefined {
 		return this.implementations[id];
@@ -42,14 +62,24 @@ abstract class AbstractTerminalCapabilityStore extends Disposable implements ITe
 		return this.capabilityEvent(this.onDidAddCapability, type);
 	}
 
-	createOnDidRemoveCapabilityOfTypeEvent<T extends TerminalCapability>(type: T): Event<ITerminalCapabilityImplMap[T]> {
+	createOnDidRemoveCapabilityOfTypeEvent<T extends TerminalCapability>(
+		type: T,
+	): Event<ITerminalCapabilityImplMap[T]> {
 		return this.capabilityEvent(this.onDidRemoveCapability, type);
 	}
 
-	private capabilityEvent<T extends TerminalCapability>(event: Event<AnyTerminalCapabilityChangeEvent>, type: T): Event<ITerminalCapabilityImplMap[T]> {
-		return (listener, thisArgs, disposables) => event(change => {
-			if (change.id === type) listener.call(thisArgs, change.capability as ITerminalCapabilityImplMap[T]);
-		}, undefined, disposables);
+	private capabilityEvent<T extends TerminalCapability>(
+		event: Event<AnyTerminalCapabilityChangeEvent>,
+		type: T,
+	): Event<ITerminalCapabilityImplMap[T]> {
+		return (listener, thisArgs, disposables) =>
+			event(
+				change => {
+					if (change.id === type) listener.call(thisArgs, change.capability as ITerminalCapabilityImplMap[T]);
+				},
+				undefined,
+				disposables,
+			);
 	}
 
 	protected override disposeCore(): void {
@@ -63,12 +93,14 @@ export class TerminalCapabilityStore extends AbstractTerminalCapabilityStore {
 		this.registerCapability(id, capability);
 	}
 
-	remove(id: TerminalCapability): void { this.unregisterCapability(id); }
+	remove(id: TerminalCapability): void {
+		this.unregisterCapability(id);
+	}
 }
 
 /** Combines process and screen capabilities, with earlier stores taking precedence. */
 export class TerminalCapabilityStoreMultiplexer extends AbstractTerminalCapabilityStore {
-	private readonly sources = new Map<ITerminalCapabilityStore, { lifetime: DisposableStore; leases: number; }>();
+	private readonly sources = new Map<ITerminalCapabilityStore, { lifetime: DisposableStore; leases: number }>();
 
 	add(store: ITerminalCapabilityStore): IDisposable {
 		this.assertNotDisposed();
@@ -94,7 +126,9 @@ export class TerminalCapabilityStoreMultiplexer extends AbstractTerminalCapabili
 		const ids = new Set(this.items);
 		for (const store of this.sources.keys()) for (const id of store.items) ids.add(id);
 		for (const id of ids) {
-			const selected = [...this.sources.keys()].map(store => store.get(id)).find(capability => capability !== undefined);
+			const selected = [...this.sources.keys()]
+				.map(store => store.get(id))
+				.find(capability => capability !== undefined);
 			if (selected === this.get(id)) continue;
 			this.unregisterCapability(id);
 			if (selected) this.registerCapability(id, selected);

@@ -33,12 +33,20 @@ setup(() => {
 	windowServices.registerInstance(ILogService, new NullLoggerService());
 	windowServices.registerSingleton(IThemeMainService, () => {
 		const state = new Map<string, unknown>();
-		return new ThemeMainService({
-			shouldUseDarkColors: false, shouldUseHighContrastColors: false, on: () => { }, removeListener: () => { },
-		}, {
-			getItem: key => state.get(key), setItem: (key, value) => { state.set(key, value); }, removeItem: key => { state.delete(key); },
-			flush: async () => { }, close: async () => { },
-		});
+		return new ThemeMainService(
+			{ shouldUseDarkColors: false, shouldUseHighContrastColors: false, on: () => {}, removeListener: () => {} },
+			{
+				getItem: key => state.get(key),
+				setItem: (key, value) => {
+					state.set(key, value);
+				},
+				removeItem: key => {
+					state.delete(key);
+				},
+				flush: async () => {},
+				close: async () => {},
+			},
+		);
 	});
 	windowServices.registerSingleton(IAuxiliaryWindowsMainService, () => new AuxiliaryWindowsMainService(() => null));
 	showMessageBox = async () => ({ response: 1, checkboxChecked: false });
@@ -48,9 +56,18 @@ setup(() => {
 		showSaveDialog: async () => ({ canceled: true, filePath: '' }),
 	});
 	windowServices.registerInstance(IDialogMainService, dialogs);
-	lifecycle = new LifecycleMainService<TestWindow>(() => { }, () => { }, {
-		getItem: () => undefined, setItem: () => { }, removeItem: () => { }, flush: async () => { }, close: async () => { },
-	}, 'test');
+	lifecycle = new LifecycleMainService<TestWindow>(
+		() => {},
+		() => {},
+		{
+			getItem: () => undefined,
+			setItem: () => {},
+			removeItem: () => {},
+			flush: async () => {},
+			close: async () => {},
+		},
+		'test',
+	);
 	// The test host supplies the same domain contract with a synthetic window.
 	windowServices.registerInstance(ILifecycleMainService, lifecycle as unknown as ILifecycleMainService);
 	cleanup.add(dialogs);
@@ -65,46 +82,100 @@ ensureNoDisposablesAreLeakedInTestSuite();
 
 class TestWindow extends EventEmitter implements ICodeWindowHandle<TestWindow> {
 	public readonly messageHooks = new Map<number, (wParam: Buffer, lParam: Buffer) => void>();
-	public hookWindowMessage(message: number, callback: (wParam: Buffer, lParam: Buffer) => void): void { this.messageHooks.set(message, callback); }
-	public unhookWindowMessage(message: number): void { this.messageHooks.delete(message); }
+	public hookWindowMessage(message: number, callback: (wParam: Buffer, lParam: Buffer) => void): void {
+		this.messageHooks.set(message, callback);
+	}
+	public unhookWindowMessage(message: number): void {
+		this.messageHooks.delete(message);
+	}
 	public readonly id = 1;
 	public readonly loads: string[] = [];
 	public reloads = 0;
-	public readonly messages: { channel: string; token: unknown; }[] = [];
+	public readonly messages: { channel: string; token: unknown }[] = [];
 	public readonly webContents = Object.assign(new EventEmitter(), {
 		isDestroyed: (): boolean => this.destroyed,
 		getZoomLevel: (): number => 0,
-		reload: (): void => { this.reloads++; this.navigate(); },
-		send: (channel: string, token: unknown): void => { this.messages.push({ channel, token }); },
+		reload: (): void => {
+			this.reloads++;
+			this.navigate();
+		},
+		send: (channel: string, token: unknown): void => {
+			this.messages.push({ channel, token });
+		},
 	});
 	public destroyed = false;
 	public shown = 0;
 	public minimized = false;
 	public focused = 0;
-	public isMinimized(): boolean { return this.minimized; }
-	public restore(): void { this.minimized = false; }
-	public focus(): void { this.focused++; this.emit('focus'); }
-	public isFullScreen(): boolean { return this.fullscreen; }
-	public isMaximized(): boolean { return this.maximized > 0; }
-	public getNormalBounds(): IWindowBounds { return this.bounds; }
-	public addTabbedWindow(_window: TestWindow): void { }
+	public isMinimized(): boolean {
+		return this.minimized;
+	}
+	public restore(): void {
+		this.minimized = false;
+	}
+	public focus(): void {
+		this.focused++;
+		this.emit('focus');
+	}
+	public isFullScreen(): boolean {
+		return this.fullscreen;
+	}
+	public isMaximized(): boolean {
+		return this.maximized > 0;
+	}
+	public getNormalBounds(): IWindowBounds {
+		return this.bounds;
+	}
+	public addTabbedWindow(_window: TestWindow): void {}
 
 	public maximized = 0;
 	public fullscreen = false;
 	public bounds: IWindowBounds = { x: 0, y: 0, width: 800, height: 600 };
 	public frameRounding = { width: 0, height: 0 };
 
-	public isDestroyed(): boolean { return this.destroyed; }
-	public show(): void { this.shown++; }
-	public getBounds(): IWindowBounds { return this.bounds; }
-	public setTitleBarOverlay(_colors: { color: string; symbolColor: string; height: number; }): void { }
-	public setBounds(bounds: IWindowBounds): void { this.bounds = { ...bounds, width: bounds.width + this.frameRounding.width, height: bounds.height + this.frameRounding.height }; }
-	public maximize(): void { this.maximized++; }
-	public setFullScreen(fullscreen: boolean): void { this.fullscreen = fullscreen; }
-	public async loadURL(url: string): Promise<void> { this.loads.push(url); this.navigate(); }
-	public async loadFile(path: string): Promise<void> { this.loads.push(path); this.navigate(); }
-	public navigate(inPlace = false, mainFrame = true): void { this.webContents.emit('did-start-navigation', undefined, 'file:///synthetic/workbench.html', inPlace, mainFrame); }
-	public close(): void { this.destroy(); }
+	public isDestroyed(): boolean {
+		return this.destroyed;
+	}
+	public show(): void {
+		this.shown++;
+	}
+	public getBounds(): IWindowBounds {
+		return this.bounds;
+	}
+	public setTitleBarOverlay(_colors: { color: string; symbolColor: string; height: number }): void {}
+	public setBounds(bounds: IWindowBounds): void {
+		this.bounds = {
+			...bounds,
+			width: bounds.width + this.frameRounding.width,
+			height: bounds.height + this.frameRounding.height,
+		};
+	}
+	public maximize(): void {
+		this.maximized++;
+	}
+	public setFullScreen(fullscreen: boolean): void {
+		this.fullscreen = fullscreen;
+	}
+	public async loadURL(url: string): Promise<void> {
+		this.loads.push(url);
+		this.navigate();
+	}
+	public async loadFile(path: string): Promise<void> {
+		this.loads.push(path);
+		this.navigate();
+	}
+	public navigate(inPlace = false, mainFrame = true): void {
+		this.webContents.emit(
+			'did-start-navigation',
+			undefined,
+			'file:///synthetic/workbench.html',
+			inPlace,
+			mainFrame,
+		);
+	}
+	public close(): void {
+		this.destroy();
+	}
 	public destroy(): void {
 		if (this.destroyed) return;
 		this.destroyed = true;
@@ -117,16 +188,28 @@ test('CodeWindow supplies startup theme colors before showing workbench and Agen
 	for (const title of ['Workbench', 'Sessions']) {
 		const window = new TestWindow();
 		let received: IWindowConstructorOptions | undefined;
-		using host = windowServices.createInstance(CodeWindow<TestWindow>, (options: IWindowConstructorOptions) => {
-			received = options;
-			assert.equal(window.shown, 0);
-			return window;
-		}, {
-			state: { mode: WindowMode.Normal, width: 1000, height: 700 },
-			reopen: async () => { },
-			webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
-			title, backgroundColor: '#ffffff',
-		}, new DisposableStore());
+		using host = windowServices.createInstance(
+			CodeWindow<TestWindow>,
+			(options: IWindowConstructorOptions) => {
+				received = options;
+				assert.equal(window.shown, 0);
+				return window;
+			},
+			{
+				state: { mode: WindowMode.Normal, width: 1000, height: 700 },
+				reopen: async () => {},
+				webPreferences: {
+					contextIsolation: true,
+					nodeIntegration: false,
+					sandbox: true,
+					preload: '',
+					additionalArguments: [],
+				},
+				title,
+				backgroundColor: '#ffffff',
+			},
+			new DisposableStore(),
+		);
 		assert.equal(received?.backgroundColor, '#ffffff');
 		if (process.platform === 'win32' || process.platform === 'linux') {
 			assert.deepEqual(received?.titleBarOverlay, { color: '#ffffff', symbolColor: '#000000', height: 35 });
@@ -143,19 +226,52 @@ test('CodeWindow applies Windows startup bounds before tracking and showing ever
 		const window = new TestWindow();
 		window.frameRounding = { width: 2, height: 1 };
 		const constructorBounds = window.bounds;
-		using host = windowServices.createInstance(CodeWindow<TestWindow>, () => window, {
-			state: { mode, ...bounds },
-			reopen: async () => { },
-			webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
-			title: 'Workbench',
-		}, new DisposableStore());
-		assert.deepEqual({ bounds: host.win.bounds, shown: host.win.shown, maximized: host.win.maximized, fullscreen: host.win.fullscreen }, {
-			bounds: process.platform === 'win32' ? bounds : constructorBounds, shown: 0, maximized: 0, fullscreen: false,
-		});
+		using host = windowServices.createInstance(
+			CodeWindow<TestWindow>,
+			() => window,
+			{
+				state: { mode, ...bounds },
+				reopen: async () => {},
+				webPreferences: {
+					contextIsolation: true,
+					nodeIntegration: false,
+					sandbox: true,
+					preload: '',
+					additionalArguments: [],
+				},
+				title: 'Workbench',
+			},
+			new DisposableStore(),
+		);
+		assert.deepEqual(
+			{
+				bounds: host.win.bounds,
+				shown: host.win.shown,
+				maximized: host.win.maximized,
+				fullscreen: host.win.fullscreen,
+			},
+			{
+				bounds: process.platform === 'win32' ? bounds : constructorBounds,
+				shown: 0,
+				maximized: 0,
+				fullscreen: false,
+			},
+		);
 		host.win.emit('ready-to-show');
-		assert.deepEqual({ bounds: host.win.bounds, shown: host.win.shown, maximized: host.win.maximized, fullscreen: host.win.fullscreen }, {
-			bounds: process.platform === 'win32' ? bounds : constructorBounds, shown: 1, maximized: mode === WindowMode.Maximized ? 1 : 0, fullscreen: mode === WindowMode.Fullscreen,
-		});
+		assert.deepEqual(
+			{
+				bounds: host.win.bounds,
+				shown: host.win.shown,
+				maximized: host.win.maximized,
+				fullscreen: host.win.fullscreen,
+			},
+			{
+				bounds: process.platform === 'win32' ? bounds : constructorBounds,
+				shown: 1,
+				maximized: mode === WindowMode.Maximized ? 1 : 0,
+				fullscreen: mode === WindowMode.Fullscreen,
+			},
+		);
 	}
 });
 
@@ -174,12 +290,23 @@ test('CodeWindow restores saved dimensions across fractional DPI rounding platea
 			height: bounds.height >= 701 ? 703 : 702,
 		};
 	};
-	using host = windowServices.createInstance(CodeWindow<TestWindow>, () => window, {
-		state: { mode: WindowMode.Normal, ...saved },
-		reopen: async () => { },
-		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
-		title: 'Sessions',
-	}, new DisposableStore());
+	using host = windowServices.createInstance(
+		CodeWindow<TestWindow>,
+		() => window,
+		{
+			state: { mode: WindowMode.Normal, ...saved },
+			reopen: async () => {},
+			webPreferences: {
+				contextIsolation: true,
+				nodeIntegration: false,
+				sandbox: true,
+				preload: '',
+				additionalArguments: [],
+			},
+			title: 'Sessions',
+		},
+		new DisposableStore(),
+	);
 	assert.deepEqual(host.win.getBounds(), saved);
 	host.win.emit('ready-to-show');
 	assert.deepEqual(host.win.getBounds(), saved);
@@ -196,12 +323,23 @@ test('CodeWindow stops compensating when OS constraints prevent restoring the sa
 		requests++;
 		window.bounds = { ...bounds, width: Math.max(bounds.width, 1500), height: Math.max(bounds.height, 1000) };
 	};
-	using host = windowServices.createInstance(CodeWindow<TestWindow>, () => window, {
-		state: { mode: WindowMode.Normal, x: 20, y: 30, width: 1002, height: 702 },
-		reopen: async () => { },
-		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
-		title: 'Sessions',
-	}, new DisposableStore());
+	using host = windowServices.createInstance(
+		CodeWindow<TestWindow>,
+		() => window,
+		{
+			state: { mode: WindowMode.Normal, x: 20, y: 30, width: 1002, height: 702 },
+			reopen: async () => {},
+			webPreferences: {
+				contextIsolation: true,
+				nodeIntegration: false,
+				sandbox: true,
+				preload: '',
+				additionalArguments: [],
+			},
+			title: 'Sessions',
+		},
+		new DisposableStore(),
+	);
 	assert.ok(requests <= 4);
 	assert.deepEqual(host.win.getBounds(), { x: 20, y: 30, width: 1500, height: 1000 });
 });
@@ -209,13 +347,28 @@ test('CodeWindow stops compensating when OS constraints prevent restoring the sa
 test('CodeWindow restores state when ready and releases resources when closed', () => {
 	const resources = new DisposableStore();
 	let released = 0;
-	resources.add(toDisposable(() => { released++; }));
-	const host = windowServices.createInstance(CodeWindow<TestWindow>, () => new TestWindow(), {
-		state: { mode: WindowMode.Maximized, width: 1000, height: 700 },
-		reopen: async () => { },
-		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
-		title: 'Workbench',
-	}, resources);
+	resources.add(
+		toDisposable(() => {
+			released++;
+		}),
+	);
+	const host = windowServices.createInstance(
+		CodeWindow<TestWindow>,
+		() => new TestWindow(),
+		{
+			state: { mode: WindowMode.Maximized, width: 1000, height: 700 },
+			reopen: async () => {},
+			webPreferences: {
+				contextIsolation: true,
+				nodeIntegration: false,
+				sandbox: true,
+				preload: '',
+				additionalArguments: [],
+			},
+			title: 'Workbench',
+		},
+		resources,
+	);
 	const window = host.win;
 	window.emit('ready-to-show');
 	assert.deepEqual({ shown: window.shown, maximized: window.maximized }, { shown: 1, maximized: 1 });
@@ -225,28 +378,60 @@ test('CodeWindow restores state when ready and releases resources when closed', 
 
 test('CodeWindow closes a renderer lost before loading and releases startup resources', () => {
 	const errors: unknown[][] = [];
-	windowServices.get(ILogService).error = (...args: unknown[]): void => { errors.push(args); };
+	windowServices.get(ILogService).error = (...args: unknown[]): void => {
+		errors.push(args);
+	};
 	const resources = new DisposableStore();
 	let released = 0;
-	resources.add(toDisposable(() => { released++; }));
-	const host = windowServices.createInstance(CodeWindow<TestWindow>, () => new TestWindow(), {
-		state: { mode: WindowMode.Normal, width: 1000, height: 700 },
-		reopen: async () => { },
-		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
-		title: 'Sessions',
-	}, resources);
+	resources.add(
+		toDisposable(() => {
+			released++;
+		}),
+	);
+	const host = windowServices.createInstance(
+		CodeWindow<TestWindow>,
+		() => new TestWindow(),
+		{
+			state: { mode: WindowMode.Normal, width: 1000, height: 700 },
+			reopen: async () => {},
+			webPreferences: {
+				contextIsolation: true,
+				nodeIntegration: false,
+				sandbox: true,
+				preload: '',
+				additionalArguments: [],
+			},
+			title: 'Sessions',
+		},
+		resources,
+	);
 	host.win.webContents.emit('render-process-gone', undefined, { reason: 'crashed', exitCode: 139 });
 	assert.deepEqual({ destroyed: host.win.destroyed, released }, { destroyed: true, released: 1 });
-	assert.deepEqual(errors[0], ['window', 'Renderer process gone', { windowId: host.id, reason: 'crashed', exitCode: 139 }]);
+	assert.deepEqual(errors[0], [
+		'window',
+		'Renderer process gone',
+		{ windowId: host.id, reason: 'crashed', exitCode: 139 },
+	]);
 });
 
-function createHost(window = new TestWindow(), reopen: () => Promise<void> = async () => { }): CodeWindow<TestWindow> {
-	return windowServices.createInstance(CodeWindow<TestWindow>, () => window, {
-		state: { mode: WindowMode.Normal, width: 1000, height: 700 },
-		reopen,
-		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
-		title: 'Workbench',
-	}, new DisposableStore());
+function createHost(window = new TestWindow(), reopen: () => Promise<void> = async () => {}): CodeWindow<TestWindow> {
+	return windowServices.createInstance(
+		CodeWindow<TestWindow>,
+		() => window,
+		{
+			state: { mode: WindowMode.Normal, width: 1000, height: 700 },
+			reopen,
+			webPreferences: {
+				contextIsolation: true,
+				nodeIntegration: false,
+				sandbox: true,
+				preload: '',
+				additionalArguments: [],
+			},
+			title: 'Workbench',
+		},
+		new DisposableStore(),
+	);
 }
 
 test('CodeWindow preserves native client pixels, coalesces resize and releases its message hook', async function () {
@@ -268,7 +453,9 @@ test('CodeWindow preserves native client pixels, coalesces resize and releases i
 	resize(0, 0, 1);
 	resize(1501, 1001);
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual(window.messages, [{ channel: 'ash:window:client-size-changed', token: { width: 1501, height: 1001 } }]);
+	assert.deepEqual(window.messages, [
+		{ channel: 'ash:window:client-size-changed', token: { width: 1501, height: 1001 } },
+	]);
 	resize(1500, 997);
 	host.dispose();
 	assert.equal(window.messageHooks.size, 0);
@@ -276,25 +463,49 @@ test('CodeWindow preserves native client pixels, coalesces resize and releases i
 	assert.equal(window.messages.length, 1);
 });
 
-const packagedEntry = { file: '/synthetic/workbench.html', url: 'file:///synthetic/workbench.html', useDevelopmentUrl: false };
+const packagedEntry = {
+	file: '/synthetic/workbench.html',
+	url: 'file:///synthetic/workbench.html',
+	useDevelopmentUrl: false,
+};
 
 test('CodeWindow creation fails before creating an OS window when a required service is missing', () => {
 	using services = new InstantiationService();
 	let created = false;
 	using resources = new DisposableStore();
-	assert.throws(() => services.createInstance(CodeWindow<TestWindow>, () => { created = true; return new TestWindow(); }, {
-		state: { mode: WindowMode.Normal, width: 1000, height: 700 },
-		reopen: async () => { },
-		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
-		title: 'Workbench',
-	}, resources), /Unknown service: logService/);
+	assert.throws(
+		() =>
+			services.createInstance(
+				CodeWindow<TestWindow>,
+				() => {
+					created = true;
+					return new TestWindow();
+				},
+				{
+					state: { mode: WindowMode.Normal, width: 1000, height: 700 },
+					reopen: async () => {},
+					webPreferences: {
+						contextIsolation: true,
+						nodeIntegration: false,
+						sandbox: true,
+						preload: '',
+						additionalArguments: [],
+					},
+					title: 'Workbench',
+				},
+				resources,
+			),
+		/Unknown service: logService/,
+	);
 	assert.equal(created, false);
 });
 
 test('CodeWindow readiness follows the latest document and closing releases pending waiters', async () => {
 	using host = createHost();
 	let signals = 0;
-	using listener = host.onDidSignalReady(() => { signals++; });
+	using listener = host.onDidSignalReady(() => {
+		signals++;
+	});
 	const first = host.ready();
 	host.setReady();
 	host.setReady();
@@ -303,7 +514,9 @@ test('CodeWindow readiness follows the latest document and closing releases pend
 	await host.load(packagedEntry);
 	assert.equal(host.isReady, false);
 	let ready = false;
-	const next = host.ready().then(() => { ready = true; });
+	const next = host.ready().then(() => {
+		ready = true;
+	});
 	host.win.navigate();
 	await new Promise(resolve => setImmediate(resolve));
 	assert.equal(ready, false);
@@ -354,17 +567,21 @@ test('CodeWindow waits for development HTML, coalesces recovery, and propagates 
 		await loading;
 		assert.equal(requests, 2);
 		assert.deepEqual(host.win.loads, [entry.url]);
-		host.win.loadURL = async () => { throw new Error('load host failed'); };
+		host.win.loadURL = async () => {
+			throw new Error('load host failed');
+		};
 		await assert.rejects(host.load(entry), /load host failed/);
 	} finally {
 		server.closeAllConnections();
-		await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+		await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())));
 	}
 });
 
 test('CodeWindow closing aborts a pending development response and settles its load', async () => {
 	const requested = new DeferredPromise<void>();
-	const server = createServer(() => { void requested.complete(); });
+	const server = createServer(() => {
+		void requested.complete();
+	});
 	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
 	try {
 		const address = server.address();
@@ -377,14 +594,17 @@ test('CodeWindow closing aborts a pending development response and settles its l
 		assert.deepEqual(host.win.loads, []);
 	} finally {
 		server.closeAllConnections();
-		await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+		await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())));
 	}
 });
 
 test('CodeWindow cancels an unresponsive prompt on recovery and ignores its late close result', async () => {
 	const result = new DeferredPromise<MessageBoxReturnValue>();
 	const shown = new DeferredPromise<MessageBoxOptions>();
-	showMessageBox = options => { void shown.complete(options); return result.p; };
+	showMessageBox = options => {
+		void shown.complete(options);
+		return result.p;
+	};
 	using host = createHost();
 	host.win.emit('unresponsive');
 	host.win.emit('unresponsive');
@@ -398,7 +618,9 @@ test('CodeWindow cancels an unresponsive prompt on recovery and ignores its late
 
 test('CodeWindow diagnostics distinguish native unresponsiveness from a shutdown timeout', async () => {
 	const errors: unknown[][] = [];
-	windowServices.get(ILogService).error = (...args: unknown[]) => { errors.push(args); };
+	windowServices.get(ILogService).error = (...args: unknown[]) => {
+		errors.push(args);
+	};
 	showMessageBox = async options => ({ response: options.cancelId!, checkboxChecked: false });
 	using host = createHost();
 	await host.reportWindowError(false);
@@ -411,13 +633,20 @@ test('CodeWindow diagnostics distinguish native unresponsiveness from a shutdown
 });
 
 test('CodeWindow offers localized crash recovery and replaces the window without a dead-renderer handshake', async () => {
-	const messages = JSON.parse(await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')) as Record<string, Record<string, string>>;
+	const messages = JSON.parse(
+		await readFile('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'),
+	) as Record<string, Record<string, string>>;
 	setNlsMessages('zh-CN', messages);
 	const result = new DeferredPromise<MessageBoxReturnValue>();
 	const shown = new DeferredPromise<MessageBoxOptions>();
-	showMessageBox = options => { void shown.complete(options); return result.p; };
+	showMessageBox = options => {
+		void shown.complete(options);
+		return result.p;
+	};
 	let reopened = 0;
-	using host = createHost(new TestWindow(), async () => { reopened++; });
+	using host = createHost(new TestWindow(), async () => {
+		reopened++;
+	});
 	await host.load(packagedEntry);
 	host.setReady();
 	host.win.webContents.emit('render-process-gone', undefined, { reason: 'crashed', exitCode: 139 });
@@ -437,13 +666,19 @@ test('CodeWindow recovery waits for its new host before destroying the unrespons
 	const replacement = new DeferredPromise<void>();
 	const opening = new DeferredPromise<void>();
 	showMessageBox = async options => ({ response: options.buttons!.indexOf('Reopen'), checkboxChecked: false });
-	using host = createHost(new TestWindow(), () => { void opening.complete(); return replacement.p; });
+	using host = createHost(new TestWindow(), () => {
+		void opening.complete();
+		return replacement.p;
+	});
 	await host.load(packagedEntry);
 	using registration = lifecycle.registerWindow(host.win);
 	lifecycle.respondToClose(host.win, { kind: 'ready' });
 	const recovering = host.reportWindowError(false);
 	await opening.p;
-	assert.deepEqual({ destroyed: host.win.destroyed, reloads: host.win.reloads, messages: host.win.messages }, { destroyed: false, reloads: 0, messages: [] });
+	assert.deepEqual(
+		{ destroyed: host.win.destroyed, reloads: host.win.reloads, messages: host.win.messages },
+		{ destroyed: false, reloads: 0, messages: [] },
+	);
 	await replacement.complete();
 	await recovering;
 	assert.equal(host.win.destroyed, true);
@@ -453,9 +688,14 @@ test('CodeWindow recovery waits for its new host before destroying the unrespons
 test('CodeWindow shutdown recovery survives responsive events and ignores a choice after shutdown completes', async () => {
 	const shown = new DeferredPromise<MessageBoxOptions>();
 	const result = new DeferredPromise<MessageBoxReturnValue>();
-	showMessageBox = options => { void shown.complete(options); return result.p; };
+	showMessageBox = options => {
+		void shown.complete(options);
+		return result.p;
+	};
 	let reopened = 0;
-	using host = createHost(new TestWindow(), async () => { reopened++; });
+	using host = createHost(new TestWindow(), async () => {
+		reopened++;
+	});
 	const shutdown = new AbortController();
 	const recovering = host.reportWindowError(false, shutdown.signal);
 	const options = await shown.p;
@@ -475,7 +715,11 @@ test('CodeWindow attaches shutdown cancellation to an already visible unresponsi
 	const shown = new DeferredPromise<MessageBoxOptions>();
 	const result = new DeferredPromise<MessageBoxReturnValue>();
 	let prompts = 0;
-	showMessageBox = options => { prompts++; void shown.complete(options); return result.p; };
+	showMessageBox = options => {
+		prompts++;
+		void shown.complete(options);
+		return result.p;
+	};
 	using host = createHost();
 	const nativeRecovery = host.reportWindowError(false);
 	const options = await shown.p;
@@ -494,42 +738,74 @@ for (const choice of ['Keep Waiting', 'Close'] as const) {
 	test(`CodeWindow recovery ${choice} acts only on the current window`, async () => {
 		showMessageBox = async options => ({ response: options.buttons!.indexOf(choice), checkboxChecked: false });
 		let reopened = 0;
-		using host = createHost(new TestWindow(), async () => { reopened++; });
+		using host = createHost(new TestWindow(), async () => {
+			reopened++;
+		});
 		await host.reportWindowError(false);
-		assert.deepEqual({ reopened, destroyed: host.win.destroyed, requests: host.win.messages }, { reopened: 0, destroyed: choice === 'Close', requests: [] });
+		assert.deepEqual(
+			{ reopened, destroyed: host.win.destroyed, requests: host.win.messages },
+			{ reopened: 0, destroyed: choice === 'Close', requests: [] },
+		);
 	});
 }
 
 test('CodeWindow keeps its old host when opening the replacement fails', async () => {
 	showMessageBox = async options => ({ response: options.buttons!.indexOf('Reopen'), checkboxChecked: false });
 	const errors: unknown[][] = [];
-	windowServices.get(ILogService).error = (...args: unknown[]) => { errors.push(args); };
-	using host = createHost(new TestWindow(), async () => { throw new Error('Replacement failed'); });
+	windowServices.get(ILogService).error = (...args: unknown[]) => {
+		errors.push(args);
+	};
+	using host = createHost(new TestWindow(), async () => {
+		throw new Error('Replacement failed');
+	});
 	await host.reportWindowError(false);
 	assert.equal(host.win.destroyed, false);
-	assert.deepEqual(errors.map(args => args[1]), ['Window is unresponsive', 'Window recovery failed']);
+	assert.deepEqual(
+		errors.map(args => args[1]),
+		['Window is unresponsive', 'Window recovery failed'],
+	);
 });
 
 test('CodeWindow resolves the window kind and workspace theme snapshot before OS window creation', async () => {
 	const theme = windowServices.get(IThemeMainService);
-	await theme.saveWindowSplash('workbench:fixture', { baseTheme: ColorScheme.Dark, colorInfo: { background: '#123456', foreground: '#ffffff' } });
-	await theme.saveWindowSplash('sessions:fixture', { baseTheme: ColorScheme.Light, colorInfo: { background: '#abcdef', foreground: '#000000' } });
-	for (const [isSessionsWindow, backgroundColor] of [[false, '#123456'], [true, '#abcdef']] as const) {
+	await theme.saveWindowSplash('workbench:fixture', {
+		baseTheme: ColorScheme.Dark,
+		colorInfo: { background: '#123456', foreground: '#ffffff' },
+	});
+	await theme.saveWindowSplash('sessions:fixture', {
+		baseTheme: ColorScheme.Light,
+		colorInfo: { background: '#abcdef', foreground: '#000000' },
+	});
+	for (const [isSessionsWindow, backgroundColor] of [
+		[false, '#123456'],
+		[true, '#abcdef'],
+	] as const) {
 		let actual: string | undefined;
-		using host = windowServices.createInstance(CodeWindow<TestWindow>, (options: IWindowConstructorOptions) => {
-			actual = options.backgroundColor;
-			return new TestWindow();
-		}, {
-			workspace: { id: 'fixture' }, isSessionsWindow,
-			state: { mode: WindowMode.Normal, width: 1000, height: 700 },
-			reopen: async () => { },
-			webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true, preload: '', additionalArguments: [] },
-			title: 'Workbench',
-		}, new DisposableStore());
+		using host = windowServices.createInstance(
+			CodeWindow<TestWindow>,
+			(options: IWindowConstructorOptions) => {
+				actual = options.backgroundColor;
+				return new TestWindow();
+			},
+			{
+				workspace: { id: 'fixture' },
+				isSessionsWindow,
+				state: { mode: WindowMode.Normal, width: 1000, height: 700 },
+				reopen: async () => {},
+				webPreferences: {
+					contextIsolation: true,
+					nodeIntegration: false,
+					sandbox: true,
+					preload: '',
+					additionalArguments: [],
+				},
+				title: 'Workbench',
+			},
+			new DisposableStore(),
+		);
 		assert.equal(actual, backgroundColor);
 	}
 });
-
 
 test('CodeWindow restores focus and captures normal bounds with the current window mode', () => {
 	using host = createHost();
@@ -581,7 +857,10 @@ test('CodeWindow buffers messages once, removes canceled requests and never send
 	host.sendWhenReady('closed', CancellationToken.None, 4);
 	host.dispose();
 	host.send('after-close', 5);
-	assert.deepEqual(host.win.messages.map(message => message.channel), ['files', 'already-ready']);
+	assert.deepEqual(
+		host.win.messages.map(message => message.channel),
+		['files', 'already-ready'],
+	);
 });
 
 test('CodeWindow keeps buffered messages for the next document when a ready subscriber navigates', () => {
@@ -594,7 +873,6 @@ test('CodeWindow keeps buffered messages for the next document when a ready subs
 	host.setReady();
 	assert.deepEqual(host.win.messages, [{ channel: 'files', token: 1 }]);
 });
-
 
 test('CodeWindow reports one accepted load and ignores subframe and in-place navigation', async () => {
 	using host = createHost();

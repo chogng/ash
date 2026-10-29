@@ -1,17 +1,29 @@
 import type { WorkspaceTrustGrant } from '../../workspace/common/workspaceTrust.js';
 
-import type { IDisposable } from "../../../base/common/lifecycle.js";
-import type { AppServerConnectionState } from "../../agentHost/common/appServerApi.js";
-import { AppServerRemoteError } from "../../agentHost/common/appServerError.js";
-import type { AppServerConnectionRelay } from "../../agentHost/electron-main/appServerConnectionRelay.js";
+import type { IDisposable } from '../../../base/common/lifecycle.js';
+import type { AppServerConnectionState } from '../../agentHost/common/appServerApi.js';
+import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
+import type { AppServerConnectionRelay } from '../../agentHost/electron-main/appServerConnectionRelay.js';
 import { AppServerDaemonLauncher } from '../../app-server-daemon/electron-main/appServerDaemonLauncher.js';
 import { RemoteAppServerProcessLauncher } from '../../remote/electron-main/remoteAppServerProcessLauncher.js';
 import type { RendererWorkspaceHost } from './rendererWorkspaceHost.js';
-import { type IWorkspaceRuntimeSwitcher, type IWorkspaceTransitionContext, type IWorkspaceTransitionFailure, type IWorkspaceTransitionRecoveryRouter, WorkspaceTransitionFailureKind, WorkspaceTransitionRecovery } from "./workspaceTransitionMainService.js";
+import {
+	type IWorkspaceRuntimeSwitcher,
+	type IWorkspaceTransitionContext,
+	type IWorkspaceTransitionFailure,
+	type IWorkspaceTransitionRecoveryRouter,
+	WorkspaceTransitionFailureKind,
+	WorkspaceTransitionRecovery,
+} from './workspaceTransitionMainService.js';
 
 export interface IAppServerWorkspaceTransitionHost {
 	getState(): AppServerConnectionState;
-	switchWorkspace(root: string, grant: IWorkspaceTransitionContext["grant"], workspaceId: string, previousWorkspaceId: string): Promise<void>;
+	switchWorkspace(
+		root: string,
+		grant: IWorkspaceTransitionContext['grant'],
+		workspaceId: string,
+		previousWorkspaceId: string,
+	): Promise<void>;
 	onStateChange(listener: (state: AppServerConnectionState) => void): IDisposable;
 }
 
@@ -21,8 +33,10 @@ export interface IAppServerWorkspaceTransitionHost {
  * Connection loss is retryable. Busy, unsupported protocol, and runtime
  * rejection remain visible transition failures.
  */
-export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwitcher, IWorkspaceTransitionRecoveryRouter {
-	constructor(private readonly host: IAppServerWorkspaceTransitionHost) { }
+export class AppServerWorkspaceTransitionAdapter
+	implements IWorkspaceRuntimeSwitcher, IWorkspaceTransitionRecoveryRouter
+{
+	constructor(private readonly host: IAppServerWorkspaceTransitionHost) {}
 
 	switchWorkspace({ root, grant, workspace, previous }: IWorkspaceTransitionContext): Promise<void> {
 		return this.host.switchWorkspace(root, grant, workspace.id, previous.id);
@@ -31,18 +45,18 @@ export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwi
 	classifyRuntimeError(error: unknown): WorkspaceTransitionFailureKind {
 		if (error instanceof AppServerRemoteError) {
 			switch (error.errorName) {
-				case "EnvironmentBusy":
+				case 'EnvironmentBusy':
 					return WorkspaceTransitionFailureKind.RuntimeBusy;
-				case "EnvironmentUnavailable":
-				case "MethodNotFound":
+				case 'EnvironmentUnavailable':
+				case 'MethodNotFound':
 					return WorkspaceTransitionFailureKind.RuntimeUnsupported;
 				default:
 					return WorkspaceTransitionFailureKind.RuntimeRejected;
 			}
 		}
 		if (
-			this.host.getState() !== "ready"
-			|| (error instanceof Error && /connection closed|stdout ended|exited|not ready/i.test(error.message))
+			this.host.getState() !== 'ready' ||
+			(error instanceof Error && /connection closed|stdout ended|exited|not ready/i.test(error.message))
 		) {
 			return WorkspaceTransitionFailureKind.RuntimeUnavailable;
 		}
@@ -63,8 +77,8 @@ export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwi
 
 	private waitUntilReady(options: IWaitUntilReadyOptions): Promise<void> {
 		const state = this.host.getState();
-		if (state === "ready") return Promise.resolve();
-		if (state === "stopped" || state === "stopping") {
+		if (state === 'ready') return Promise.resolve();
+		if (state === 'stopped' || state === 'stopping') {
 			return Promise.reject(new Error(`App Server cannot recover from ${state}`));
 		}
 		return new Promise<void>((resolve, reject) => {
@@ -79,13 +93,13 @@ export class AppServerWorkspaceTransitionAdapter implements IWorkspaceRuntimeSwi
 				else resolve();
 			};
 			const timeout = setTimeout(() => {
-				finish(new Error("Timed out waiting for App Server recovery"));
+				finish(new Error('Timed out waiting for App Server recovery'));
 			}, options.timeoutMs);
 			timeout.unref();
-			subscription = this.host.onStateChange((nextState) => {
-				if (nextState === "ready") {
+			subscription = this.host.onStateChange(nextState => {
+				if (nextState === 'ready') {
 					finish();
-				} else if (nextState === "stopped" || nextState === "stopping") {
+				} else if (nextState === 'stopped' || nextState === 'stopping') {
 					finish(new Error(`App Server recovery stopped in ${nextState}`));
 				}
 			});
@@ -104,8 +118,9 @@ export function createAppServerWorkspaceTransitionAdapter(
 	resolveWorkspaceLauncher(supervisor);
 	return new AppServerWorkspaceTransitionAdapter({
 		getState: () => supervisor.state,
-		switchWorkspace: (root, grant, workspaceId, previousWorkspaceId) => reconnectAppServerWorkspace(supervisor, workspaceHost, root, grant, workspaceId, previousWorkspaceId),
-		onStateChange: (listener) => supervisor.onStateChange(listener),
+		switchWorkspace: (root, grant, workspaceId, previousWorkspaceId) =>
+			reconnectAppServerWorkspace(supervisor, workspaceHost, root, grant, workspaceId, previousWorkspaceId),
+		onStateChange: listener => supervisor.onStateChange(listener),
 	});
 }
 
@@ -119,9 +134,15 @@ export async function reconnectAppServerWorkspace(
 	previousWorkspaceId: string,
 ): Promise<void> {
 	const launcher = resolveWorkspaceLauncher(supervisor);
-	const previous = launcher instanceof AppServerDaemonLauncher
-		? { kind: 'local' as const, launcher, environment: launcher.environment, root: launcher.environment.ASH_WORKSPACE_ROOT }
-		: { kind: 'remote' as const, launcher, root: launcher.workspaceRoot };
+	const previous =
+		launcher instanceof AppServerDaemonLauncher
+			? {
+					kind: 'local' as const,
+					launcher,
+					environment: launcher.environment,
+					root: launcher.environment.ASH_WORKSPACE_ROOT,
+				}
+			: { kind: 'remote' as const, launcher, root: launcher.workspaceRoot };
 	if (root !== undefined) {
 		await workspaceHost.persistDirectoryGrant(root, grant);
 	}
@@ -142,7 +163,9 @@ export async function reconnectAppServerWorkspace(
 	}
 	try {
 		await supervisor.start();
-		await workspaceHost.setFolders(root === undefined ? [] : [{ id: workspaceId, path: root, grant: { type: 'config' } }]);
+		await workspaceHost.setFolders(
+			root === undefined ? [] : [{ id: workspaceId, path: root, grant: { type: 'config' } }],
+		);
 	} catch (error) {
 		await supervisor.stop();
 		if (previous.kind === 'local') {
@@ -152,9 +175,9 @@ export async function reconnectAppServerWorkspace(
 		}
 		try {
 			await supervisor.start();
-			await workspaceHost.setFolders(previous.root
-				? [{ id: previousWorkspaceId, path: previous.root, grant: { type: 'config' } }]
-				: []);
+			await workspaceHost.setFolders(
+				previous.root ? [{ id: previousWorkspaceId, path: previous.root, grant: { type: 'config' } }] : [],
+			);
 		} catch (rollbackError) {
 			throw new AggregateError([error, rollbackError], 'Workspace authority switch and rollback both failed');
 		}
@@ -162,7 +185,9 @@ export async function reconnectAppServerWorkspace(
 	}
 }
 
-function resolveWorkspaceLauncher(supervisor: AppServerConnectionRelay): AppServerDaemonLauncher | RemoteAppServerProcessLauncher {
+function resolveWorkspaceLauncher(
+	supervisor: AppServerConnectionRelay,
+): AppServerDaemonLauncher | RemoteAppServerProcessLauncher {
 	const launcher = supervisor.options.enabled ? supervisor.options.processLauncher : undefined;
 	if (!(launcher instanceof AppServerDaemonLauncher) && !(launcher instanceof RemoteAppServerProcessLauncher)) {
 		throw new Error('Workspace connection has no directory launcher');

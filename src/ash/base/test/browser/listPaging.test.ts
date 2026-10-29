@@ -19,11 +19,16 @@ test('PagedList resolves only rendered placeholders and preserves attached actio
 		const resolved = Array.from({ length: 50 }, (_, index) => `Commit ${index}`);
 		let reads = 0;
 		const model: IPagedModel<string> = {
-			get length() { return resolved.length === 50 ? 51 : resolved.length; },
+			get length() {
+				return resolved.length === 50 ? 51 : resolved.length;
+			},
 			onDidIncrementLength: lengthChanged.event,
 			isResolved: index => index < resolved.length,
 			get: index => resolved[index]!,
-			resolve: () => { reads++; return pending.p; },
+			resolve: () => {
+				reads++;
+				return pending.p;
+			},
 		};
 		const renderer: IPagedRenderer<string, HTMLElement> = {
 			templateId: 'commit',
@@ -35,13 +40,18 @@ test('PagedList resolves only rendered placeholders and preserves attached actio
 					container.append(h(dom.window.document, 'button', undefined, value));
 				}
 			},
-			renderPlaceholder: (_index, container) => { container.textContent = 'Loading'; },
+			renderPlaceholder: (_index, container) => {
+				container.textContent = 'Loading';
+			},
 			disposeTemplate: container => container.replaceChildren(),
 		};
-		using list = new PagedList('History', dom.window.document.body, {
-			getHeight: () => 20,
-			getTemplateId: () => 'commit',
-		}, [renderer], { mouseSupport: false, keyboardSupport: false });
+		using list = new PagedList(
+			'History',
+			dom.window.document.body,
+			{ getHeight: () => 20, getTemplateId: () => 'commit' },
+			[renderer],
+			{ mouseSupport: false, keyboardSupport: false },
+		);
 		const viewport = list.widget.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
 		Object.defineProperties(viewport, {
 			clientWidth: { value: 100 },
@@ -59,7 +69,10 @@ test('PagedList resolves only rendered placeholders and preserves attached actio
 		resolved.push('Commit 50', 'Commit 51', 'Commit 52', 'Commit 53', 'Commit 54');
 		lengthChanged.fire(resolved.length);
 		await pending.complete('Commit 50');
-		assert.deepEqual({ reads, length: list.widget.items.length, scrollTop: viewport.scrollTop }, { reads: 1, length: 55, scrollTop: 960 });
+		assert.deepEqual(
+			{ reads, length: list.widget.items.length, scrollTop: viewport.scrollTop },
+			{ reads: 1, length: 55, scrollTop: 960 },
+		);
 		assert.equal(dom.window.document.activeElement, action);
 		assert.equal(list.widget.row(48)!.querySelector('button'), action);
 		assert.equal(list.widget.row(50)!.textContent, 'Commit 50');
@@ -78,15 +91,26 @@ test('PagedList cancels obsolete resolutions and disposes templates when its mod
 		let disposed = 0;
 		const renderer: IPagedRenderer<string, HTMLElement> = {
 			templateId: 'item',
-			renderTemplate: container => { templates++; return container; },
-			renderElement: (value, _index, container) => { container.textContent = value; },
-			renderPlaceholder: (_index, container) => { container.textContent = 'Loading'; },
-			disposeTemplate: () => { disposed++; },
+			renderTemplate: container => {
+				templates++;
+				return container;
+			},
+			renderElement: (value, _index, container) => {
+				container.textContent = value;
+			},
+			renderPlaceholder: (_index, container) => {
+				container.textContent = 'Loading';
+			},
+			disposeTemplate: () => {
+				disposed++;
+			},
 		};
-		using list = new PagedList('Items', dom.window.document.body, {
-			getHeight: () => 20,
-			getTemplateId: () => 'item',
-		}, [renderer]);
+		using list = new PagedList(
+			'Items',
+			dom.window.document.body,
+			{ getHeight: () => 20, getTemplateId: () => 'item' },
+			[renderer],
+		);
 		const viewport = list.widget.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
 		Object.defineProperties(viewport, {
 			clientWidth: { value: 100 },
@@ -97,8 +121,13 @@ test('PagedList cancels obsolete resolutions and disposes templates when its mod
 			length: 1,
 			onDidIncrementLength: lengthChanged.event,
 			isResolved: () => false,
-			get: () => { throw new Error('Unresolved'); },
-			resolve: (_index, cancellation) => { token = cancellation; return pending.p; },
+			get: () => {
+				throw new Error('Unresolved');
+			},
+			resolve: (_index, cancellation) => {
+				token = cancellation;
+				return pending.p;
+			},
 		};
 		list.model = {
 			length: 1,
@@ -128,27 +157,33 @@ test('PagedList keeps failed placeholders available for an explicit retry', asyn
 		const renderer: IPagedRenderer<string, HTMLElement> = {
 			templateId: 'item',
 			renderTemplate: container => container,
-			renderElement: (value, _index, container) => { container.textContent = value; void retried.complete(); },
+			renderElement: (value, _index, container) => {
+				container.textContent = value;
+				void retried.complete();
+			},
 			renderPlaceholder: (_index, container) => {
 				container.textContent = reads ? 'Retry' : 'Loading';
 				if (reads) void renderedFailure.complete();
 			},
 			disposeTemplate: container => container.replaceChildren(),
 		};
-		using list = new PagedList('Items', dom.window.document.body, {
-			getHeight: () => reads > 1 ? 40 : 20,
-			getTemplateId: () => 'item',
-		}, [renderer], {
-			role: 'tree',
-			accessibilityProvider: {
-				getRole: () => 'treeitem',
-				getAriaLabel: value => value,
-				getAriaLevel: () => 2,
-				getAriaSetSize: () => 1,
-				getAriaPosInSet: () => 1,
-				isExpanded: () => false,
+		using list = new PagedList(
+			'Items',
+			dom.window.document.body,
+			{ getHeight: () => (reads > 1 ? 40 : 20), getTemplateId: () => 'item' },
+			[renderer],
+			{
+				role: 'tree',
+				accessibilityProvider: {
+					getRole: () => 'treeitem',
+					getAriaLabel: value => value,
+					getAriaLevel: () => 2,
+					getAriaSetSize: () => 1,
+					getAriaPosInSet: () => 1,
+					isExpanded: () => false,
+				},
 			},
-		});
+		);
 		const viewport = list.widget.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
 		Object.defineProperties(viewport, {
 			clientWidth: { value: 100 },
@@ -160,7 +195,7 @@ test('PagedList keeps failed placeholders available for an explicit retry', asyn
 			onDidIncrementLength: lengthChanged.event,
 			isResolved: () => reads > 1,
 			get: () => 'Loaded',
-			resolve: () => ++reads === 1 ? failed.p : Promise.resolve('Loaded'),
+			resolve: () => (++reads === 1 ? failed.p : Promise.resolve('Loaded')),
 		};
 		await failed.error(new Error('Request failed'));
 		await renderedFailure.p;
@@ -169,8 +204,16 @@ test('PagedList keeps failed placeholders available for an explicit retry', asyn
 		await retried.p;
 		assert.deepEqual({ reads, text: list.widget.row(0)!.textContent }, { reads: 2, text: 'Loaded' });
 		const row = list.widget.row(0)!;
-		assert.deepEqual(['role', 'aria-label', 'aria-level', 'aria-setsize', 'aria-posinset', 'aria-expanded'].map(name => row.getAttribute(name)), ['treeitem', 'Loaded', '2', '1', '1', 'false']);
-		assert.deepEqual({ height: list.widget.getElementHeight(0), style: row.style.height }, { height: 40, style: '40px' });
+		assert.deepEqual(
+			['role', 'aria-label', 'aria-level', 'aria-setsize', 'aria-posinset', 'aria-expanded'].map(name =>
+				row.getAttribute(name),
+			),
+			['treeitem', 'Loaded', '2', '1', '1', 'false'],
+		);
+		assert.deepEqual(
+			{ height: list.widget.getElementHeight(0), style: row.style.height },
+			{ height: 40, style: '40px' },
+		);
 	} finally {
 		dom.window.close();
 	}
@@ -188,14 +231,22 @@ test('PagedList cancels hidden row requests and resolves them again when the vie
 		const renderer: IPagedRenderer<string, HTMLElement> = {
 			templateId: 'item',
 			renderTemplate: container => container,
-			renderElement: (value, _index, container) => { container.textContent = value; void rendered.complete(); },
-			renderPlaceholder: (_index, container) => { container.textContent = 'Loading'; },
+			renderElement: (value, _index, container) => {
+				container.textContent = value;
+				void rendered.complete();
+			},
+			renderPlaceholder: (_index, container) => {
+				container.textContent = 'Loading';
+			},
 			disposeTemplate: container => container.replaceChildren(),
 		};
-		using list = new PagedList('Items', dom.window.document.body, {
-			getHeight: () => 20,
-			getTemplateId: () => 'item',
-		}, [renderer], { mouseSupport: false, keyboardSupport: false });
+		using list = new PagedList(
+			'Items',
+			dom.window.document.body,
+			{ getHeight: () => 20, getTemplateId: () => 'item' },
+			[renderer],
+			{ mouseSupport: false, keyboardSupport: false },
+		);
 		const viewport = list.widget.domNode.querySelector<HTMLElement>('.ash-scrollbar-viewport')!;
 		let height = 80;
 		Object.defineProperties(viewport, {

@@ -6,7 +6,12 @@ import { localize } from '../../../../nls.js';
 import { type Color } from '../../../../base/common/color.js';
 import { ColorPicker } from '../../../../base/browser/ui/colorPicker/colorPicker.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
-import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
+import {
+	ContentWidgetPositionPreference,
+	type ICodeEditor,
+	type IContentWidget,
+	type IContentWidgetPosition,
+} from '../../../browser/editorBrowser.js';
 import { type Position } from '../../../common/core/position.js';
 import { type ColorPickerModel } from './colorPickerModel.js';
 
@@ -26,7 +31,12 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 	private focusPending = false;
 	private registered = true;
 
-	constructor(private readonly editor: ICodeEditor, private readonly onColorChange: (color: Color) => void, onApply: () => void, onCancel: () => void) {
+	constructor(
+		private readonly editor: ICodeEditor,
+		private readonly onColorChange: (color: Color) => void,
+		onApply: () => void,
+		onCancel: () => void,
+	) {
 		super();
 		const ownerDocument = editor.getDomNode()!.ownerDocument;
 		this.picker = this._register(new ColorPicker(ownerDocument, 'embedded'));
@@ -34,66 +44,111 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 			className: 'stanza-editor-color-picker-presentation',
 			attributes: { 'aria-label': localize('colorPicker.documentFormat', 'Document color format') },
 		});
-		const heading = h(ownerDocument, 'div', { className: 'stanza-editor-color-picker-header' }, this.presentationSelect);
-		this._register(new Button(heading, {
-			...defaultButtonStyles,
-			label: localize('colorPicker.close', 'Close'),
-			size: 'small',
-			onClick: onCancel,
-		}));
+		const heading = h(
+			ownerDocument,
+			'div',
+			{ className: 'stanza-editor-color-picker-header' },
+			this.presentationSelect,
+		);
+		this._register(
+			new Button(heading, {
+				...defaultButtonStyles,
+				label: localize('colorPicker.close', 'Close'),
+				size: 'small',
+				onClick: onCancel,
+			}),
+		);
 		const actions = h(ownerDocument, 'div', { className: 'stanza-editor-color-picker-actions' });
-		this._register(new Button(actions, {
-			...defaultButtonStyles,
-			label: localize('colorPicker.restore', 'Restore original color'),
-			size: 'small',
-			onClick: () => {
-				if (this.model) {
-					this.model.color = this.model.originalColor;
-					this.onColorChange(this.model.color);
-					this.model.flushColor();
-				}
-			},
-		}));
-		this.applyButton = this._register(new Button(actions, {
-			...defaultButtonStyles,
-			label: localize('apply', 'Apply'),
-			presentation: 'primary',
-			size: 'small',
-			onClick: onApply,
-		}));
+		this._register(
+			new Button(actions, {
+				...defaultButtonStyles,
+				label: localize('colorPicker.restore', 'Restore original color'),
+				size: 'small',
+				onClick: () => {
+					if (this.model) {
+						this.model.color = this.model.originalColor;
+						this.onColorChange(this.model.color);
+						this.model.flushColor();
+					}
+				},
+			}),
+		);
+		this.applyButton = this._register(
+			new Button(actions, {
+				...defaultButtonStyles,
+				label: localize('apply', 'Apply'),
+				presentation: 'primary',
+				size: 'small',
+				onClick: onApply,
+			}),
+		);
 		this.applyButton.domNode.classList.add('stanza-editor-color-picker-apply');
-		this.domNode = h(ownerDocument, 'div', {
-			className: 'stanza-editor-color-picker',
-			attributes: { role: 'dialog', 'aria-label': localize('colorPicker.title', 'Color picker'), 'aria-modal': 'false' },
-			properties: { hidden: true },
-		}, heading, this.picker.domNode, actions);
+		this.domNode = h(
+			ownerDocument,
+			'div',
+			{
+				className: 'stanza-editor-color-picker',
+				attributes: {
+					role: 'dialog',
+					'aria-label': localize('colorPicker.title', 'Color picker'),
+					'aria-modal': 'false',
+				},
+				properties: { hidden: true },
+			},
+			heading,
+			this.picker.domNode,
+			actions,
+		);
 		focusedWidgets.set(this.domNode, this);
-		this._register(this.picker.onDidChangeColor(color => {
-			if (!this.model) { return; }
-			this.model.color = color;
-			this.onColorChange(color);
-		}));
+		this._register(
+			this.picker.onDidChangeColor(color => {
+				if (!this.model) {
+					return;
+				}
+				this.model.color = color;
+				this.onColorChange(color);
+			}),
+		);
 		this._register(this.picker.onDidCommitColor(() => this.model?.flushColor()));
-		this._register(addDisposableListener(this.presentationSelect, 'change', () => this.selectPresentation(this.presentationSelect.selectedIndex)));
+		this._register(
+			addDisposableListener(this.presentationSelect, 'change', () =>
+				this.selectPresentation(this.presentationSelect.selectedIndex),
+			),
+		);
 		// Let the controls receive pointer input before isolating it from editor selection handling.
 		this._register(addDisposableListener(this.domNode, 'pointerdown', event => event.stopPropagation()));
 		this._register(addDisposableListener(this.domNode, 'mousedown', event => event.stopPropagation()));
-		this._register(addDisposableListener(this.domNode, 'keydown', event => {
-			if (event.key === 'Escape') {
-				stopEvent(event);
-				onCancel();
-			}
-		}));
+		this._register(
+			addDisposableListener(this.domNode, 'keydown', event => {
+				if (event.key === 'Escape') {
+					stopEvent(event);
+					onCancel();
+				}
+			}),
+		);
 		editor.addContentWidget(this);
-		this._register(observeResize(this.domNode, () => {
-			if (this.visible && this.registered) { this.editor.layoutContentWidget(this); }
-		}));
+		this._register(
+			observeResize(this.domNode, () => {
+				if (this.visible && this.registered) {
+					this.editor.layoutContentWidget(this);
+				}
+			}),
+		);
 	}
 
-	public getId(): string { return 'editor.contrib.colorPickerWidget'; }
-	public getDomNode(): HTMLElement { return this.domNode; }
+	public getId(): string {
+		return 'editor.contrib.colorPickerWidget';
+	}
+	public getDomNode(): HTMLElement {
+		return this.domNode;
+	}
 	public getPosition(): IContentWidgetPosition | null {
-		return this.position ? { position: this.position, preference: [ContentWidgetPositionPreference.BELOW, ContentWidgetPositionPreference.ABOVE] } : null;
+		return this.position
+			? {
+					position: this.position,
+					preference: [ContentWidgetPositionPreference.BELOW, ContentWidgetPositionPreference.ABOVE],
+				}
+			: null;
 	}
 
 	public static getFocused(element: HTMLElement): ColorPickerWidget | undefined {
@@ -102,10 +157,16 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 	}
 
 	public getAccessibleContent(): string {
-		return this.picker.getAccessibleContent() + '\n' + localize('colorPicker.documentValue', 'Document value: {0}', this.model?.presentation?.label ?? '');
+		return (
+			this.picker.getAccessibleContent() +
+			'\n' +
+			localize('colorPicker.documentValue', 'Document value: {0}', this.model?.presentation?.label ?? '')
+		);
 	}
 
-	public focus(): void { this.picker.focus(); }
+	public focus(): void {
+		this.picker.focus();
+	}
 
 	public afterRender(position: ContentWidgetPositionPreference | null): void {
 		if (position !== null && this.focusPending) {
@@ -121,7 +182,10 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 	show(model: ColorPickerModel, position: Position, focus: boolean): void {
 		this.domNode.classList.remove('hover');
 		this.applyButton.hidden = false;
-		if (!this.registered) { this.editor.addContentWidget(this); this.registered = true; }
+		if (!this.registered) {
+			this.editor.addContentWidget(this);
+			this.registered = true;
+		}
 		this.bindModel(model);
 		this.position = position;
 		this.domNode.hidden = false;
@@ -130,9 +194,14 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 	}
 
 	public showHover(model: ColorPickerModel, container: HTMLElement): void {
-		if (this.registered) { this.editor.removeContentWidget(this); this.registered = false; }
+		if (this.registered) {
+			this.editor.removeContentWidget(this);
+			this.registered = false;
+		}
 		// Content-widget positioning belongs to the old host; the hover lays out this root in normal flow.
-		for (const property of ['display', 'visibility', 'position', 'left', 'top', 'max-width']) { this.domNode.style.removeProperty(property); }
+		for (const property of ['display', 'visibility', 'position', 'left', 'top', 'max-width']) {
+			this.domNode.style.removeProperty(property);
+		}
 		this.bindModel(model);
 		this.position = undefined;
 		this.focusPending = false;
@@ -145,26 +214,36 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 	private bindModel(model: ColorPickerModel): void {
 		this.modelListeners.clear();
 		this.model = model;
-		this.modelListeners.add(model.onDidChangeColor(color => {
-			// An echo from the picker must not reset its active pointer capture.
-			if (!this.picker.color.equals(color)) { this.picker.setColor(color); }
-		}));
-		this.modelListeners.add(model.onDidChangePresentation(() => {
-			this.renderPresentations();
-			this.renderSelectedPresentation();
-		}));
+		this.modelListeners.add(
+			model.onDidChangeColor(color => {
+				// An echo from the picker must not reset its active pointer capture.
+				if (!this.picker.color.equals(color)) {
+					this.picker.setColor(color);
+				}
+			}),
+		);
+		this.modelListeners.add(
+			model.onDidChangePresentation(() => {
+				this.renderPresentations();
+				this.renderSelectedPresentation();
+			}),
+		);
 		this.picker.setColor(model.color);
 		this.renderPresentations();
 	}
 
 	hide(): void {
 		this.modelListeners.clear();
-		if (this.model) { this.picker.setColor(this.model.originalColor); }
+		if (this.model) {
+			this.picker.setColor(this.model.originalColor);
+		}
 		this.model = undefined;
 		this.position = undefined;
 		this.focusPending = false;
 		this.domNode.hidden = true;
-		if (this.registered) { this.editor.layoutContentWidget(this); }
+		if (this.registered) {
+			this.editor.layoutContentWidget(this);
+		}
 	}
 
 	private selectPresentation(index: number): void {
@@ -174,7 +253,9 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 
 	private renderPresentations(): void {
 		const presentations = this.model?.colorPresentations ?? [];
-		this.presentationSelect.replaceChildren(...presentations.map(presentation => h(this.domNode.ownerDocument, 'option', {}, presentation.label)));
+		this.presentationSelect.replaceChildren(
+			...presentations.map(presentation => h(this.domNode.ownerDocument, 'option', {}, presentation.label)),
+		);
 		this.applyButton.enabled = presentations.length > 0;
 		this.presentationSelect.disabled = presentations.length === 0;
 		this.renderSelectedPresentation();
@@ -189,7 +270,9 @@ export class ColorPickerWidget extends Disposable implements IContentWidget {
 
 	protected override disposeCore(): void {
 		this.hide();
-		if (this.registered) { this.editor.removeContentWidget(this); }
+		if (this.registered) {
+			this.editor.removeContentWidget(this);
+		}
 		focusedWidgets.delete(this.domNode);
 		this.domNode.remove();
 		super.disposeCore();

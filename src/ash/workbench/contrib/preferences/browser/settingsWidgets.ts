@@ -21,7 +21,12 @@ import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
-import { IConfigurationService, type IConfigurationOverrides, ConfigurationTarget, getConfigValueInTarget } from '../../../../platform/configuration/common/configuration.js';
+import {
+	IConfigurationService,
+	type IConfigurationOverrides,
+	ConfigurationTarget,
+	getConfigValueInTarget,
+} from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IContextMenuService, IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import { HoverConfiguration } from '../../../../platform/hover/common/hoverService.js';
@@ -29,8 +34,24 @@ import { IHoverService } from '../../../../platform/hover/browser/hoverService.j
 import type { ILocalizationService } from '../../../services/localization/common/localizationService.js';
 import { parseJsonc } from '../../../../base/common/jsonc.js';
 import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
-import type { IBooleanSetting, IComplexSetting, INumberSetting, INumberWithOptionsSetting, ISelectSetting, ISetting, IStringMapSetting, ITextSetting, SettingReference, SettingValueBinding, SettingsPresentation } from '../../../services/preferences/common/preferences.js';
-import { configurationSettingBinding, SettingModel, type SettingState } from '../../../services/preferences/common/settingsModels.js';
+import type {
+	IBooleanSetting,
+	IComplexSetting,
+	INumberSetting,
+	INumberWithOptionsSetting,
+	ISelectSetting,
+	ISetting,
+	IStringMapSetting,
+	ITextSetting,
+	SettingReference,
+	SettingValueBinding,
+	SettingsPresentation,
+} from '../../../services/preferences/common/preferences.js';
+import {
+	configurationSettingBinding,
+	SettingModel,
+	type SettingState,
+} from '../../../services/preferences/common/settingsModels.js';
 import { SettingsSearchMenu } from './settingsSearchMenu.js';
 import { SettingsTreeIndicatorsLabel } from './settingsEditorSettingIndicators.js';
 
@@ -50,27 +71,36 @@ export class SettingsSearchWidget extends Disposable {
 	private readonly inputBox: InputBox;
 	private readonly searchMenu: SettingsSearchMenu;
 
-	constructor(container: HTMLElement, private readonly options: SettingsSearchWidgetOptions) {
+	constructor(
+		container: HTMLElement,
+		private readonly options: SettingsSearchWidgetOptions,
+	) {
 		super();
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = 'ash-settings-search';
 		this.domNode.setAttribute('role', 'search');
 		const searchLabel = this.searchLabel();
-		this.inputBox = this._register(new InputBox(this.domNode, {
-			inputBoxStyles: defaultInputBoxStyles,
-			presentation: 'field',
-			type: 'search',
-			placeholder: searchLabel,
-			ariaLabel: searchLabel,
-			ariaControls: options.ariaControls,
-		}));
+		this.inputBox = this._register(
+			new InputBox(this.domNode, {
+				inputBoxStyles: defaultInputBoxStyles,
+				presentation: 'field',
+				type: 'search',
+				placeholder: searchLabel,
+				ariaLabel: searchLabel,
+				ariaControls: options.ariaControls,
+			}),
+		);
 		this.inputBox.element.classList.add('ash-settings-search-input');
-		this.searchMenu = this._register(new SettingsSearchMenu(this.inputBox.element, {
-			getValue: () => this.inputBox.value,
-			setValue: value => { this.inputBox.value = value; },
-			focus: () => this.inputBox.focus(),
-			contextMenuProvider: options.contextMenuProvider,
-		}));
+		this.searchMenu = this._register(
+			new SettingsSearchMenu(this.inputBox.element, {
+				getValue: () => this.inputBox.value,
+				setValue: value => {
+					this.inputBox.value = value;
+				},
+				focus: () => this.inputBox.focus(),
+				contextMenuProvider: options.contextMenuProvider,
+			}),
+		);
 		container.append(this.domNode);
 		this.onDidChange = this.inputBox.onDidChange;
 		this.onDidRequestFocusResults = this.focusResultsEmitter.event;
@@ -108,7 +138,11 @@ export class SettingsSearchWidget extends Disposable {
 	}
 
 	private searchLabel(): string {
-		return this.options.localizationService.translate('ash.settings', 'chrome.search', localize2({ bundle: 'ash.settings', key: 'chrome.search' }, 'Search settings').original);
+		return this.options.localizationService.translate(
+			'ash.settings',
+			'chrome.search',
+			localize2({ bundle: 'ash.settings', key: 'chrome.search' }, 'Search settings').original,
+		);
 	}
 }
 
@@ -136,19 +170,24 @@ class SettingActions extends Disposable {
 	private readonly actionsDomNode: HTMLSpanElement;
 	private readonly trigger: Button;
 
-	constructor(container: HTMLElement, label: string, private readonly options: SettingActionsOptions,
+	constructor(
+		container: HTMLElement,
+		label: string,
+		private readonly options: SettingActionsOptions,
 		@IClipboardService private readonly clipboardService: IClipboardService,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 	) {
 		super();
 		this.actionsDomNode = h(container.ownerDocument, 'span');
 		this.actionsDomNode.className = 'ash-setting-item-actions';
-		this.trigger = this._register(new Button(this.actionsDomNode, {
-			...defaultButtonStyles,
-			label: '',
-			icon: Lxicon.gear,
-			onClick: () => this.show(),
-		}));
+		this.trigger = this._register(
+			new Button(this.actionsDomNode, {
+				...defaultButtonStyles,
+				label: '',
+				icon: Lxicon.gear,
+				onClick: () => this.show(),
+			}),
+		);
 		this.trigger.toggleClassName('ash-setting-item-actions-trigger', true);
 		this.trigger.domNode.setAttribute('aria-haspopup', 'menu');
 		this.trigger.domNode.setAttribute('aria-expanded', 'false');
@@ -157,10 +196,12 @@ class SettingActions extends Disposable {
 		container.dataset.settingsItemKind = 'setting';
 		container.classList.add('ash-setting-item');
 		container.prepend(this.actionsDomNode);
-		this._register(toDisposable(() => {
-			container.classList.remove('ash-setting-item');
-			this.actionsDomNode.remove();
-		}));
+		this._register(
+			toDisposable(() => {
+				container.classList.remove('ash-setting-item');
+				this.actionsDomNode.remove();
+			}),
+		);
 	}
 
 	public updateLabel(label: string): void {
@@ -242,7 +283,16 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 	private readonly titleDomNode: HTMLSpanElement;
 	private pendingFocus: HTMLElement | undefined;
 
-	protected constructor(container: HTMLElement, descriptor: TSetting, binding: SettingValueBinding<TValue>, private readonly options: SettingWidgetOptions, configurationService: IConfigurationService, contextViewProvider: IContextViewProvider, instantiationService: IInstantiationService, kind?: 'select' | 'toggle') {
+	protected constructor(
+		container: HTMLElement,
+		descriptor: TSetting,
+		binding: SettingValueBinding<TValue>,
+		private readonly options: SettingWidgetOptions,
+		configurationService: IConfigurationService,
+		contextViewProvider: IContextViewProvider,
+		instantiationService: IInstantiationService,
+		kind?: 'select' | 'toggle',
+	) {
 		super();
 		const document = container.ownerDocument;
 		this.descriptor = descriptor;
@@ -250,7 +300,8 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.domNode = h(document, 'div');
 		this.domNode.className = `ash-configuration-setting ash-${this.presentation}-setting`;
 		this.domNode.setAttribute('role', 'group');
-		if (kind === 'select' && this.presentation === 'editor') this.domNode.classList.add('ash-editor-setting-select-row');
+		if (kind === 'select' && this.presentation === 'editor')
+			this.domNode.classList.add('ash-editor-setting-select-row');
 		if (kind === 'toggle') this.domNode.classList.add(`ash-${this.presentation}-toggle-setting`);
 		this._register(toDisposable(() => this.domNode.remove()));
 
@@ -261,35 +312,75 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		this.descriptionDomNode = h(document, 'span');
 		this.descriptionDomNode.className = `ash-configuration-setting-description ash-${this.presentation}-setting-description`;
 		const configuredText = options.configurationOverrides?.overrideIdentifier
-			? localize({ bundle: 'ash.settings', key: 'status.configuredLanguage' }, 'Configured for {0} in the selected target.', options.configurationOverrides.overrideIdentifier)
-			: options.configurationTarget === ConfigurationTarget.WORKSPACE || options.configurationTarget === ConfigurationTarget.WORKSPACE_FOLDER
-				? localize({ bundle: 'ash.settings', key: 'status.configuredTarget' }, 'Configured in the selected target.') : undefined;
-		this.indicators = this._register(new SettingsTreeIndicatorsLabel(this.copyDomNode, contextViewProvider, () => configurationService.getValue<number>(HoverConfiguration.delay), configuredText));
+			? localize(
+					{ bundle: 'ash.settings', key: 'status.configuredLanguage' },
+					'Configured for {0} in the selected target.',
+					options.configurationOverrides.overrideIdentifier,
+				)
+			: options.configurationTarget === ConfigurationTarget.WORKSPACE ||
+				  options.configurationTarget === ConfigurationTarget.WORKSPACE_FOLDER
+				? localize(
+						{ bundle: 'ash.settings', key: 'status.configuredTarget' },
+						'Configured in the selected target.',
+					)
+				: undefined;
+		this.indicators = this._register(
+			new SettingsTreeIndicatorsLabel(
+				this.copyDomNode,
+				contextViewProvider,
+				() => configurationService.getValue<number>(HoverConfiguration.delay),
+				configuredText,
+			),
+		);
 		this.copyDomNode.prepend(this.titleDomNode, this.descriptionDomNode);
 		this.updateCopy(descriptor);
 
 		this.model = this._register(new SettingModel(binding));
 		try {
-			this.actions = this._register(instantiationService.createInstance(SettingActions, this.domNode, descriptor.title, {
-				reference: {
-					id: this.model.id,
-					isDefault: () => this.model.isDefault(),
-					reset: () => this.resetSetting(),
-				},
-				editInJSON: descriptor.binding || !options.onOpenSettings ? undefined : () => options.onOpenSettings!(this.descriptor.id),
-				onError: (error: unknown) => this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'actions.failed' }, 'Unable to run the setting action.')), true),
-				copySettingAsJSON: descriptor.binding ? undefined : () => {
-					const setting = this.descriptor.configuration;
-					const inspected = configurationService.inspect(setting.key, options.configurationOverrides);
-					const value = binding.isDefault?.() ? binding.defaultValue : getConfigValueInTarget(inspected, options.configurationTarget ?? ConfigurationTarget.USER_LOCAL);
-					return `${JSON.stringify(setting.key)}: ${JSON.stringify(value, null, 2)}`;
-				},
-			}));
+			this.actions = this._register(
+				instantiationService.createInstance(SettingActions, this.domNode, descriptor.title, {
+					reference: {
+						id: this.model.id,
+						isDefault: () => this.model.isDefault(),
+						reset: () => this.resetSetting(),
+					},
+					editInJSON:
+						descriptor.binding || !options.onOpenSettings
+							? undefined
+							: () => options.onOpenSettings!(this.descriptor.id),
+					onError: (error: unknown) =>
+						this.reportStatus(
+							settingErrorMessage(
+								error,
+								localize(
+									{ bundle: 'ash.settings', key: 'actions.failed' },
+									'Unable to run the setting action.',
+								),
+							),
+							true,
+						),
+					copySettingAsJSON: descriptor.binding
+						? undefined
+						: () => {
+								const setting = this.descriptor.configuration;
+								const inspected = configurationService.inspect(
+									setting.key,
+									options.configurationOverrides,
+								);
+								const value = binding.isDefault?.()
+									? binding.defaultValue
+									: getConfigValueInTarget(
+											inspected,
+											options.configurationTarget ?? ConfigurationTarget.USER_LOCAL,
+										);
+								return `${JSON.stringify(setting.key)}: ${JSON.stringify(value, null, 2)}`;
+							},
+				}),
+			);
 		} catch (error) {
 			this.dispose();
 			throw error;
 		}
-
 	}
 
 	public update(setting: ISetting): void {
@@ -315,12 +406,14 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 			const document = this.domNode.ownerDocument;
 			if (state.isPending && !this.pendingFocus) {
 				const active = getActiveElement(document);
-				if (active instanceof document.defaultView!.HTMLElement && this.domNode.contains(active)) this.pendingFocus = active;
+				if (active instanceof document.defaultView!.HTMLElement && this.domNode.contains(active))
+					this.pendingFocus = active;
 			}
 			renderState(state);
 			if (!state.isPending && this.pendingFocus) {
 				// Disabling a saving control blurs it. Restore focus only if the user has not moved elsewhere.
-				if (getActiveElement(document) === document.body && this.pendingFocus.isConnected) this.pendingFocus.focus();
+				if (getActiveElement(document) === document.body && this.pendingFocus.isConnected)
+					this.pendingFocus.focus();
 				this.pendingFocus = undefined;
 			}
 		};
@@ -338,7 +431,13 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		try {
 			await this.model.update(value);
 		} catch (error) {
-			this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.saveFailed' }, 'Unable to save the setting.')), true);
+			this.reportStatus(
+				settingErrorMessage(
+					error,
+					localize({ bundle: 'ash.settings', key: 'status.saveFailed' }, 'Unable to save the setting.'),
+				),
+				true,
+			);
 		}
 	}
 
@@ -349,7 +448,13 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 		try {
 			await this.model.reset();
 		} catch (error) {
-			this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.resetFailed' }, 'Unable to reset the setting.')), true);
+			this.reportStatus(
+				settingErrorMessage(
+					error,
+					localize({ bundle: 'ash.settings', key: 'status.resetFailed' }, 'Unable to reset the setting.'),
+				),
+				true,
+			);
 			throw error;
 		}
 	}
@@ -363,7 +468,10 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 	}
 
 	private updateIndicatorDescriptions(): void {
-		const ids = [this.domNode.classList.contains('is-configured') ? this.indicators.configuredDescriptionId : undefined, this.indicators.maturityDescriptionId].filter(Boolean);
+		const ids = [
+			this.domNode.classList.contains('is-configured') ? this.indicators.configuredDescriptionId : undefined,
+			this.indicators.maturityDescriptionId,
+		].filter(Boolean);
 		if (ids.length) this.domNode.setAttribute('aria-describedby', ids.join(' '));
 		else this.domNode.removeAttribute('aria-describedby');
 	}
@@ -372,18 +480,38 @@ abstract class AbstractSettingWidget<TSetting extends ISetting, TValue> extends 
 class BooleanSettingWidget extends AbstractSettingWidget<IBooleanSetting, boolean> {
 	private readonly toggle: Switch;
 
-	constructor(container: HTMLElement, descriptor: IBooleanSetting, options: SettingWidgetOptions,
+	constructor(
+		container: HTMLElement,
+		descriptor: IBooleanSetting,
+		options: SettingWidgetOptions,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService, 'toggle');
-		this.toggle = this._register(new Switch(this.domNode, {
-			...defaultToggleStyles,
-			ariaLabel: descriptor.title,
-			content: this.copyDomNode,
-			contentPlacement: 'before-control',
-		}));
+		super(
+			container,
+			descriptor,
+			descriptor.binding ??
+				configurationSettingBinding(
+					configurationService,
+					descriptor.configuration,
+					options.configurationOverrides,
+					options.configurationTarget,
+				),
+			options,
+			configurationService,
+			contextViewProvider,
+			instantiationService,
+			'toggle',
+		);
+		this.toggle = this._register(
+			new Switch(this.domNode, {
+				...defaultToggleStyles,
+				ariaLabel: descriptor.title,
+				content: this.copyDomNode,
+				contentPlacement: 'before-control',
+			}),
+		);
 		this.toggle.element.classList.add(`ash-${this.presentation}-toggle-control`);
 		this.toggle.input.dataset.configurationKey = descriptor.configuration.key;
 		this.bindState(state => {
@@ -402,20 +530,39 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 	private readonly input: HTMLInputElement;
 	private readonly inputBox: InputBox | undefined;
 
-	constructor(container: HTMLElement, descriptor: INumberSetting, options: SettingWidgetOptions,
+	constructor(
+		container: HTMLElement,
+		descriptor: INumberSetting,
+		options: SettingWidgetOptions,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService);
+		super(
+			container,
+			descriptor,
+			descriptor.binding ??
+				configurationSettingBinding(
+					configurationService,
+					descriptor.configuration,
+					options.configurationOverrides,
+					options.configurationTarget,
+				),
+			options,
+			configurationService,
+			contextViewProvider,
+			instantiationService,
+		);
 		this.domNode.append(this.copyDomNode);
 		if (this.presentation === 'editor') {
-			this.inputBox = this._register(new InputBox(this.domNode, {
-				inputBoxStyles: defaultInputBoxStyles,
-				type: 'number',
-				ariaLabel: descriptor.title,
-				presentation: 'compact',
-			}));
+			this.inputBox = this._register(
+				new InputBox(this.domNode, {
+					inputBoxStyles: defaultInputBoxStyles,
+					type: 'number',
+					ariaLabel: descriptor.title,
+					presentation: 'compact',
+				}),
+			);
 			this.inputBox.element.classList.add('ash-editor-setting-number');
 			this.input = this.inputBox.inputElement;
 			this.inputBox.step = '1';
@@ -448,7 +595,16 @@ class NumberSettingWidget extends AbstractSettingWidget<INumberSetting, number> 
 		if (!Number.isFinite(value) || value < this.descriptor.minimum || value > this.descriptor.maximum) {
 			this.model.refresh();
 			this.input.value = String(this.model.state.value);
-			this.reportStatus(localize({ bundle: 'ash.settings', key: 'status.numberRange' }, '{0} must be between {1} and {2}.', this.descriptor.title, this.descriptor.minimum, this.descriptor.maximum), true);
+			this.reportStatus(
+				localize(
+					{ bundle: 'ash.settings', key: 'status.numberRange' },
+					'{0} must be between {1} and {2}.',
+					this.descriptor.title,
+					this.descriptor.minimum,
+					this.descriptor.maximum,
+				),
+				true,
+			);
 			return;
 		}
 		void this.updateSetting(value);
@@ -459,32 +615,60 @@ class NumberWithOptionsSettingWidget extends AbstractSettingWidget<INumberWithOp
 	private readonly inputBox: InputBox;
 	private readonly select: SelectBox | undefined;
 
-	constructor(container: HTMLElement, descriptor: INumberWithOptionsSetting, options: SettingWidgetOptions,
+	constructor(
+		container: HTMLElement,
+		descriptor: INumberWithOptionsSetting,
+		options: SettingWidgetOptions,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService);
+		super(
+			container,
+			descriptor,
+			descriptor.binding ??
+				configurationSettingBinding(
+					configurationService,
+					descriptor.configuration,
+					options.configurationOverrides,
+					options.configurationTarget,
+				),
+			options,
+			configurationService,
+			contextViewProvider,
+			instantiationService,
+		);
 		const controls = h(this.domNode.ownerDocument, 'div');
 		controls.className = 'ash-setting-number-controls';
 		this.domNode.append(this.copyDomNode, controls);
-		this.inputBox = this._register(new InputBox(controls, {
-			inputBoxStyles: defaultInputBoxStyles, type: 'number', ariaLabel: descriptor.title, presentation: 'compact',
-		}));
+		this.inputBox = this._register(
+			new InputBox(controls, {
+				inputBoxStyles: defaultInputBoxStyles,
+				type: 'number',
+				ariaLabel: descriptor.title,
+				presentation: 'compact',
+			}),
+		);
 		this.inputBox.element.classList.add('ash-editor-setting-number');
 		this.inputBox.inputElement.dataset.configurationKey = descriptor.id;
 		if (descriptor.options.some(option => typeof option.value === 'string')) {
-			this.select = this._register(new SelectBox(controls, {
-				options: [], presentation: 'field', contextViewProvider,
-			}, defaultSelectBoxStyles));
-			this._register(this.select.onDidSelect(({ value }) => {
-				if (value === 'custom') {
-					this.inputBox.focus();
-				} else {
-					const option = this.descriptor.options[Number(value)];
-					if (option) void this.updateSetting(option.value);
-				}
-			}));
+			this.select = this._register(
+				new SelectBox(
+					controls,
+					{ options: [], presentation: 'field', contextViewProvider },
+					defaultSelectBoxStyles,
+				),
+			);
+			this._register(
+				this.select.onDidSelect(({ value }) => {
+					if (value === 'custom') {
+						this.inputBox.focus();
+					} else {
+						const option = this.descriptor.options[Number(value)];
+						if (option) void this.updateSetting(option.value);
+					}
+				}),
+			);
 		}
 		this.updateControl(descriptor);
 		this.bindState(state => this.renderState(state));
@@ -497,11 +681,30 @@ class NumberWithOptionsSettingWidget extends AbstractSettingWidget<INumberWithOp
 		input.max = String(descriptor.maximum);
 		input.step = descriptor.integer ? '1' : 'any';
 		input.setAttribute('aria-label', descriptor.title);
-		input.setAttribute('aria-description', [
-			...(descriptor.options.some(option => option.value === null) ? [localize({ bundle: 'ash.settings', key: 'number.automaticHelp' }, 'Enter a number, or clear the field to use Automatic.')] : []),
-			...(this.select ? [localize({ bundle: 'ash.settings', key: 'number.modeHelp' }, 'Enter a number directly, or use the value mode list for other choices.')] : []),
-		].join(' '));
-		this.select?.setAriaLabel(localize({ bundle: 'ash.settings', key: 'number.mode' }, '{0}: Value mode', descriptor.title));
+		input.setAttribute(
+			'aria-description',
+			[
+				...(descriptor.options.some(option => option.value === null)
+					? [
+							localize(
+								{ bundle: 'ash.settings', key: 'number.automaticHelp' },
+								'Enter a number, or clear the field to use Automatic.',
+							),
+						]
+					: []),
+				...(this.select
+					? [
+							localize(
+								{ bundle: 'ash.settings', key: 'number.modeHelp' },
+								'Enter a number directly, or use the value mode list for other choices.',
+							),
+						]
+					: []),
+			].join(' '),
+		);
+		this.select?.setAriaLabel(
+			localize({ bundle: 'ash.settings', key: 'number.mode' }, '{0}: Value mode', descriptor.title),
+		);
 		this.select?.setOptions([
 			{ value: 'custom', label: localize({ bundle: 'ash.settings', key: 'number.custom' }, 'Custom number') },
 			...descriptor.options.map((option, index) => ({ value: String(index), label: option.label })),
@@ -528,11 +731,31 @@ class NumberWithOptionsSettingWidget extends AbstractSettingWidget<INumberWithOp
 			return;
 		}
 		const value = input.valueAsNumber;
-		if (!Number.isFinite(value) || value < this.descriptor.minimum || value > this.descriptor.maximum || this.descriptor.integer && !Number.isInteger(value)) {
+		if (
+			!Number.isFinite(value) ||
+			value < this.descriptor.minimum ||
+			value > this.descriptor.maximum ||
+			(this.descriptor.integer && !Number.isInteger(value))
+		) {
 			this.renderState(this.model.state);
-			this.reportStatus(this.descriptor.integer
-				? localize({ bundle: 'ash.settings', key: 'status.integerRange' }, '{0} must be a whole number between {1} and {2}.', this.descriptor.title, this.descriptor.minimum, this.descriptor.maximum)
-				: localize({ bundle: 'ash.settings', key: 'status.numberRange' }, '{0} must be between {1} and {2}.', this.descriptor.title, this.descriptor.minimum, this.descriptor.maximum), true);
+			this.reportStatus(
+				this.descriptor.integer
+					? localize(
+							{ bundle: 'ash.settings', key: 'status.integerRange' },
+							'{0} must be a whole number between {1} and {2}.',
+							this.descriptor.title,
+							this.descriptor.minimum,
+							this.descriptor.maximum,
+						)
+					: localize(
+							{ bundle: 'ash.settings', key: 'status.numberRange' },
+							'{0} must be between {1} and {2}.',
+							this.descriptor.title,
+							this.descriptor.minimum,
+							this.descriptor.maximum,
+						),
+				true,
+			);
 			return;
 		}
 		void this.updateSetting(value);
@@ -542,19 +765,45 @@ class NumberWithOptionsSettingWidget extends AbstractSettingWidget<INumberWithOp
 class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string | boolean> {
 	private readonly select: SelectBox;
 
-	constructor(container: HTMLElement, descriptor: ISelectSetting, options: SettingWidgetOptions,
+	constructor(
+		container: HTMLElement,
+		descriptor: ISelectSetting,
+		options: SettingWidgetOptions,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService, 'select');
-		this.select = this._register(new SelectBox(this.domNode, {
-			options: descriptor.options.map(option => ({ value: String(option.value), label: option.label })),
-			ariaLabel: descriptor.title,
-			presentation: 'field',
-			contextViewProvider: contextViewProvider,
-		}, defaultSelectBoxStyles));
-		this.select.element.classList.add(this.presentation === 'general' ? 'ash-general-setting-control' : 'ash-editor-setting-select');
+		super(
+			container,
+			descriptor,
+			descriptor.binding ??
+				configurationSettingBinding(
+					configurationService,
+					descriptor.configuration,
+					options.configurationOverrides,
+					options.configurationTarget,
+				),
+			options,
+			configurationService,
+			contextViewProvider,
+			instantiationService,
+			'select',
+		);
+		this.select = this._register(
+			new SelectBox(
+				this.domNode,
+				{
+					options: descriptor.options.map(option => ({ value: String(option.value), label: option.label })),
+					ariaLabel: descriptor.title,
+					presentation: 'field',
+					contextViewProvider: contextViewProvider,
+				},
+				defaultSelectBoxStyles,
+			),
+		);
+		this.select.element.classList.add(
+			this.presentation === 'general' ? 'ash-general-setting-control' : 'ash-editor-setting-select',
+		);
 		this.select.element.dataset.configurationKey = descriptor.id;
 		this.domNode.append(this.copyDomNode, this.select.element);
 		this.bindState(state => this.renderState(state));
@@ -586,7 +835,10 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string |
 		const options = this.descriptor.options.map(option => ({ value: String(option.value), label: option.label }));
 		const value = String(state.value);
 		if (!options.some(option => option.value === value)) {
-			options.push({ value, label: localize({ bundle: 'ash.settings', key: 'option.unavailable' }, 'Unavailable ({0})', value) });
+			options.push({
+				value,
+				label: localize({ bundle: 'ash.settings', key: 'option.unavailable' }, 'Unavailable ({0})', value),
+			});
 		}
 		if (!sameSelectOptions(this.select.options, options)) this.select.setOptions(options);
 		this.select.value = String(state.value);
@@ -597,12 +849,29 @@ class SelectSettingWidget extends AbstractSettingWidget<ISelectSetting, string |
 class TextSettingWidget extends AbstractSettingWidget<ITextSetting, string> {
 	private readonly input: HTMLInputElement;
 
-	constructor(container: HTMLElement, descriptor: ITextSetting, options: SettingWidgetOptions,
+	constructor(
+		container: HTMLElement,
+		descriptor: ITextSetting,
+		options: SettingWidgetOptions,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService);
+		super(
+			container,
+			descriptor,
+			descriptor.binding ??
+				configurationSettingBinding(
+					configurationService,
+					descriptor.configuration,
+					options.configurationOverrides,
+					options.configurationTarget,
+				),
+			options,
+			configurationService,
+			contextViewProvider,
+			instantiationService,
+		);
 		this.input = h(this.domNode.ownerDocument, 'input');
 		this.input.className = `ash-${this.presentation}-setting-text`;
 		this.input.type = 'text';
@@ -652,66 +921,90 @@ class StringMapSuggestions extends Disposable {
 		this._register(addDisposableListener(input, 'focus', () => this.show()));
 		this._register(addDisposableListener(input, 'input', () => this.show()));
 		this._register(addDisposableListener(input, 'blur', () => this.hide()));
-		this._register(addDisposableListener(input, 'keydown', event => {
-			if (event.isComposing) { return; }
-			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-				if (!this.visible) { this.show(); }
-				if (!this.visible) { return; }
-				stopEvent(event);
-				let next = this.activeIndex + (event.key === 'ArrowDown' ? 1 : -1);
-				if (this.activeIndex < 0) {
-					next = event.key === 'ArrowDown' ? 0 : this.candidates.length - 1;
+		this._register(
+			addDisposableListener(input, 'keydown', event => {
+				if (event.isComposing) {
+					return;
 				}
-				this.setActiveIndex((next + this.candidates.length) % this.candidates.length);
-			} else if (event.key === 'Enter' && this.visible && this.activeIndex >= 0) {
-				stopEvent(event);
-				this.commit(this.activeIndex);
-			} else if (event.key === 'Escape' && this.visible) {
-				stopEvent(event);
-				this.hide();
-			}
-		}));
+				if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+					if (!this.visible) {
+						this.show();
+					}
+					if (!this.visible) {
+						return;
+					}
+					stopEvent(event);
+					let next = this.activeIndex + (event.key === 'ArrowDown' ? 1 : -1);
+					if (this.activeIndex < 0) {
+						next = event.key === 'ArrowDown' ? 0 : this.candidates.length - 1;
+					}
+					this.setActiveIndex((next + this.candidates.length) % this.candidates.length);
+				} else if (event.key === 'Enter' && this.visible && this.activeIndex >= 0) {
+					stopEvent(event);
+					this.commit(this.activeIndex);
+				} else if (event.key === 'Escape' && this.visible) {
+					stopEvent(event);
+					this.hide();
+				}
+			}),
+		);
 		this._register(addDisposableListener(this.list, 'pointerdown', event => event.preventDefault()));
-		this._register(addDisposableListener(this.list, 'click', event => {
-			const option = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
-			if (option) { this.commit(Number(option.dataset.index)); }
-		}));
-		this._register(addDisposableListener(this.list, 'pointermove', event => {
-			const option = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
-			if (option) { this.setActiveIndex(Number(option.dataset.index)); }
-		}));
-		this._register(toDisposable(() => {
-			this.hide();
-			this.list.remove();
-		}));
+		this._register(
+			addDisposableListener(this.list, 'click', event => {
+				const option = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
+				if (option) {
+					this.commit(Number(option.dataset.index));
+				}
+			}),
+		);
+		this._register(
+			addDisposableListener(this.list, 'pointermove', event => {
+				const option = (event.target as HTMLElement).closest<HTMLElement>('[role="option"]');
+				if (option) {
+					this.setActiveIndex(Number(option.dataset.index));
+				}
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				this.hide();
+				this.list.remove();
+			}),
+		);
 	}
 
 	private show(): void {
 		const inputWidth = this.input.getBoundingClientRect().width;
 		const query = this.input.value.trim().toLocaleLowerCase();
 		this.candidates = Object.entries(this.getProperties())
-			.filter(([key, schema]) => !schema.doNotSuggest && [key, schema.description ?? ''].some(text => text.toLocaleLowerCase().includes(query)))
+			.filter(
+				([key, schema]) =>
+					!schema.doNotSuggest &&
+					[key, schema.description ?? ''].some(text => text.toLocaleLowerCase().includes(query)),
+			)
 			.sort(([left], [right]) => left.localeCompare(right));
 		if (!this.candidates.length) {
 			this.hide();
 			return;
 		}
-		this.list.replaceChildren(...this.candidates.map(([key, schema], index) => {
-			const option = h(this.input.ownerDocument, 'div');
-			option.id = `${this.list.id}-${index}`;
-			option.className = 'ash-settings-key-option';
-			option.dataset.index = String(index);
-			option.setAttribute('role', 'option');
-			option.setAttribute('aria-selected', 'false');
-			const name = h(this.input.ownerDocument, 'span');
-			name.className = 'ash-settings-key-name';
-			name.textContent = key;
-			const description = h(this.input.ownerDocument, 'span');
-			description.className = 'ash-settings-key-description';
-			description.textContent = schema.description ?? '';
-			option.append(name, description);
-			return option;
-		}));
+		this.list.replaceChildren(
+			...this.candidates.map(([key, schema], index) => {
+				const option = h(this.input.ownerDocument, 'div');
+				option.id = `${this.list.id}-${index}`;
+				option.className = 'ash-settings-key-option';
+				option.dataset.index = String(index);
+				option.setAttribute('role', 'option');
+				option.setAttribute('aria-selected', 'false');
+				const name = h(this.input.ownerDocument, 'span');
+				name.className = 'ash-settings-key-name';
+				name.textContent = key;
+				const description = h(this.input.ownerDocument, 'span');
+				description.className = 'ash-settings-key-description';
+				description.textContent = schema.description ?? '';
+				option.append(name, description);
+				return option;
+			}),
+		);
 		this.activeIndex = -1;
 		this.input.removeAttribute('aria-activedescendant');
 		this.list.setAttribute('aria-label', this.input.getAttribute('aria-label')!);
@@ -751,7 +1044,9 @@ class StringMapSuggestions extends Disposable {
 	}
 
 	private hide(): void {
-		if (this.visible) { this.contextView.hide(); }
+		if (this.visible) {
+			this.contextView.hide();
+		}
 	}
 }
 
@@ -763,17 +1058,33 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 	private renderedValue: Record<string, unknown> | undefined;
 	private readonly conditional: boolean;
 
-	constructor(container: HTMLElement, descriptor: IStringMapSetting, options: SettingWidgetOptions,
+	constructor(
+		container: HTMLElement,
+		descriptor: IStringMapSetting,
+		options: SettingWidgetOptions,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IHoverService private readonly hoverService: IHoverService,
 	) {
-		const binding = configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget);
-		super(container, descriptor, {
-			...binding,
-			updateValue: value => Object.keys(value).length ? binding.updateValue(value) : binding.resetValue(),
-		}, options, configurationService, contextViewProvider, instantiationService);
+		const binding = configurationSettingBinding(
+			configurationService,
+			descriptor.configuration,
+			options.configurationOverrides,
+			options.configurationTarget,
+		);
+		super(
+			container,
+			descriptor,
+			{
+				...binding,
+				updateValue: value => (Object.keys(value).length ? binding.updateValue(value) : binding.resetValue()),
+			},
+			options,
+			configurationService,
+			contextViewProvider,
+			instantiationService,
+		);
 		this.conditional = ['files.exclude', 'search.exclude', 'explorer.autoRevealExclude'].includes(descriptor.id);
 		this.domNode.classList.add('ash-pattern-setting');
 		this.domNode.dataset.configurationKey = descriptor.id;
@@ -783,17 +1094,20 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 		this.rows.setAttribute('aria-label', descriptor.title);
 		const actions = h(container.ownerDocument, 'div');
 		actions.className = 'ash-pattern-actions';
-		this.addButton = this._register(new Button(actions, {
-			...defaultButtonStyles,
-			label: descriptor.addLabel,
-			size: 'small',
-			onClick: () => this.editRule(),
-		}));
+		this.addButton = this._register(
+			new Button(actions, {
+				...defaultButtonStyles,
+				label: descriptor.addLabel,
+				size: 'small',
+				onClick: () => this.editRule(),
+			}),
+		);
 		this.domNode.append(this.copyDomNode, this.rows, actions);
 		this.bindState(state => {
 			if (!state.isPending && !sameStringMap(this.renderedValue, state.value)) this.renderRows();
 			this.addButton.enabled = !state.isPending;
-			for (const control of this.rows.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button')) control.disabled = state.isPending;
+			for (const control of this.rows.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input, button'))
+				control.disabled = state.isPending;
 		});
 	}
 
@@ -822,49 +1136,86 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 			if (sibling !== undefined) {
 				const condition = h(row.ownerDocument, 'span');
 				condition.className = 'ash-pattern-condition';
-				condition.textContent = localize({ bundle: 'ash.settings', key: 'patterns.when' }, 'When: {0}', sibling);
+				condition.textContent = localize(
+					{ bundle: 'ash.settings', key: 'patterns.when' },
+					'When: {0}',
+					sibling,
+				);
 				row.append(condition);
 			}
-			const label = sibling === undefined ? pattern : localize({ bundle: 'ash.settings', key: 'patterns.conditionLabel' }, '{0}, when a sibling matches {1}', pattern, sibling);
+			const label =
+				sibling === undefined
+					? pattern
+					: localize(
+							{ bundle: 'ash.settings', key: 'patterns.conditionLabel' },
+							'{0}, when a sibling matches {1}',
+							pattern,
+							sibling,
+						);
 			row.setAttribute('aria-label', label);
-			row.setAttribute('aria-description', localize({ bundle: 'ash.settings', key: 'patterns.rowHelp' }, 'Press Enter to edit. Press Delete to remove this rule. Use arrow keys to move between rules.'));
+			row.setAttribute(
+				'aria-description',
+				localize(
+					{ bundle: 'ash.settings', key: 'patterns.rowHelp' },
+					'Press Enter to edit. Press Delete to remove this rule. Use arrow keys to move between rules.',
+				),
+			);
 			this.rowDisposables.add(this.hoverService.setupDelayedHover(row, { content: label }));
 			const actions = h(row.ownerDocument, 'span');
 			actions.className = 'ash-pattern-row-actions';
 			row.append(actions);
-			this.rowDisposables.add(new ActionBar(actions, {
-				actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-				ariaLabel: label,
-				actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
-				actions: [
-					{
-						id: 'workbench.action.editListItem',
-						label: localize({ bundle: 'ash.settings', key: 'patterns.editLabel' }, 'Edit rule {0}', pattern),
-						tooltip: localize({ bundle: 'ash.settings', key: 'patterns.edit' }, 'Edit'),
-						icon: Lxicon.edit,
-						enabled: true,
-						run: () => this.editRule(pattern),
-					},
-					{
-						id: 'workbench.action.removeListItem',
-						label: localize({ bundle: 'ash.settings', key: 'patterns.removeLabel' }, 'Remove rule {0}', pattern),
-						tooltip: this.descriptor.removeLabel,
-						icon: Lxicon.close,
-						enabled: true,
-						run: () => this.saveRule(pattern),
-					},
-				],
-			}));
-			this.rowDisposables.add(addDisposableListener(row, 'keydown', event => {
-				if (event.target !== row || this.model.state.isPending) return;
-				if (event.key === 'Enter') { stopEvent(event); this.editRule(pattern); }
-				else if (event.key === 'Delete') { stopEvent(event); void this.saveRule(pattern); }
-				else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-					stopEvent(event);
-					const next = (event.key === 'ArrowUp' ? row.previousElementSibling : row.nextElementSibling) as HTMLElement | null;
-					next?.focus();
-				}
-			}));
+			this.rowDisposables.add(
+				new ActionBar(actions, {
+					actionViewItemOptions: { buttonStyles: defaultButtonStyles },
+					ariaLabel: label,
+					actionViewItemProvider: action =>
+						new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
+					actions: [
+						{
+							id: 'workbench.action.editListItem',
+							label: localize(
+								{ bundle: 'ash.settings', key: 'patterns.editLabel' },
+								'Edit rule {0}',
+								pattern,
+							),
+							tooltip: localize({ bundle: 'ash.settings', key: 'patterns.edit' }, 'Edit'),
+							icon: Lxicon.edit,
+							enabled: true,
+							run: () => this.editRule(pattern),
+						},
+						{
+							id: 'workbench.action.removeListItem',
+							label: localize(
+								{ bundle: 'ash.settings', key: 'patterns.removeLabel' },
+								'Remove rule {0}',
+								pattern,
+							),
+							tooltip: this.descriptor.removeLabel,
+							icon: Lxicon.close,
+							enabled: true,
+							run: () => this.saveRule(pattern),
+						},
+					],
+				}),
+			);
+			this.rowDisposables.add(
+				addDisposableListener(row, 'keydown', event => {
+					if (event.target !== row || this.model.state.isPending) return;
+					if (event.key === 'Enter') {
+						stopEvent(event);
+						this.editRule(pattern);
+					} else if (event.key === 'Delete') {
+						stopEvent(event);
+						void this.saveRule(pattern);
+					} else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+						stopEvent(event);
+						const next = (
+							event.key === 'ArrowUp' ? row.previousElementSibling : row.nextElementSibling
+						) as HTMLElement | null;
+						next?.focus();
+					}
+				}),
+			);
 			this.rows.append(row);
 		}
 	}
@@ -887,22 +1238,41 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 			const rule = original === undefined ? undefined : this.model.state.value[original];
 			sibling.type = 'text';
 			sibling.value = typeof rule === 'object' && rule !== null && 'when' in rule ? String(rule.when) : '';
-			sibling.placeholder = localize({ bundle: 'ash.settings', key: 'patterns.sibling' }, 'When a sibling matches (optional)');
+			sibling.placeholder = localize(
+				{ bundle: 'ash.settings', key: 'patterns.sibling' },
+				'When a sibling matches (optional)',
+			);
 			sibling.setAttribute('aria-label', sibling.placeholder);
 			editor.append(sibling);
 		}
 		const help = h(document, 'span');
 		help.className = 'ash-pattern-help';
-		help.textContent = localize({ bundle: 'ash.settings', key: 'patterns.editHelp' }, 'Use * or ** to match paths. Enter saves; Escape cancels.');
+		help.textContent = localize(
+			{ bundle: 'ash.settings', key: 'patterns.editHelp' },
+			'Use * or ** to match paths. Enter saves; Escape cancels.',
+		);
 		pattern.setAttribute('aria-description', help.textContent);
-		if (this.conditional) sibling.setAttribute('aria-description', localize({ bundle: 'ash.settings', key: 'patterns.siblingHelp' }, 'Apply this rule only when a matching file exists in the same folder. Use $(basename) for the matched file name without its extension.'));
+		if (this.conditional)
+			sibling.setAttribute(
+				'aria-description',
+				localize(
+					{ bundle: 'ash.settings', key: 'patterns.siblingHelp' },
+					'Apply this rule only when a matching file exists in the same folder. Use $(basename) for the matched file name without its extension.',
+				),
+			);
 		editor.append(help);
 		const save = (): void => {
 			const key = pattern.value.trim();
-			const duplicate = key !== original && Object.hasOwn(this.model.state.value, key) && !!this.model.state.value[key];
+			const duplicate =
+				key !== original && Object.hasOwn(this.model.state.value, key) && !!this.model.state.value[key];
 			pattern.setAttribute('aria-invalid', String(!key || duplicate));
 			if (!key || duplicate) {
-				this.reportStatus(duplicate ? this.descriptor.duplicateMessage : localize({ bundle: 'ash.settings', key: 'patterns.required' }, 'Enter a path pattern.'), true);
+				this.reportStatus(
+					duplicate
+						? this.descriptor.duplicateMessage
+						: localize({ bundle: 'ash.settings', key: 'patterns.required' }, 'Enter a path pattern.'),
+					true,
+				);
 				pattern.focus();
 				return;
 			}
@@ -915,23 +1285,38 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 		};
 		const actions = h(document, 'div');
 		actions.className = 'ash-pattern-actions';
-		this.rowDisposables.add(new Button(actions, {
-			...defaultButtonStyles,
-			label: localize({ bundle: 'ash.settings', key: 'patterns.save' }, 'Save'),
-			size: 'small',
-			onClick: save,
-		}));
-		this.rowDisposables.add(new Button(actions, {
-			...defaultButtonStyles,
-			label: localize({ bundle: 'ash.settings', key: 'patterns.cancel' }, 'Cancel'),
-			size: 'small',
-			onClick: cancel,
-		}));
+		this.rowDisposables.add(
+			new Button(actions, {
+				...defaultButtonStyles,
+				label: localize({ bundle: 'ash.settings', key: 'patterns.save' }, 'Save'),
+				size: 'small',
+				onClick: save,
+			}),
+		);
+		this.rowDisposables.add(
+			new Button(actions, {
+				...defaultButtonStyles,
+				label: localize({ bundle: 'ash.settings', key: 'patterns.cancel' }, 'Cancel'),
+				size: 'small',
+				onClick: cancel,
+			}),
+		);
 		editor.append(actions);
-		this.rowDisposables.add(addDisposableListener(editor, 'keydown', event => {
-			if (event.key === 'Escape') { stopEvent(event); cancel(); }
-			else if (event.key === 'Enter' && event.target instanceof document.defaultView!.HTMLInputElement && !event.isComposing) { stopEvent(event); save(); }
-		}));
+		this.rowDisposables.add(
+			addDisposableListener(editor, 'keydown', event => {
+				if (event.key === 'Escape') {
+					stopEvent(event);
+					cancel();
+				} else if (
+					event.key === 'Enter' &&
+					event.target instanceof document.defaultView!.HTMLInputElement &&
+					!event.isComposing
+				) {
+					stopEvent(event);
+					save();
+				}
+			}),
+		);
 		const existing = [...this.rows.children].find(row => (row as HTMLElement).dataset.pattern === original);
 		if (existing) existing.replaceWith(editor);
 		else this.rows.append(editor);
@@ -944,12 +1329,22 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 		const overrides: Record<string, unknown> = Object.assign(Object.create(null), inspected.userLocalValue);
 		// Removing an inherited default requires a false override; deleting its key would reveal it again.
 		if (original !== undefined) {
-			if (inspected.defaultValue && Object.hasOwn(inspected.defaultValue, original) && inspected.defaultValue[original]) overrides[original] = false;
+			if (
+				inspected.defaultValue &&
+				Object.hasOwn(inspected.defaultValue, original) &&
+				inspected.defaultValue[original]
+			)
+				overrides[original] = false;
 			else delete overrides[original];
 		}
 		if (pattern !== undefined) {
 			const rule = sibling ? { when: sibling } : true;
-			if (inspected.defaultValue && Object.hasOwn(inspected.defaultValue, pattern) && JSON.stringify(inspected.defaultValue[pattern]) === JSON.stringify(rule)) delete overrides[pattern];
+			if (
+				inspected.defaultValue &&
+				Object.hasOwn(inspected.defaultValue, pattern) &&
+				JSON.stringify(inspected.defaultValue[pattern]) === JSON.stringify(rule)
+			)
+				delete overrides[pattern];
 			else overrides[pattern] = rule;
 		}
 		try {
@@ -957,16 +1352,26 @@ class ExcludeSettingWidget extends AbstractSettingWidget<IStringMapSetting, Reco
 			this.reportStatus('', false);
 			await this.model.update(overrides);
 			if (this.isDisposed) return;
-			const restoreFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement) || this.domNode.ownerDocument.activeElement === this.domNode.ownerDocument.body;
+			const restoreFocus =
+				this.domNode.contains(this.domNode.ownerDocument.activeElement) ||
+				this.domNode.ownerDocument.activeElement === this.domNode.ownerDocument.body;
 			this.renderRows();
 			if (restoreFocus) this.focusRule(pattern);
 		} catch (error) {
-			if (!this.isDisposed) this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.saveFailed' }, 'Unable to save the setting.')), true);
+			if (!this.isDisposed)
+				this.reportStatus(
+					settingErrorMessage(
+						error,
+						localize({ bundle: 'ash.settings', key: 'status.saveFailed' }, 'Unable to save the setting.'),
+					),
+					true,
+				);
 		}
 	}
 
 	private focusRule(pattern?: string): void {
-		const row = [...this.rows.children].find(row => (row as HTMLElement).dataset.pattern === pattern) as HTMLElement | undefined;
+		const row = [...this.rows.children].find(row => (row as HTMLElement).dataset.pattern === pattern) as
+			HTMLElement | undefined;
 		(row ?? this.addButton.domNode).focus();
 	}
 }
@@ -978,12 +1383,29 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 	private renderedValue: Record<string, unknown> | undefined;
 	private readonly contextViewProvider: IContextViewProvider;
 
-	constructor(container: HTMLElement, descriptor: IStringMapSetting, options: SettingWidgetOptions,
+	constructor(
+		container: HTMLElement,
+		descriptor: IStringMapSetting,
+		options: SettingWidgetOptions,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, descriptor, descriptor.binding ?? configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService);
+		super(
+			container,
+			descriptor,
+			descriptor.binding ??
+				configurationSettingBinding(
+					configurationService,
+					descriptor.configuration,
+					options.configurationOverrides,
+					options.configurationTarget,
+				),
+			options,
+			configurationService,
+			contextViewProvider,
+			instantiationService,
+		);
 		this.contextViewProvider = contextViewProvider;
 		this.domNode.classList.add('ash-string-map-setting');
 		this.domNode.dataset.configurationKey = descriptor.configuration.key;
@@ -991,24 +1413,39 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 		this.rows.className = 'ash-string-map-rows';
 		const actions = h(this.domNode.ownerDocument, 'div');
 		actions.className = 'ash-string-map-actions';
-		this.addButton = this._register(new Button(actions, {
-			...defaultButtonStyles,
-			label: descriptor.addLabel,
-			ariaLabel: descriptor.addLabel,
-			onClick: () => {
-				const keyInput = this.addRow('', '');
-				keyInput.focus();
-			},
-		}));
+		this.addButton = this._register(
+			new Button(actions, {
+				...defaultButtonStyles,
+				label: descriptor.addLabel,
+				ariaLabel: descriptor.addLabel,
+				onClick: () => {
+					const keyInput = this.addRow('', '');
+					keyInput.focus();
+				},
+			}),
+		);
 		// Nested values retain a JSON fallback; flat maps and path rules have complete UI controls.
 		if (descriptor.structuredValues && !descriptor.binding && options.onOpenSettings) {
-			this._register(new Button(actions, {
-				...defaultButtonStyles,
-				label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
-				onClick: () => {
-					void options.onOpenSettings!(this.descriptor.configuration.key).catch(error => options.onStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'json.openFailed' }, 'Unable to open settings.json.')), true));
-				},
-			}));
+			this._register(
+				new Button(actions, {
+					...defaultButtonStyles,
+					label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
+					onClick: () => {
+						void options.onOpenSettings!(this.descriptor.configuration.key).catch(error =>
+							options.onStatus(
+								settingErrorMessage(
+									error,
+									localize(
+										{ bundle: 'ash.settings', key: 'json.openFailed' },
+										'Unable to open settings.json.',
+									),
+								),
+								true,
+							),
+						);
+					},
+				}),
+			);
 		}
 		this.domNode.append(this.copyDomNode, this.rows, actions);
 		this.bindState(state => {
@@ -1054,42 +1491,69 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 		row.append(keyInput, valueInput);
 		const rowDisposables = this.rowDisposables.add(new DisposableStore());
 		if (this.descriptor.configuration.schema?.properties) {
-			rowDisposables.add(new StringMapSuggestions(keyInput, this.contextViewProvider, () => {
-				const used = [...this.rows.querySelectorAll<HTMLInputElement>('[data-pattern-part="key"]')]
-					.filter(input => input !== keyInput).map(input => input.value.trim());
-				return Object.fromEntries(Object.entries(this.descriptor.configuration.schema!.properties!).filter(([key]) => !used.includes(key)));
-			}, key => {
-				keyInput.value = key;
-				valueInput.focus();
-				if (valueInput.value.trim()) { this.acceptRows(); }
-			}));
+			rowDisposables.add(
+				new StringMapSuggestions(
+					keyInput,
+					this.contextViewProvider,
+					() => {
+						const used = [...this.rows.querySelectorAll<HTMLInputElement>('[data-pattern-part="key"]')]
+							.filter(input => input !== keyInput)
+							.map(input => input.value.trim());
+						return Object.fromEntries(
+							Object.entries(this.descriptor.configuration.schema!.properties!).filter(
+								([key]) => !used.includes(key),
+							),
+						);
+					},
+					key => {
+						keyInput.value = key;
+						valueInput.focus();
+						if (valueInput.value.trim()) {
+							this.acceptRows();
+						}
+					},
+				),
+			);
 		}
 		const valueSuggestions = (): Readonly<Record<string, JsonSchema>> => {
 			const schema = this.descriptor.configuration.schema?.additionalProperties;
-			if (typeof schema !== 'object') { return {}; }
-			return Object.fromEntries([schema, ...schema.anyOf ?? [], ...schema.oneOf ?? []].flatMap(alternative =>
-				(alternative.enum ?? []).flatMap((value, index) => typeof value === 'string' ? [[value, { description: alternative.enumDescriptions?.[index] ?? '' }]] : [])));
+			if (typeof schema !== 'object') {
+				return {};
+			}
+			return Object.fromEntries(
+				[schema, ...(schema.anyOf ?? []), ...(schema.oneOf ?? [])].flatMap(alternative =>
+					(alternative.enum ?? []).flatMap((value, index) =>
+						typeof value === 'string'
+							? [[value, { description: alternative.enumDescriptions?.[index] ?? '' }]]
+							: [],
+					),
+				),
+			);
 		};
 		if (Object.keys(valueSuggestions()).length) {
-			rowDisposables.add(new StringMapSuggestions(valueInput, this.contextViewProvider, valueSuggestions, value => {
-				valueInput.value = value;
-				this.acceptRows();
-			}));
+			rowDisposables.add(
+				new StringMapSuggestions(valueInput, this.contextViewProvider, valueSuggestions, value => {
+					valueInput.value = value;
+					this.acceptRows();
+				}),
+			);
 		}
 		rowDisposables.add(addDisposableListener(keyInput, 'change', () => this.acceptRows()));
 		rowDisposables.add(addDisposableListener(valueInput, 'change', () => this.acceptRows()));
-		rowDisposables.add(new Button(row, {
-			...defaultButtonStyles,
-			label: this.descriptor.removeLabel,
-			ariaLabel: this.descriptor.removeLabel,
-			size: 'small',
-			onClick: () => {
-				row.remove();
-				rowDisposables.dispose();
-				this.updateRowLabels();
-				this.acceptRows();
-			},
-		}));
+		rowDisposables.add(
+			new Button(row, {
+				...defaultButtonStyles,
+				label: this.descriptor.removeLabel,
+				ariaLabel: this.descriptor.removeLabel,
+				size: 'small',
+				onClick: () => {
+					row.remove();
+					rowDisposables.dispose();
+					this.updateRowLabels();
+					this.acceptRows();
+				},
+			}),
+		);
 		this.rows.append(row);
 		this.updateRowLabels();
 		return keyInput;
@@ -1097,9 +1561,18 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 
 	private updateRowLabels(): void {
 		for (const [index, row] of [...this.rows.children].entries()) {
-			row.querySelector<HTMLInputElement>('[data-pattern-part="key"]')?.setAttribute('aria-label', `${this.descriptor.keyLabel} ${index + 1}`);
-			row.querySelector<HTMLInputElement>('[data-pattern-part="value"]')?.setAttribute('aria-label', `${this.descriptor.valueLabel} ${index + 1}`);
-			row.querySelector<HTMLButtonElement>('button')?.setAttribute('aria-label', `${this.descriptor.removeLabel} ${index + 1}`);
+			row.querySelector<HTMLInputElement>('[data-pattern-part="key"]')?.setAttribute(
+				'aria-label',
+				`${this.descriptor.keyLabel} ${index + 1}`,
+			);
+			row.querySelector<HTMLInputElement>('[data-pattern-part="value"]')?.setAttribute(
+				'aria-label',
+				`${this.descriptor.valueLabel} ${index + 1}`,
+			);
+			row.querySelector<HTMLButtonElement>('button')?.setAttribute(
+				'aria-label',
+				`${this.descriptor.removeLabel} ${index + 1}`,
+			);
 		}
 	}
 
@@ -1124,17 +1597,32 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 				return;
 			}
 			try {
-				value[key] = this.descriptor.structuredValues && /^(?:\{|\[|true$|false$)/u.test(childPatterns) ? parseJsonc(childPatterns, key) : childPatterns;
+				value[key] =
+					this.descriptor.structuredValues && /^(?:\{|\[|true$|false$)/u.test(childPatterns)
+						? parseJsonc(childPatterns, key)
+						: childPatterns;
 			} catch (error) {
 				valueInput.setAttribute('aria-invalid', 'true');
-				this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.invalidValue' }, 'Invalid setting value.')), true);
+				this.reportStatus(
+					settingErrorMessage(
+						error,
+						localize({ bundle: 'ash.settings', key: 'status.invalidValue' }, 'Invalid setting value.'),
+					),
+					true,
+				);
 				return;
 			}
 		}
 		try {
 			this.descriptor.configuration.parse(value);
 		} catch (error) {
-			this.reportStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'status.invalidValue' }, 'Invalid setting value.')), true);
+			this.reportStatus(
+				settingErrorMessage(
+					error,
+					localize({ bundle: 'ash.settings', key: 'status.invalidValue' }, 'Invalid setting value.'),
+				),
+				true,
+			);
 			return;
 		}
 		if (sameStringMap(value, this.model.state.value)) {
@@ -1148,28 +1636,66 @@ class StringMapSettingWidget extends AbstractSettingWidget<IStringMapSetting, Re
 
 /** Complex extension values keep schema validation and editing in the shared JSON editor. */
 class ComplexSettingWidget extends AbstractSettingWidget<IComplexSetting, unknown> {
-	constructor(container: HTMLElement, descriptor: IComplexSetting, options: SettingWidgetOptions,
+	constructor(
+		container: HTMLElement,
+		descriptor: IComplexSetting,
+		options: SettingWidgetOptions,
 		@IConfigurationService configurationService: IConfigurationService,
 		@IContextViewService contextViewProvider: IContextViewService,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(container, descriptor, configurationSettingBinding(configurationService, descriptor.configuration, options.configurationOverrides, options.configurationTarget), options, configurationService, contextViewProvider, instantiationService);
+		super(
+			container,
+			descriptor,
+			configurationSettingBinding(
+				configurationService,
+				descriptor.configuration,
+				options.configurationOverrides,
+				options.configurationTarget,
+			),
+			options,
+			configurationService,
+			contextViewProvider,
+			instantiationService,
+		);
 		this.domNode.dataset.configurationKey = descriptor.id;
-		const button = this._register(new Button(this.domNode, {
-			...defaultButtonStyles,
-			label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
-			onClick: () => {
-				void options.onOpenSettings?.(descriptor.id).catch(error => options.onStatus(settingErrorMessage(error, localize({ bundle: 'ash.settings', key: 'json.openFailed' }, 'Unable to open settings.json.')), true));
-			},
-		}));
+		const button = this._register(
+			new Button(this.domNode, {
+				...defaultButtonStyles,
+				label: localize({ bundle: 'ash.settings', key: 'json.edit' }, 'Edit in settings.json'),
+				onClick: () => {
+					void options
+						.onOpenSettings?.(descriptor.id)
+						.catch(error =>
+							options.onStatus(
+								settingErrorMessage(
+									error,
+									localize(
+										{ bundle: 'ash.settings', key: 'json.openFailed' },
+										'Unable to open settings.json.',
+									),
+								),
+								true,
+							),
+						);
+				},
+			}),
+		);
 		this.domNode.prepend(this.copyDomNode);
-		this.bindState(state => { button.enabled = !state.isPending && options.onOpenSettings !== undefined; });
+		this.bindState(state => {
+			button.enabled = !state.isPending && options.onOpenSettings !== undefined;
+		});
 	}
 
-	protected updateControl(_descriptor: IComplexSetting): void { }
+	protected updateControl(_descriptor: IComplexSetting): void {}
 }
 
-export function createSettingWidget(container: HTMLElement, setting: ISetting, options: SettingWidgetOptions, instantiationService: IInstantiationService): SettingWidget {
+export function createSettingWidget(
+	container: HTMLElement,
+	setting: ISetting,
+	options: SettingWidgetOptions,
+	instantiationService: IInstantiationService,
+): SettingWidget {
 	switch (setting.valueType) {
 		case 'boolean':
 			return instantiationService.createInstance(BooleanSettingWidget, container, setting, options);
@@ -1182,7 +1708,16 @@ export function createSettingWidget(container: HTMLElement, setting: ISetting, o
 		case 'text':
 			return instantiationService.createInstance(TextSettingWidget, container, setting, options);
 		case 'stringMap':
-			if (['files.exclude', 'search.exclude', 'explorer.autoRevealExclude', 'files.readonlyInclude', 'files.readonlyExclude', 'workbench.localHistory.exclude'].includes(setting.id)) {
+			if (
+				[
+					'files.exclude',
+					'search.exclude',
+					'explorer.autoRevealExclude',
+					'files.readonlyInclude',
+					'files.readonlyExclude',
+					'workbench.localHistory.exclude',
+				].includes(setting.id)
+			) {
 				return instantiationService.createInstance(ExcludeSettingWidget, container, setting, options);
 			}
 			return instantiationService.createInstance(StringMapSettingWidget, container, setting, options);
@@ -1195,14 +1730,23 @@ function sameStringMap(left: Record<string, unknown> | undefined, right: Record<
 	if (!left) return false;
 	const leftEntries = Object.entries(left);
 	const rightEntries = Object.entries(right);
-	return leftEntries.length === rightEntries.length && leftEntries.every(([key, value], index) => key === rightEntries[index]?.[0] && JSON.stringify(value) === JSON.stringify(rightEntries[index]?.[1]));
+	return (
+		leftEntries.length === rightEntries.length &&
+		leftEntries.every(
+			([key, value], index) =>
+				key === rightEntries[index]?.[0] && JSON.stringify(value) === JSON.stringify(rightEntries[index]?.[1]),
+		)
+	);
 }
 
 function sameSelectOptions(left: readonly SelectOption[], right: readonly SelectOption[]): boolean {
-	return left.length === right.length && left.every((option, index) => {
-		const candidate = right[index];
-		return candidate !== undefined && option.value === candidate.value && option.label === candidate.label;
-	});
+	return (
+		left.length === right.length &&
+		left.every((option, index) => {
+			const candidate = right[index];
+			return candidate !== undefined && option.value === candidate.value && option.label === candidate.label;
+		})
+	);
 }
 
 function settingPresentation(setting: ISetting): SettingsPresentation {

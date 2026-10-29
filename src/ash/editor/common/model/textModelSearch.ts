@@ -1,8 +1,12 @@
-import { escapeRegExpCharacters } from "../../../base/common/strings.js";
-import { Position } from "../core/position.js";
-import { Range } from "../core/range.js";
-import { getMapForWordSeparators, WordCharacterClass, type WordCharacterClassifier } from '../core/wordCharacterClassifier.js';
-import type { TextModel } from "./textModel.js";
+import { escapeRegExpCharacters } from '../../../base/common/strings.js';
+import { Position } from '../core/position.js';
+import { Range } from '../core/range.js';
+import {
+	getMapForWordSeparators,
+	WordCharacterClass,
+	type WordCharacterClassifier,
+} from '../core/wordCharacterClassifier.js';
+import type { TextModel } from './textModel.js';
 
 export function isMultilineRegexSource(searchString: string): boolean {
 	if (!searchString) return false;
@@ -23,8 +27,8 @@ const MAX_PATTERN_LENGTH = 4_096;
 
 /** Selects whether a search pattern is interpreted literally or as a JavaScript regular expression. */
 export enum TextSearchPatternKind {
-	Literal = "literal",
-	RegularExpression = "regularExpression",
+	Literal = 'literal',
+	RegularExpression = 'regularExpression',
 }
 
 /** One caller-readable document search request. */
@@ -56,7 +60,7 @@ export interface TextSearchMatch {
 export class TextSearchQueryError extends Error {
 	constructor(message: string, options?: ErrorOptions) {
 		super(message, options);
-		this.name = "TextSearchQueryError";
+		this.name = 'TextSearchQueryError';
 	}
 }
 
@@ -66,7 +70,11 @@ export class TextSearchQueryError extends Error {
  * Offsets and ranges use UTF-16 code units. Empty regular-expression matches are supported and
  * always advance by one Unicode code point so a global search cannot loop forever.
  */
-export function findTextMatches(model: TextModel, query: TextModelSearchQuery, options: TextSearchOptions = {}): readonly TextSearchMatch[] {
+export function findTextMatches(
+	model: TextModel,
+	query: TextModelSearchQuery,
+	options: TextSearchOptions = {},
+): readonly TextSearchMatch[] {
 	validateQuery(query);
 	const resultLimit = readResultLimit(options.resultLimit);
 	if (query.pattern.length === 0 || resultLimit === 0) return Object.freeze([]);
@@ -83,16 +91,18 @@ export function findTextMatches(model: TextModel, query: TextModelSearchQuery, o
 		const relativeStart = match.index;
 		const relativeEnd = relativeStart + match[0].length;
 		if (!query.wholeWord || isWholeWordMatch(text, relativeStart, relativeEnd, query.wordSeparators)) {
-			matches.push(Object.freeze({
-				modelVersion: snapshot.version,
-				range: Range.fromPositions(
-					model.positionAt(startOffset + relativeStart),
-					model.positionAt(startOffset + relativeEnd),
-				),
-				text: match[0],
-				captures: Object.freeze(match.slice(1)),
-				namedCaptures: Object.freeze({ ...match.groups }),
-			}));
+			matches.push(
+				Object.freeze({
+					modelVersion: snapshot.version,
+					range: Range.fromPositions(
+						model.positionAt(startOffset + relativeStart),
+						model.positionAt(startOffset + relativeEnd),
+					),
+					text: match[0],
+					captures: Object.freeze(match.slice(1)),
+					namedCaptures: Object.freeze({ ...match.groups }),
+				}),
+			);
 		}
 		if (match[0].length === 0) {
 			if (expression.lastIndex >= text.length) break;
@@ -104,7 +114,12 @@ export function findTextMatches(model: TextModel, query: TextModelSearchQuery, o
 }
 
 /** Finds the first match at or after `from`, optionally wrapping once at the document end. */
-export function findNextTextMatch(model: TextModel, query: TextModelSearchQuery, from: Position, wrap = true): TextSearchMatch | undefined {
+export function findNextTextMatch(
+	model: TextModel,
+	query: TextModelSearchQuery,
+	from: Position,
+	wrap = true,
+): TextSearchMatch | undefined {
 	const documentEnd = model.positionAt(model.createVersionedSnapshot().length);
 	const following = findTextMatches(model, query, {
 		range: Range.fromPositions(from, documentEnd),
@@ -112,15 +127,16 @@ export function findNextTextMatch(model: TextModel, query: TextModelSearchQuery,
 	})[0];
 	if (following || !wrap || model.offsetAt(from) === 0) return following;
 	return findTextMatches(model, query, {
-		range: Range.fromPositions(new Position((0) + 1, (0) + 1), from),
+		range: Range.fromPositions(new Position(0 + 1, 0 + 1), from),
 		resultLimit: 1,
 	})[0];
 }
 
 function validateQuery(query: TextModelSearchQuery): void {
-	if (!query || typeof query !== "object") throw new TypeError("Text search requires a query");
-	if (typeof query.pattern !== "string") throw new TypeError("Text search pattern must be a string");
-	if (query.wordSeparators !== undefined && typeof query.wordSeparators !== 'string') throw new TypeError('Text search word separators must be a string');
+	if (!query || typeof query !== 'object') throw new TypeError('Text search requires a query');
+	if (typeof query.pattern !== 'string') throw new TypeError('Text search pattern must be a string');
+	if (query.wordSeparators !== undefined && typeof query.wordSeparators !== 'string')
+		throw new TypeError('Text search word separators must be a string');
 	if (query.pattern.length > MAX_PATTERN_LENGTH) {
 		throw new TextSearchQueryError(`Text search pattern must not exceed ${MAX_PATTERN_LENGTH} UTF-16 units`);
 	}
@@ -138,13 +154,14 @@ function readResultLimit(value: number | undefined): number {
 }
 
 function compileQuery(query: TextModelSearchQuery): RegExp {
-	const source = query.patternKind === TextSearchPatternKind.RegularExpression
-		? query.pattern
-		: escapeRegExpCharacters(query.pattern);
+	const source =
+		query.patternKind === TextSearchPatternKind.RegularExpression
+			? query.pattern
+			: escapeRegExpCharacters(query.pattern);
 	try {
-		return new RegExp(source, `gmu${query.matchCase ? "" : "i"}`);
+		return new RegExp(source, `gmu${query.matchCase ? '' : 'i'}`);
 	} catch (error) {
-		throw new TextSearchQueryError("Text search regular expression is invalid", { cause: error });
+		throw new TextSearchQueryError('Text search regular expression is invalid', { cause: error });
 	}
 }
 
@@ -154,8 +171,10 @@ function isWholeWordMatch(text: string, start: number, end: number, wordSeparato
 	const before = codePointBefore(text, start);
 	const after = codePointAt(text, end);
 	const classifier = wordSeparators === undefined ? undefined : getMapForWordSeparators(wordSeparators, []);
-	return !(isWordCharacter(first, classifier) && isWordCharacter(before, classifier)) &&
-		!(isWordCharacter(last, classifier) && isWordCharacter(after, classifier));
+	return (
+		!(isWordCharacter(first, classifier) && isWordCharacter(before, classifier)) &&
+		!(isWordCharacter(last, classifier) && isWordCharacter(after, classifier))
+	);
 }
 
 function isWordCharacter(value: string | undefined, classifier: WordCharacterClassifier | undefined): boolean {

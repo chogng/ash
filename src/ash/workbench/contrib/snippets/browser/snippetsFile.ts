@@ -36,12 +36,32 @@ export class SnippetFile {
 			}
 			const body = multilineValue(entry.body, `${entryOwner}.body`, 1024 * 1024);
 			parseSnippet(body, { allowUnresolvedVariables: true });
-			const description = entry.description === undefined ? '' : multilineValue(entry.description, `${entryOwner}.description`, 512);
+			const description =
+				entry.description === undefined
+					? ''
+					: multilineValue(entry.description, `${entryOwner}.description`, 512);
 			const prefixes = entry.prefix === undefined ? [''] : textList(entry.prefix, `${entryOwner}.prefix`, 128);
-			const declaredScopes = entry.scope === undefined ? undefined : textList(entry.scope, `${entryOwner}.scope`, 128).flatMap(scope => scope.split(',').map(language => language.trim()));
-			const scopes = Object.freeze(resource.languageIds.filter(language => !declaredScopes || declaredScopes.includes(language)));
+			const declaredScopes =
+				entry.scope === undefined
+					? undefined
+					: textList(entry.scope, `${entryOwner}.scope`, 128).flatMap(scope =>
+							scope.split(',').map(language => language.trim()),
+						);
+			const scopes = Object.freeze(
+				resource.languageIds.filter(language => !declaredScopes || declaredScopes.includes(language)),
+			);
 			for (const prefix of new Set(prefixes)) {
-				snippets.push(new Snippet(entry.isFileTemplate === true, scopes, name, prefix, description, body, JSON.stringify([resource.extensionId, resource.location.path, name, prefix])));
+				snippets.push(
+					new Snippet(
+						entry.isFileTemplate === true,
+						scopes,
+						name,
+						prefix,
+						description,
+						body,
+						JSON.stringify([resource.extensionId, resource.location.path, name, prefix]),
+					),
+				);
 			}
 		}
 		this.data = Object.freeze(snippets);

@@ -3,9 +3,14 @@ import { IModelService } from '../../../../editor/common/services/model.js';
 import { ILanguageService } from '../../../../editor/common/languages/language.js';
 import { EndOfLineSequence, type ITextModel } from '../../../../editor/common/model.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import type { IOutputChannelChange, IOutputEntry, IOutputEntryInput, OutputEntrySeverity } from "../../../services/output/common/output.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import type {
+	IOutputChannelChange,
+	IOutputEntry,
+	IOutputEntryInput,
+	OutputEntrySeverity,
+} from '../../../services/output/common/output.js';
 
 const MaxRetainedEntries = 20_000;
 const MaxRetainedBytes = 4 * 1024 * 1024;
@@ -45,12 +50,18 @@ export class InMemoryOutputChannelModel extends Disposable implements IOutputCha
 	public async loadModel(): Promise<ITextModel> {
 		this.assertNotDisposed();
 		if (!this.textModel) {
-			const model = this.modelService.createModel(this.getText(), this.languageService.createById(this.languageId), this.resource);
+			const model = this.modelService.createModel(
+				this.getText(),
+				this.languageService.createById(this.languageId),
+				this.resource,
+			);
 			// Output is a stream of normalized lines, independent of file EOL preferences.
 			model.setEOL(EndOfLineSequence.LF);
 			this.textModel = model;
 			// Views borrow the model through the resolver. Retained entries outlive its last reference.
-			this.modelListener.value = model.onWillDispose(() => { this.textModel = undefined; });
+			this.modelListener.value = model.onWillDispose(() => {
+				this.textModel = undefined;
+			});
 		}
 		return this.textModel;
 	}
@@ -66,30 +77,37 @@ export class InMemoryOutputChannelModel extends Disposable implements IOutputCha
 		const previous = this.retainedEntries.at(-1);
 		this.retain(entry);
 		if (this.textModel) {
-			if (this.retainedEntries.at(-1) !== entry || (firstSequence !== undefined && firstSequence !== this.retainedEntries[0]?.sequence)) {
+			if (
+				this.retainedEntries.at(-1) !== entry ||
+				(firstSequence !== undefined && firstSequence !== this.retainedEntries[0]?.sequence)
+			) {
 				this.modelService.updateModel(this.textModel, this.getText());
 			} else {
 				const line = this.textModel.getLineCount();
 				const column = this.textModel.getLineMaxColumn(line);
 				// A CRLF can arrive in separate writes; the model already normalized its CR.
-				const text = (previous?.text.endsWith('\r') && entry.text.startsWith('\n') ? entry.text.slice(1) : entry.text).replace(/\r\n?|\n/g, '\n');
+				const text = (
+					previous?.text.endsWith('\r') && entry.text.startsWith('\n') ? entry.text.slice(1) : entry.text
+				).replace(/\r\n?|\n/g, '\n');
 				this.textModel.applyEdits([{ range: new Range(line, column, line, column), text }]);
 			}
 		}
-		this.changeEmitter.fire(Object.freeze({ kind: "append", appended: Object.freeze([entry]) }));
+		this.changeEmitter.fire(Object.freeze({ kind: 'append', appended: Object.freeze([entry]) }));
 	}
 
 	appendLine(input: IOutputEntryInput): void {
-		this.append({ ...input, text: input.text.endsWith("\n") ? input.text : `${input.text}\n` });
+		this.append({ ...input, text: input.text.endsWith('\n') ? input.text : `${input.text}\n` });
 	}
 
 	replace(inputs: IOutputEntryInput | readonly IOutputEntryInput[]): void {
-		const candidates = (Array.isArray(inputs) ? inputs : [inputs]).map(input => this.createEntry(input)).filter((entry): entry is IOutputEntry => entry !== undefined);
+		const candidates = (Array.isArray(inputs) ? inputs : [inputs])
+			.map(input => this.createEntry(input))
+			.filter((entry): entry is IOutputEntry => entry !== undefined);
 		this.retainedEntries.length = 0;
 		this.retainedBytes = 0;
 		for (const entry of candidates) this.retain(entry);
 		if (this.textModel) this.modelService.updateModel(this.textModel, this.getText());
-		this.changeEmitter.fire(Object.freeze({ kind: "replace", appended: Object.freeze([...this.retainedEntries]) }));
+		this.changeEmitter.fire(Object.freeze({ kind: 'replace', appended: Object.freeze([...this.retainedEntries]) }));
 	}
 
 	clear(): void {
@@ -97,23 +115,31 @@ export class InMemoryOutputChannelModel extends Disposable implements IOutputCha
 		// update is pending, even when no content has been retained yet.
 		this.retainedEntries.length = 0;
 		this.retainedBytes = 0;
-		if (this.textModel) this.modelService.updateModel(this.textModel, "");
-		this.changeEmitter.fire(Object.freeze({ kind: "clear", appended: Object.freeze([]) }));
+		if (this.textModel) this.modelService.updateModel(this.textModel, '');
+		this.changeEmitter.fire(Object.freeze({ kind: 'clear', appended: Object.freeze([]) }));
 	}
 
 	getText(): string {
-		return this.retainedEntries.map(entry => entry.text).join("");
+		return this.retainedEntries.map(entry => entry.text).join('');
 	}
 
 	private createEntry(input: IOutputEntryInput): IOutputEntry | undefined {
-		if (typeof input.text !== "string") throw new TypeError("Output entry text must be a string");
+		if (typeof input.text !== 'string') throw new TypeError('Output entry text must be a string');
 		if (input.text.length === 0) return undefined;
-		const severity = input.severity ?? "log";
-		if (!isOutputEntrySeverity(severity)) throw new TypeError(`Unsupported Output entry severity: ${String(severity)}`);
+		const severity = input.severity ?? 'log';
+		if (!isOutputEntrySeverity(severity))
+			throw new TypeError(`Unsupported Output entry severity: ${String(severity)}`);
 		const timestamp = input.timestamp ?? Date.now();
-		if (!Number.isFinite(timestamp) || timestamp < 0) throw new TypeError("Output entry timestamp must be a non-negative finite number");
+		if (!Number.isFinite(timestamp) || timestamp < 0)
+			throw new TypeError('Output entry timestamp must be a non-negative finite number');
 		const category = normalizeCategory(input.category);
-		return Object.freeze({ sequence: this.nextSequence++, timestamp, severity, ...(category ? { category } : {}), text: input.text });
+		return Object.freeze({
+			sequence: this.nextSequence++,
+			timestamp,
+			severity,
+			...(category ? { category } : {}),
+			text: input.text,
+		});
 	}
 
 	private retain(entry: IOutputEntry): void {
@@ -134,11 +160,19 @@ function retainedSize(entry: IOutputEntry): number {
 function normalizeCategory(value: string | undefined): string | undefined {
 	if (value === undefined) return undefined;
 	const category = value.trim();
-	if (!category || category.includes("\0")) throw new TypeError("Output entry category must be non-empty and cannot contain null bytes");
-	if (category.length > 256) throw new RangeError("Output entry category is too long");
+	if (!category || category.includes('\0'))
+		throw new TypeError('Output entry category must be non-empty and cannot contain null bytes');
+	if (category.length > 256) throw new RangeError('Output entry category is too long');
 	return category;
 }
 
 function isOutputEntrySeverity(value: unknown): value is OutputEntrySeverity {
-	return value === "trace" || value === "debug" || value === "information" || value === "warning" || value === "error" || value === "log";
+	return (
+		value === 'trace' ||
+		value === 'debug' ||
+		value === 'information' ||
+		value === 'warning' ||
+		value === 'error' ||
+		value === 'log'
+	);
 }

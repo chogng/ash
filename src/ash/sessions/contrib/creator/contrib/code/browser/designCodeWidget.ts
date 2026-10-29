@@ -15,25 +15,52 @@ export class DesignCodeWidget extends Disposable {
 	private readonly exportButton: Button;
 	private document: DesignDocument | undefined;
 
-	constructor(ownerDocument: Document, private readonly documentController: DesignDocumentController, exportCode: () => Promise<void>) {
+	constructor(
+		ownerDocument: Document,
+		private readonly documentController: DesignDocumentController,
+		exportCode: () => Promise<void>,
+	) {
 		super();
-		this.domNode = h(ownerDocument, 'section', { className: 'ash-design-code-widget', attributes: { 'aria-label': localize('sessions.design.generatedCode', 'Generated code') } });
+		this.domNode = h(ownerDocument, 'section', {
+			className: 'ash-design-code-widget',
+			attributes: { 'aria-label': localize('sessions.design.generatedCode', 'Generated code') },
+		});
 		const header = h(ownerDocument, 'div', { className: 'ash-design-code-header' });
-		header.append(h(ownerDocument, 'span', {}, localize('sessions.design.codeHint', 'Runnable HTML/CSS/SVG with object IDs, keyframes and editable design JSON for agents.')));
-		this.exportButton = this._register(new Button(header, {
-			...defaultButtonStyles,
-			label: localize('sessions.design.exportCode', 'Export code'),
-			onClick: exportCode,
-		}));
-		this.source = h(ownerDocument, 'textarea', { properties: { readOnly: true, spellcheck: false }, attributes: { 'aria-label': localize('sessions.design.generatedCode', 'Generated code') } });
+		header.append(
+			h(
+				ownerDocument,
+				'span',
+				{},
+				localize(
+					'sessions.design.codeHint',
+					'Runnable HTML/CSS/SVG with object IDs, keyframes and editable design JSON for agents.',
+				),
+			),
+		);
+		this.exportButton = this._register(
+			new Button(header, {
+				...defaultButtonStyles,
+				label: localize('sessions.design.exportCode', 'Export code'),
+				onClick: exportCode,
+			}),
+		);
+		this.source = h(ownerDocument, 'textarea', {
+			properties: { readOnly: true, spellcheck: false },
+			attributes: { 'aria-label': localize('sessions.design.generatedCode', 'Generated code') },
+		});
 		this.domNode.append(header, this.source);
 	}
 
 	public update(document: DesignDocument, isActive: boolean, isBusy: boolean): void {
 		this.domNode.classList.toggle('visible', isActive);
 		this.exportButton.enabled = !isBusy && document.shapes.length > 0;
-		if (isActive && this.document !== document) { this.source.value = generateDesignCode(document, this.documentController.getEmbeddedImageSources(document)); this.document = document; }
+		if (isActive && this.document !== document) {
+			this.source.value = generateDesignCode(document, this.documentController.getEmbeddedImageSources(document));
+			this.document = document;
+		}
 	}
 
-	public getAccessibleContent(): string { return this.source.value; }
+	public getAccessibleContent(): string {
+		return this.source.value;
+	}
 }

@@ -1,7 +1,13 @@
 import type { CancellationToken } from '../../../../../base/common/cancellation.js';
 import type { IObservable } from '../../../../../base/common/observable.js';
 import { createServiceIdentifier } from '../../../../../platform/instantiation/common/instantiation.js';
-import type { AutomationTarget, IAutomationDescriptor, IAutomationRun, IAutomationRunResult, IAutomationSchedule } from './automation.js';
+import type {
+	AutomationTarget,
+	IAutomationDescriptor,
+	IAutomationRun,
+	IAutomationRunResult,
+	IAutomationSchedule,
+} from './automation.js';
 
 export type AutomationCatalogueState = 'loading' | 'ready' | 'unavailable' | 'error';
 
@@ -22,8 +28,8 @@ export interface IUpdateAutomationOptions {
 }
 
 export type IGuardedAutomationUpdateResult =
-	| { readonly kind: 'updated'; readonly automation: IAutomationDescriptor; }
-	| { readonly kind: 'conflict'; readonly current: IAutomationDescriptor | undefined; };
+	| { readonly kind: 'updated'; readonly automation: IAutomationDescriptor }
+	| { readonly kind: 'conflict'; readonly current: IAutomationDescriptor | undefined };
 
 export type IAutomationRunRequestResult = {
 	readonly kind: 'dispatched';
@@ -32,7 +38,10 @@ export type IAutomationRunRequestResult = {
 	cancel(): void;
 };
 
-export interface IAutomationProviderDescriptor { readonly id: string; readonly label: string; }
+export interface IAutomationProviderDescriptor {
+	readonly id: string;
+	readonly label: string;
+}
 
 /** Provider-owned frontend catalogues; persistence and execution remain on the host. */
 export interface IAutomationStore {
@@ -45,7 +54,11 @@ export interface IAutomationStore {
 	getAutomation(id: string): IAutomationDescriptor | undefined;
 	createAutomation(options: ICreateAutomationOptions): Promise<IAutomationDescriptor>;
 	updateAutomation(id: string, patch: IUpdateAutomationOptions): Promise<IAutomationDescriptor>;
-	updateAutomationIfUnchanged(id: string, patch: IUpdateAutomationOptions, expected: IAutomationDescriptor): Promise<IGuardedAutomationUpdateResult>;
+	updateAutomationIfUnchanged(
+		id: string,
+		patch: IUpdateAutomationOptions,
+		expected: IAutomationDescriptor,
+	): Promise<IGuardedAutomationUpdateResult>;
 	deleteAutomation(id: string): Promise<void>;
 	runAutomation(id: string, token?: CancellationToken): Promise<IAutomationRunRequestResult>;
 	stopRun(run: IAutomationRun): Promise<void>;

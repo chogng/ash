@@ -1,6 +1,10 @@
 import { localize2 } from '../../../../nls.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
-import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
+import {
+	EditorAction,
+	registerEditorAction,
+	type ServicesAccessor,
+} from '../../../browser/editorFeatureRegistration.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { MoveCaretCommand } from './moveCaretCommand.js';
 
@@ -37,7 +41,10 @@ function moveSelectedText(editor: ICodeEditor, source: string, isMovingLeft: boo
 	if (!selections) return;
 
 	editor.pushUndoStop();
-	editor.executeCommands(source, selections.map(selection => new MoveCaretCommand(selection, isMovingLeft)));
+	editor.executeCommands(
+		source,
+		selections.map(selection => new MoveCaretCommand(selection, isMovingLeft)),
+	);
 	editor.pushUndoStop();
 }
 

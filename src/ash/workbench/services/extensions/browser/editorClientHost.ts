@@ -17,7 +17,13 @@ import { SelectBox } from '../../../../base/browser/ui/selectbox/selectbox.js';
 import { ToolBar } from '../../../../base/browser/ui/toolbar/toolbar.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, DisposableStore, MutableDisposable, combinedDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import {
+	Disposable,
+	DisposableStore,
+	MutableDisposable,
+	combinedDisposable,
+	toDisposable,
+} from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { lexer } from '../../../../base/common/marked/marked.js';
 import { clamp, isFiniteNumber, isNonNegativeSafeInteger, isSafeInteger } from '../../../../base/common/numbers.js';
@@ -31,7 +37,11 @@ import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { localize } from '../../../../nls.js';
 import { IDialogService, IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
-import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultSelectBoxStyles,
+} from '../../../../platform/theme/browser/defaultStyles.js';
 import { FileKind, IFileService } from '../../../../platform/files/common/files.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
@@ -45,7 +55,9 @@ export const editorClientHost = Object.freeze({
 	'workbench/services/editor/common/editorService.js': Object.freeze({ IEditorService }),
 	'workbench/services/workingCopy/common/workingCopyService.js': Object.freeze({ IWorkingCopyService }),
 	'workbench/browser/editor.js': Object.freeze({ EditorPanes }),
-	'workbench/services/extensions/browser/resourceEditorAccessibility.js': Object.freeze({ registerResourceEditorAccessibility }),
+	'workbench/services/extensions/browser/resourceEditorAccessibility.js': Object.freeze({
+		registerResourceEditorAccessibility,
+	}),
 	'platform/configuration/common/configuration.js': Object.freeze({ IConfigurationService }),
 	'base/browser/dom.js': Object.freeze({ addDisposableListener, fragment, h, svg }),
 	'base/common/actions.js': Object.freeze({ Separator }),
@@ -59,7 +71,13 @@ export const editorClientHost = Object.freeze({
 	'base/browser/ui/toolbar/toolbar.js': Object.freeze({ ToolBar }),
 	'base/common/errors.js': Object.freeze({ onUnexpectedError }),
 	'base/common/event.js': Object.freeze({ Emitter }),
-	'base/common/lifecycle.js': Object.freeze({ Disposable, DisposableStore, MutableDisposable, combinedDisposable, toDisposable }),
+	'base/common/lifecycle.js': Object.freeze({
+		Disposable,
+		DisposableStore,
+		MutableDisposable,
+		combinedDisposable,
+		toDisposable,
+	}),
 	'base/common/lxicons.js': Object.freeze({ Lxicon }),
 	'base/common/marked/marked.js': Object.freeze({ lexer }),
 	'base/common/numbers.js': Object.freeze({ clamp, isFiniteNumber, isNonNegativeSafeInteger, isSafeInteger }),
@@ -73,7 +91,11 @@ export const editorClientHost = Object.freeze({
 	'nls.js': Object.freeze({ localize }),
 	'platform/dialogs/common/dialogs.js': Object.freeze({ IDialogService, IFileDialogService }),
 	'platform/opener/common/opener.js': Object.freeze({ IOpenerService }),
-	'platform/theme/browser/defaultStyles.js': Object.freeze({ defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles }),
+	'platform/theme/browser/defaultStyles.js': Object.freeze({
+		defaultButtonStyles,
+		defaultInputBoxStyles,
+		defaultSelectBoxStyles,
+	}),
 	'platform/files/common/files.js': Object.freeze({ FileKind, IFileService }),
 	'platform/storage/common/storage.js': Object.freeze({ IStorageService }),
 	'platform/theme/common/themeService.js': Object.freeze({ IThemeService }),

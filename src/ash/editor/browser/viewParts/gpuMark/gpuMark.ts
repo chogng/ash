@@ -11,7 +11,10 @@ export class GpuMarkOverlay extends DynamicViewOverlay {
 	public static readonly CLASS_NAME = 'gpu-mark';
 	private renderResult: string[] | undefined;
 
-	constructor(private readonly context: ViewContext, private readonly gpuContext: ViewGpuContext) {
+	constructor(
+		private readonly context: ViewContext,
+		private readonly gpuContext: ViewGpuContext,
+	) {
 		super();
 		context.addEventHandler(this);
 	}
@@ -22,15 +25,33 @@ export class GpuMarkOverlay extends DynamicViewOverlay {
 		super.dispose();
 	}
 
-	public override onConfigurationChanged(): boolean { return true; }
-	public override onCursorStateChanged(): boolean { return true; }
-	public override onFlushed(): boolean { return true; }
-	public override onLinesChanged(): boolean { return true; }
-	public override onLinesDeleted(): boolean { return true; }
-	public override onLinesInserted(): boolean { return true; }
-	public override onScrollChanged(e: viewEvents.ViewScrollChangedEvent): boolean { return e.scrollTopChanged; }
-	public override onZonesChanged(): boolean { return true; }
-	public override onDecorationsChanged(): boolean { return true; }
+	public override onConfigurationChanged(): boolean {
+		return true;
+	}
+	public override onCursorStateChanged(): boolean {
+		return true;
+	}
+	public override onFlushed(): boolean {
+		return true;
+	}
+	public override onLinesChanged(): boolean {
+		return true;
+	}
+	public override onLinesDeleted(): boolean {
+		return true;
+	}
+	public override onLinesInserted(): boolean {
+		return true;
+	}
+	public override onScrollChanged(e: viewEvents.ViewScrollChangedEvent): boolean {
+		return e.scrollTopChanged;
+	}
+	public override onZonesChanged(): boolean {
+		return true;
+	}
+	public override onDecorationsChanged(): boolean {
+		return true;
+	}
 
 	public prepareRender(ctx: RenderingContext): void {
 		const start = ctx.visibleRange.startLineNumber;

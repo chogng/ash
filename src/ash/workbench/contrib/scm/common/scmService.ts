@@ -12,9 +12,11 @@ export class SCMService extends Disposable implements ISCMService {
 
 	constructor() {
 		super();
-		this._register(toDisposable(() => {
-			for (const repository of [...this.repositoryMap.values()]) repository.dispose();
-		}));
+		this._register(
+			toDisposable(() => {
+				for (const repository of [...this.repositoryMap.values()]) repository.dispose();
+			}),
+		);
 	}
 
 	public get repositories(): Iterable<ISCMRepository> {
@@ -22,7 +24,8 @@ export class SCMService extends Disposable implements ISCMService {
 	}
 
 	public registerSCMProvider(provider: ISCMProvider): ISCMRepository {
-		if (this.repositoryMap.has(provider.id)) throw new Error(`SCM repository '${provider.id}' is already registered`);
+		if (this.repositoryMap.has(provider.id))
+			throw new Error(`SCM repository '${provider.id}' is already registered`);
 		const repository: ISCMRepository = {
 			id: provider.id,
 			provider,
@@ -41,5 +44,4 @@ export class SCMService extends Disposable implements ISCMService {
 	public getRepository(id: string): ISCMRepository | undefined {
 		return this.repositoryMap.get(id);
 	}
-
 }

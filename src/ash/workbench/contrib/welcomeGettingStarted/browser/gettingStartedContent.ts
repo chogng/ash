@@ -48,10 +48,7 @@ export class GettingStarted extends Disposable {
 	private cloneCard: HTMLButtonElement | undefined;
 	private recentProjects: readonly IGettingStartedProject[];
 
-	constructor(
-		container: HTMLElement,
-		options: GettingStartedOptions = {},
-	) {
+	constructor(container: HTMLElement, options: GettingStartedOptions = {}) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		this.recentProjects = options.recentProjects ?? [];
@@ -81,17 +78,21 @@ export class GettingStarted extends Disposable {
 		const items = [...this.recentSection.querySelectorAll<HTMLElement>('.ash-getting-started-recent-item')];
 		const activeElement = this.domNode.ownerDocument.activeElement;
 		const focusedIndex = items.findIndex(item => item.contains(activeElement));
-		const focusedAction = items[focusedIndex]?.querySelector('.ash-getting-started-recent-actions')?.contains(activeElement);
+		const focusedAction = items[focusedIndex]
+			?.querySelector('.ash-getting-started-recent-actions')
+			?.contains(activeElement);
 		const focusedPath = this.recentProjects[focusedIndex]?.path;
 		this.recentProjects = projects;
 		this.renderRecentProjects(this.recentSection);
 		if (focusedIndex !== -1) {
 			const nextItems = this.recentSection.querySelectorAll<HTMLElement>('.ash-getting-started-recent-item');
 			const retainedIndex = projects.findIndex(project => project.path === focusedPath);
-			const nextItem = nextItems[retainedIndex === -1 ? Math.min(focusedIndex, nextItems.length - 1) : retainedIndex];
-			const target = retainedIndex !== -1 && focusedAction
-				? nextItem?.querySelector<HTMLElement>('.ash-getting-started-recent-actions button')
-				: nextItem?.querySelector<HTMLElement>('button');
+			const nextItem =
+				nextItems[retainedIndex === -1 ? Math.min(focusedIndex, nextItems.length - 1) : retainedIndex];
+			const target =
+				retainedIndex !== -1 && focusedAction
+					? nextItem?.querySelector<HTMLElement>('.ash-getting-started-recent-actions button')
+					: nextItem?.querySelector<HTMLElement>('button');
 			const fallback = this.domNode.querySelector<HTMLButtonElement>('.ash-getting-started-card:not(:disabled)');
 			(target ?? fallback ?? this.domNode).focus();
 		}
@@ -117,10 +118,7 @@ export class GettingStarted extends Disposable {
 		return wrapper;
 	}
 
-	private createCards(
-		ownerDocument: Document,
-		actions: GettingStartedOptions['actions'],
-	): HTMLElement {
+	private createCards(ownerDocument: Document, actions: GettingStartedOptions['actions']): HTMLElement {
 		const cards = h(ownerDocument, 'div');
 		cards.className = 'ash-getting-started-cards';
 		const cardOptions: readonly WelcomeCardOptions[] = [
@@ -155,17 +153,20 @@ export class GettingStarted extends Disposable {
 		return cards;
 	}
 
-	private createCard(
-		ownerDocument: Document,
-		options: WelcomeCardOptions,
-	): HTMLButtonElement {
+	private createCard(ownerDocument: Document, options: WelcomeCardOptions): HTMLButtonElement {
 		const card = h(ownerDocument, 'button');
 		card.type = 'button';
 		card.className = `ash-getting-started-card${options.variant === 'featured' ? ' featured' : ''}`;
 		if (options.labelKey === 'editorWelcome.cloneRepo') {
 			this.cloneCard = card;
 			this.setCloneRepositoryAction(options.action);
-			this._register(addDisposableListener(card, 'click', () => { if (this.cloneAction) { this.run(this.cloneAction); } }));
+			this._register(
+				addDisposableListener(card, 'click', () => {
+					if (this.cloneAction) {
+						this.run(this.cloneAction);
+					}
+				}),
+			);
 		} else if (!options.action) {
 			card.disabled = true;
 			card.classList.add('is-disabled');
@@ -224,10 +225,7 @@ export class GettingStarted extends Disposable {
 		section.append(title, list);
 	}
 
-	private createRecentProject(
-		ownerDocument: Document,
-		project: IGettingStartedProject,
-	): HTMLElement {
+	private createRecentProject(ownerDocument: Document, project: IGettingStartedProject): HTMLElement {
 		const item = h(ownerDocument, 'div');
 		item.className = 'ash-getting-started-recent-item';
 		const content = h(ownerDocument, project.onOpen ? 'button' : 'div');
@@ -246,18 +244,23 @@ export class GettingStarted extends Disposable {
 			actions.className = 'ash-getting-started-recent-actions';
 			item.append(actions);
 			const onRemove = project.onRemove;
-			this.recentDisposables.add(new ActionBar(actions, {
-				ariaLabel: localize('gettingStarted.recentActions', 'Actions for {0}', project.name),
-				actionViewItemProvider: action => new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
-				actions: [{
-					id: 'gettingStarted.removeRecent',
-					label: localize('gettingStarted.removeRecent', 'Remove {0} from Recents', project.name),
-					tooltip: localize('gettingStarted.removeRecentTooltip', 'Remove'),
-					icon: Lxicon.close,
-					enabled: true,
-					run: () => this.run(onRemove),
-				}],
-			}));
+			this.recentDisposables.add(
+				new ActionBar(actions, {
+					ariaLabel: localize('gettingStarted.recentActions', 'Actions for {0}', project.name),
+					actionViewItemProvider: action =>
+						new LabelActionViewItem(action, { label: '', ariaLabel: action.label }),
+					actions: [
+						{
+							id: 'gettingStarted.removeRecent',
+							label: localize('gettingStarted.removeRecent', 'Remove {0} from Recents', project.name),
+							tooltip: localize('gettingStarted.removeRecentTooltip', 'Remove'),
+							icon: Lxicon.close,
+							enabled: true,
+							run: () => this.run(onRemove),
+						},
+					],
+				}),
+			);
 		}
 		return item;
 	}

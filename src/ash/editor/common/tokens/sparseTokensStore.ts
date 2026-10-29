@@ -9,7 +9,6 @@ import { ITextModel } from '../model.js';
  * Represents sparse tokens in a text model.
  */
 export class SparseTokensStore {
-
 	private _pieces: SparseMultilineTokens[];
 	private _isComplete: boolean;
 	private readonly _languageIdCodec: ILanguageIdCodec;
@@ -26,10 +25,14 @@ export class SparseTokensStore {
 	}
 
 	public isEmpty(): boolean {
-		return (this._pieces.length === 0);
+		return this._pieces.length === 0;
 	}
 
-	public set(pieces: SparseMultilineTokens[] | null, isComplete: boolean, textModel: ITextModel | undefined = undefined): void {
+	public set(
+		pieces: SparseMultilineTokens[] | null,
+		isComplete: boolean,
+		textModel: ITextModel | undefined = undefined,
+	): void {
 		this._pieces = pieces || [];
 		this._isComplete = isComplete;
 
@@ -53,7 +56,7 @@ export class SparseTokensStore {
 			range = _range.plusRange(_firstRange).plusRange(_lastRange);
 		}
 
-		let insertPosition: { index: number; } | null = null;
+		let insertPosition: { index: number } | null = null;
 		for (let i = 0, len = this._pieces.length; i < len; i++) {
 			const piece = this._pieces[i];
 			if (piece.endLineNumber < range.startLineNumber) {
@@ -171,15 +174,15 @@ export class SparseTokensStore {
 			const bEndCharacter = Math.min(bTokens.getEndCharacter(bIndex), aTokens.getTextLength());
 			const bMetadata = bTokens.getMetadata(bIndex);
 
-			const bMask = (
-				((bMetadata & MetadataConsts.SEMANTIC_USE_ITALIC) ? MetadataConsts.ITALIC_MASK : 0)
-				| ((bMetadata & MetadataConsts.SEMANTIC_USE_BOLD) ? MetadataConsts.BOLD_MASK : 0)
-				| ((bMetadata & MetadataConsts.SEMANTIC_USE_UNDERLINE) ? MetadataConsts.UNDERLINE_MASK : 0)
-				| ((bMetadata & MetadataConsts.SEMANTIC_USE_STRIKETHROUGH) ? MetadataConsts.STRIKETHROUGH_MASK : 0)
-				| ((bMetadata & MetadataConsts.SEMANTIC_USE_FOREGROUND) ? MetadataConsts.FOREGROUND_MASK : 0)
-				| ((bMetadata & MetadataConsts.SEMANTIC_USE_BACKGROUND) ? MetadataConsts.BACKGROUND_MASK : 0)
-			) >>> 0;
-			const aMask = (~bMask) >>> 0;
+			const bMask =
+				((bMetadata & MetadataConsts.SEMANTIC_USE_ITALIC ? MetadataConsts.ITALIC_MASK : 0) |
+					(bMetadata & MetadataConsts.SEMANTIC_USE_BOLD ? MetadataConsts.BOLD_MASK : 0) |
+					(bMetadata & MetadataConsts.SEMANTIC_USE_UNDERLINE ? MetadataConsts.UNDERLINE_MASK : 0) |
+					(bMetadata & MetadataConsts.SEMANTIC_USE_STRIKETHROUGH ? MetadataConsts.STRIKETHROUGH_MASK : 0) |
+					(bMetadata & MetadataConsts.SEMANTIC_USE_FOREGROUND ? MetadataConsts.FOREGROUND_MASK : 0) |
+					(bMetadata & MetadataConsts.SEMANTIC_USE_BACKGROUND ? MetadataConsts.BACKGROUND_MASK : 0)) >>>
+				0;
+			const aMask = ~bMask >>> 0;
 
 			// push any token from `a` that is before `b`
 			while (aIndex < aLen && aTokens.getEndOffset(aIndex) <= bStartCharacter) {
@@ -233,7 +236,11 @@ export class SparseTokensStore {
 			} else if (pieces[mid].startLineNumber > lineNumber) {
 				high = mid - 1;
 			} else {
-				while (mid > low && pieces[mid - 1].startLineNumber <= lineNumber && lineNumber <= pieces[mid - 1].endLineNumber) {
+				while (
+					mid > low &&
+					pieces[mid - 1].startLineNumber <= lineNumber &&
+					lineNumber <= pieces[mid - 1].endLineNumber
+				) {
 					mid--;
 				}
 				return mid;
@@ -243,7 +250,13 @@ export class SparseTokensStore {
 		return low;
 	}
 
-	public acceptEdit(range: IRange, eolCount: number, firstLineLength: number, lastLineLength: number, firstCharCode: number): void {
+	public acceptEdit(
+		range: IRange,
+		eolCount: number,
+		firstLineLength: number,
+		lastLineLength: number,
+		firstCharCode: number,
+	): void {
 		for (let i = 0; i < this._pieces.length; i++) {
 			const piece = this._pieces[i];
 			piece.acceptEdit(range, eolCount, firstLineLength, lastLineLength, firstCharCode);
@@ -256,4 +269,3 @@ export class SparseTokensStore {
 		}
 	}
 }
-

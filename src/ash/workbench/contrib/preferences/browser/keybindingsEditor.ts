@@ -20,25 +20,48 @@ import type { ITableColumn, ITableRenderer } from '../../../../base/browser/ui/t
 import { observeElementSize } from '../../../../base/browser/observer.js';
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
 import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/common/keybindingLabels.js';
-import { Keybinding, KeybindingChordKind, logicalKey, MAX_KEYBINDING_CHORDS } from '../../../../base/common/keybindings.js';
-import { DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import {
+	Keybinding,
+	KeybindingChordKind,
+	logicalKey,
+	MAX_KEYBINDING_CHORDS,
+} from '../../../../base/common/keybindings.js';
+import {
+	DisposableStore,
+	MutableDisposable,
+	toDisposable,
+	type IDisposable,
+} from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { getHoverDelegate, type IManagedHover } from '../../../../base/browser/ui/hover/hoverDelegate.js';
-import type { IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
-import { IContextKeyService, type IScopedContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import {
+	IContextKeyService,
+	type IScopedContextKeyService,
+} from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { KeybindingContextKeys, IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
 import { IKeybindingEditingService } from '../../../services/keybinding/common/keybindingEditing.js';
-import { isKeybindingsEditorInput, KeybindingsEditorInput } from '../../../services/preferences/browser/keybindingsEditorInput.js';
-import { type KeybindingsEditorModel, type KeyboardShortcutItem } from '../../../services/preferences/browser/keybindingsEditorModel.js';
 import {
-	CONTEXT_KEYBINDINGS_EDITOR, CONTEXT_KEYBINDINGS_SEARCH_FOCUS, CONTEXT_KEYBINDINGS_SEARCH_HAS_VALUE,
-	KEYBINDINGS_EDITOR_COMMAND_RECORD_SEARCH_KEYS, KEYBINDINGS_EDITOR_COMMAND_SORTBY_PRECEDENCE, KEYBINDINGS_EDITOR_COMMAND_CLEAR_SEARCH_RESULTS,
+	isKeybindingsEditorInput,
+	KeybindingsEditorInput,
+} from '../../../services/preferences/browser/keybindingsEditorInput.js';
+import {
+	type KeybindingsEditorModel,
+	type KeyboardShortcutItem,
+} from '../../../services/preferences/browser/keybindingsEditorModel.js';
+import {
+	CONTEXT_KEYBINDINGS_EDITOR,
+	CONTEXT_KEYBINDINGS_SEARCH_FOCUS,
+	CONTEXT_KEYBINDINGS_SEARCH_HAS_VALUE,
+	KEYBINDINGS_EDITOR_COMMAND_RECORD_SEARCH_KEYS,
+	KEYBINDINGS_EDITOR_COMMAND_SORTBY_PRECEDENCE,
+	KEYBINDINGS_EDITOR_COMMAND_CLEAR_SEARCH_RESULTS,
 } from '../common/preferences.js';
 
 let nextRecorderHelpId = 1;
@@ -112,13 +135,15 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 
 		const toolbar = h(ownerDocument, 'div');
 		toolbar.className = 'ash-keybindings-toolbar';
-		this.searchInput = this._register(new InputBox(toolbar, {
-			inputBoxStyles: defaultInputBoxStyles,
-			type: 'search',
-			presentation: 'field',
-			placeholder: localize('keybindings.search', 'Search keybindings'),
-			ariaLabel: localize('keybindings.search', 'Search keybindings'),
-		}));
+		this.searchInput = this._register(
+			new InputBox(toolbar, {
+				inputBoxStyles: defaultInputBoxStyles,
+				type: 'search',
+				presentation: 'field',
+				placeholder: localize('keybindings.search', 'Search keybindings'),
+				ariaLabel: localize('keybindings.search', 'Search keybindings'),
+			}),
+		);
 		this.searchInput.element.classList.add('ash-keybindings-search');
 		const searchContext = this._register(this.scopedContext.createScoped(this.searchInput.inputElement));
 		this.searchRecordingContext = KeybindingContextKeys.isRecording.bindTo(searchContext);
@@ -132,29 +157,36 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.recordingBadge.textContent = localize('keybindings.recordingKeys', 'Recording Keys');
 		this.recordingBadge.hidden = true;
 		searchActions.append(this.recordingBadge);
-		this.recordSearchButton = this._register(new Button(searchActions, {
-			...defaultButtonStyles,
-			label: localize('keybindings.recordKeys', 'Record Keys'),
-			icon: Lxicon.recordKeys,
-			iconOnly: true,
-			checked: false,
-			onClick: () => this.recordSearchButton?.checked ? this.setSearchRecording(false) : this.recordSearchKeys(),
-		}));
-		this.sortSearchButton = this._register(new Button(searchActions, {
-			...defaultButtonStyles,
-			label: localize('keybindings.sortByPrecedence', 'Sort by Precedence (Highest first)'),
-			icon: Lxicon.sortPrecedence,
-			iconOnly: true,
-			checked: false,
-			onClick: () => this.toggleSortByPrecedence(),
-		}));
-		this.clearSearchButton = this._register(new Button(searchActions, {
-			...defaultButtonStyles,
-			label: localize('keybindings.clearSearch', 'Clear Keybindings Search Input'),
-			icon: Lxicon.clearAll,
-			iconOnly: true,
-			onClick: () => this.clearSearchResults(),
-		}));
+		this.recordSearchButton = this._register(
+			new Button(searchActions, {
+				...defaultButtonStyles,
+				label: localize('keybindings.recordKeys', 'Record Keys'),
+				icon: Lxicon.recordKeys,
+				iconOnly: true,
+				checked: false,
+				onClick: () =>
+					this.recordSearchButton?.checked ? this.setSearchRecording(false) : this.recordSearchKeys(),
+			}),
+		);
+		this.sortSearchButton = this._register(
+			new Button(searchActions, {
+				...defaultButtonStyles,
+				label: localize('keybindings.sortByPrecedence', 'Sort by Precedence (Highest first)'),
+				icon: Lxicon.sortPrecedence,
+				iconOnly: true,
+				checked: false,
+				onClick: () => this.toggleSortByPrecedence(),
+			}),
+		);
+		this.clearSearchButton = this._register(
+			new Button(searchActions, {
+				...defaultButtonStyles,
+				label: localize('keybindings.clearSearch', 'Clear Keybindings Search Input'),
+				icon: Lxicon.clearAll,
+				iconOnly: true,
+				onClick: () => this.clearSearchResults(),
+			}),
+		);
 		for (const button of [this.recordSearchButton, this.sortSearchButton, this.clearSearchButton]) {
 			button.toggleClassName('ash-keybindings-search-action', true);
 		}
@@ -164,20 +196,30 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.count.setAttribute('aria-live', 'polite');
 		this.count.setAttribute('aria-atomic', 'true');
 		toolbar.append(this.searchInput.element, this.count);
-		this._register(this.searchInput.onDidChange(() => {
-			if (!this.recordSearchButton?.checked || !this.searchInput?.value) this.searchChords.length = 0;
-			this.searchHasValueContext?.set(!!this.searchInput?.value);
-			this.renderRows();
-		}));
-		this._register(this.searchInput.onDidFocus(() => {
-			this.searchFocusContext?.set(true);
-			this.updateSearchActionTooltips();
-		}));
+		this._register(
+			this.searchInput.onDidChange(() => {
+				if (!this.recordSearchButton?.checked || !this.searchInput?.value) this.searchChords.length = 0;
+				this.searchHasValueContext?.set(!!this.searchInput?.value);
+				this.renderRows();
+			}),
+		);
+		this._register(
+			this.searchInput.onDidFocus(() => {
+				this.searchFocusContext?.set(true);
+				this.updateSearchActionTooltips();
+			}),
+		);
 		this._register(this.searchInput.onDidBlur(() => this.searchFocusContext?.set(false)));
 		this._register(this.keybindingService.onDidUpdateKeybindings(() => this.updateSearchActionTooltips()));
 		this.updateSearchActionTooltips();
 		this._register(this.searchInput.onKeyDown(event => this.handleSearchKeyDown(event)));
-		this.searchInput.inputElement.setAttribute('aria-description', localize('keybindings.searchHelp', 'Use Record Keys to search for an exact shortcut, Sort by Precedence to show higher priority rules first, and Clear to reset the query. Escape exits recording. Each action shows its current shortcut in its tooltip. Tab reaches the search actions.'));
+		this.searchInput.inputElement.setAttribute(
+			'aria-description',
+			localize(
+				'keybindings.searchHelp',
+				'Use Record Keys to search for an exact shortcut, Sort by Precedence to show higher priority rules first, and Clear to reset the query. Escape exits recording. Each action shows its current shortcut in its tooltip. Tab reaches the search actions.',
+			),
+		);
 
 		this.recorder = this.createRecorder(ownerDocument);
 		this.status = h(ownerDocument, 'p');
@@ -185,7 +227,7 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.status.setAttribute('role', 'status');
 		this.status.hidden = true;
 
-		const tableContainer = this.tableContainer = h(ownerDocument, 'div');
+		const tableContainer = (this.tableContainer = h(ownerDocument, 'div'));
 		tableContainer.className = 'ash-keybindings-list';
 		this.table = this._register(this.createTable(tableContainer));
 		this.empty = h(ownerDocument, 'p');
@@ -195,19 +237,35 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		tableContainer.append(this.empty);
 		container.append(toolbar, this.recorder, this.status, tableContainer);
 		this._register(observeElementSize(tableContainer, size => this.table?.layout(size.height, size.width)));
-		this._register(addDisposableListener(this.table.domNode, 'dblclick', event => {
-			if (isHTMLElement(event.target) && event.target.closest('.ash-table-row') && !event.target.closest('button')) this.editFocusedShortcut();
-		}));
-		this._register(addDisposableListener(this.table.domNode, 'keydown', event => {
-			if (event.key !== 'Enter' || !isHTMLElement(event.target) || !event.target.closest('.ash-table-row') || event.target.closest('button,input,textarea')) return;
-			stopEvent(event);
-			this.editFocusedShortcut();
-		}));
+		this._register(
+			addDisposableListener(this.table.domNode, 'dblclick', event => {
+				if (
+					isHTMLElement(event.target) &&
+					event.target.closest('.ash-table-row') &&
+					!event.target.closest('button')
+				)
+					this.editFocusedShortcut();
+			}),
+		);
+		this._register(
+			addDisposableListener(this.table.domNode, 'keydown', event => {
+				if (
+					event.key !== 'Enter' ||
+					!isHTMLElement(event.target) ||
+					!event.target.closest('.ash-table-row') ||
+					event.target.closest('button,input,textarea')
+				)
+					return;
+				stopEvent(event);
+				this.editFocusedShortcut();
+			}),
+		);
 		this.renderRows();
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
-		if (!isKeybindingsEditorInput(input)) throw new RangeError(`Keyboard Shortcuts editor cannot open ${input.resource}`);
+		if (!isKeybindingsEditorInput(input))
+			throw new RangeError(`Keyboard Shortcuts editor cannot open ${input.resource}`);
 		throwIfCancelled(signal, 'Keyboard Shortcuts loading was cancelled');
 		// Working-set restoration produces plain resource inputs. Rehydrate at this
 		// entrance so restored panes use the same input-owned model and release rule.
@@ -223,7 +281,9 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 			if (this.isDisposed || this.inputReference.value !== reference) return;
 			this.model = model;
 			this.editorContext?.set(this.isVisible());
-			this.searchFocusContext?.set(this.isVisible() && this.searchInput?.inputElement === this.container?.ownerDocument.activeElement);
+			this.searchFocusContext?.set(
+				this.isVisible() && this.searchInput?.inputElement === this.container?.ownerDocument.activeElement,
+			);
 			this.modelListener.value = model.onDidChange(() => this.renderRows());
 			this.renderRows();
 		} catch (error) {
@@ -251,7 +311,9 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 	public override setVisible(visibility: boolean): void {
 		super.setVisible(visibility);
 		this.editorContext?.set(visibility && !!this.input);
-		this.searchFocusContext?.set(visibility && this.searchInput?.inputElement === this.container?.ownerDocument.activeElement);
+		this.searchFocusContext?.set(
+			visibility && this.searchInput?.inputElement === this.container?.ownerDocument.activeElement,
+		);
 		if (!visibility) this.recordingContext?.reset();
 		else if (this.editingItem) this.recordingContext?.set(true);
 		this.searchRecordingContext?.set(visibility && !!this.recordSearchButton?.checked);
@@ -263,30 +325,50 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 
 	public override getActions(): readonly IAction[] {
 		const label = localize('keybindings.openJsonEditor', 'Open Keyboard Shortcuts (JSON)');
-		return [{
-			id: 'workbench.action.openGlobalKeybindingsFile',
-			label,
-			tooltip: label,
-			icon: Lxicon.code,
-			enabled: true,
-			run: () => this.commandService.executeCommand('workbench.action.openGlobalKeybindingsFile'),
-		}];
+		return [
+			{
+				id: 'workbench.action.openGlobalKeybindingsFile',
+				label,
+				tooltip: label,
+				icon: Lxicon.code,
+				enabled: true,
+				run: () => this.commandService.executeCommand('workbench.action.openGlobalKeybindingsFile'),
+			},
+		];
 	}
 
 	public override getSecondaryActions(): readonly IAction[] {
-		const source = /@source:\s*(system|default|user|extension|unassigned)\b/i.exec(this.searchInput?.value ?? '')?.[1].toLowerCase();
+		const source = /@source:\s*(system|default|user|extension|unassigned)\b/i
+			.exec(this.searchInput?.value ?? '')?.[1]
+			.toLowerCase();
 		return [
 			...[
-				['system', 'keybindings.editor.showDefaultKeybindings', localize('keybindings.showSystem', 'Show System Keybindings')],
-				['user', 'keybindings.editor.showUserKeybindings', localize('keybindings.showUser', 'Show User Keybindings')],
-				['extension', 'keybindings.editor.showExtensionKeybindings', localize('keybindings.showExtension', 'Show Extension Keybindings')],
-				['unassigned', 'keybindings.editor.showUnassignedKeybindings', localize('keybindings.showUnassigned', 'Show Unassigned Commands')],
+				[
+					'system',
+					'keybindings.editor.showDefaultKeybindings',
+					localize('keybindings.showSystem', 'Show System Keybindings'),
+				],
+				[
+					'user',
+					'keybindings.editor.showUserKeybindings',
+					localize('keybindings.showUser', 'Show User Keybindings'),
+				],
+				[
+					'extension',
+					'keybindings.editor.showExtensionKeybindings',
+					localize('keybindings.showExtension', 'Show Extension Keybindings'),
+				],
+				[
+					'unassigned',
+					'keybindings.editor.showUnassignedKeybindings',
+					localize('keybindings.showUnassigned', 'Show Unassigned Commands'),
+				],
 			].map(([value, id, label]) => ({
 				id,
 				label,
 				tooltip: label,
 				enabled: true,
-				checked: source === value || value === 'system' && source === 'default',
+				checked: source === value || (value === 'system' && source === 'default'),
 				run: () => this.search(`@source:${value}`),
 			})),
 			new Separator(),
@@ -331,7 +413,10 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 			[this.clearSearchButton, KEYBINDINGS_EDITOR_COMMAND_CLEAR_SEARCH_RESULTS],
 		] as const) {
 			if (!button) continue;
-			const binding = this.keybindingService.lookupKeybinding(command, this.contextKeyService.getContext(this.searchInput?.inputElement));
+			const binding = this.keybindingService.lookupKeybinding(
+				command,
+				this.contextKeyService.getContext(this.searchInput?.inputElement),
+			);
 			const tooltip = binding
 				? localize('keybindings.actionWithKeybinding', '{0} ({1})', button.label, getKeybindingLabel(binding))
 				: button.label;
@@ -358,12 +443,19 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 
 	private handleSearchKeyDown(event: KeyboardEvent): void {
 		const recording = this.recordSearchButton?.checked;
-		if (recording && event.key === 'Escape' && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
+		if (
+			recording &&
+			event.key === 'Escape' &&
+			!event.ctrlKey &&
+			!event.altKey &&
+			!event.metaKey &&
+			!event.shiftKey
+		) {
 			stopEvent(event);
 			this.setSearchRecording(false);
 			return;
 		}
-		if (!recording || event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey) return;
+		if (!recording || (event.key === 'Tab' && !event.ctrlKey && !event.altKey && !event.metaKey)) return;
 		stopEvent(event);
 		if (event.repeat || event.isComposing || isModifierKey(event) || event.key === 'Process') return;
 		const keyboardEvent = new StandardKeyboardEvent(event);
@@ -382,23 +474,33 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 				const store = new DisposableStore();
 				element.classList.add('ash-keybindings-row-actions');
 				const template: ShortcutActionsTemplate = {
-					element, store, item: undefined,
-					edit: store.add(new Button(element, {
-						...defaultButtonStyles,
-						label: localize('keybindings.edit', 'Edit'),
-						icon: Lxicon.edit,
-						iconOnly: true,
-						size: 'small',
-						onClick: () => { if (template.item) this.openRecorder(template.item); },
-					})),
-					remove: store.add(new Button(element, {
-						...defaultButtonStyles,
-						label: localize('keybindings.remove', 'Remove'),
-						icon: Lxicon.trash,
-						iconOnly: true,
-						size: 'small',
-						onClick: () => { if (template.item) void this.removeItem(template.item); },
-					})),
+					element,
+					store,
+					item: undefined,
+					edit: store.add(
+						new Button(element, {
+							...defaultButtonStyles,
+							label: localize('keybindings.edit', 'Edit'),
+							icon: Lxicon.edit,
+							iconOnly: true,
+							size: 'small',
+							onClick: () => {
+								if (template.item) this.openRecorder(template.item);
+							},
+						}),
+					),
+					remove: store.add(
+						new Button(element, {
+							...defaultButtonStyles,
+							label: localize('keybindings.remove', 'Remove'),
+							icon: Lxicon.trash,
+							iconOnly: true,
+							size: 'small',
+							onClick: () => {
+								if (template.item) void this.removeItem(template.item);
+							},
+						}),
+					),
 				};
 				for (const button of [template.edit, template.remove]) {
 					button.toggleClassName('ash-keybindings-row-action', true);
@@ -416,7 +518,9 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 				const editLabel = item.key
 					? localize('keybindings.editTitle', 'Edit keybinding for {0}', item.commandLabel)
 					: localize('keybindings.addTitle', 'Add keybinding for {0}', item.commandLabel);
-				template.edit.label = item.key ? localize('keybindings.edit', 'Edit') : localize('keybindings.add', 'Add');
+				template.edit.label = item.key
+					? localize('keybindings.edit', 'Edit')
+					: localize('keybindings.add', 'Add');
 				template.edit.icon = item.key ? Lxicon.edit : Lxicon.add;
 				template.edit.setTitle(editLabel);
 				template.edit.domNode.setAttribute('aria-label', editLabel);
@@ -432,7 +536,10 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 				template.store.dispose();
 			},
 		};
-		const command: ITableRenderer<KeyboardShortcutItem, { label: HTMLElement; id: HTMLElement; hovers: DisposableStore; }> = {
+		const command: ITableRenderer<
+			KeyboardShortcutItem,
+			{ label: HTMLElement; id: HTMLElement; hovers: DisposableStore }
+		> = {
 			templateId: 'shortcut-command',
 			renderTemplate: element => {
 				const content = h(element.ownerDocument, 'div');
@@ -450,21 +557,33 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 				template.id.textContent = item.command ?? '';
 				template.id.hidden = !commandIdMatches(item, this.searchInput?.value ?? '');
 				template.hovers.clear();
-				for (const [target, content] of [[template.label, `${item.commandLabel}${item.command ? ` (${item.command})` : ''}`], [template.id, item.command ?? '']] as const) {
+				for (const [target, content] of [
+					[template.label, `${item.commandLabel}${item.command ? ` (${item.command})` : ''}`],
+					[template.id, item.command ?? ''],
+				] as const) {
 					if (content) template.hovers.add(getHoverDelegate().setupHover({ target, content }));
 				}
 			},
 			disposeTemplate: template => template.hovers.dispose(),
 		};
-		const keybinding: ITableRenderer<KeyboardShortcutItem, { element: HTMLElement; label: MutableDisposable<KeybindingLabel>; hover: MutableDisposable<IManagedHover>; }> = {
+		const keybinding: ITableRenderer<
+			KeyboardShortcutItem,
+			{ element: HTMLElement; label: MutableDisposable<KeybindingLabel>; hover: MutableDisposable<IManagedHover> }
+		> = {
 			templateId: 'shortcut-keybinding',
 			renderTemplate: element => {
 				element.classList.add('ash-keybindings-key');
-				return { element, label: new MutableDisposable<KeybindingLabel>(), hover: new MutableDisposable<IManagedHover>() };
+				return {
+					element,
+					label: new MutableDisposable<KeybindingLabel>(),
+					hover: new MutableDisposable<IManagedHover>(),
+				};
 			},
 			renderElement: (item, _index, template) => {
 				const resolved = item.keybindingItem.resolvedKeybinding;
-				template.hover.value = item.keyLabel ? getHoverDelegate().setupHover({ target: template.element, content: item.keyLabel }) : undefined;
+				template.hover.value = item.keyLabel
+					? getHoverDelegate().setupHover({ target: template.element, content: item.keyLabel })
+					: undefined;
 				if (!resolved) {
 					template.label.clear();
 					template.element.textContent = item.keyLabel;
@@ -486,54 +605,77 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		};
 		const columns: ITableColumn<KeyboardShortcutItem, KeyboardShortcutItem>[] = [
 			{
-				label: '', tooltip: localize('keybindings.actions', 'Actions'),
+				label: '',
+				tooltip: localize('keybindings.actions', 'Actions'),
 				templateId: actions.templateId,
-				weight: 0, minimumWidth: 48, maximumWidth: 48,
+				weight: 0,
+				minimumWidth: 48,
+				maximumWidth: 48,
 				project: item => item,
 			},
 			{
 				label: localize('keybindings.command', 'Command'),
 				templateId: command.templateId,
-				weight: 3.2, minimumWidth: 180,
+				weight: 3.2,
+				minimumWidth: 180,
 				project: item => item,
 			},
 			{
 				label: localize('keybindings.keybinding', 'Keybinding'),
 				templateId: keybinding.templateId,
-				weight: 2.2, minimumWidth: 180,
+				weight: 2.2,
+				minimumWidth: 180,
 				project: item => item,
 			},
 			{
 				label: localize('keybindings.when', 'When'),
 				templateId: 'shortcut-when',
-				weight: 3.3, minimumWidth: 160,
+				weight: 3.3,
+				minimumWidth: 160,
 				project: item => item,
 			},
 			{
 				label: localize('keybindings.source', 'Source'),
 				templateId: 'shortcut-source',
-				weight: 1.3, minimumWidth: 90,
+				weight: 1.3,
+				minimumWidth: 90,
 				project: item => item,
 			},
 		];
 		const renderers = [actions, command, keybinding, shortcutTextRenderer('when'), shortcutTextRenderer('source')];
-		const table = new Table('KeybindingsEditor', container, {
-			headerRowHeight: 30,
-			getHeight: item => commandIdMatches(item, this.searchInput?.value ?? '') ? 40 : 24,
-		}, columns, renderers, {
-			ariaLabel: localize('workbench.manageKeyboardShortcuts', 'Keyboard Shortcuts'),
-			scrolling: 'managed',
-			identityProvider: { getId: item => item.id },
-			accessibilityProvider: {
-				getAriaLabel: item => localize('keybindings.rowLabel', '{0}, {1}, {2}, {3}',
-					item.commandLabel,
-					item.keyLabel || localize('keybindings.sourceUnassigned', 'Unassigned'),
-					item.when || localize('keybindings.always', 'Always'),
-					item.sourceLabel,
-				),
+		const table = new Table(
+			'KeybindingsEditor',
+			container,
+			{
+				headerRowHeight: 30,
+				getHeight: item => (commandIdMatches(item, this.searchInput?.value ?? '') ? 40 : 24),
 			},
-		});
-		table.domNode.setAttribute('aria-description', localize('keybindings.tableHelp', 'Use arrow keys to navigate shortcuts and Enter to edit. Tab reaches row actions and column separators. Drag a column separator, or focus it and use arrow keys, to resize columns. Double-click a separator to reset its column width.'));
+			columns,
+			renderers,
+			{
+				ariaLabel: localize('workbench.manageKeyboardShortcuts', 'Keyboard Shortcuts'),
+				scrolling: 'managed',
+				identityProvider: { getId: item => item.id },
+				accessibilityProvider: {
+					getAriaLabel: item =>
+						localize(
+							'keybindings.rowLabel',
+							'{0}, {1}, {2}, {3}',
+							item.commandLabel,
+							item.keyLabel || localize('keybindings.sourceUnassigned', 'Unassigned'),
+							item.when || localize('keybindings.always', 'Always'),
+							item.sourceLabel,
+						),
+				},
+			},
+		);
+		table.domNode.setAttribute(
+			'aria-description',
+			localize(
+				'keybindings.tableHelp',
+				'Use arrow keys to navigate shortcuts and Enter to edit. Tab reaches row actions and column separators. Drag a column separator, or focus it and use arrow keys, to resize columns. Double-click a separator to reset its column width.',
+			),
+		);
 		return table;
 	}
 
@@ -552,17 +694,26 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		dialog.setAttribute('aria-modal', 'true');
 		this.recorderTitle = h(ownerDocument, 'p');
 		this.recorderTitle.className = 'ash-keybindings-recorder-message';
-		this.recorderTitle.textContent = localize('keybindings.recordingPrompt', 'Press desired key combination and then press ENTER.');
+		this.recorderTitle.textContent = localize(
+			'keybindings.recordingPrompt',
+			'Press desired key combination and then press ENTER.',
+		);
 		const help = h(ownerDocument, 'p');
 		help.className = 'ash-keybindings-recorder-help';
 		help.id = `ash-keybindings-recorder-help-${nextRecorderHelpId++}`;
-		help.textContent = localize('keybindings.recordingHelp', 'Press up to {0} chords in order. Enter saves; Escape clears the binding, then cancels when empty. Tab and Shift+Tab keep focus in the recorder. Modified Enter and Escape are recorded. Use Keyboard Shortcuts (JSON) for bare Enter, Escape, Tab or Shift+Tab. After {0} chords, the next chord starts a new sequence.', MAX_KEYBINDING_CHORDS);
+		help.textContent = localize(
+			'keybindings.recordingHelp',
+			'Press up to {0} chords in order. Enter saves; Escape clears the binding, then cancels when empty. Tab and Shift+Tab keep focus in the recorder. Modified Enter and Escape are recorded. Use Keyboard Shortcuts (JSON) for bare Enter, Escape, Tab or Shift+Tab. After {0} chords, the next chord starts a new sequence.',
+			MAX_KEYBINDING_CHORDS,
+		);
 		dialog.setAttribute('aria-describedby', help.id);
-		this.keyInput = this._register(new InputBox(dialog, {
-			inputBoxStyles: defaultInputBoxStyles,
-			ariaLabel: localize('keybindings.record', 'Record keybinding'),
-			presentation: 'field',
-		}));
+		this.keyInput = this._register(
+			new InputBox(dialog, {
+				inputBoxStyles: defaultInputBoxStyles,
+				ariaLabel: localize('keybindings.record', 'Record keybinding'),
+				presentation: 'field',
+			}),
+		);
 		this.keyInput.inputElement.readOnly = true;
 		this.keyInput.element.classList.add('ash-keybindings-record-input');
 		this.keyInput.inputElement.setAttribute('aria-describedby', help.id);
@@ -575,15 +726,18 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.recorderError.hidden = true;
 		dialog.append(this.recorderTitle, this.keyInput.element, this.recorderPreview, this.recorderError, help);
 		recorder.append(dialog);
-		this._register(addDisposableListener(recorder, 'mousedown', event => {
-			if (event.target === recorder && !this.saving) this.closeRecorder();
-		}));
+		this._register(
+			addDisposableListener(recorder, 'mousedown', event => {
+				if (event.target === recorder && !this.saving) this.closeRecorder();
+			}),
+		);
 		this._register(this.keyInput.onKeyDown(event => this.recordKeybinding(event)));
 		return recorder;
 	}
 
 	private openRecorder(item: KeyboardShortcutItem): void {
-		if (this.isDisposed || !this.input || this.saving || !this.recorder || !this.recorderTitle || !this.keyInput) return;
+		if (this.isDisposed || !this.input || this.saving || !this.recorder || !this.recorderTitle || !this.keyInput)
+			return;
 		if (!this.editingItem) {
 			const activeElement = this.container?.ownerDocument.activeElement;
 			this.recorderReturnFocus = isHTMLElement(activeElement) ? activeElement : undefined;
@@ -591,9 +745,14 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.editingItem = item;
 		// Record a replacement without changing the selected rule's context or arguments.
 		this.recordedChords.length = 0;
-		this.recorder.querySelector('[role="dialog"]')?.setAttribute('aria-label', item.key
-			? localize('keybindings.editTitle', 'Edit keybinding for {0}', item.commandLabel)
-			: localize('keybindings.addTitle', 'Add keybinding for {0}', item.commandLabel));
+		this.recorder
+			.querySelector('[role="dialog"]')
+			?.setAttribute(
+				'aria-label',
+				item.key
+					? localize('keybindings.editTitle', 'Edit keybinding for {0}', item.commandLabel)
+					: localize('keybindings.addTitle', 'Add keybinding for {0}', item.commandLabel),
+			);
 		this.keyInput.value = '';
 		this.recorderLabel.clear();
 		if (this.recorderError) this.recorderError.hidden = true;
@@ -644,24 +803,32 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 				this.recordedChords.length = 0;
 				this.keyInput.value = '';
 				this.recorderLabel.clear();
-				this.setStatus(localize('keybindings.recordingCleared', 'Keybinding cleared. Record a new sequence, or press Escape again to cancel.'), false);
+				this.setStatus(
+					localize(
+						'keybindings.recordingCleared',
+						'Keybinding cleared. Record a new sequence, or press Escape again to cancel.',
+					),
+					false,
+				);
 			} else this.closeRecorder();
 			return;
 		}
 		const keyboardEvent = new StandardKeyboardEvent(event);
-		const resolved = this.keyboardLayoutService.getKeyboardMapper().resolveKeyboardEvent({
-			key: keyboardEvent.key,
-			code: keyboardEvent.code,
-			keyCode: keyboardEvent.keyCode,
-			scanCode: keyboardEvent.scanCode,
-			location: keyboardEvent.location,
-			ctrlKey: keyboardEvent.ctrlKey,
-			shiftKey: keyboardEvent.shiftKey,
-			altKey: keyboardEvent.altKey,
-			metaKey: keyboardEvent.metaKey,
-			altGraphKey: keyboardEvent.altGraphKey,
-			isComposing: keyboardEvent.isComposing,
-		});
+		const resolved = this.keyboardLayoutService
+			.getKeyboardMapper()
+			.resolveKeyboardEvent({
+				key: keyboardEvent.key,
+				code: keyboardEvent.code,
+				keyCode: keyboardEvent.keyCode,
+				scanCode: keyboardEvent.scanCode,
+				location: keyboardEvent.location,
+				ctrlKey: keyboardEvent.ctrlKey,
+				shiftKey: keyboardEvent.shiftKey,
+				altKey: keyboardEvent.altKey,
+				metaKey: keyboardEvent.metaKey,
+				altGraphKey: keyboardEvent.altGraphKey,
+				isComposing: keyboardEvent.isComposing,
+			});
 		if (isModifierKey(event)) {
 			if (!this.recordedChords.length) {
 				const keys = [
@@ -671,11 +838,22 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 					event.metaKey ? 'meta' : '',
 				].filter(Boolean);
 				if (keys.length && this.recorderPreview) {
-					const modifiers = this.keybindingService.resolveKeybinding(new Keybinding(keys.map(key => logicalKey(key))));
-					this.keyInput.value = modifiers.chords.map(chord => getKeybindingLabel(
-						{ chords: [chord], operatingSystem: modifiers.operatingSystem }, KeybindingLabelStyle.UserSettings,
-					)).join('+');
-					this.recorderLabel.value = new KeybindingLabel(this.recorderPreview, { ...defaultKeybindingLabelStyles, keybinding: modifiers, presentation: 'keycap' });
+					const modifiers = this.keybindingService.resolveKeybinding(
+						new Keybinding(keys.map(key => logicalKey(key))),
+					);
+					this.keyInput.value = modifiers.chords
+						.map(chord =>
+							getKeybindingLabel(
+								{ chords: [chord], operatingSystem: modifiers.operatingSystem },
+								KeybindingLabelStyle.UserSettings,
+							),
+						)
+						.join('+');
+					this.recorderLabel.value = new KeybindingLabel(this.recorderPreview, {
+						...defaultKeybindingLabelStyles,
+						keybinding: modifiers,
+						presentation: 'keycap',
+					});
 				}
 			}
 			return;
@@ -689,17 +867,40 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		const binding = this.keybindingService.resolveUserBinding(this.recordedChords.join(' '));
 		if (binding && this.recorderPreview) {
 			// Show layout labels in the field while retaining physical keys for persistence.
-			this.keyInput.value = getKeybindingLabel({
-				chords: binding.chords.map(chord => ({ ...chord, kind: KeybindingChordKind.Logical, key: (chord.label ?? chord.key).toLocaleLowerCase() })),
-				operatingSystem: binding.operatingSystem,
-			}, KeybindingLabelStyle.UserSettings);
+			this.keyInput.value = getKeybindingLabel(
+				{
+					chords: binding.chords.map(chord => ({
+						...chord,
+						kind: KeybindingChordKind.Logical,
+						key: (chord.label ?? chord.key).toLocaleLowerCase(),
+					})),
+					operatingSystem: binding.operatingSystem,
+				},
+				KeybindingLabelStyle.UserSettings,
+			);
 			this.recorderLabel.value = new KeybindingLabel(this.recorderPreview, {
-				...defaultKeybindingLabelStyles, keybinding: binding, presentation: 'keycap',
+				...defaultKeybindingLabelStyles,
+				keybinding: binding,
+				presentation: 'keycap',
 			});
 		}
-		this.setStatus(restarting
-			? localize('keybindings.recordingRestarted', 'Started a new sequence after {0} chords: {1}.', MAX_KEYBINDING_CHORDS, chord)
-			: localize('keybindings.recordingChords', 'Recorded {0} of {1} chords: {2}.', this.recordedChords.length, MAX_KEYBINDING_CHORDS, this.keyInput.value), false);
+		this.setStatus(
+			restarting
+				? localize(
+						'keybindings.recordingRestarted',
+						'Started a new sequence after {0} chords: {1}.',
+						MAX_KEYBINDING_CHORDS,
+						chord,
+					)
+				: localize(
+						'keybindings.recordingChords',
+						'Recorded {0} of {1} chords: {2}.',
+						this.recordedChords.length,
+						MAX_KEYBINDING_CHORDS,
+						this.keyInput.value,
+					),
+			false,
+		);
 	}
 
 	private async saveEditingItem(): Promise<void> {
@@ -709,7 +910,8 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		this.setStatus(localize('keybindings.recordingSaving', 'Saving keybinding…'), false);
 		try {
 			const key = this.recordedChords.join(' ');
-			if (!this.keybindingService.resolveUserBinding(key)) throw new TypeError(localize('keybindings.invalidKey', 'Enter a valid keybinding before saving.'));
+			if (!this.keybindingService.resolveUserBinding(key))
+				throw new TypeError(localize('keybindings.invalidKey', 'Enter a valid keybinding before saving.'));
 			await this.keybindingEditingService.editKeybinding(item.keybindingItem, key, item.when || undefined);
 			if (this.isDisposed || this.editingItem !== item) return;
 			// The saved row can be replaced by the asynchronous file watcher.
@@ -718,7 +920,12 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 			this.setStatus(localize('keybindings.recordingSaved', 'Keybinding saved.'), false);
 		} catch (error) {
 			if (this.isDisposed || this.editingItem !== item) return;
-			this.setStatus(error instanceof Error ? error.message : localize('keybindings.recordingSaveFailed', 'Unable to save the keybinding.'), true);
+			this.setStatus(
+				error instanceof Error
+					? error.message
+					: localize('keybindings.recordingSaveFailed', 'Unable to save the keybinding.'),
+				true,
+			);
 		} finally {
 			if (!this.isDisposed) {
 				this.setSaving(false);
@@ -753,7 +960,12 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 			this.setStatus(localize('keybindings.removed', 'Keybinding removed.'), false);
 		} catch (error) {
 			if (this.isDisposed || this.inputReference.value !== reference) return;
-			this.setStatus(error instanceof Error ? error.message : localize('keybindings.removeFailed', 'Unable to remove the keybinding.'), true);
+			this.setStatus(
+				error instanceof Error
+					? error.message
+					: localize('keybindings.removeFailed', 'Unable to remove the keybinding.'),
+				true,
+			);
 		}
 	}
 
@@ -764,7 +976,11 @@ export class KeybindingsEditor extends EditorPane implements IKeybindingsEditorP
 		if (this.clearSearchButton) this.clearSearchButton.enabled = !!this.searchInput?.value;
 		this.table.splice(0, this.table.length, items);
 		const countLabel = this.sortSearchButton?.checked
-			? localize('keybindings.countByPrecedence', '{0} shortcuts, sorted by precedence, highest first', items.length)
+			? localize(
+					'keybindings.countByPrecedence',
+					'{0} shortcuts, sorted by precedence, highest first',
+					items.length,
+				)
 			: localize('keybindings.countAlphabetically', '{0} shortcuts, sorted alphabetically', items.length);
 		if (this.count && this.count.textContent !== countLabel) this.count.textContent = countLabel;
 		if (this.empty) this.empty.hidden = items.length !== 0;
@@ -791,7 +1007,9 @@ interface ShortcutActionsTemplate {
 	item: KeyboardShortcutItem | undefined;
 }
 
-function shortcutTextRenderer(column: 'when' | 'source'): ITableRenderer<KeyboardShortcutItem, { element: HTMLElement; hover: MutableDisposable<IManagedHover>; }> {
+function shortcutTextRenderer(
+	column: 'when' | 'source',
+): ITableRenderer<KeyboardShortcutItem, { element: HTMLElement; hover: MutableDisposable<IManagedHover> }> {
 	return {
 		templateId: `shortcut-${column}`,
 		renderTemplate: container => {
@@ -803,7 +1021,9 @@ function shortcutTextRenderer(column: 'when' | 'source'): ITableRenderer<Keyboar
 		renderElement: (item, _index, template) => {
 			const content = column === 'when' ? item.when : item.sourceLabel;
 			template.element.textContent = content;
-			template.hover.value = content ? getHoverDelegate().setupHover({ target: template.element, content }) : undefined;
+			template.hover.value = content
+				? getHoverDelegate().setupHover({ target: template.element, content })
+				: undefined;
 		},
 		disposeTemplate: template => template.hover.dispose(),
 	};
@@ -818,16 +1038,27 @@ function commandIdMatches(item: KeyboardShortcutItem, query: string): boolean {
 	return text.split(/\s+/).some(term => term && command.includes(term) && !label.includes(term));
 }
 
-registerColor('keybindingTable.headerBackground', {
-	dark: transparent('foreground', 0.04),
-	light: transparent('foreground', 0.04),
-	hcDark: 'editor.background',
-	hcLight: 'editor.background',
-}, { description: 'Background color for the keyboard shortcuts table header.', owner: 'workbench.preferences' });
+registerColor(
+	'keybindingTable.headerBackground',
+	{
+		dark: transparent('foreground', 0.04),
+		light: transparent('foreground', 0.04),
+		hcDark: 'editor.background',
+		hcLight: 'editor.background',
+	},
+	{ description: 'Background color for the keyboard shortcuts table header.', owner: 'workbench.preferences' },
+);
 
-registerColor('keybindingTable.rowsBackground', {
-	dark: transparent('foreground', 0.04),
-	light: transparent('foreground', 0.04),
-	hcDark: 'editor.background',
-	hcLight: 'editor.background',
-}, { description: 'Background color for the keyboard shortcuts table alternating rows.', owner: 'workbench.preferences' });
+registerColor(
+	'keybindingTable.rowsBackground',
+	{
+		dark: transparent('foreground', 0.04),
+		light: transparent('foreground', 0.04),
+		hcDark: 'editor.background',
+		hcLight: 'editor.background',
+	},
+	{
+		description: 'Background color for the keyboard shortcuts table alternating rows.',
+		owner: 'workbench.preferences',
+	},
+);

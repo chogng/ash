@@ -7,11 +7,10 @@ import { CharacterClassifier } from './characterClassifier.js';
 export const enum WordCharacterClass {
 	Regular = 0,
 	Whitespace = 1,
-	WordSeparator = 2
+	WordSeparator = 2,
 }
 
 export class WordCharacterClassifier extends CharacterClassifier<WordCharacterClass> {
-
 	public readonly intlSegmenterLocales: Intl.UnicodeBCP47LocaleIdentifier[];
 	private readonly _segmenter: Lazy<Intl.Segmenter> | null = null;
 	private _cachedLine: string | null = null;
@@ -96,7 +95,10 @@ export interface IntlWordSegmentData extends Intl.SegmentData {
 
 const wordClassifierCache = new LRUCache<string, WordCharacterClassifier>(10);
 
-export function getMapForWordSeparators(wordSeparators: string, intlSegmenterLocales: Intl.UnicodeBCP47LocaleIdentifier[]): WordCharacterClassifier {
+export function getMapForWordSeparators(
+	wordSeparators: string,
+	intlSegmenterLocales: Intl.UnicodeBCP47LocaleIdentifier[],
+): WordCharacterClassifier {
 	const key = `${wordSeparators}/${intlSegmenterLocales.join(',')}`;
 	let result = wordClassifierCache.get(key)!;
 	if (!result) {

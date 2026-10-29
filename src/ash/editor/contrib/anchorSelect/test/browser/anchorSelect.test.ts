@@ -28,17 +28,19 @@ test('Selection anchor follows edits and supports set, go to, select, and cancel
 	fixture.viewport.layout({ width: 240, height: 40 });
 	await Promise.resolve();
 	assert.equal(fixture.controller.selectionAnchorSet, true);
-	assert.deepEqual(fixture.decorations.decorations[0]?.range, Range.fromPositions(new Position((0) + 1, (2) + 1)));
+	assert.deepEqual(fixture.decorations.decorations[0]?.range, Range.fromPositions(new Position(0 + 1, 2 + 1)));
 	assert.equal(fixture.model.getAllDecorations()[0]?.options.className, 'selection-anchor');
 
-	fixture.model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (0) + 1)), text: 'x' }]);
+	fixture.model.applyEdits([{ range: Range.fromPositions(new Position(0 + 1, 0 + 1)), text: 'x' }]);
 	fixture.selections.setSelections(singleCaret(0, 0));
 	fixture.controller.goToSelectionAnchor();
 	assert.deepEqual(fixture.selections.getSelections(), singleCaret(0, 3));
 
 	fixture.selections.setSelections(singleCaret(0, 5));
 	fixture.controller.selectFromAnchorToCursor();
-	assert.deepEqual(fixture.selections.getSelections(), [Selection.fromPositions(new Position((0) + 1, (3) + 1), new Position((0) + 1, (5) + 1))]);
+	assert.deepEqual(fixture.selections.getSelections(), [
+		Selection.fromPositions(new Position(0 + 1, 3 + 1), new Position(0 + 1, 5 + 1)),
+	]);
 	assert.equal(fixture.controller.selectionAnchorSet, false);
 	assert.deepEqual(fixture.decorations.decorations, []);
 
@@ -66,7 +68,10 @@ test('Selection anchor keybindings use the two-key commands and leave navigation
 	const select = keydown(fixture.dom.window, 'k', { ctrlKey: true });
 	fixture.input.dispatchEvent(select);
 	assert.equal(select.defaultPrevented, true);
-	assert.deepEqual(fixture.selections.getSelections()[0]!, Selection.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (4) + 1)));
+	assert.deepEqual(
+		fixture.selections.getSelections()[0]!,
+		Selection.fromPositions(new Position(0 + 1, 1 + 1), new Position(0 + 1, 4 + 1)),
+	);
 	assert.equal(fixture.controller.selectionAnchorSet, false);
 
 	fixture.controller.setSelectionAnchor();
@@ -92,7 +97,13 @@ function createFixture(text: string): {
 	const model = new TextModel(text);
 	const selections = createTestCursorsController(model, singleCaret(0, 0));
 	const decorations = new TextDecorationCollection<void>(model);
-	const viewport = new View({ container, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer(), selectionController: selections });
+	const viewport = new View({
+		container,
+		model,
+		lineHeight: 20,
+		textMeasurer: new FixedTextMeasurer(),
+		selectionController: selections,
+	});
 	const input = h(dom.window.document, 'textarea') as unknown as HTMLTextAreaElement;
 	container.append(input);
 	const editor = {
@@ -113,16 +124,29 @@ function createFixture(text: string): {
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;
 	readonly contentLeftPadding = 12;
-	refresh(): boolean { return false; }
-	measureLineWidth(text: string): number { return text.length * 10; }
+	refresh(): boolean {
+		return false;
+	}
+	measureLineWidth(text: string): number {
+		return text.length * 10;
+	}
 }
 
 function singleCaret(lineIndex: number, columnIndex: number): readonly Selection[] {
-	return [Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1))];
+	return [Selection.fromPositions(new Position(lineIndex + 1, columnIndex + 1))];
 }
 
-function keydown(targetWindow: typeof browserEnvironment.window, key: string, options: KeyboardEventInit = {}): KeyboardEvent {
-	return new targetWindow.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key, ...options }) as unknown as KeyboardEvent;
+function keydown(
+	targetWindow: typeof browserEnvironment.window,
+	key: string,
+	options: KeyboardEventInit = {},
+): KeyboardEvent {
+	return new targetWindow.KeyboardEvent('keydown', {
+		bubbles: true,
+		cancelable: true,
+		key,
+		...options,
+	}) as unknown as KeyboardEvent;
 }
 
 const codeFeatures = registerTestCodeEditorFeatures();

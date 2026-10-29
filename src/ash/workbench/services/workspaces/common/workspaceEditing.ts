@@ -4,9 +4,13 @@ import type { URI } from '../../../../base/common/uri.js';
 /** Edits workspace metadata through its owning host; directory authorization remains separate. */
 export interface IWorkspaceEditingService {
 	validateFolders(folders: readonly URI[]): void;
-	addFolders(folders: readonly { readonly uri: URI; readonly name?: string; }[]): Promise<void>;
+	addFolders(folders: readonly { readonly uri: URI; readonly name?: string }[]): Promise<void>;
 	removeFolders(folders: readonly URI[]): Promise<void>;
-	updateFolders(index: number, deleteCount?: number, foldersToAdd?: readonly { readonly uri: URI; readonly name?: string; }[]): Promise<void>;
+	updateFolders(
+		index: number,
+		deleteCount?: number,
+		foldersToAdd?: readonly { readonly uri: URI; readonly name?: string }[],
+	): Promise<void>;
 	/** Enters an existing workspace through the current window's host. */
 	enterWorkspace(path: URI): Promise<void>;
 	saveAndEnterWorkspace(path: URI): Promise<void>;
@@ -17,5 +21,7 @@ export const IWorkspaceEditingService = createServiceIdentifier<IWorkspaceEditin
 
 /** The workspace model was published; callers must keep its saved metadata during recovery. */
 export class WorkspaceTransitionCommittedError extends Error {
-	constructor(message: string, cause: unknown) { super(message, { cause }); }
+	constructor(message: string, cause: unknown) {
+		super(message, { cause });
+	}
 }

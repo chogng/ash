@@ -9,7 +9,15 @@ import type { IDimension } from './core/2d/dimension.js';
 import type { IRange, Range } from './core/range.js';
 import type { IPosition, Position } from './core/position.js';
 import type { ISelection, Selection } from './core/selection.js';
-import type { IModelDecoration, IModelDecorationsChangeAccessor, IModelDeltaDecoration, ITextModel, IValidEditOperation, OverviewRulerLane, TrackedRangeStickiness } from './model.js';
+import type {
+	IModelDecoration,
+	IModelDecorationsChangeAccessor,
+	IModelDeltaDecoration,
+	ITextModel,
+	IValidEditOperation,
+	OverviewRulerLane,
+	TrackedRangeStickiness,
+} from './model.js';
 import type { IModelDecorationsChangedEvent } from './textModelEvents.js';
 
 export interface INewScrollPosition {
@@ -34,7 +42,6 @@ export interface IContentSizeChangedEvent {
 	readonly contentWidthChanged: boolean;
 	readonly contentHeightChanged: boolean;
 }
-
 
 /** Collects edit operations and tracked selections for one editor command. */
 export interface IEditOperationBuilder {
@@ -107,7 +114,7 @@ export interface IViewState {
 export interface ICodeEditorViewState {
 	cursorState: ICursorState[];
 	viewState: IViewState;
-	contributionsState: { [id: string]: unknown; };
+	contributionsState: { [id: string]: unknown };
 }
 
 export interface IDiffEditorViewState {
@@ -200,7 +207,7 @@ export interface IEditorContribution extends IDisposable {
 	restoreViewState?(state: unknown): void;
 }
 
-export interface IDiffEditorContribution extends IDisposable { }
+export interface IDiffEditorContribution extends IDisposable {}
 
 export function isThemeColor(value: unknown): value is ThemeColor {
 	return typeof value === 'object' && value !== null && typeof (value as ThemeColor).id === 'string';
@@ -233,8 +240,8 @@ export interface IThemeDecorationRenderOptions {
 	overviewRulerColor?: string | ThemeColor;
 	before?: IContentDecorationRenderOptions;
 	after?: IContentDecorationRenderOptions;
-	beforeInjectedText?: IContentDecorationRenderOptions & { affectsLetterSpacing?: boolean; };
-	afterInjectedText?: IContentDecorationRenderOptions & { affectsLetterSpacing?: boolean; };
+	beforeInjectedText?: IContentDecorationRenderOptions & { affectsLetterSpacing?: boolean };
+	afterInjectedText?: IContentDecorationRenderOptions & { affectsLetterSpacing?: boolean };
 }
 
 export interface IContentDecorationRenderOptions {
@@ -282,10 +289,7 @@ export interface IDecorationOptions {
 	renderOptions?: IDecorationInstanceRenderOptions;
 }
 
-export const EditorType = {
-	ICodeEditor: 'vs.editor.ICodeEditor',
-	IDiffEditor: 'vs.editor.IDiffEditor',
-};
+export const EditorType = { ICodeEditor: 'vs.editor.ICodeEditor', IDiffEditor: 'vs.editor.IDiffEditor' };
 
 export const enum Handler {
 	CompositionStart = 'compositionStart',

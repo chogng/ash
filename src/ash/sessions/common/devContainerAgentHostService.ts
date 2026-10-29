@@ -11,4 +11,5 @@ export interface IDevContainerAgentHostService {
 	stopContainer(workspace: string, token: CancellationToken): Promise<void>;
 	removeContainer(workspace: string, token: CancellationToken): Promise<void>;
 }
-export const IDevContainerAgentHostService = createDecorator<IDevContainerAgentHostService>('devContainerAgentHostService');
+export const IDevContainerAgentHostService =
+	createDecorator<IDevContainerAgentHostService>('devContainerAgentHostService');

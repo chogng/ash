@@ -42,11 +42,15 @@ export class NativeKeyboardLayoutMainService extends Disposable {
 export function keyboardLayoutChannel(service: NativeKeyboardLayoutMainService): IServerChannel {
 	return {
 		async call<T>(_context: string, command: string, arg?: unknown): Promise<T> {
-			if (command !== 'readKeyboardLayout' || arg !== undefined) { throw new TypeError('Invalid keyboard layout read'); }
-			return await service.readKeyboardLayout() as T;
+			if (command !== 'readKeyboardLayout' || arg !== undefined) {
+				throw new TypeError('Invalid keyboard layout read');
+			}
+			return (await service.readKeyboardLayout()) as T;
 		},
 		listen<T>(_context: string, event: string, arg?: unknown): Event<T> {
-			if (event !== 'onDidChangeKeyboardLayout' || arg !== undefined) { throw new TypeError('Invalid keyboard layout subscription'); }
+			if (event !== 'onDidChangeKeyboardLayout' || arg !== undefined) {
+				throw new TypeError('Invalid keyboard layout subscription');
+			}
 			return service.onDidChangeKeyboardLayout as Event<T>;
 		},
 	};
@@ -85,7 +89,7 @@ function readNativeKeyboardLayout(nativeKeymap: NativeKeymapModule): IKeyboardLa
 function nativeLayoutIdentity(
 	layout: ReturnType<NativeKeymapModule['getCurrentKeyboardLayout']>,
 	operatingSystem: OperatingSystem,
-): { readonly id: string; readonly label: string; } {
+): { readonly id: string; readonly label: string } {
 	if (operatingSystem === OperatingSystem.Windows && 'name' in layout) {
 		return { id: layout.name, label: layout.text };
 	}
@@ -93,19 +97,19 @@ function nativeLayoutIdentity(
 		return { id: layout.id, label: layout.localizedName || layout.id };
 	}
 	if ('layout' in layout) {
-		return {
-			id: layout.layout,
-			label: layout.variant ? `${layout.layout} (${layout.variant})` : layout.layout,
-		};
+		return { id: layout.layout, label: layout.variant ? `${layout.layout} (${layout.variant})` : layout.layout };
 	}
 	return { id: 'unknown', label: 'Unknown keyboard layout' };
 }
 
 function currentOperatingSystem(): OperatingSystem {
 	switch (process.platform) {
-		case 'win32': return OperatingSystem.Windows;
-		case 'darwin': return OperatingSystem.Macintosh;
-		default: return OperatingSystem.Linux;
+		case 'win32':
+			return OperatingSystem.Windows;
+		case 'darwin':
+			return OperatingSystem.Macintosh;
+		default:
+			return OperatingSystem.Linux;
 	}
 }
 

@@ -18,10 +18,12 @@ export class Client extends Disposable {
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 		this._register(toDisposable(() => ipcRenderer.send('ash:disconnect')));
-		this.peer = this._register(new IPCClient({
-			onMessage: this.messages.event,
-			send: buffer => ipcRenderer.send('ash:message', buffer.buffer),
-		}, id));
+		this.peer = this._register(
+			new IPCClient(
+				{ onMessage: this.messages.event, send: buffer => ipcRenderer.send('ash:message', buffer.buffer) },
+				id,
+			),
+		);
 		// Electron preserves sender message order: hello precedes the first channel call.
 		ipcRenderer.send('ash:hello');
 	}

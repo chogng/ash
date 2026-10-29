@@ -24,13 +24,21 @@ teardown(() => {
 test('IdleTaskQueue imports before browser bootstrap but construction still requires a window', () => {
 	// This process has no DOM fixture, unlike the scheduling tests below.
 	const moduleUrl = new URL('../../browser/gpu/taskQueue.js', import.meta.url).href;
-	const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+	const result = spawnSync(
+		process.execPath,
+		[
+			'--input-type=module',
+			'-e',
+			`
 		import assert from 'node:assert/strict';
 		assert.equal(globalThis.window, undefined);
 		const { IdleTaskQueue } = await import(${JSON.stringify(moduleUrl)});
 		assert.equal(globalThis.window, undefined);
 		assert.throws(() => new IdleTaskQueue({}), /A browser window is required/);
-	`], { encoding: 'utf8' });
+	`,
+		],
+		{ encoding: 'utf8' },
+	);
 	assert.equal(result.error, undefined);
 	assert.equal(result.signal, null);
 	assert.equal(result.status, 0, result.stderr);
@@ -40,15 +48,23 @@ test('IdleTaskQueue uses browser idle deadlines and repeats unfinished tasks in 
 	let pending: IdleRequestCallback | undefined;
 	let requests = 0;
 	Object.assign(ownerWindow, {
-		requestIdleCallback: (callback: IdleRequestCallback) => { pending = callback; return ++requests; },
+		requestIdleCallback: (callback: IdleRequestCallback) => {
+			pending = callback;
+			return ++requests;
+		},
 		cancelIdleCallback: () => assert.fail('A completed idle callback must not be cancelled'),
 	});
 	const { IdleTaskQueue } = await import('../../browser/gpu/taskQueue.js');
 	using queue = new IdleTaskQueue(new NullLoggerService());
 	const calls: string[] = [];
 	let remaining = 2;
-	queue.enqueue(() => { calls.push('first'); return --remaining > 0; });
-	queue.enqueue(() => { calls.push('second'); });
+	queue.enqueue(() => {
+		calls.push('first');
+		return --remaining > 0;
+	});
+	queue.enqueue(() => {
+		calls.push('second');
+	});
 	assert.equal(requests, 1);
 	pending!({ didTimeout: false, timeRemaining: () => 50 });
 	assert.deepEqual(calls, ['first', 'first', 'second']);
@@ -66,11 +82,17 @@ test('IdleTaskQueue flush, clear and dispose cancel pending idle work', async ()
 	const queue = new IdleTaskQueue(new NullLoggerService());
 	let calls = 0;
 	try {
-		queue.enqueue(() => { calls++; });
+		queue.enqueue(() => {
+			calls++;
+		});
 		queue.flush();
-		queue.enqueue(() => { calls++; });
+		queue.enqueue(() => {
+			calls++;
+		});
 		queue.clear();
-		queue.enqueue(() => { calls++; });
+		queue.enqueue(() => {
+			calls++;
+		});
 	} finally {
 		queue.dispose();
 	}
@@ -84,15 +106,23 @@ test('IdleTaskQueue selects the priority timeout fallback when idle callbacks ar
 	let pending: (() => void) | undefined;
 	let requests = 0;
 	Object.assign(ownerWindow, {
-		setTimeout: (callback: () => void) => { pending = callback; return ++requests; },
+		setTimeout: (callback: () => void) => {
+			pending = callback;
+			return ++requests;
+		},
 		clearTimeout: () => assert.fail('A completed timeout must not be cancelled'),
 	});
 	const { IdleTaskQueue } = await import('../../browser/gpu/taskQueue.js');
 	using queue = new IdleTaskQueue(new NullLoggerService());
 	const calls: string[] = [];
 	let remaining = 2;
-	queue.enqueue(() => { calls.push('first'); return --remaining > 0; });
-	queue.enqueue(() => { calls.push('second'); });
+	queue.enqueue(() => {
+		calls.push('first');
+		return --remaining > 0;
+	});
+	queue.enqueue(() => {
+		calls.push('second');
+	});
 	assert.equal(requests, 1);
 	pending!();
 	assert.deepEqual(calls, ['first', 'first', 'second']);
@@ -112,11 +142,17 @@ test('IdleTaskQueue fallback flush, clear and dispose cancel pending timeouts', 
 	const queue = new IdleTaskQueue(new NullLoggerService());
 	let calls = 0;
 	try {
-		queue.enqueue(() => { calls++; });
+		queue.enqueue(() => {
+			calls++;
+		});
 		queue.flush();
-		queue.enqueue(() => { calls++; });
+		queue.enqueue(() => {
+			calls++;
+		});
 		queue.clear();
-		queue.enqueue(() => { calls++; });
+		queue.enqueue(() => {
+			calls++;
+		});
 	} finally {
 		queue.dispose();
 	}

@@ -25,20 +25,36 @@ const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
 test('text inputs resolve once and retain shared provider text until the last input closes', async () => {
-	using models = uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, {});
+	using models = uriIdentityServices.createInstance(
+		BrowserTextModelService,
+		{
+			onDidChange: Event.None,
+			resolve: async request => ({ resource: request.resource, text: '', revision: undefined }),
+			save: async () => ({ revision: undefined }),
+		} satisfies ITextResourceStore,
+		{},
+	);
 	using services = new InstantiationService();
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
 	using text = new TextModel('shared text');
 	let calls = 0;
-	using provider = services.get(ITextModelService).registerTextModelContentProvider('review', { provideTextContent: async () => { calls++; return text; } });
+	using provider = services.get(ITextModelService).registerTextModelContentProvider('review', {
+		provideTextContent: async () => {
+			calls++;
+			return text;
+		},
+	});
 	const resource = URI.parse('review:/content.txt');
 	using first = services.createInstance(TextResourceEditorInput, resource, 'Review');
 	using second = services.createInstance(TextResourceEditorInput, resource, undefined);
 	const opening = first.resolve();
 	assert.equal(first.resolve(), opening);
 	const [firstModel, secondModel] = await Promise.all([opening, second.resolve()]);
-	assert.deepEqual([calls, first.getName(), second.getName(), firstModel.textEditorModel === secondModel.textEditorModel], [2, 'Review', 'content.txt', true]);
+	assert.deepEqual(
+		[calls, first.getName(), second.getName(), firstModel.textEditorModel === secondModel.textEditorModel],
+		[2, 'Review', 'content.txt', true],
+	);
 	first.dispose();
 	assert.deepEqual([firstModel.isResolved(), secondModel.isResolved(), text.isDisposed()], [false, true, false]);
 	second.dispose();
@@ -46,7 +62,15 @@ test('text inputs resolve once and retain shared provider text until the last in
 });
 
 test('text input retries provider failures and releases content arriving after disposal', async () => {
-	using models = uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: '', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, {});
+	using models = uriIdentityServices.createInstance(
+		BrowserTextModelService,
+		{
+			onDidChange: Event.None,
+			resolve: async request => ({ resource: request.resource, text: '', revision: undefined }),
+			save: async () => ({ revision: undefined }),
+		} satisfies ITextResourceStore,
+		{},
+	);
 	using services = new InstantiationService();
 	services.registerInstance(ITextModelResourceService, models);
 	services.registerSingleton(ITextModelService, () => services.createInstance(TextModelResolverService));
@@ -56,7 +80,9 @@ test('text input retries provider failures and releases content arriving after d
 	using provider = services.get(ITextModelService).registerTextModelContentProvider('review', {
 		provideTextContent: async () => {
 			if (++calls === 1) throw new Error('Content unavailable');
-			return new Promise<TextModel>(resolve => { complete = resolve; });
+			return new Promise<TextModel>(resolve => {
+				complete = resolve;
+			});
 		},
 	});
 	using input = services.createInstance(TextResourceEditorInput, URI.parse('review:/content.txt'), undefined);
@@ -75,19 +101,43 @@ test('live file inputs match resource requests while custom views keep their sep
 	const group = new EditorGroupModel();
 	const original = group.openEditor(input).editor;
 	assert.ok(input instanceof EditorInput);
-	assert.deepEqual([input.matches(renamed), input.matches({ resource: input.resource }), input.matches(custom), custom.matches({ resource: input.resource, editorId: custom.editorId })], [true, true, false, true]);
+	assert.deepEqual(
+		[
+			input.matches(renamed),
+			input.matches({ resource: input.resource }),
+			input.matches(custom),
+			custom.matches({ resource: input.resource, editorId: custom.editorId }),
+		],
+		[true, true, false, true],
+	);
 	group.openEditor(renamed);
 	group.openEditor(custom);
-	assert.deepEqual([group.entries.length, group.entries[0]!.instanceId, input.getName()], [2, original.instanceId, 'Selected name']);
+	assert.deepEqual(
+		[group.entries.length, group.entries[0]!.instanceId, input.getName()],
+		[2, original.instanceId, 'Selected name'],
+	);
 });
 
-for (const [kind, createInput] of [['text', createDiffEditorInput], ['binary', createBinaryDiffEditorInput]] as const) {
+for (const [kind, createInput] of [
+	['text', createDiffEditorInput],
+	['binary', createBinaryDiffEditorInput],
+] as const) {
 	test(`${kind} comparison names follow their sources and all view subscriptions are released`, () => {
 		using originalChanges = new Emitter<void>();
 		using modifiedChanges = new Emitter<void>();
 		let name = 'Before';
-		const original = { resource: URI.file('/project/before.bin'), get label() { return name; }, onDidChangeLabel: originalChanges.event };
-		const modified = { resource: URI.file('/project/after.bin'), label: 'After', onDidChangeLabel: modifiedChanges.event };
+		const original = {
+			resource: URI.file('/project/before.bin'),
+			get label() {
+				return name;
+			},
+			onDidChangeLabel: originalChanges.event,
+		};
+		const modified = {
+			resource: URI.file('/project/after.bin'),
+			label: 'After',
+			onDidChangeLabel: modifiedChanges.event,
+		};
 		using input = createInput(original, modified);
 		using firstView = new DisposableStore();
 		using secondView = new DisposableStore();
@@ -101,12 +151,30 @@ for (const [kind, createInput] of [['text', createDiffEditorInput], ['binary', c
 		const restored = EditorInputSerializers.deserialize(JSON.parse(JSON.stringify(snapshot)));
 		assert.ok(restored instanceof EditorInput);
 		try {
-			assert.deepEqual([labels, restored.label, snapshot.value], [[`second:Renamed ↔ After`], 'Renamed ↔ After', {
-				original: EditorInputSerializers.serialize(original), modified: EditorInputSerializers.serialize(modified),
-			}]);
-		} finally { restored.dispose(); }
+			assert.deepEqual(
+				[labels, restored.label, snapshot.value],
+				[
+					[`second:Renamed ↔ After`],
+					'Renamed ↔ After',
+					{
+						original: EditorInputSerializers.serialize(original),
+						modified: EditorInputSerializers.serialize(modified),
+					},
+				],
+			);
+		} finally {
+			restored.dispose();
+		}
 		secondView.clear();
 		input.dispose();
-		assert.deepEqual([originalChanges.hasListeners(), modifiedChanges.hasListeners(), originalChanges.isDisposed, modifiedChanges.isDisposed], [false, false, false, false]);
+		assert.deepEqual(
+			[
+				originalChanges.hasListeners(),
+				modifiedChanges.hasListeners(),
+				originalChanges.isDisposed,
+				modifiedChanges.isDisposed,
+			],
+			[false, false, false, false],
+		);
 	});
 }

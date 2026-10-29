@@ -13,7 +13,11 @@ export class SettingsRenderer extends Disposable {
 	private readonly pages = new Map<string, SettingsPageRenderer<ISetting | SettingsSectionReference>>();
 	private readonly widgets = this._register(new DisposableMap<string, SettingWidget>());
 
-	constructor(private readonly container: HTMLElement, private readonly options: SettingWidgetOptions, @IInstantiationService private readonly instantiationService: IInstantiationService) {
+	constructor(
+		private readonly container: HTMLElement,
+		private readonly options: SettingWidgetOptions,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+	) {
 		super();
 		this._register(toDisposable(() => this.pages.clear()));
 	}
@@ -59,10 +63,14 @@ export class SettingsRenderer extends Disposable {
  * Owns retained section controls within Preferences. Search and navigation carry
  * only data references; domain services never implement this renderer contract.
  */
-export abstract class SettingsPageRenderer<T extends ISetting | SettingsSectionReference = ISetting | SettingsSectionReference> extends Disposable {
+export abstract class SettingsPageRenderer<
+	T extends ISetting | SettingsSectionReference = ISetting | SettingsSectionReference,
+> extends Disposable {
 	public readonly rendererId = generateUuid();
 	public abstract readonly categoryId: string;
-	public get settingIds(): readonly string[] | undefined { return undefined; }
+	public get settingIds(): readonly string[] | undefined {
+		return undefined;
+	}
 	public abstract readonly onDidChange: Event<void>;
 	private readonly elements = new Map<string, HTMLElement>();
 

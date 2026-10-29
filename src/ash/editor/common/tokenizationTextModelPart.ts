@@ -3,9 +3,21 @@ import type { IDisposable } from '../../base/common/lifecycle.js';
 import type { TextModel } from './model/textModel.js';
 import type { LanguageFeatureRegistry, SyntaxProviderRegistry } from './languageFeatureRegistry.js';
 import type { ILanguageIdCodec, LanguageSemanticTokensProvider, SyntaxServiceOptions } from './languages.js';
-import type { LanguageTokenizationSource, SemanticTokenModelSource, SemanticTokenSource, LanguageToken } from './tokens/languageTokens.js';
+import type {
+	LanguageTokenizationSource,
+	SemanticTokenModelSource,
+	SemanticTokenSource,
+	LanguageToken,
+} from './tokens/languageTokens.js';
 import type { LanguageRequestOptions, LanguageRequestOutcome } from './model/languageRequestCoordinator.js';
-import type { TreeSitterBracket, TreeSitterFacts, RelativeToken, TreeSitterSyntaxSession, TreeSitterTokenStyle, TreeSitterTokenizationMeasure } from './services/treeSitter/treeSitterLibraryService.js';
+import type {
+	TreeSitterBracket,
+	TreeSitterFacts,
+	RelativeToken,
+	TreeSitterSyntaxSession,
+	TreeSitterTokenStyle,
+	TreeSitterTokenizationMeasure,
+} from './services/treeSitter/treeSitterLibraryService.js';
 import { type Range } from './core/range.js';
 import { type StandardTokenType } from './encodedTokenAttributes.js';
 import { type LineTokens } from './tokens/lineTokens.js';
@@ -35,7 +47,11 @@ export interface ITokenizationTextModelPart {
 	getTokenTypeIfInsertingCharacter(lineNumber: number, column: number, character: string): StandardTokenType;
 	tokenizeLinesAt(lineNumber: number, lines: string[]): LineTokens[] | null;
 	/** Tokenizes proposed lines using the current document's lexical state without publishing them. */
-	tokenizeLinesAtAsync(lineNumber: number, lines: readonly string[], signal: AbortSignal): Promise<LineTokens[] | null>;
+	tokenizeLinesAtAsync(
+		lineNumber: number,
+		lines: readonly string[],
+		signal: AbortSignal,
+	): Promise<LineTokens[] | null>;
 	getLanguageId(): string;
 	getLanguageIdAtPosition(lineNumber: number, column: number): string;
 	setLanguageId(languageId: string, source?: string): void;
@@ -61,20 +77,24 @@ export interface ISyntaxTreeTextModelPart extends IDisposable {
 	readonly modelVersion: number;
 	readonly tokenCount: number;
 	readonly backgroundTokenizationState: BackgroundTokenizationState;
-	readonly lines: readonly { lineIndex: number; tokens: readonly LanguageToken[]; }[];
-	readonly onDidChangeTokens: Event<readonly { fromLineNumber: number; toLineNumber: number; }[]>;
+	readonly lines: readonly { lineIndex: number; tokens: readonly LanguageToken[] }[];
+	readonly onDidChangeTokens: Event<readonly { fromLineNumber: number; toLineNumber: number }[]>;
 	readonly onDidEncounterError: Event<unknown>;
 	whenReady(signal: AbortSignal): Promise<void>;
 	hasAccurateTokensForLine(line: number): boolean;
 	isCheapToTokenize(line: number): boolean;
 	forceTokenization(line: number): void;
-	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number; }[]): void;
+	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number }[]): void;
 	refreshRange(startLineNumber: number, endLineNumber: number): void;
 	getTokenCaptures(line: number): readonly RelativeToken[];
 	getLanguageTokens(line: number): readonly LanguageToken[];
 	resetStyles(): void;
 	tokenizeLinesAt(line: number, lines: readonly string[]): readonly LanguageToken[][];
-	tokenizeLinesAtAsync(line: number, lines: readonly string[], signal: AbortSignal): Promise<readonly (readonly LanguageToken[])[]>;
+	tokenizeLinesAtAsync(
+		line: number,
+		lines: readonly string[],
+		signal: AbortSignal,
+	): Promise<readonly (readonly LanguageToken[])[]>;
 	getBracketPairs(range: Range): readonly TreeSitterBracket[];
 	getFacts(signal: AbortSignal): Promise<TreeSitterFacts>;
 	getSelectionRanges(ranges: readonly Range[], signal: AbortSignal): Promise<readonly Range[]>;
@@ -102,13 +122,13 @@ export interface IModelTokenization extends ITokenizationTextModelPart, IDisposa
 	readonly textModel: TextModel;
 	readonly modelVersion: number;
 	readonly tokenCount: number;
-	readonly lines: readonly { lineIndex: number; tokens: readonly LanguageToken[]; }[];
-	readonly onDidChange: Event<readonly { fromLineNumber: number; toLineNumber: number; }[] | undefined>;
+	readonly lines: readonly { lineIndex: number; tokens: readonly LanguageToken[] }[];
+	readonly onDidChange: Event<readonly { fromLineNumber: number; toLineNumber: number }[] | undefined>;
 	readonly onDidEncounterError: Event<unknown>;
 	readonly languageTokens: LanguageTokenizationSource & SemanticTokenModelSource;
 	readonly semanticTokens?: SemanticTokenModelSource & {
 		readonly onDidEncounterError: Event<unknown>;
 		requestTokens(languageId: string, options?: LanguageRequestOptions): Promise<LanguageRequestOutcome>;
 	};
-	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number; }[]): void;
+	setVisibleLines(ranges: readonly { startLineNumber: number; endLineNumber: number }[]): void;
 }

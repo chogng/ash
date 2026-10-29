@@ -3,10 +3,18 @@ export type Comparator<T> = (left: T, right: T) => number;
 export type CompareResult = number;
 
 export namespace CompareResult {
-	export function isLessThan(result: CompareResult): boolean { return result < 0; }
-	export function isLessThanOrEqual(result: CompareResult): boolean { return result <= 0; }
-	export function isGreaterThan(result: CompareResult): boolean { return result > 0; }
-	export function isNeitherLessOrGreaterThan(result: CompareResult): boolean { return result === 0; }
+	export function isLessThan(result: CompareResult): boolean {
+		return result < 0;
+	}
+	export function isLessThanOrEqual(result: CompareResult): boolean {
+		return result <= 0;
+	}
+	export function isGreaterThan(result: CompareResult): boolean {
+		return result > 0;
+	}
+	export function isNeitherLessOrGreaterThan(result: CompareResult): boolean {
+		return result === 0;
+	}
 	export const greaterThan = 1;
 	export const lessThan = -1;
 	export const neitherLessOrGreaterThan = 0;
@@ -15,7 +23,11 @@ export namespace CompareResult {
 export const numberComparator: Comparator<number> = (left, right) => left - right;
 export const booleanComparator: Comparator<boolean> = (left, right) => numberComparator(left ? 1 : 0, right ? 1 : 0);
 
-export function equals<T>(left: readonly T[] | undefined, right: readonly T[] | undefined, itemEquals: (left: T, right: T) => boolean = strictEquals): boolean {
+export function equals<T>(
+	left: readonly T[] | undefined,
+	right: readonly T[] | undefined,
+	itemEquals: (left: T, right: T) => boolean = strictEquals,
+): boolean {
 	if (left === right) return true;
 	if (!left || !right) return false;
 	return arraysEqual(left, right, itemEquals);
@@ -23,7 +35,8 @@ export function equals<T>(left: readonly T[] | undefined, right: readonly T[] | 
 
 /** Binary-searches an indexed collection. A missing item is encoded as `-(insertionIndex + 1)`. */
 export function binarySearch2(length: number, compareToKey: (index: number) => number): number {
-	if (!Number.isSafeInteger(length) || length < 0) throw new RangeError('Binary-search length must be a non-negative safe integer');
+	if (!Number.isSafeInteger(length) || length < 0)
+		throw new RangeError('Binary-search length must be a non-negative safe integer');
 	let low = 0;
 	let high = length - 1;
 	while (low <= high) {
@@ -50,7 +63,10 @@ export function sumBy<T>(items: readonly T[], selector: (item: T) => number): nu
 	return result;
 }
 
-export function* groupAdjacentBy<T>(items: Iterable<T>, shouldGroup: (left: T, right: T) => boolean): IterableIterator<T[]> {
+export function* groupAdjacentBy<T>(
+	items: Iterable<T>,
+	shouldGroup: (left: T, right: T) => boolean,
+): IterableIterator<T[]> {
 	let group: T[] = [];
 	for (const item of items) {
 		if (group.length > 0 && !shouldGroup(group[group.length - 1]!, item)) {
@@ -93,8 +109,12 @@ export class ArrayQueue<T> {
 		return result;
 	}
 
-	peek(): T | undefined { return this.length === 0 ? undefined : this.items[this.firstIndex]; }
-	peekLast(): T | undefined { return this.length === 0 ? undefined : this.items[this.lastIndex]; }
+	peek(): T | undefined {
+		return this.length === 0 ? undefined : this.items[this.firstIndex];
+	}
+	peekLast(): T | undefined {
+		return this.length === 0 ? undefined : this.items[this.lastIndex];
+	}
 	dequeue(): T | undefined {
 		if (this.length === 0) return undefined;
 		const result = this.items[this.firstIndex];
@@ -108,7 +128,8 @@ export class ArrayQueue<T> {
 		return result;
 	}
 	takeCount(count: number): T[] {
-		if (!Number.isSafeInteger(count) || count < 0 || count > this.length) throw new RangeError('Queue count is outside the remaining items');
+		if (!Number.isSafeInteger(count) || count < 0 || count > this.length)
+			throw new RangeError('Queue count is outside the remaining items');
 		const result = this.items.slice(this.firstIndex, this.firstIndex + count);
 		this.firstIndex += count;
 		return result;
@@ -169,10 +190,7 @@ export function commonArraySuffixLength<T>(
 	}
 	const maximumLength = limit - prefixLength;
 	let length = 0;
-	while (
-		length < maximumLength &&
-		equals(left[left.length - length - 1]!, right[right.length - length - 1]!)
-	) {
+	while (length < maximumLength && equals(left[left.length - length - 1]!, right[right.length - length - 1]!)) {
 		length += 1;
 	}
 	return length;
@@ -184,22 +202,28 @@ function strictEquals<T>(left: T, right: T): boolean {
 
 /** A callback-based lazy sequence that can stop iteration early. */
 export class CallbackIterable<T> {
-	public static readonly empty = new CallbackIterable<never>(_callback => { });
+	public static readonly empty = new CallbackIterable<never>(_callback => {});
 
-	constructor(public readonly iterate: (callback: (item: T) => boolean) => void) { }
+	constructor(public readonly iterate: (callback: (item: T) => boolean) => void) {}
 
 	forEach(handler: (item: T) => void): void {
-		this.iterate(item => { handler(item); return true; });
+		this.iterate(item => {
+			handler(item);
+			return true;
+		});
 	}
 
 	toArray(): T[] {
 		const result: T[] = [];
-		this.iterate(item => { result.push(item); return true; });
+		this.iterate(item => {
+			result.push(item);
+			return true;
+		});
 		return result;
 	}
 
 	filter(predicate: (item: T) => boolean): CallbackIterable<T> {
-		return new CallbackIterable(callback => this.iterate(item => predicate(item) ? callback(item) : true));
+		return new CallbackIterable(callback => this.iterate(item => (predicate(item) ? callback(item) : true)));
 	}
 
 	map<TResult>(mapFn: (item: T) => TResult): CallbackIterable<TResult> {
@@ -208,7 +232,10 @@ export class CallbackIterable<T> {
 
 	some(predicate: (item: T) => boolean): boolean {
 		let result = false;
-		this.iterate(item => { result = predicate(item); return !result; });
+		this.iterate(item => {
+			result = predicate(item);
+			return !result;
+		});
 		return result;
 	}
 

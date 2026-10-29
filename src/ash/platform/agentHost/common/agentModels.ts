@@ -51,9 +51,9 @@ export interface AdvisorConfig {
 }
 
 export type AdvisorSelection =
-	| { readonly type: 'default'; }
-	| { readonly type: 'off'; }
-	| { readonly type: 'model'; readonly config: AdvisorConfig; };
+	| { readonly type: 'default' }
+	| { readonly type: 'off' }
+	| { readonly type: 'model'; readonly config: AdvisorConfig };
 
 export interface ModelProviderCredentialStatus {
 	readonly connection: string;
@@ -69,10 +69,12 @@ export interface ModelProviderCredentialStatus {
 
 export interface AgentModelCatalog {
 	readonly models: readonly ModelCatalogEntry[];
-	readonly scopes?: readonly { readonly connection: string; readonly identity: string | null; }[];
+	readonly scopes?: readonly { readonly connection: string; readonly identity: string | null }[];
 }
 
-export interface AgentModelProviders { readonly providers: readonly ModelProviderCredentialStatus[]; }
+export interface AgentModelProviders {
+	readonly providers: readonly ModelProviderCredentialStatus[];
+}
 
 export type ModelProviderApiFormat = 'responses' | 'chatCompletions' | 'anthropicMessages';
 
@@ -91,7 +93,7 @@ export interface CustomModelProvider {
 }
 
 export type ModelProviderTestResult =
-	{ readonly type: 'passed'; } | { readonly type: 'failed'; readonly message: string; };
+	{ readonly type: 'passed' } | { readonly type: 'failed'; readonly message: string };
 
 export interface ModelPreferencesUpdate {
 	readonly acceleration?: string | null;
@@ -100,13 +102,13 @@ export interface ModelPreferencesUpdate {
 
 /** Review selection does not change the model or effort used by the Agent. */
 export type ApprovalReviewModelSelection =
-	| { readonly type: 'automatic'; }
+	| { readonly type: 'automatic' }
 	| {
-		readonly type: 'explicit';
-		readonly model: { readonly provider: string; readonly model: string; };
-		readonly connection?: string;
-		readonly reasoningEffort?: ModelReasoningEffort;
-	};
+			readonly type: 'explicit';
+			readonly model: { readonly provider: string; readonly model: string };
+			readonly connection?: string;
+			readonly reasoningEffort?: ModelReasoningEffort;
+	  };
 
 /** Backend execution defaults. Null means no configured model, not an executable automatic selection. */
 export interface AgentModelDefaults {
@@ -127,7 +129,7 @@ export interface IAgentModelsService {
 	setApprovalReviewModel(selection: ApprovalReviewModelSelection): Promise<void>;
 	setModelPreferences(model: ModelRef, update: ModelPreferencesUpdate): Promise<void>;
 	readAdvisorDefault(): Promise<AdvisorConfig | null>;
-	setAdvisorDefault(params: { readonly commandId: string; readonly advisor: AdvisorConfig | null; }): Promise<void>;
+	setAdvisorDefault(params: { readonly commandId: string; readonly advisor: AdvisorConfig | null }): Promise<void>;
 	listCustomProviders(): Promise<readonly CustomModelProvider[]>;
 	saveCustomProvider(provider: CustomModelProvider): Promise<void>;
 	testProviderModel(provider: CustomModelProvider, model: string): Promise<ModelProviderTestResult>;
@@ -137,10 +139,10 @@ export interface IAgentModelsService {
 	setProviderApiKey(params: {
 		readonly connection: string;
 		readonly apiKey: string;
-	}): Promise<{ readonly connection: string; readonly apiKeyConfigured: boolean; }>;
+	}): Promise<{ readonly connection: string; readonly apiKeyConfigured: boolean }>;
 	removeProviderApiKey(connection: string): Promise<void>;
 	readModel(): Promise<ModelRef | null>;
-	setModel(params: { readonly commandId: string; readonly model: ModelRef; }): Promise<void>;
+	setModel(params: { readonly commandId: string; readonly model: ModelRef }): Promise<void>;
 }
 
 export const IAgentModelsService = createServiceIdentifier<IAgentModelsService>('agentModelsService');

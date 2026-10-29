@@ -32,7 +32,12 @@ test('canonical indentation commands convert the document and preserve the selec
 
 test('getReindentEditOperations follows registered language indentation rules', () => {
 	using configurations = createTestLanguageConfigurationService();
-	using model = new TextModel('if (ok) {\nvalue();\n}', { languageId: 'javascript', tabSize: 4, indentSize: 4, insertSpaces: true });
+	using model = new TextModel('if (ok) {\nvalue();\n}', {
+		languageId: 'javascript',
+		tabSize: 4,
+		indentSize: 4,
+		insertSpaces: true,
+	});
 	const edits = getReindentEditOperations(model, configurations, 1, 3);
 	model.applyEdits(edits);
 	assert.equal(model.getText(), 'if (ok) {\n    value();\n}');

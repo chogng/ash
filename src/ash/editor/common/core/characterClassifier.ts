@@ -26,7 +26,9 @@ export class CharacterClassifier<T extends number> {
 	}
 
 	get(charCode: number): T {
-		return (charCode >= 0 && charCode < 256 ? this._asciiMap[charCode] : this._map.get(charCode) ?? this._defaultValue) as T;
+		return (
+			charCode >= 0 && charCode < 256 ? this._asciiMap[charCode] : (this._map.get(charCode) ?? this._defaultValue)
+		) as T;
 	}
 
 	clear() {
@@ -35,7 +37,10 @@ export class CharacterClassifier<T extends number> {
 	}
 }
 
-const enum Boolean { False = 0, True = 1 }
+const enum Boolean {
+	False = 0,
+	True = 1,
+}
 
 export class CharacterSet {
 	private readonly _actual: CharacterClassifier<Boolean>;
@@ -44,7 +49,13 @@ export class CharacterSet {
 		this._actual = new CharacterClassifier<Boolean>(Boolean.False);
 	}
 
-	add(charCode: number): void { this._actual.set(charCode, Boolean.True); }
-	has(charCode: number): boolean { return this._actual.get(charCode) === Boolean.True; }
-	clear(): void { return this._actual.clear(); }
+	add(charCode: number): void {
+		this._actual.set(charCode, Boolean.True);
+	}
+	has(charCode: number): boolean {
+		return this._actual.get(charCode) === Boolean.True;
+	}
+	clear(): void {
+		return this._actual.clear();
+	}
 }

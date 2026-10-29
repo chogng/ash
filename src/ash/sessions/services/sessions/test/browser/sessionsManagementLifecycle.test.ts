@@ -27,30 +27,64 @@ class Provider extends Disposable implements ISessionsProvider {
 	items: ISession[] = [session('first'), session('second')];
 	createCount = 0;
 	subscribeCount = 0;
-	async list(): Promise<readonly ISession[]> { return this.items; }
-	async listAgents(): Promise<readonly ChatAgent[]> { return []; }
-	async readCatalog(id: string): Promise<ISession | undefined> { return this.items.find(session => session.sessionId === id); }
-	async subscribe(value: ISession): Promise<ISession> { this.subscribeCount++; return { ...value, agentTree: [] }; }
-	async unsubscribe(): Promise<void> { }
-	currentWorkspace(): SessionWorkspaceSelection { return { type: 'current' }; }
-	async create(_title: string, _workspace: SessionWorkspaceSelection, _agent?: ChatAgent, _creationId?: string): Promise<IActiveSessionThread> {
+	async list(): Promise<readonly ISession[]> {
+		return this.items;
+	}
+	async listAgents(): Promise<readonly ChatAgent[]> {
+		return [];
+	}
+	async readCatalog(id: string): Promise<ISession | undefined> {
+		return this.items.find(session => session.sessionId === id);
+	}
+	async subscribe(value: ISession): Promise<ISession> {
+		this.subscribeCount++;
+		return { ...value, agentTree: [] };
+	}
+	async unsubscribe(): Promise<void> {}
+	currentWorkspace(): SessionWorkspaceSelection {
+		return { type: 'current' };
+	}
+	async create(
+		_title: string,
+		_workspace: SessionWorkspaceSelection,
+		_agent?: ChatAgent,
+		_creationId?: string,
+	): Promise<IActiveSessionThread> {
 		this.createCount++;
 		const created = session(`created-${this.createCount}`);
 		this.items.push(created);
 		return { session: created, threadId: created.chats[0]!.threadId };
 	}
-	async setModel(): Promise<void> { }
-	async renameSession(value: ISession, title: string): Promise<ISession> { const renamed = { ...value, title }; this.items = this.items.map(item => item.sessionId === value.sessionId ? renamed : item); return renamed; }
-	async deleteSession(value: ISession): Promise<void> { this.items = this.items.filter(item => item.sessionId !== value.sessionId); }
+	async setModel(): Promise<void> {}
+	async renameSession(value: ISession, title: string): Promise<ISession> {
+		const renamed = { ...value, title };
+		this.items = this.items.map(item => (item.sessionId === value.sessionId ? renamed : item));
+		return renamed;
+	}
+	async deleteSession(value: ISession): Promise<void> {
+		this.items = this.items.filter(item => item.sessionId !== value.sessionId);
+	}
 
-	async archive(value: ISession): Promise<ISession> { return { ...value, status: 'archived', agentTree: undefined }; }
-	async restore(value: ISession): Promise<ISession> { return { ...value, status: 'active', agentTree: undefined }; }
-	async stop(value: ISession): Promise<ISession> { return this.archive(value); }
-	async interrupt(): Promise<void> { }
+	async archive(value: ISession): Promise<ISession> {
+		return { ...value, status: 'archived', agentTree: undefined };
+	}
+	async restore(value: ISession): Promise<ISession> {
+		return { ...value, status: 'active', agentTree: undefined };
+	}
+	async stop(value: ISession): Promise<ISession> {
+		return this.archive(value);
+	}
+	async interrupt(): Promise<void> {}
 }
 
 function session(id: string): ISession {
-	return { sessionId: id, title: id, status: 'active', nextApprovalMode: 'manual', chats: [{ threadId: `${id}-thread`, origin: { type: 'root' }, status: 'active' }] };
+	return {
+		sessionId: id,
+		title: id,
+		status: 'active',
+		nextApprovalMode: 'manual',
+		chats: [{ threadId: `${id}-thread`, origin: { type: 'root' }, status: 'active' }],
+	};
 }
 
 for (const reentrant of [false, true]) {
@@ -61,7 +95,8 @@ for (const reentrant of [false, true]) {
 		const draft = management.createUntitledSession('Send once');
 		let repeated: Promise<IActiveSessionThread> | undefined;
 		using listener = management.onDidChange(() => {
-			if (reentrant && management.state === 'creating') repeated = management.materializeUntitledSession(draft.untitledSessionId);
+			if (reentrant && management.state === 'creating')
+				repeated = management.materializeUntitledSession(draft.untitledSessionId);
 		});
 		const first = management.materializeUntitledSession(draft.untitledSessionId);
 		const second = management.materializeUntitledSession(draft.untitledSessionId);
@@ -70,7 +105,10 @@ for (const reentrant of [false, true]) {
 		assert.equal(await second, created);
 		if (reentrant) assert.equal(await repeated, created);
 		assert.equal(await management.materializeUntitledSession(draft.untitledSessionId), created);
-		assert.deepEqual({ count: provider.createCount, state: management.state, drafts: management.untitledSessions }, { count: 1, state: 'ready', drafts: [draft] });
+		assert.deepEqual(
+			{ count: provider.createCount, state: management.state, drafts: management.untitledSessions },
+			{ count: 1, state: 'ready', drafts: [draft] },
+		);
 	});
 }
 
@@ -78,7 +116,13 @@ test('failed draft creation remains editable and can retry with its chosen value
 	const provider = new Provider();
 	const create = provider.create.bind(provider);
 	let first = true;
-	provider.create = async (...args) => { if (first) { first = false; throw new Error('Preparation failed'); } return create(...args); };
+	provider.create = async (...args) => {
+		if (first) {
+			first = false;
+			throw new Error('Preparation failed');
+		}
+		return create(...args);
+	};
 	using management = new SessionsManagementService(provider);
 	await management.initialize();
 	const draft = management.createUntitledSession('Retry');
@@ -88,16 +132,22 @@ test('failed draft creation remains editable and can retry with its chosen value
 	const chosen: ChatAgent = { name: 'Review', description: 'Review code', sourceId: 'workspace' };
 	management.setUntitledSessionAgent(draft.untitledSessionId, chosen);
 	const requests: (ChatAgent | undefined)[] = [];
-	provider.create = async (...args) => { requests.push(args[2]); return create(...args); };
+	provider.create = async (...args) => {
+		requests.push(args[2]);
+		return create(...args);
+	};
 	await management.materializeUntitledSession(draft.untitledSessionId);
-	assert.deepEqual({ requests, state: management.state, error: management.error }, { requests: [chosen], state: 'ready', error: undefined });
+	assert.deepEqual(
+		{ requests, state: management.state, error: management.error },
+		{ requests: [chosen], state: 'ready', error: undefined },
+	);
 });
 
 test('completion of one draft leaves another pending creation in creating state', async () => {
 	const provider = new Provider();
 	const held = new DeferredPromise<IActiveSessionThread>();
 	const create = provider.create.bind(provider);
-	provider.create = (...args) => args[0] === 'Held' ? held.p : create(...args);
+	provider.create = (...args) => (args[0] === 'Held' ? held.p : create(...args));
 	using management = new SessionsManagementService(provider);
 	await management.initialize();
 	const heldDraft = management.createUntitledSession('Held');
@@ -117,9 +167,20 @@ test('ensureActiveThread graduates the selected draft instead of returning the p
 	await management.initialize();
 	const draft = management.createUntitledSession('Selected draft');
 	const active = await management.ensureActiveThread();
-	assert.deepEqual({ id: active.session.sessionId, selected: management.active?.threadId, draft: management.activeUntitledSession, mapping: management.materializedSessions.get().get(draft.untitledSessionId) }, {
-		id: 'created-1', selected: 'created-1-thread', draft: undefined, mapping: { sessionId: 'created-1', threadId: 'created-1-thread' },
-	});
+	assert.deepEqual(
+		{
+			id: active.session.sessionId,
+			selected: management.active?.threadId,
+			draft: management.activeUntitledSession,
+			mapping: management.materializedSessions.get().get(draft.untitledSessionId),
+		},
+		{
+			id: 'created-1',
+			selected: 'created-1-thread',
+			draft: undefined,
+			mapping: { sessionId: 'created-1', threadId: 'created-1-thread' },
+		},
+	);
 });
 
 for (const later of ['thread', 'draft'] as const) {
@@ -141,7 +202,10 @@ for (const later of ['thread', 'draft'] as const) {
 		if (later === 'thread') management.selectThread('first', 'first-thread');
 		await held.complete({ ...provider.items[1]!, agentTree: [] });
 		await opening;
-		assert.deepEqual({ thread: management.active?.threadId, draft: management.activeUntitledSession?.untitledSessionId }, { thread: 'first-thread', draft: draft?.untitledSessionId });
+		assert.deepEqual(
+			{ thread: management.active?.threadId, draft: management.activeUntitledSession?.untitledSessionId },
+			{ thread: 'first-thread', draft: draft?.untitledSessionId },
+		);
 	});
 }
 
@@ -156,7 +220,14 @@ test('a delayed new Session creation does not replace a draft opened during prep
 	const created = session('background');
 	await held.complete({ session: created, threadId: created.chats[0]!.threadId });
 	await creating;
-	assert.deepEqual({ active: management.active?.threadId, draft: management.activeUntitledSession?.untitledSessionId, ids: management.sessions.map(value => value.sessionId) }, { active: 'first-thread', draft: draft.untitledSessionId, ids: ['background', 'first', 'second'] });
+	assert.deepEqual(
+		{
+			active: management.active?.threadId,
+			draft: management.activeUntitledSession?.untitledSessionId,
+			ids: management.sessions.map(value => value.sessionId),
+		},
+		{ active: 'first-thread', draft: draft.untitledSessionId, ids: ['background', 'first', 'second'] },
+	);
 });
 
 test('background graduation preserves the later draft when there was no previous durable selection', async () => {
@@ -168,14 +239,24 @@ test('background graduation preserves the later draft when there was no previous
 	const created = await management.materializeUntitledSession(first.untitledSessionId);
 	const later = management.createUntitledSession('Later');
 	management.promoteUntitledSession(first.untitledSessionId, created);
-	assert.deepEqual({ active: management.active, draft: management.activeUntitledSession, ids: management.sessions.map(value => value.sessionId) }, { active: undefined, draft: later, ids: ['created-1'] });
+	assert.deepEqual(
+		{
+			active: management.active,
+			draft: management.activeUntitledSession,
+			ids: management.sessions.map(value => value.sessionId),
+		},
+		{ active: undefined, draft: later, ids: ['created-1'] },
+	);
 });
 
 test('disposing during draft preparation cancels completion without publishing a Session', async () => {
 	const provider = new Provider();
 	const held = new DeferredPromise<IActiveSessionThread>();
 	const started = new DeferredPromise<void>();
-	provider.create = async () => { await started.complete(); return held.p; };
+	provider.create = async () => {
+		await started.complete();
+		return held.p;
+	};
 	const management = new SessionsManagementService(provider);
 	const draft = management.createUntitledSession('Closing');
 	const creating = management.materializeUntitledSession(draft.untitledSessionId);
@@ -192,15 +273,23 @@ test('cancelled preparation restores ready state and allows retry', async () => 
 	const provider = new Provider();
 	const create = provider.create.bind(provider);
 	let first = true;
-	provider.create = async (...args) => { if (first) { first = false; throw canceled(); } return create(...args); };
+	provider.create = async (...args) => {
+		if (first) {
+			first = false;
+			throw canceled();
+		}
+		return create(...args);
+	};
 	using management = new SessionsManagementService(provider);
 	const draft = management.createUntitledSession('Retry cancel');
 	await assert.rejects(management.materializeUntitledSession(draft.untitledSessionId), isCancellationError);
-	assert.deepEqual({ state: management.state, error: management.error, draft: management.activeUntitledSession }, { state: 'ready', error: undefined, draft });
+	assert.deepEqual(
+		{ state: management.state, error: management.error, draft: management.activeUntitledSession },
+		{ state: 'ready', error: undefined, draft },
+	);
 	await management.materializeUntitledSession(draft.untitledSessionId);
 	assert.equal(provider.createCount, 1);
 });
-
 
 test('closing a sibling while it opens preserves both visible and management selection', async () => {
 	const dom = new JSDOM('', { url: 'https://ash.test' });
@@ -215,9 +304,22 @@ test('closing a sibling while it opens preserves both visible and management sel
 			return held.p;
 		};
 		using management = new SessionsManagementService(provider);
-		using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'pending-sibling', flushInterval: 0 });
-		const visible = provider.items.map(value => ({ kind: 'session', sessionId: value.sessionId, threadId: value.chats[0]!.threadId }));
-		storage.store('sessions.viewState', JSON.stringify({ version: 2, drafts: [], visible, active: 0 }), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		using storage = new BrowserStorageService({
+			ownerWindow: dom.window as unknown as Window,
+			workspaceId: 'pending-sibling',
+			flushInterval: 0,
+		});
+		const visible = provider.items.map(value => ({
+			kind: 'session',
+			sessionId: value.sessionId,
+			threadId: value.chats[0]!.threadId,
+		}));
+		storage.store(
+			'sessions.viewState',
+			JSON.stringify({ version: 2, drafts: [], visible, active: 0 }),
+			StorageScope.WORKSPACE,
+			StorageTarget.MACHINE,
+		);
 		using customViews = new CustomViewService(new NullLoggerService(), storage);
 		using view = new SessionsService(management, storage, customViews);
 		await view.initialize();
@@ -227,11 +329,20 @@ test('closing a sibling while it opens preserves both visible and management sel
 		await held.complete({ ...provider.items[1]!, agentTree: [] });
 		await opening;
 		assert.equal(management.active?.threadId, 'first-thread');
-		assert.deepEqual(view.visibleSelections.map(selection => selection.kind === 'session' ? selection.active.threadId : selection.session.untitledSessionId), ['first-thread']);
-		assert.equal(view.activeSelection?.kind === 'session' ? view.activeSelection.active.threadId : undefined, 'first-thread');
-	} finally { dom.window.close(); }
+		assert.deepEqual(
+			view.visibleSelections.map(selection =>
+				selection.kind === 'session' ? selection.active.threadId : selection.session.untitledSessionId,
+			),
+			['first-thread'],
+		);
+		assert.equal(
+			view.activeSelection?.kind === 'session' ? view.activeSelection.active.threadId : undefined,
+			'first-thread',
+		);
+	} finally {
+		dom.window.close();
+	}
 });
-
 
 test('graduated draft lookup reads the canonical Session after catalog facts change', async () => {
 	const provider = new Provider();
@@ -241,16 +352,26 @@ test('graduated draft lookup reads the canonical Session after catalog facts cha
 	const created = await management.materializeUntitledSession(draft.untitledSessionId);
 	management.promoteUntitledSession(draft.untitledSessionId, created);
 	const stored = provider.items.findIndex(value => value.sessionId === created.session.sessionId);
-	provider.items[stored] = { ...created.session, title: 'Renamed by another window', agentTree: undefined, chats: [...created.session.chats, { threadId: 'peer', status: 'active', origin: { type: 'root' } }] };
+	provider.items[stored] = {
+		...created.session,
+		title: 'Renamed by another window',
+		agentTree: undefined,
+		chats: [...created.session.chats, { threadId: 'peer', status: 'active', origin: { type: 'root' } }],
+	};
 	await management.openThread(created.session.sessionId, 'peer');
 	const lookedUp = await management.materializeUntitledSession(draft.untitledSessionId);
-	assert.deepEqual({ title: lookedUp.session.title, thread: lookedUp.threadId, creates: provider.createCount }, { title: 'Renamed by another window', thread: created.threadId, creates: 1 });
-	assert.equal(lookedUp.session, management.sessions.find(value => value.sessionId === created.session.sessionId));
+	assert.deepEqual(
+		{ title: lookedUp.session.title, thread: lookedUp.threadId, creates: provider.createCount },
+		{ title: 'Renamed by another window', thread: created.threadId, creates: 1 },
+	);
+	assert.equal(
+		lookedUp.session,
+		management.sessions.find(value => value.sessionId === created.session.sessionId),
+	);
 });
 
-
 test('deletion retires an older catalog read without losing another Session or an unsent draft', async () => {
-	using changes = new Emitter<{ sessionId: string; detailChanged: boolean; }>();
+	using changes = new Emitter<{ sessionId: string; detailChanged: boolean }>();
 	const started = new DeferredPromise<void>();
 	const gate = new DeferredPromise<void>();
 	let hold = false;
@@ -258,7 +379,10 @@ test('deletion retires an older catalog read without losing another Session or a
 		override readonly onDidChangeSession = changes.event;
 		override async readCatalog(id: string): Promise<ISession | undefined> {
 			const snapshot = this.items.find(session => session.sessionId === id);
-			if (hold && id === 'first') { started.complete(); await gate.p; }
+			if (hold && id === 'first') {
+				started.complete();
+				await gate.p;
+			}
 			return snapshot;
 		}
 	}
@@ -273,6 +397,9 @@ test('deletion retires an older catalog read without losing another Session or a
 	await management.deleteSession('first');
 	gate.complete();
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual(management.sessions.map(session => session.sessionId), ['second']);
+	assert.deepEqual(
+		management.sessions.map(session => session.sessionId),
+		['second'],
+	);
 	assert.equal(management.activeUntitledSession?.untitledSessionId, draft.untitledSessionId);
 });

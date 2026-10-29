@@ -31,7 +31,7 @@ export class MinimapCharRendererFactory {
 		} else {
 			factory = MinimapCharRendererFactory.createFromSampleData(
 				MinimapCharRendererFactory.createSampleData(fontFamily).data,
-				scale
+				scale,
 			);
 		}
 
@@ -62,7 +62,12 @@ export class MinimapCharRendererFactory {
 			x += Constants.SAMPLED_CHAR_WIDTH;
 		}
 
-		return ctx.getImageData(0, 0, Constants.CHAR_COUNT * Constants.SAMPLED_CHAR_WIDTH, Constants.SAMPLED_CHAR_HEIGHT);
+		return ctx.getImageData(
+			0,
+			0,
+			Constants.CHAR_COUNT * Constants.SAMPLED_CHAR_WIDTH,
+			Constants.SAMPLED_CHAR_HEIGHT,
+		);
 	}
 
 	/**
@@ -70,7 +75,10 @@ export class MinimapCharRendererFactory {
 	 */
 	public static createFromSampleData(source: Uint8ClampedArray, scale: number): MinimapCharRenderer {
 		const expectedLength =
-			Constants.SAMPLED_CHAR_HEIGHT * Constants.SAMPLED_CHAR_WIDTH * Constants.RGBA_CHANNELS_CNT * Constants.CHAR_COUNT;
+			Constants.SAMPLED_CHAR_HEIGHT *
+			Constants.SAMPLED_CHAR_WIDTH *
+			Constants.RGBA_CHANNELS_CNT *
+			Constants.CHAR_COUNT;
 		if (source.length !== expectedLength) {
 			throw new Error('Unexpected source in MinimapCharRenderer');
 		}
@@ -84,7 +92,7 @@ export class MinimapCharRendererFactory {
 		sourceOffset: number,
 		dest: Uint8ClampedArray,
 		destOffset: number,
-		scale: number
+		scale: number,
 	): number {
 		const width = Constants.BASE_CHAR_WIDTH * scale;
 		const height = Constants.BASE_CHAR_HEIGHT * scale;

@@ -1,14 +1,12 @@
-import { Emitter, type Event } from "../../base/common/event.js";
-import { Disposable, toDisposable } from "../../base/common/lifecycle.js";
+import { Emitter, type Event } from '../../base/common/event.js';
+import { Disposable, toDisposable } from '../../base/common/lifecycle.js';
 import {
 	type DialogRequest,
 	DialogResult,
 	type IDialogHandler,
 	type IDialogOutcome,
-} from "../../platform/dialogs/common/dialogs.js";
-import {
-	createServiceIdentifier,
-} from "../../platform/instantiation/common/instantiation.js";
+} from '../../platform/dialogs/common/dialogs.js';
+import { createServiceIdentifier } from '../../platform/instantiation/common/instantiation.js';
 
 /** One dialog exposed to a workbench dialog renderer. */
 export interface IDialogViewItem {
@@ -27,16 +25,8 @@ export interface IDialogHandle {
 
 /** Change emitted after one dialog leaves the model. */
 export type IDialogCloseEvent =
-	| {
-		readonly kind: "result";
-		readonly item: IDialogViewItem;
-		readonly result: IDialogOutcome;
-	}
-	| {
-		readonly kind: "error";
-		readonly item: IDialogViewItem;
-		readonly error: unknown;
-	};
+	| { readonly kind: 'result'; readonly item: IDialogViewItem; readonly result: IDialogOutcome }
+	| { readonly kind: 'error'; readonly item: IDialogViewItem; readonly error: unknown };
 
 /**
  * Window-scoped dialog queue shared between dialog services and renderers.
@@ -50,23 +40,17 @@ export interface IDialogsModel {
 }
 
 /** Window-scoped dialog model owned by the workbench dialog service. */
-export const IDialogsModel =
-	createServiceIdentifier<IDialogsModel>("dialogsModel");
+export const IDialogsModel = createServiceIdentifier<IDialogsModel>('dialogsModel');
 
 /** Host-specific dialog renderer consumed by the dialog contribution. */
-export const IWorkbenchDialogHandler =
-	createServiceIdentifier<IDialogHandler>("workbenchDialogHandler");
+export const IWorkbenchDialogHandler = createServiceIdentifier<IDialogHandler>('workbenchDialogHandler');
 
 /**
  * Owns pending workbench dialogs without depending on browser presentation.
  */
-export class DialogsModel
-	extends Disposable
-	implements IDialogsModel {
-	private readonly _onWillShowDialog =
-		this._register(new Emitter<IDialogViewItem>());
-	private readonly _onDidCloseDialog =
-		this._register(new Emitter<IDialogCloseEvent>());
+export class DialogsModel extends Disposable implements IDialogsModel {
+	private readonly _onWillShowDialog = this._register(new Emitter<IDialogViewItem>());
+	private readonly _onDidCloseDialog = this._register(new Emitter<IDialogCloseEvent>());
 	private readonly _dialogs: IDialogViewItem[] = [];
 
 	readonly onWillShowDialog = this._onWillShowDialog.event;
@@ -74,9 +58,11 @@ export class DialogsModel
 
 	constructor() {
 		super();
-		this._register(toDisposable(() => {
-			for (const item of [...this._dialogs]) item.cancel();
-		}));
+		this._register(
+			toDisposable(() => {
+				for (const item of [...this._dialogs]) item.cancel();
+			}),
+		);
 	}
 
 	get dialogs(): readonly IDialogViewItem[] {
@@ -85,7 +71,7 @@ export class DialogsModel
 
 	show(request: DialogRequest): IDialogHandle {
 		if (this.isDisposed) {
-			throw new ReferenceError("DialogsModel is already disposed");
+			throw new ReferenceError('DialogsModel is already disposed');
 		}
 
 		let resolveResult!: (result: IDialogOutcome) => void;
@@ -98,24 +84,20 @@ export class DialogsModel
 
 		const item: IDialogViewItem = {
 			request,
-			close: (dialogResult) => {
+			close: dialogResult => {
 				if (settled) return;
 				settled = true;
 				this.remove(item);
 				resolveResult(dialogResult);
-				this._onDidCloseDialog.fire({
-					kind: "result",
-					item,
-					result: dialogResult,
-				});
+				this._onDidCloseDialog.fire({ kind: 'result', item, result: dialogResult });
 			},
 			cancel: () => item.close({ button: DialogResult.Cancel }),
-			fail: (error) => {
+			fail: error => {
 				if (settled) return;
 				settled = true;
 				this.remove(item);
 				rejectResult(error);
-				this._onDidCloseDialog.fire({ kind: "error", item, error });
+				this._onDidCloseDialog.fire({ kind: 'error', item, error });
 			},
 		};
 		this._dialogs.push(item);

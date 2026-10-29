@@ -1,18 +1,18 @@
 import type { URI } from '../../../../base/common/uri.js';
-import { type Event } from "../../../../base/common/event.js";
-import { type IDisposable } from "../../../../base/common/lifecycle.js";
+import { type Event } from '../../../../base/common/event.js';
+import { type IDisposable } from '../../../../base/common/lifecycle.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { localize } from '../../../../nls.js';
 import { isHighSurrogate, isLowSurrogate } from '../../../../base/common/strings.js';
 
-export const RUN_TASK_COMMAND_ID = "workbench.action.tasks.runTask";
-export const RUN_BUILD_TASK_COMMAND_ID = "workbench.action.tasks.build";
-export const RUN_TEST_TASK_COMMAND_ID = "workbench.action.tasks.test";
-export const RERUN_LAST_TASK_COMMAND_ID = "workbench.action.tasks.reRunTask";
-export const TERMINATE_TASK_COMMAND_ID = "workbench.action.tasks.terminate";
+export const RUN_TASK_COMMAND_ID = 'workbench.action.tasks.runTask';
+export const RUN_BUILD_TASK_COMMAND_ID = 'workbench.action.tasks.build';
+export const RUN_TEST_TASK_COMMAND_ID = 'workbench.action.tasks.test';
+export const RERUN_LAST_TASK_COMMAND_ID = 'workbench.action.tasks.reRunTask';
+export const TERMINATE_TASK_COMMAND_ID = 'workbench.action.tasks.terminate';
 
-export type WorkspaceTaskSource = "vscode" | "npm" | "pnpm" | "yarn" | "cargo" | "extension";
-export type WorkspaceTaskGroup = "build" | "test" | "clean" | "rebuild" | "run" | "other";
+export type WorkspaceTaskSource = 'vscode' | 'npm' | 'pnpm' | 'yarn' | 'cargo' | 'extension';
+export type WorkspaceTaskGroup = 'build' | 'test' | 'clean' | 'rebuild' | 'run' | 'other';
 
 export interface TaskDefinition {
 	readonly type: string;
@@ -49,10 +49,10 @@ export interface TaskPseudoterminal {
 	readonly onDidWrite: Event<string>;
 	readonly onDidClose?: Event<number | void>;
 	readonly onDidChangeName?: Event<string>;
-	open(initialDimensions: { readonly columns: number; readonly rows: number; } | undefined): void;
+	open(initialDimensions: { readonly columns: number; readonly rows: number } | undefined): void;
 	close(): void;
 	handleInput?(data: string): void;
-	setDimensions?(dimensions: { readonly columns: number; readonly rows: number; }): void;
+	setDimensions?(dimensions: { readonly columns: number; readonly rows: number }): void;
 }
 
 export enum ShellQuoting {
@@ -71,21 +71,28 @@ export interface ShellExecutionOptions {
 	readonly executable?: string;
 	readonly shellArgs?: readonly string[];
 	readonly shellQuoting?: {
-		readonly escape?: string | { readonly escapeChar: string; readonly charsToEscape: string; };
+		readonly escape?: string | { readonly escapeChar: string; readonly charsToEscape: string };
 		readonly strong?: string;
 		readonly weak?: string;
 	};
 }
 
-export type TaskShellExecution = { readonly type: 'shell'; readonly options?: ShellExecutionOptions; } & (
-	| { readonly commandLine: string; readonly command?: never; readonly args?: never; }
-	| { readonly command: string | ShellQuotedString; readonly args: readonly (string | ShellQuotedString)[]; readonly commandLine?: never; }
+export type TaskShellExecution = { readonly type: 'shell'; readonly options?: ShellExecutionOptions } & (
+	| { readonly commandLine: string; readonly command?: never; readonly args?: never }
+	| {
+			readonly command: string | ShellQuotedString;
+			readonly args: readonly (string | ShellQuotedString)[];
+			readonly commandLine?: never;
+	  }
 );
 
 export type TaskExecution =
-	| { readonly type: 'process'; readonly program: string; readonly args: readonly string[]; }
+	| { readonly type: 'process'; readonly program: string; readonly args: readonly string[] }
 	| TaskShellExecution
-	| { readonly type: 'custom'; readonly callback: (definition: TaskDefinition) => TaskPseudoterminal | PromiseLike<TaskPseudoterminal>; };
+	| {
+			readonly type: 'custom';
+			readonly callback: (definition: TaskDefinition) => TaskPseudoterminal | PromiseLike<TaskPseudoterminal>;
+	  };
 
 /** Original JSON configuration retained for extension metadata and future capability resolution. */
 export interface IWorkspaceTaskConfiguration {
@@ -154,7 +161,10 @@ export interface TaskProvider {
 	readonly id: string;
 	readonly type?: string;
 	provideTasks(signal: AbortSignal): readonly TaskProviderTask[] | PromiseLike<readonly TaskProviderTask[]>;
-	resolveTask?(task: IWorkspaceTask, signal: AbortSignal): TaskProviderTask | undefined | PromiseLike<TaskProviderTask | undefined>;
+	resolveTask?(
+		task: IWorkspaceTask,
+		signal: AbortSignal,
+	): TaskProviderTask | undefined | PromiseLike<TaskProviderTask | undefined>;
 }
 
 /** One caller-owned provider set that can be atomically replaced. */
@@ -162,7 +172,7 @@ export interface TaskProviderRegistration extends IDisposable {
 	replace(providers: readonly TaskProvider[]): void;
 }
 
-export type TaskRunStatus = "running" | "completed" | "succeeded" | "failed" | "canceled";
+export type TaskRunStatus = 'running' | 'completed' | 'succeeded' | 'failed' | 'canceled';
 
 /** One task execution projected through an integrated Terminal instance. */
 export interface ITaskRun {
@@ -198,7 +208,20 @@ export interface ITaskOutput {
 /** Keeps output pages serializable as UTF-8 strings across the application host boundary. */
 export function readTaskOutput(text: string, offset: number, cursor: number, maxCharacters: number): ITaskOutput {
 	const outputEnd = offset + text.length;
-	if (!Number.isSafeInteger(cursor) || cursor < 0 || cursor > outputEnd || !Number.isSafeInteger(maxCharacters) || maxCharacters < 1 || maxCharacters > 65_536) throw new RangeError(localize('tasks.invalidOutputRange', 'Invalid task output cursor or limit. Start with cursor=0 and use a limit between 1 and 65536.'));
+	if (
+		!Number.isSafeInteger(cursor) ||
+		cursor < 0 ||
+		cursor > outputEnd ||
+		!Number.isSafeInteger(maxCharacters) ||
+		maxCharacters < 1 ||
+		maxCharacters > 65_536
+	)
+		throw new RangeError(
+			localize(
+				'tasks.invalidOutputRange',
+				'Invalid task output cursor or limit. Start with cursor=0 and use a limit between 1 and 65536.',
+			),
+		);
 	let start = Math.max(cursor, offset) - offset;
 	if (isLowSurrogate(text.charCodeAt(start)) && isHighSurrogate(text.charCodeAt(start - 1))) start--;
 	let end = Math.min(text.length, start + maxCharacters);
@@ -206,7 +229,13 @@ export function readTaskOutput(text: string, offset: number, cursor: number, max
 		// A one-unit budget must still make progress through a two-unit code point.
 		end += end - start === 1 ? 1 : -1;
 	}
-	return { text: text.slice(start, end), cursor: offset + start, nextCursor: offset + end, truncated: cursor < offset, hasMore: offset + end < outputEnd };
+	return {
+		text: text.slice(start, end),
+		cursor: offset + start,
+		nextCursor: offset + end,
+		truncated: cursor < offset,
+		hasMore: offset + end < outputEnd,
+	};
 }
 
 /** Static execution recipe reviewed before an Agent starts a configured task. */
@@ -215,7 +244,7 @@ export interface ITaskDescription {
 	readonly label: string;
 	readonly directory: string;
 	readonly revision: string;
-	readonly commands: readonly { readonly command: string; readonly cwd: string; }[];
+	readonly commands: readonly { readonly command: string; readonly cwd: string }[];
 }
 
 /** Completes on foreground exit or the first background compilation becoming ready. */
@@ -227,27 +256,51 @@ export function waitForTask(run: ITaskRun, signal?: AbortSignal): Promise<TaskRu
 		return Promise.resolve(run.isReady && run.status === 'running' ? 'succeeded' : run.status);
 	}
 	if (run.task.isBackground && run.hasBackgroundMatcher === false) {
-		return Promise.reject(new Error(localize('tasks.backgroundMatcherRequired', "Background task '{0}' needs a problem matcher with begin and end patterns.", run.task.label)));
+		return Promise.reject(
+			new Error(
+				localize(
+					'tasks.backgroundMatcherRequired',
+					"Background task '{0}' needs a problem matcher with begin and end patterns.",
+					run.task.label,
+				),
+			),
+		);
 	}
 	return new Promise((resolve, reject) => {
 		let statusListener: IDisposable | undefined;
 		let readyListener: IDisposable | undefined;
 		let settled = false;
-		const abort = (): void => { if (!settled) { settled = true; cleanup(); reject(new CancellationError()); } };
+		const abort = (): void => {
+			if (!settled) {
+				settled = true;
+				cleanup();
+				reject(new CancellationError());
+			}
+		};
 		function cleanup(): void {
 			statusListener?.dispose();
 			readyListener?.dispose();
 			signal?.removeEventListener('abort', abort);
 		}
-		function finish(status: TaskRunStatus): void { if (!settled) { settled = true; cleanup(); resolve(status); } }
+		function finish(status: TaskRunStatus): void {
+			if (!settled) {
+				settled = true;
+				cleanup();
+				resolve(status);
+			}
+		}
 		statusListener = run.onDidChangeStatus(status => {
 			if (status !== 'running') finish(status);
 		});
 		if (!settled) readyListener = run.onDidBecomeReady?.(() => finish('succeeded'));
-		if (settled) { cleanup(); return; }
+		if (settled) {
+			cleanup();
+			return;
+		}
 		signal?.addEventListener('abort', abort, { once: true });
 		// A producer may deliver its retained ready/exit state during subscription.
 		if (signal?.aborted) abort();
-		else if (run.status !== 'running' || run.isReady) finish(run.isReady && run.status === 'running' ? 'succeeded' : run.status);
+		else if (run.status !== 'running' || run.isReady)
+			finish(run.isReady && run.status === 'running' ? 'succeeded' : run.status);
 	});
 }

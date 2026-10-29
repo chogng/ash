@@ -9,7 +9,11 @@ interface PaintBounds {
 	height: number;
 }
 const textures = new WeakMap<DesignPaint, Map<string, string>>();
-function element<K extends keyof SVGElementTagNameMap>(document: Document, tag: K, attributes: Record<string, string | number> = {}): SVGElementTagNameMap[K] {
+function element<K extends keyof SVGElementTagNameMap>(
+	document: Document,
+	tag: K,
+	attributes: Record<string, string | number> = {},
+): SVGElementTagNameMap[K] {
 	const value = document.createElementNS(ns, tag);
 	for (const [key, item] of Object.entries(attributes)) {
 		value.setAttribute(key, String(item));
@@ -38,7 +42,10 @@ function texture(document: Document, paint: DesignPaint, width: number, height: 
 	const image = context.createImageData(w, h);
 	for (let y = 0; y < h; y++) {
 		for (let x = 0; x < w; x++) {
-			const color = sampleDesignPaint(paint, paint.type === 'solid' ? 0 : designGradientPosition(paint, { x: (x + .5) / w, y: (y + .5) / h }));
+			const color = sampleDesignPaint(
+				paint,
+				paint.type === 'solid' ? 0 : designGradientPosition(paint, { x: (x + 0.5) / w, y: (y + 0.5) / h }),
+			);
 			const index = (y * w + x) * 4;
 			for (let channel = 0; channel < 4; channel++) {
 				image.data[index + channel] = color[channel];
@@ -53,10 +60,11 @@ function texture(document: Document, paint: DesignPaint, width: number, height: 
 	cache.set(key, result);
 	return result;
 }
-function paintServer(document: Document, paint: DesignPaint, bounds: PaintBounds): {
-	fill: string;
-	definition?: SVGElement;
-} {
+function paintServer(
+	document: Document,
+	paint: DesignPaint,
+	bounds: PaintBounds,
+): { fill: string; definition?: SVGElement } {
 	if (paint.type === 'solid') {
 		return { fill: paint.color };
 	}
@@ -64,17 +72,38 @@ function paintServer(document: Document, paint: DesignPaint, bounds: PaintBounds
 	if (paint.type === 'angular' || paint.type === 'diamond') {
 		const pattern = element(document, 'pattern', { id, patternUnits: 'userSpaceOnUse', ...bounds });
 		// Pattern content starts at its own origin; layer placement belongs to the tile, not the image.
-		pattern.append(element(document, 'image', { x: 0, y: 0, width: bounds.width, height: bounds.height, href: texture(document, paint, bounds.width, bounds.height), preserveAspectRatio: 'none' }));
+		pattern.append(
+			element(document, 'image', {
+				x: 0,
+				y: 0,
+				width: bounds.width,
+				height: bounds.height,
+				href: texture(document, paint, bounds.width, bounds.height),
+				preserveAspectRatio: 'none',
+			}),
+		);
 		return { fill: `url(#${id})`, definition: pattern };
 	}
 	const [a, b, c] = paint.handles;
-	const gradient = paint.type === 'linear' ? element(document, 'linearGradient', { x1: 0, y1: 0, x2: 1, y2: 0 }) : element(document, 'radialGradient', { cx: 0, cy: 0, r: 1 });
+	const gradient =
+		paint.type === 'linear'
+			? element(document, 'linearGradient', { x1: 0, y1: 0, x2: 1, y2: 0 })
+			: element(document, 'radialGradient', { cx: 0, cy: 0, r: 1 });
 	gradient.id = id;
 	gradient.setAttribute('gradientUnits', 'userSpaceOnUse');
 	gradient.setAttribute('color-interpolation', 'sRGB');
-	gradient.setAttribute('gradientTransform', `matrix(${(b.x - a.x) * bounds.width} ${(b.y - a.y) * bounds.height} ${(c.x - a.x) * bounds.width} ${(c.y - a.y) * bounds.height} ${bounds.x + a.x * bounds.width} ${bounds.y + a.y * bounds.height})`);
+	gradient.setAttribute(
+		'gradientTransform',
+		`matrix(${(b.x - a.x) * bounds.width} ${(b.y - a.y) * bounds.height} ${(c.x - a.x) * bounds.width} ${(c.y - a.y) * bounds.height} ${bounds.x + a.x * bounds.width} ${bounds.y + a.y * bounds.height})`,
+	);
 	for (const stop of paint.stops) {
-		gradient.append(element(document, 'stop', { offset: stop.position, 'stop-color': stop.color.slice(0, 7), 'stop-opacity': stop.color.length === 9 ? parseInt(stop.color.slice(7, 9), 16) / 255 : 1 }));
+		gradient.append(
+			element(document, 'stop', {
+				offset: stop.position,
+				'stop-color': stop.color.slice(0, 7),
+				'stop-opacity': stop.color.length === 9 ? parseInt(stop.color.slice(7, 9), 16) / 255 : 1,
+			}),
+		);
 	}
 	return { fill: `url(#${id})`, definition: gradient };
 }
@@ -93,26 +122,94 @@ export function designPaintBackground(document: Document, paint: DesignPaint, wi
 }
 /** Chromium lacks plus-darker. A backdrop filter computes max(source + backdrop - 1, 0)
  * in sRGB, then restores source coverage, including transparent gradients and an empty backdrop. */
-export function renderDesignPlusDarker(document: Document, source: SVGGraphicsElement, bounds: PaintBounds): SVGGElement {
-	const group = element(document, 'g'), definitions = element(document, 'defs'), filterId = `blend-filter-${generateUuid()}`;
-	const symbol = element(document, 'svg', { viewBox: `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`, width: bounds.width, height: bounds.height, overflow: 'visible' });
+export function renderDesignPlusDarker(
+	document: Document,
+	source: SVGGraphicsElement,
+	bounds: PaintBounds,
+): SVGGElement {
+	const group = element(document, 'g'),
+		definitions = element(document, 'defs'),
+		filterId = `blend-filter-${generateUuid()}`;
+	const symbol = element(document, 'svg', {
+		viewBox: `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`,
+		width: bounds.width,
+		height: bounds.height,
+		overflow: 'visible',
+	});
 	symbol.append(source);
 	const sourceUrl = `data:image/svg+xml,${encodeURIComponent(new document.defaultView!.XMLSerializer().serializeToString(symbol))}`;
 	// CSS filter primitives must use pixels: the editor's outer SVG viewport is only one pixel.
-	const filter = element(document, 'filter', { id: filterId, filterUnits: 'userSpaceOnUse', primitiveUnits: 'userSpaceOnUse', x: 0, y: 0, width: bounds.width, height: bounds.height, 'color-interpolation-filters': 'sRGB' });
-	filter.append(element(document, 'feImage', { href: sourceUrl, x: 0, y: 0, width: bounds.width, height: bounds.height, preserveAspectRatio: 'none', result: 'paint' }));
-	for (const [input, result] of [['paint', 'opaquePaint'], ['SourceGraphic', 'opaqueBackdrop']]) {
+	const filter = element(document, 'filter', {
+		id: filterId,
+		filterUnits: 'userSpaceOnUse',
+		primitiveUnits: 'userSpaceOnUse',
+		x: 0,
+		y: 0,
+		width: bounds.width,
+		height: bounds.height,
+		'color-interpolation-filters': 'sRGB',
+	});
+	filter.append(
+		element(document, 'feImage', {
+			href: sourceUrl,
+			x: 0,
+			y: 0,
+			width: bounds.width,
+			height: bounds.height,
+			preserveAspectRatio: 'none',
+			result: 'paint',
+		}),
+	);
+	for (const [input, result] of [
+		['paint', 'opaquePaint'],
+		['SourceGraphic', 'opaqueBackdrop'],
+	]) {
 		const transfer = element(document, 'feComponentTransfer', { in: input, result });
 		transfer.append(element(document, 'feFuncA', { type: 'linear', slope: 0, intercept: 1 }));
 		filter.append(transfer);
 	}
-	filter.append(element(document, 'feComposite', { in: 'opaquePaint', in2: 'opaqueBackdrop', operator: 'arithmetic', k2: 1, k3: 1, k4: -1, result: 'burn' }));
-	filter.append(element(document, 'feComposite', { in: 'burn', in2: 'paint', operator: 'in', result: 'coveredPaint' }));
-	filter.append(element(document, 'feComposite', { in: 'coveredPaint', in2: 'SourceGraphic', operator: 'in', result: 'coveredBlend' }));
-	filter.append(element(document, 'feComposite', { in: 'paint', in2: 'SourceGraphic', operator: 'out', result: 'uncoveredPaint' }));
-	filter.append(element(document, 'feComposite', { in: 'coveredBlend', in2: 'uncoveredPaint', operator: 'arithmetic', k2: 1, k3: 1 }));
+	filter.append(
+		element(document, 'feComposite', {
+			in: 'opaquePaint',
+			in2: 'opaqueBackdrop',
+			operator: 'arithmetic',
+			k2: 1,
+			k3: 1,
+			k4: -1,
+			result: 'burn',
+		}),
+	);
+	filter.append(
+		element(document, 'feComposite', { in: 'burn', in2: 'paint', operator: 'in', result: 'coveredPaint' }),
+	);
+	filter.append(
+		element(document, 'feComposite', {
+			in: 'coveredPaint',
+			in2: 'SourceGraphic',
+			operator: 'in',
+			result: 'coveredBlend',
+		}),
+	);
+	filter.append(
+		element(document, 'feComposite', {
+			in: 'paint',
+			in2: 'SourceGraphic',
+			operator: 'out',
+			result: 'uncoveredPaint',
+		}),
+	);
+	filter.append(
+		element(document, 'feComposite', {
+			in: 'coveredBlend',
+			in2: 'uncoveredPaint',
+			operator: 'arithmetic',
+			k2: 1,
+			k3: 1,
+		}),
+	);
 	definitions.append(filter);
-	const foreign = element(document, 'foreignObject', { ...bounds }), content = document.createElement('div');
+	const foreign = element(document, 'foreignObject', { ...bounds }),
+		content = document.createElement('div');
 	content.style.width = '100%';
 	content.style.height = '100%';
 	content.style.backdropFilter = `url(#${filterId})`;
@@ -126,11 +223,17 @@ export function renderDesignPlusDarker(document: Document, source: SVGGraphicsEl
 function interactionTree(document: Document, shape: DesignShape): SVGGraphicsElement {
 	const container = shape.kind === 'frame' || shape.kind === 'group';
 	const node = element(document, container ? 'svg' : 'rect', {
-		x: shape.x, y: shape.y, width: shape.width, height: shape.height,
+		x: shape.x,
+		y: shape.y,
+		width: shape.width,
+		height: shape.height,
 		transform: `rotate(${shape.rotation} ${shape.x + shape.width / 2} ${shape.y + shape.height / 2})`,
-		'data-shape-id': shape.id, fill: '#00000000',
+		'data-shape-id': shape.id,
+		fill: '#00000000',
 	});
-	if (shape.visible === false) { node.style.display = 'none'; }
+	if (shape.visible === false) {
+		node.style.display = 'none';
+	}
 	if (shape.kind === 'frame' || shape.kind === 'group') {
 		const width = shape.kind === 'group' ? shape.contentWidth : shape.width;
 		const height = shape.kind === 'group' ? shape.contentHeight : shape.height;
@@ -145,16 +248,22 @@ function interactionTree(document: Document, shape: DesignShape): SVGGraphicsEle
 /** Paint layers are rendered back-to-front; opacity and blend belong to the whole paint, not each region. */
 
 export function applyDesignPaints(base: SVGGraphicsElement, shape: DesignShape): SVGGraphicsElement {
-	const document = base.ownerDocument, container = shape.kind === 'frame' || shape.kind === 'group' || shape.kind === 'image' || shape.kind === 'text';
+	const document = base.ownerDocument,
+		container = shape.kind === 'frame' || shape.kind === 'group' || shape.kind === 'image' || shape.kind === 'text';
 	const bounds = {
 		x: container ? 0 : shape.x,
 		y: container ? 0 : shape.y,
 		width: shape.kind === 'group' ? shape.contentWidth : shape.width,
-		height: shape.kind === 'group' ? shape.contentHeight : shape.height
+		height: shape.kind === 'group' ? shape.contentHeight : shape.height,
 	};
 	let root = base;
 	if (shape.fills !== undefined) {
-		const targets: SVGGraphicsElement[] = container || base.tagName === 'g' ? [...base.querySelectorAll<SVGGraphicsElement>(':scope > [data-design-fill]')] : base.getAttribute('fill') === 'none' ? [] : [base];
+		const targets: SVGGraphicsElement[] =
+			container || base.tagName === 'g'
+				? [...base.querySelectorAll<SVGGraphicsElement>(':scope > [data-design-fill]')]
+				: base.getAttribute('fill') === 'none'
+					? []
+					: [base];
 		if (targets.length) {
 			if (targets[0] === base) {
 				root = element(document, 'g');
@@ -172,7 +281,8 @@ export function applyDesignPaints(base: SVGGraphicsElement, shape: DesignShape):
 				if (paint.visible === false || paint.opacity === 0) {
 					continue;
 				}
-				const layer = element(document, 'g', { opacity: paint.opacity ?? 1, 'data-paint-id': paint.id }), server = paintServer(document, paint, bounds);
+				const layer = element(document, 'g', { opacity: paint.opacity ?? 1, 'data-paint-id': paint.id }),
+					server = paintServer(document, paint, bounds);
 				if (server.definition) {
 					const defs = element(document, 'defs');
 					defs.append(server.definition);
@@ -191,7 +301,7 @@ export function applyDesignPaints(base: SVGGraphicsElement, shape: DesignShape):
 							backgroundSize: '100% 100%',
 							backgroundRepeat: 'no-repeat',
 							backgroundClip: 'text',
-							webkitBackgroundClip: 'text'
+							webkitBackgroundClip: 'text',
 						});
 						for (const node of [content, ...content.querySelectorAll<HTMLElement>('*')]) {
 							node.style.webkitTextFillColor = 'transparent';
@@ -202,8 +312,7 @@ export function applyDesignPaints(base: SVGGraphicsElement, shape: DesignShape):
 				}
 				if (paint.blendMode === 'plus-darker') {
 					fills.append(renderDesignPlusDarker(document, layer, bounds));
-				}
-				else {
+				} else {
 					layer.style.mixBlendMode = paint.blendMode ?? 'normal';
 					fills.append(layer);
 				}
@@ -211,8 +320,7 @@ export function applyDesignPaints(base: SVGGraphicsElement, shape: DesignShape):
 			for (const target of targets) {
 				if (target === base) {
 					target.setAttribute('fill', 'none');
-				}
-				else {
+				} else {
 					target.remove();
 				}
 			}
@@ -225,10 +333,15 @@ export function applyDesignPaints(base: SVGGraphicsElement, shape: DesignShape):
 	return root;
 }
 
-export function applyDesignLayerBlend(root: SVGGraphicsElement, shape: DesignShape, layerBounds?: PaintBounds): SVGGraphicsElement {
+export function applyDesignLayerBlend(
+	root: SVGGraphicsElement,
+	shape: DesignShape,
+	layerBounds?: PaintBounds,
+): SVGGraphicsElement {
 	const document = root.ownerDocument;
 	if (shape.blendMode === 'plus-darker') {
-		const placed = layerBounds ?? { x: shape.x, y: shape.y, width: shape.width, height: shape.height }, wrapper = renderDesignPlusDarker(document, root, placed);
+		const placed = layerBounds ?? { x: shape.x, y: shape.y, width: shape.width, height: shape.height },
+			wrapper = renderDesignPlusDarker(document, root, placed);
 		wrapper.dataset.shapeId = shape.id;
 		root.removeAttribute('data-shape-id');
 		const interactions = interactionTree(document, shape);
@@ -237,7 +350,7 @@ export function applyDesignLayerBlend(root: SVGGraphicsElement, shape: DesignSha
 		wrapper.append(interactions);
 		return wrapper;
 	}
-	root.style.mixBlendMode = shape.blendMode === 'pass-through' ? 'normal' : shape.blendMode ?? 'normal';
+	root.style.mixBlendMode = shape.blendMode === 'pass-through' ? 'normal' : (shape.blendMode ?? 'normal');
 	root.style.isolation = !shape.blendMode || shape.blendMode === 'pass-through' ? 'auto' : 'isolate';
 	// Isolation alone does not establish a backdrop root for CSS backdrop filters.
 	if (root.style.isolation === 'isolate') {

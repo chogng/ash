@@ -13,23 +13,36 @@ export class DesktopDetailPanelCoordinator {
 		@IViewsService private readonly views: IViewsService,
 		@IEditorService private readonly editors: IEditorService,
 		@ILayoutService private readonly layout: IAgentWorkbenchLayoutService,
-	) { }
+	) {}
 
 	public get supportsActiveEditor(): boolean {
 		const input = this.editors.activeEditor;
-		return input !== undefined && (['ash-session-changes', 'file', 'ash-remote', 'untitled', 'ash-sessions-files'].includes(input.resource.scheme) || isDiffEditorInput(input) || isMultiDiffEditorInput(input));
+		return (
+			input !== undefined &&
+			(['ash-session-changes', 'file', 'ash-remote', 'untitled', 'ash-sessions-files'].includes(
+				input.resource.scheme,
+			) ||
+				isDiffEditorInput(input) ||
+				isMultiDiffEditorInput(input))
+		);
 	}
 
 	public async update(reveal: boolean): Promise<void> {
 		const input = this.editors.activeEditor;
-		const changes = input && (input.resource.scheme === 'ash-session-changes' || isDiffEditorInput(input) || isMultiDiffEditorInput(input));
+		const changes =
+			input &&
+			(input.resource.scheme === 'ash-session-changes' ||
+				isDiffEditorInput(input) ||
+				isMultiDiffEditorInput(input));
 		const files = input && ['file', 'ash-remote', 'untitled', 'ash-sessions-files'].includes(input.resource.scheme);
 		if (!changes && !files && this.layout.isPartVisible('editor')) {
 			this.layout.hidePart('auxiliarybar');
 			return;
 		}
 		// Hidden detail content is selected when explicitly opened; background updates must not resize the session grid.
-		if (!reveal && !this.layout.isPartVisible('auxiliarybar')) { return; }
+		if (!reveal && !this.layout.isPartVisible('auxiliarybar')) {
+			return;
+		}
 		await this.views.openViewContainer(changes ? CHANGES_VIEW_CONTAINER_ID : SESSIONS_FILES_CONTAINER_ID);
 	}
 }

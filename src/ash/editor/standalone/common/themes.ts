@@ -1,5 +1,10 @@
 import { Color } from '../../../base/common/color.js';
-import { darkColorTheme, highContrastDarkColorTheme, highContrastLightColorTheme, lightColorTheme } from '../../../platform/theme/common/colorTheme.js';
+import {
+	darkColorTheme,
+	highContrastDarkColorTheme,
+	highContrastLightColorTheme,
+	lightColorTheme,
+} from '../../../platform/theme/common/colorTheme.js';
 import type { IColorTheme } from '../../../platform/theme/common/themeService.js';
 import * as editorColors from '../../../platform/theme/common/colors/editorColors.js';
 import type { BuiltinTheme, IStandaloneThemeData } from './standaloneTheme.js';
@@ -24,8 +29,15 @@ function themeData(base: BuiltinTheme, theme: IColorTheme): IStandaloneThemeData
 		inherit: false,
 		colors: {},
 		rules: [
-			{ token: '', foreground: Color.Format.CSS.formatHex(foreground), background: Color.Format.CSS.formatHex(background) },
-			...scopes.map(([token, color]) => ({ token, foreground: Color.Format.CSS.formatHex(theme.getColor(color)!) })),
+			{
+				token: '',
+				foreground: Color.Format.CSS.formatHex(foreground),
+				background: Color.Format.CSS.formatHex(background),
+			},
+			...scopes.map(([token, color]) => ({
+				token,
+				foreground: Color.Format.CSS.formatHex(theme.getColor(color)!),
+			})),
 		],
 	};
 }

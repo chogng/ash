@@ -37,7 +37,9 @@ export class DesktopLayoutController extends BaseLayoutController {
 	private readonly detailPanel: DesktopDetailPanelCoordinator;
 	private closedProfile = { documents: true, details: true };
 
-	constructor(private readonly pageGroupId: number, private readonly context: IDesktopLayoutContext,
+	constructor(
+		private readonly pageGroupId: number,
+		private readonly context: IDesktopLayoutContext,
 		@IPaneCompositePartService panes: IPaneCompositePartService,
 		@ISessionsService sessions: ISessionsService,
 		@ISessionsManagementService management: ISessionsManagementService,
@@ -50,123 +52,238 @@ export class DesktopLayoutController extends BaseLayoutController {
 		@ILifecycleService lifecycle: ILifecycleService,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
-		super(panes, sessions, management, editor, editors, workspace, layout, storage, notifications, lifecycle, instantiation);
+		super(
+			panes,
+			sessions,
+			management,
+			editor,
+			editors,
+			workspace,
+			layout,
+			storage,
+			notifications,
+			lifecycle,
+			instantiation,
+		);
 		this.tabs = this._register(instantiation.createInstance(DesktopDockedTabsCoordinator, pageGroupId));
 		this.detailPanel = instantiation.createInstance(DesktopDetailPanelCoordinator);
 		const lastOpen = storage.get(lastOpenKey, StorageScope.PROFILE);
 		if (lastOpen !== undefined) {
 			const profile: unknown = JSON.parse(lastOpen);
-			if (!isRecord(profile) || typeof profile.editor !== 'boolean' || typeof profile.details !== 'boolean') { throw new TypeError(localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.')); }
+			if (!isRecord(profile) || typeof profile.editor !== 'boolean' || typeof profile.details !== 'boolean') {
+				throw new TypeError(
+					localize('sessions.layout.invalidState', 'Saved session editor layout is invalid.'),
+				);
+			}
 			this.closedProfile = { documents: profile.editor, details: profile.details };
 		}
 	}
 	public override start(): void {
 		super.start();
-		this._register(this.editor.onDidChangeEditors(event => {
-			if (event.kind === 'groupChanged' && event.event.kind === 'editorClosed' && this.context.isDocumentContent && !this.isRestoringEditors && !this.context.isChangingContent && this.documentGroups.every(group => group.inputs.length === 0)) {
-				this.layout.updateParts(() => { this.layout.hidePart('editor'); this.layout.hidePart('auxiliarybar'); });
-			}
-		}));
+		this._register(
+			this.editor.onDidChangeEditors(event => {
+				if (
+					event.kind === 'groupChanged' &&
+					event.event.kind === 'editorClosed' &&
+					this.context.isDocumentContent &&
+					!this.isRestoringEditors &&
+					!this.context.isChangingContent &&
+					this.documentGroups.every(group => group.inputs.length === 0)
+				) {
+					this.layout.updateParts(() => {
+						this.layout.hidePart('editor');
+						this.layout.hidePart('auxiliarybar');
+					});
+				}
+			}),
+		);
 	}
 
-
-	private get documentGroups(): readonly IEditorGroupView[] { return this.editor.groups.filter(group => group.id !== this.pageGroupId); }
-	private get documentsVisible(): boolean { return this.context.isDocumentContent && this.layout.isPartVisible('editor'); }
-	public get hasDocumentEditors(): boolean { return this.documentGroups.some(group => group.inputs.some(input => !this.tabs.isManaged(input))); }
-	public get supportsDetails(): boolean { return this.detailPanel.supportsActiveEditor; }
-	public get isRestoringEditors(): boolean { return this.restoring || this.autoVisibilitySuppressions > 0; }
+	private get documentGroups(): readonly IEditorGroupView[] {
+		return this.editor.groups.filter(group => group.id !== this.pageGroupId);
+	}
+	private get documentsVisible(): boolean {
+		return this.context.isDocumentContent && this.layout.isPartVisible('editor');
+	}
+	public get hasDocumentEditors(): boolean {
+		return this.documentGroups.some(group => group.inputs.some(input => !this.tabs.isManaged(input)));
+	}
+	public get supportsDetails(): boolean {
+		return this.detailPanel.supportsActiveEditor;
+	}
+	public get isRestoringEditors(): boolean {
+		return this.restoring || this.autoVisibilitySuppressions > 0;
+	}
 
 	/** Settle the current session before capturing the document groups that the entry leaves behind. */
 	public async prepareContentChange(): Promise<void> {
 		await this.whenSettled();
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) {
+			return;
+		}
 		this.captureEditors();
 	}
 
 	public async activate(revealDetails: boolean): Promise<void> {
 		await this.whenSettled();
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) {
+			return;
+		}
 		this.editor.activateGroup(this.documentGroups[0]!.id);
 		const selection = this.sessions.activeSelection;
-		if (selection) { await this.tabs.reconcile(selection, !this.documentsVisible && revealDetails); }
-		if (this.isDisposed) { return; }
+		if (selection) {
+			await this.tabs.reconcile(selection, !this.documentsVisible && revealDetails);
+		}
+		if (this.isDisposed) {
+			return;
+		}
 		await this.detailPanel.update(revealDetails);
 	}
 
-	public updateDetails(reveal: boolean): Promise<void> { return this.isDisposed ? Promise.resolve() : this.detailPanel.update(reveal); }
+	public updateDetails(reveal: boolean): Promise<void> {
+		return this.isDisposed ? Promise.resolve() : this.detailPanel.update(reveal);
+	}
 
 	/** Details-only keeps the tab strip while its editor content is hidden; focus the visible pane instead. */
 	public focus(): void {
-		if (this.isDisposed) { return; }
-		if (this.documentsVisible) { this.editor.focus(); }
-		else {
+		if (this.isDisposed) {
+			return;
+		}
+		if (this.documentsVisible) {
+			this.editor.focus();
+		} else {
 			const details = this.panes.getActivePaneComposite(ViewContainerLocation.AuxiliaryBar);
-			if (this.layout.isPartVisible('auxiliarybar') && details) { details.focus(); }
-			else { this.layout.focus(); }
+			if (this.layout.isPartVisible('auxiliarybar') && details) {
+				details.focus();
+			} else {
+				this.layout.focus();
+			}
 		}
 	}
 
 	private setDocumentsVisible(visible: boolean): void {
-		if (visible) { this.layout.showPart('editor'); }
-		else { this.layout.hidePart('editor'); }
+		if (visible) {
+			this.layout.showPart('editor');
+		} else {
+			this.layout.hidePart('editor');
+		}
 	}
 
 	private setPartVisible(visible: boolean): void {
-		if (visible) { this.layout.showPart('auxiliarybar'); }
-		else { this.layout.hidePart('auxiliarybar'); }
+		if (visible) {
+			this.layout.showPart('auxiliarybar');
+		} else {
+			this.layout.hidePart('auxiliarybar');
+		}
 	}
 
-	protected override canRestoreSessionEditors(): boolean { return this.context.isSessionContent; }
-	protected override shouldShowEditor(): boolean {
-		return !this.context.isSessionContent || (this.context.isDocumentContent && this.editors.visibleEditors.length > 0 && (this.layout.isPartVisible('editor') || !this.editors.activeEditor || !this.tabs.isManaged(this.editors.activeEditor)));
+	protected override canRestoreSessionEditors(): boolean {
+		return this.context.isSessionContent;
 	}
-	protected override isEditorAutoVisibilitySuppressed(): boolean { return super.isEditorAutoVisibilitySuppressed() || this.context.isChangingContent; }
-	protected override getWorkingSet(key: string): EditorWorkingSet { return this.editor.saveWorkingSet(key, [this.pageGroupId]); }
+	protected override shouldShowEditor(): boolean {
+		return (
+			!this.context.isSessionContent ||
+			(this.context.isDocumentContent &&
+				this.editors.visibleEditors.length > 0 &&
+				(this.layout.isPartVisible('editor') ||
+					!this.editors.activeEditor ||
+					!this.tabs.isManaged(this.editors.activeEditor)))
+		);
+	}
+	protected override isEditorAutoVisibilitySuppressed(): boolean {
+		return super.isEditorAutoVisibilitySuppressed() || this.context.isChangingContent;
+	}
+	protected override getWorkingSet(key: string): EditorWorkingSet {
+		return this.editor.saveWorkingSet(key, [this.pageGroupId]);
+	}
 	protected override async applyWorkingSet(saved: EditorWorkingSet | 'empty'): Promise<void> {
 		await this.editor.applyWorkingSet(saved, { preserveFocus: true, preserveGroups: [this.pageGroupId] });
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) {
+			return;
+		}
 		this.editor.setGroupVisible(this.pageGroupId, false);
 		this.editor.activateGroup(this.documentGroups[0]!.id);
 	}
-	protected override async onSessionRestored(selection: SessionsViewSelection, _hasSavedEditors: boolean): Promise<void> {
-		if (!this.context.isDocumentContent) { return; }
+	protected override async onSessionRestored(
+		selection: SessionsViewSelection,
+		_hasSavedEditors: boolean,
+	): Promise<void> {
+		if (!this.context.isDocumentContent) {
+			return;
+		}
 		this.editor.activateGroup(this.documentGroups[0]!.id);
 		await this.tabs.reconcile(selection, !this.documentsVisible && this.layout.isPartVisible('auxiliarybar'));
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) {
+			return;
+		}
 		await this.detailPanel.update(false);
 	}
 	public async hideEditor(): Promise<void> {
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) {
+			return;
+		}
 		this.setDocumentsVisible(false);
 		this.layout.showPart('auxiliarybar');
-		if (this.sessions.activeSelection) { await this.tabs.reconcile(this.sessions.activeSelection, true); }
-		if (this.isDisposed) { return; }
+		if (this.sessions.activeSelection) {
+			await this.tabs.reconcile(this.sessions.activeSelection, true);
+		}
+		if (this.isDisposed) {
+			return;
+		}
 		await this.detailPanel.update(true);
-		if (!this.isDisposed) { this.layout.focus(); }
+		if (!this.isDisposed) {
+			this.layout.focus();
+		}
 	}
 	public async showEditor(): Promise<void> {
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) {
+			return;
+		}
 		this.setDocumentsVisible(true);
 		this.editor.activateGroup(this.documentGroups[0]!.id);
-		if (this.sessions.activeSelection) { await this.tabs.reconcile(this.sessions.activeSelection, false); }
-		if (this.isDisposed) { return; }
+		if (this.sessions.activeSelection) {
+			await this.tabs.reconcile(this.sessions.activeSelection, false);
+		}
+		if (this.isDisposed) {
+			return;
+		}
 		await this.detailPanel.update(false);
-		if (!this.isDisposed) { this.editor.focus(); }
+		if (!this.isDisposed) {
+			this.editor.focus();
+		}
 	}
 	public async toggleDetails(): Promise<void> {
-		if (this.isDisposed) { return; }
-		if (this.layout.isPartVisible('auxiliarybar')) {
-			if (!this.documentsVisible) { await this.showEditor(); }
-			if (this.isDisposed) { return; }
-			this.layout.hidePart('auxiliarybar');
+		if (this.isDisposed) {
+			return;
 		}
-		else { this.editor.activateGroup(this.documentGroups[0]!.id); await this.detailPanel.update(true); }
+		if (this.layout.isPartVisible('auxiliarybar')) {
+			if (!this.documentsVisible) {
+				await this.showEditor();
+			}
+			if (this.isDisposed) {
+				return;
+			}
+			this.layout.hidePart('auxiliarybar');
+		} else {
+			this.editor.activateGroup(this.documentGroups[0]!.id);
+			await this.detailPanel.update(true);
+		}
 	}
 	public async toggleSidePane(): Promise<void> {
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) {
+			return;
+		}
 		if (this.documentsVisible || this.layout.isPartVisible('auxiliarybar')) {
-			this.closedProfile = { documents: this.documentsVisible, details: this.layout.isPartVisible('auxiliarybar') };
-			this.storage.store(lastOpenKey, JSON.stringify({ editor: this.closedProfile.documents, details: this.closedProfile.details }), StorageScope.PROFILE, StorageTarget.MACHINE);
+			this.closedProfile = {
+				documents: this.documentsVisible,
+				details: this.layout.isPartVisible('auxiliarybar'),
+			};
+			this.storage.store(
+				lastOpenKey,
+				JSON.stringify({ editor: this.closedProfile.documents, details: this.closedProfile.details }),
+				StorageScope.PROFILE,
+				StorageTarget.MACHINE,
+			);
 			this.setDocumentsVisible(false);
 			this.layout.hidePart('auxiliarybar');
 			this.layout.focus();
@@ -179,21 +296,35 @@ export class DesktopLayoutController extends BaseLayoutController {
 	}
 
 	public async openFiles(): Promise<void> {
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) {
+			return;
+		}
 		await this.showEditor();
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) {
+			return;
+		}
 		await this.tabs.openFiles();
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) {
+			return;
+		}
 		await this.detailPanel.update(true);
 	}
 
 	public async openChanges(): Promise<void> {
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) {
+			return;
+		}
 		await this.showEditor();
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) {
+			return;
+		}
 		const selection = this.sessions.activeSelection;
-		if (selection) { await this.tabs.openChanges(selection); }
-		if (this.isDisposed) { return; }
+		if (selection) {
+			await this.tabs.openChanges(selection);
+		}
+		if (this.isDisposed) {
+			return;
+		}
 		await this.detailPanel.update(true);
 	}
 }

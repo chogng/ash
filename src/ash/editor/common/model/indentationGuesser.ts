@@ -6,13 +6,7 @@ class SpacesDiffResult {
 	looksLikeAlignment = false;
 }
 
-function spacesDiff(
-	a: string,
-	aLength: number,
-	b: string,
-	bLength: number,
-	result: SpacesDiffResult,
-): void {
+function spacesDiff(a: string, aLength: number, b: string, bLength: number, result: SpacesDiffResult): void {
 	result.spacesDiff = 0;
 	result.looksLikeAlignment = false;
 
@@ -42,13 +36,13 @@ function spacesDiff(
 	if (tabsDiff === 0) {
 		result.spacesDiff = spacesCountDiff;
 		if (
-			spacesCountDiff > 0
-			&& bSpacesCount > 0
-			&& bSpacesCount < a.length
-			&& bSpacesCount < b.length
-			&& b.charCodeAt(bSpacesCount) !== CharCode.Space
-			&& a.charCodeAt(bSpacesCount - 1) === CharCode.Space
-			&& a.charCodeAt(a.length - 1) === CharCode.Comma
+			spacesCountDiff > 0 &&
+			bSpacesCount > 0 &&
+			bSpacesCount < a.length &&
+			bSpacesCount < b.length &&
+			b.charCodeAt(bSpacesCount) !== CharCode.Space &&
+			a.charCodeAt(bSpacesCount - 1) === CharCode.Space &&
+			a.charCodeAt(a.length - 1) === CharCode.Comma
 		) {
 			result.looksLikeAlignment = true;
 		}
@@ -103,9 +97,10 @@ export function guessIndentation(
 
 		spacesDiff(previousLineText, previousLineIndentation, currentLineText, currentLineIndentation, temporaryResult);
 		if (
-			temporaryResult.looksLikeAlignment
-			&& !(defaultInsertSpaces && defaultTabSize === temporaryResult.spacesDiff)
-		) continue;
+			temporaryResult.looksLikeAlignment &&
+			!(defaultInsertSpaces && defaultTabSize === temporaryResult.spacesDiff)
+		)
+			continue;
 
 		if (temporaryResult.spacesDiff <= maximumTabSizeGuess) {
 			spacesDiffCount[temporaryResult.spacesDiff]++;
@@ -130,11 +125,12 @@ export function guessIndentation(
 			}
 		}
 		if (
-			tabSize === 4
-			&& spacesDiffCount[4] > 0
-			&& spacesDiffCount[2] > 0
-			&& spacesDiffCount[2] >= spacesDiffCount[4] * 2 / 3
-		) tabSize = 2;
+			tabSize === 4 &&
+			spacesDiffCount[4] > 0 &&
+			spacesDiffCount[2] > 0 &&
+			spacesDiffCount[2] >= (spacesDiffCount[4] * 2) / 3
+		)
+			tabSize = 2;
 	}
 
 	return { insertSpaces, tabSize };

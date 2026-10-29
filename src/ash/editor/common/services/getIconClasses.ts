@@ -68,9 +68,10 @@ export function getIconClasses(
 	const languageId = metadata
 		? languageService.getLanguageIdByMimeType(metadata.get(DataUri.META_DATA_MIME))
 		: modelService?.getModel(resource)?.getLanguageId();
-	const resolvedLanguageId = languageId && languageId !== PLAINTEXT_LANGUAGE_ID
-		? languageId
-		: languageService.guessLanguageIdByFilepathOrFirstLine(resource);
+	const resolvedLanguageId =
+		languageId && languageId !== PLAINTEXT_LANGUAGE_ID
+			? languageId
+			: languageService.guessLanguageIdByFilepathOrFirstLine(resource);
 	if (resolvedLanguageId) {
 		classes.push(`${fileIconSelectorEscape(resolvedLanguageId)}-lang-file-icon`);
 	}

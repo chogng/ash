@@ -29,17 +29,31 @@ class ScrollPane extends EditorPane implements IEditorPaneWithScrolling {
 	private readonly changed = this._register(new Emitter<void>());
 	readonly onDidChangeScroll = this.changed.event;
 	writes = 0;
-	constructor(private position: IEditorPaneScrollPosition, private readonly limit: number, @IThemeService theme: IThemeService, @IStorageService storage: IStorageService) { super('test.scrollPane', theme, storage); }
-	getScrollPosition(): IEditorPaneScrollPosition { return this.position; }
+	constructor(
+		private position: IEditorPaneScrollPosition,
+		private readonly limit: number,
+		@IThemeService theme: IThemeService,
+		@IStorageService storage: IStorageService,
+	) {
+		super('test.scrollPane', theme, storage);
+	}
+	getScrollPosition(): IEditorPaneScrollPosition {
+		return this.position;
+	}
 	setScrollPosition(position: IEditorPaneScrollPosition): void {
 		this.writes++;
-		this.position = { scrollTop: Math.max(0, Math.min(this.limit, position.scrollTop)), ...(this.position.scrollLeft === undefined ? {} : { scrollLeft: Math.max(0, position.scrollLeft ?? this.position.scrollLeft) }) };
+		this.position = {
+			scrollTop: Math.max(0, Math.min(this.limit, position.scrollTop)),
+			...(this.position.scrollLeft === undefined
+				? {}
+				: { scrollLeft: Math.max(0, position.scrollLeft ?? this.position.scrollLeft) }),
+		};
 		this.changed.fire();
 	}
-	focus(): void { }
-	async setInput(): Promise<void> { }
-	clearInput(): void { }
-	layout(): void { }
+	focus(): void {}
+	async setInput(): Promise<void> {}
+	clearInput(): void {}
+	layout(): void {}
 }
 
 function pane(resources: DisposableStore, position: IEditorPaneScrollPosition, limit = 1000): ScrollPane {
@@ -54,19 +68,47 @@ function setup(resources: DisposableStore, initial: readonly IEditorPane[]) {
 	const editors: IEditorService = {
 		...emptyEditorServiceState,
 		onDidVisibleEditorsChange: changed.event,
-		get visibleEditorPanes() { return panes; },
-		async openEditor() { },
-		focusActiveEditor() { },
+		get visibleEditorPanes() {
+			return panes;
+		},
+		async openEditor() {},
+		focusActiveEditor() {},
 	};
 	services.registerInstance(IEditorService, editors);
 	const statusbar = services.get(IStatusbarService);
-	services.registerInstance(IAccessibilityService, resources.add(new AccessibilityService({ root: document.body, contextKeyService: services.get(IContextKeyService), configurationService: services.get(IConfigurationService) })));
+	services.registerInstance(
+		IAccessibilityService,
+		resources.add(
+			new AccessibilityService({
+				root: document.body,
+				contextKeyService: services.get(IContextKeyService),
+				configurationService: services.get(IConfigurationService),
+			}),
+		),
+	);
 	const commands = resources.add(new CommandService(services));
-	const host = resources.add(WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [SyncScroll.ID]));
+	const host = resources.add(
+		WorkbenchContributionsRegistry.createHost(
+			services,
+			error => {
+				throw error;
+			},
+			[SyncScroll.ID],
+		),
+	);
 	host.advance(WorkbenchPhase.AfterRestored);
 	assert.equal(statusbar.getEntries(StatusbarAlignment.Right).length, 0);
 	host.advance(WorkbenchPhase.Eventually);
-	return { services, commands, statusbar, host, replace(next: readonly IEditorPane[]) { panes = next; changed.fire(); } };
+	return {
+		services,
+		commands,
+		statusbar,
+		host,
+		replace(next: readonly IEditorPane[]) {
+			panes = next;
+			changed.fire();
+		},
+	};
 }
 
 test('locked scrolling command preserves both offsets, ignores recursive writes and releases listeners', async () => {
@@ -75,7 +117,13 @@ test('locked scrolling command preserves both offsets, ignores recursive writes 
 	const b = pane(resources, { scrollTop: 300, scrollLeft: 80 });
 	const { commands, statusbar } = setup(resources, [a, b]);
 	await commands.executeCommand('workbench.action.toggleLockedScrolling');
-	assert.deepEqual([a.getScrollPosition(), b.getScrollPosition()], [{ scrollTop: 100, scrollLeft: 20 }, { scrollTop: 300, scrollLeft: 80 }]);
+	assert.deepEqual(
+		[a.getScrollPosition(), b.getScrollPosition()],
+		[
+			{ scrollTop: 100, scrollLeft: 20 },
+			{ scrollTop: 300, scrollLeft: 80 },
+		],
+	);
 	a.setScrollPosition({ scrollTop: 150, scrollLeft: 35 });
 	assert.deepEqual(b.getScrollPosition(), { scrollTop: 350, scrollLeft: 95 });
 	assert.equal(a.writes, 1);
@@ -117,7 +165,9 @@ test('locked scrolling expands side-by-side panes and deduplicates visible targe
 	const { services, commands, replace } = setup(resources, [a]);
 	const primary = services.createInstance(ScrollPane, { scrollTop: 200 }, 1000);
 	const secondary = services.createInstance(ScrollPane, { scrollTop: 400 }, 1000);
-	const pair = resources.add(services.get(IInstantiationService).createInstance(SideBySideEditor, 'test.pair', secondary, primary));
+	const pair = resources.add(
+		services.get(IInstantiationService).createInstance(SideBySideEditor, 'test.pair', secondary, primary),
+	);
 	replace([a, pair, primary]);
 	await commands.executeCommand('workbench.action.toggleLockedScrolling');
 	a.setScrollPosition({ scrollTop: 40 });
@@ -144,7 +194,9 @@ test('locked scrolling commands resolve the invoking window and localize the sta
 		await right.commands.executeCommand('workbench.action.toggleLockedScrolling');
 		first.dispose();
 		assert.equal(right.statusbar.getEntries(StatusbarAlignment.Right).length, 1);
-	} finally { resetNlsResolver(); }
+	} finally {
+		resetNlsResolver();
+	}
 });
 
 test('locked scrolling creation rejects missing service registrations', () => {

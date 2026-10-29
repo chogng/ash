@@ -13,7 +13,8 @@ export interface ISocketFactory<T extends RemoteConnectionType> {
 	supports(connectTo: RemoteConnectionOfType<T>): boolean;
 	connect(connectTo: RemoteConnectionOfType<T>, path: string, query: string, debugLabel: string): Promise<ISocket>;
 }
-export const IRemoteSocketFactoryService = createServiceIdentifier<IRemoteSocketFactoryService>('remoteSocketFactoryService');
+export const IRemoteSocketFactoryService =
+	createServiceIdentifier<IRemoteSocketFactoryService>('remoteSocketFactoryService');
 
 interface FactoryEntry {
 	readonly type: RemoteConnectionType;
@@ -35,15 +36,23 @@ export class RemoteSocketFactoryService extends Disposable implements IRemoteSoc
 		const entry: FactoryEntry = {
 			type,
 			supports: connection => factory.supports(connection as RemoteConnectionOfType<T>),
-			connect: (connection, path, query, label) => factory.connect(connection as RemoteConnectionOfType<T>, path, query, label),
+			connect: (connection, path, query, label) =>
+				factory.connect(connection as RemoteConnectionOfType<T>, path, query, label),
 		};
 		this.factories.add(entry);
 		return toDisposable(() => this.factories.delete(entry));
 	}
 
-	public async connect(connectTo: RemoteConnection, path: string, query: string, debugLabel: string): Promise<ISocket> {
+	public async connect(
+		connectTo: RemoteConnection,
+		path: string,
+		query: string,
+		debugLabel: string,
+	): Promise<ISocket> {
 		this.assertNotDisposed();
-		const entry = [...this.factories].find(candidate => candidate.type === connectTo.type && candidate.supports(connectTo));
+		const entry = [...this.factories].find(
+			candidate => candidate.type === connectTo.type && candidate.supports(connectTo),
+		);
 		if (!entry) {
 			throw new Error('No socket factory supports this Remote connection');
 		}

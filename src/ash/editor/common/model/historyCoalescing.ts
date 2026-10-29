@@ -8,46 +8,31 @@ export function canCoalesceHistoryEdits(
 	previousUndoEdits: readonly OffsetTextEdit[],
 	nextForwardEdits: readonly OffsetTextEdit[],
 ): boolean {
-	if (
-		previousUndoEdits.length === 0 ||
-		previousUndoEdits.length !== nextForwardEdits.length
-	) {
+	if (previousUndoEdits.length === 0 || previousUndoEdits.length !== nextForwardEdits.length) {
 		return false;
 	}
 	const typingIsAdjacent = previousUndoEdits.every((previous, index) => {
 		const next = nextForwardEdits[index];
-		return next.text.length > 0 &&
-			next.startOffset === previous.endOffset;
+		return next.text.length > 0 && next.startOffset === previous.endOffset;
 	});
 	if (typingIsAdjacent) {
-		return typingUndoEditsStayDisjoint(
-			previousUndoEdits,
-			nextForwardEdits,
-		);
+		return typingUndoEditsStayDisjoint(previousUndoEdits, nextForwardEdits);
 	}
 
 	const previousAreInsertions = previousUndoEdits.every(
-		edit => edit.startOffset === edit.endOffset &&
-			edit.text.length > 0,
+		edit => edit.startOffset === edit.endOffset && edit.text.length > 0,
 	);
 	const nextAreDeletions = nextForwardEdits.every(
-		edit => edit.endOffset > edit.startOffset &&
-			edit.text.length === 0,
+		edit => edit.endOffset > edit.startOffset && edit.text.length === 0,
 	);
-	if (
-		!previousAreInsertions ||
-		!nextAreDeletions ||
-		inverseInsertionsWouldConverge(nextForwardEdits)
-	) {
+	if (!previousAreInsertions || !nextAreDeletions || inverseInsertionsWouldConverge(nextForwardEdits)) {
 		return false;
 	}
 	const backspacesAreAdjacent = previousUndoEdits.every(
-		(previous, index) =>
-			nextForwardEdits[index].endOffset === previous.startOffset,
+		(previous, index) => nextForwardEdits[index].endOffset === previous.startOffset,
 	);
 	const deletesAreAdjacent = previousUndoEdits.every(
-		(previous, index) =>
-			nextForwardEdits[index].startOffset === previous.startOffset,
+		(previous, index) => nextForwardEdits[index].startOffset === previous.startOffset,
 	);
 	return backspacesAreAdjacent || deletesAreAdjacent;
 }
@@ -67,50 +52,38 @@ export function coalesceHistoryUndoEdits(
 				endOffset: nextUndo.endOffset,
 				text: previous.text + nextUndo.text,
 			};
-			precedingDelta += next.text.length -
-				(next.endOffset - next.startOffset);
+			precedingDelta += next.text.length - (next.endOffset - next.startOffset);
 			return combined;
 		});
 	}
 
 	if (previousUndoEdits[0].text.length > 0) {
-		const backspace =
-			nextForwardEdits[0].endOffset ===
-			previousUndoEdits[0].startOffset;
+		const backspace = nextForwardEdits[0].endOffset === previousUndoEdits[0].startOffset;
 		return previousUndoEdits.map((previous, index) => {
 			const nextUndo = nextUndoEdits[index];
 			return {
 				startOffset: nextUndo.startOffset,
 				endOffset: nextUndo.endOffset,
-				text: backspace
-					? nextUndo.text + previous.text
-					: previous.text + nextUndo.text,
+				text: backspace ? nextUndo.text + previous.text : previous.text + nextUndo.text,
 			};
 		});
 	}
 
-	throw new Error("Unsupported history coalescing shape");
+	throw new Error('Unsupported history coalescing shape');
 }
 
 export function canReplaceHistoryEdits(
 	previousUndoEdits: readonly OffsetTextEdit[],
 	nextForwardEdits: readonly OffsetTextEdit[],
 ): boolean {
-	if (
-		previousUndoEdits.length === 0 ||
-		previousUndoEdits.length !== nextForwardEdits.length
-	) {
+	if (previousUndoEdits.length === 0 || previousUndoEdits.length !== nextForwardEdits.length) {
 		return false;
 	}
-	const replacesCurrentRevision = previousUndoEdits.every(
-		(previous, index) => {
-			const next = nextForwardEdits[index];
-			return next.startOffset === previous.startOffset &&
-				next.endOffset === previous.endOffset;
-		},
-	);
-	return replacesCurrentRevision &&
-		!inverseInsertionsWouldConverge(nextForwardEdits);
+	const replacesCurrentRevision = previousUndoEdits.every((previous, index) => {
+		const next = nextForwardEdits[index];
+		return next.startOffset === previous.startOffset && next.endOffset === previous.endOffset;
+	});
+	return replacesCurrentRevision && !inverseInsertionsWouldConverge(nextForwardEdits);
 }
 
 export function replaceHistoryUndoEdits(
@@ -124,9 +97,7 @@ export function replaceHistoryUndoEdits(
 	}));
 }
 
-export function normalizeInverseEdits(
-	edits: readonly OffsetTextEdit[],
-): OffsetTextEdit[] {
+export function normalizeInverseEdits(edits: readonly OffsetTextEdit[]): OffsetTextEdit[] {
 	const normalized: OffsetTextEdit[] = [];
 	for (const edit of edits) {
 		const previous = normalized[normalized.length - 1];
@@ -148,9 +119,7 @@ export function normalizeInverseEdits(
 	return normalized;
 }
 
-function inverseInsertionsWouldConverge(
-	forwardEdits: readonly OffsetTextEdit[],
-): boolean {
+function inverseInsertionsWouldConverge(forwardEdits: readonly OffsetTextEdit[]): boolean {
 	let cumulativeDelta = 0;
 	let previousStartOffset = -1;
 	for (const edit of forwardEdits) {
@@ -177,8 +146,7 @@ function typingUndoEditsStayDisjoint(
 			return false;
 		}
 		previousEndOffset = endOffset;
-		cumulativeDelta += next.text.length -
-			(next.endOffset - next.startOffset);
+		cumulativeDelta += next.text.length - (next.endOffset - next.startOffset);
 	}
 	return true;
 }

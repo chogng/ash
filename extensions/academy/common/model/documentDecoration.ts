@@ -1,7 +1,7 @@
-import { applyDocumentTransaction, type DocumentTransaction } from "./documentTransaction.js";
-import type { DocumentAttributes, DocumentNode } from "./document.js";
-import { textSelection, type DocumentPoint, type DocumentSelection } from "../core/documentSelection.js";
-import type { DocumentSchema } from "./documentSchema.js";
+import { applyDocumentTransaction, type DocumentTransaction } from './documentTransaction.js';
+import type { DocumentAttributes, DocumentNode } from './document.js';
+import { textSelection, type DocumentPoint, type DocumentSelection } from '../core/documentSelection.js';
+import type { DocumentSchema } from './documentSchema.js';
 
 export interface DocumentDecorationOptions {
 	readonly id: string;
@@ -22,8 +22,10 @@ export interface DocumentDecoration {
 
 /** Creates an immutable decoration that can be projected by any Stanza view. */
 export function createDocumentDecoration(options: DocumentDecorationOptions): DocumentDecoration {
-	if (typeof options.id !== "string" || options.id.trim().length === 0) throw new TypeError("Document decorations require a non-empty id");
-	if (options.className !== undefined && typeof options.className !== "string") throw new TypeError("Document decoration className must be a string");
+	if (typeof options.id !== 'string' || options.id.trim().length === 0)
+		throw new TypeError('Document decorations require a non-empty id');
+	if (options.className !== undefined && typeof options.className !== 'string')
+		throw new TypeError('Document decoration className must be a string');
 	return Object.freeze({
 		id: options.id,
 		from: Object.freeze({ ...options.from }),
@@ -79,8 +81,16 @@ export class DocumentDecorationSet {
 		const mapped: DocumentDecoration[] = [];
 		for (const decoration of this.decorations) {
 			const selection = applied.mapping.mapSelection(textSelectionForDecoration(decoration));
-			if (!selection || selection.kind !== "text") continue;
-			mapped.push(createDocumentDecoration({ id: decoration.id, from: selection.anchor, to: selection.head, className: decoration.className, attrs: decoration.attrs }));
+			if (!selection || selection.kind !== 'text') continue;
+			mapped.push(
+				createDocumentDecoration({
+					id: decoration.id,
+					from: selection.anchor,
+					to: selection.head,
+					className: decoration.className,
+					attrs: decoration.attrs,
+				}),
+			);
 		}
 		return new DocumentDecorationSet(mapped);
 	}

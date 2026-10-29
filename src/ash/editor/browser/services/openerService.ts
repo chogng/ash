@@ -4,7 +4,11 @@ import { AbstractDisposable, type IDisposable, toDisposable } from '../../../bas
 import { URI } from '../../../base/common/uri.js';
 import { CancellationToken } from '../../../base/common/cancellation.js';
 import { getWindow, windowOpenNoOpener } from '../../../base/browser/dom.js';
-import { defaultExternalUriOpenerId, normalizeExternalUrl, extractSelection } from '../../../platform/opener/common/opener.js';
+import {
+	defaultExternalUriOpenerId,
+	normalizeExternalUrl,
+	extractSelection,
+} from '../../../platform/opener/common/opener.js';
 import type {
 	IExternalOpener,
 	IExternalUriResolver,
@@ -28,7 +32,10 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 	private _defaultExternalOpener: IExternalOpener | undefined;
 	private readonly _externalOpeners = new LinkedList<IExternalOpener>();
 
-	constructor(@ICodeEditorService editorService: ICodeEditorService, @ICommandService private readonly commandService: ICommandService) {
+	constructor(
+		@ICodeEditorService editorService: ICodeEditorService,
+		@ICommandService private readonly commandService: ICommandService,
+	) {
 		super();
 		this._defaultExternalOpener = {
 			openExternal: async href => {
@@ -47,7 +54,13 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 				const parsed = extractSelection(typeof target === 'string' ? URI.parse(target) : target);
 				const resource = parsed.uri;
 				const editor = await editorService.openCodeEditor(
-					{ resource, options: { ...options?.editorOptions, selection: parsed.selection ?? options?.editorOptions?.selection } },
+					{
+						resource,
+						options: {
+							...options?.editorOptions,
+							selection: parsed.selection ?? options?.editorOptions?.selection,
+						},
+					},
 					editorService.getFocusedCodeEditor(),
 					options?.openToSide,
 				);
@@ -81,7 +94,7 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 		if (!options?.skipValidation) {
 			const validationTarget = this._resolvedUriTargets.get(resource.toString()) ?? target;
 			for (const validator of this._validators) {
-				if (!await validator.shouldOpen(validationTarget, options)) return false;
+				if (!(await validator.shouldOpen(validationTarget, options))) return false;
 			}
 		}
 		if (resource.scheme === 'command') {
@@ -99,7 +112,12 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 			await this.commandService.executeCommand(id, ...args);
 			return true;
 		}
-		if (options?.openExternal || resource.scheme === 'http' || resource.scheme === 'https' || resource.scheme === 'mailto') {
+		if (
+			options?.openExternal ||
+			resource.scheme === 'http' ||
+			resource.scheme === 'https' ||
+			resource.scheme === 'mailto'
+		) {
 			return this._doOpenExternal(target, options);
 		}
 		for (const opener of this._openers) {
@@ -133,9 +151,11 @@ export class OpenerService extends AbstractDisposable implements IOpenerService 
 		try {
 			const href = resolved.toString();
 			if (options?.allowContributedOpeners && options.allowContributedOpeners !== defaultExternalUriOpenerId) {
-				const preferredOpenerId = typeof options.allowContributedOpeners === 'string' ? options.allowContributedOpeners : undefined;
+				const preferredOpenerId =
+					typeof options.allowContributedOpeners === 'string' ? options.allowContributedOpeners : undefined;
 				for (const opener of this._externalOpeners) {
-					if (await opener.openExternal(href, { sourceUri, preferredOpenerId }, CancellationToken.None)) return true;
+					if (await opener.openExternal(href, { sourceUri, preferredOpenerId }, CancellationToken.None))
+						return true;
 				}
 			}
 			if (!this._defaultExternalOpener) throw new Error('No default external opener is registered');

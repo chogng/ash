@@ -21,7 +21,7 @@ export interface LocalRepository {
 		readonly type: string;
 		readonly name: string;
 		readonly objectId: string;
-		readonly upstream?: { readonly name: string; readonly ahead: number; readonly behind: number; };
+		readonly upstream?: { readonly name: string; readonly ahead: number; readonly behind: number };
 	};
 	readonly uncommittedChanges?: number;
 	readonly remotes: readonly RepositoryRemote[];
@@ -42,10 +42,13 @@ export async function readLocalRepositories(commands: ICommandService): Promise<
 	const text = (value: unknown): string => {
 		if (typeof value !== 'string' || value.length > 32768 || value.includes('\0')) {
 			throw new TypeError('Invalid repository context text');
-		} return value;
+		}
+		return value;
 	};
 	const count = (value: unknown): number => {
-		if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) { throw new TypeError('Invalid repository context count'); }
+		if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
+			throw new TypeError('Invalid repository context count');
+		}
 		return value;
 	};
 	return result.map(value => {
@@ -53,34 +56,67 @@ export async function readLocalRepositories(commands: ICommandService): Promise<
 			throw new TypeError('Invalid repository context');
 		}
 		const upstream: unknown = value.head.upstream;
-		if (upstream !== undefined && upstream !== null && (typeof upstream !== 'object' || Array.isArray(upstream))) { throw new TypeError('Invalid repository upstream'); }
-		const tracking = upstream as { name: unknown; ahead: unknown; behind: unknown; } | null | undefined;
+		if (upstream !== undefined && upstream !== null && (typeof upstream !== 'object' || Array.isArray(upstream))) {
+			throw new TypeError('Invalid repository upstream');
+		}
+		const tracking = upstream as { name: unknown; ahead: unknown; behind: unknown } | null | undefined;
 		return {
-			id: text(value.id), label: text(value.label), path: text(value.path), root: URI.parse(text(value.root)),
+			id: text(value.id),
+			label: text(value.label),
+			path: text(value.path),
+			root: URI.parse(text(value.root)),
 			head: {
-				type: text(value.head.type), name: text(value.head.name ?? ''), objectId: text(value.head.objectId ?? ''),
-				...(tracking ? { upstream: { name: text(tracking.name), ahead: count(tracking.ahead), behind: count(tracking.behind) } } : {}),
+				type: text(value.head.type),
+				name: text(value.head.name ?? ''),
+				objectId: text(value.head.objectId ?? ''),
+				...(tracking
+					? {
+							upstream: {
+								name: text(tracking.name),
+								ahead: count(tracking.ahead),
+								behind: count(tracking.behind),
+							},
+						}
+					: {}),
 			},
 			...(value.uncommittedChanges === undefined ? {} : { uncommittedChanges: count(value.uncommittedChanges) }),
-			remotes: value.remotes.map((remote: {
-				name: unknown;
-				identity?: {
-					provider: unknown;
-					host: unknown;
-					owner: unknown;
-					repository: unknown;
-				};
-			}) => ({ name: text(remote.name), ...(remote.identity ? { identity: { provider: text(remote.identity.provider), host: text(remote.identity.host), owner: text(remote.identity.owner), repository: text(remote.identity.repository) } } : {}) }))
+			remotes: value.remotes.map(
+				(remote: {
+					name: unknown;
+					identity?: { provider: unknown; host: unknown; owner: unknown; repository: unknown };
+				}) => ({
+					name: text(remote.name),
+					...(remote.identity
+						? {
+								identity: {
+									provider: text(remote.identity.provider),
+									host: text(remote.identity.host),
+									owner: text(remote.identity.owner),
+									repository: text(remote.identity.repository),
+								},
+							}
+						: {}),
+				}),
+			),
 		};
 	});
 }
 
 /** Rules in different rulesets are additive; exclusions apply only to their own rule. */
 export function isGitHubBranchProtected(branch: string, protection: GitHubBranchProtection): boolean {
-	return protection.rules.some(rule => rule.include.some(pattern => match(pattern, branch)) && !rule.exclude.some(pattern => match(pattern, branch)));
+	return protection.rules.some(
+		rule =>
+			rule.include.some(pattern => match(pattern, branch)) &&
+			!rule.exclude.some(pattern => match(pattern, branch)),
+	);
 }
 /** Prefer the tracked remote to avoid sharing a fork's commit through the upstream repository. */
 export function githubRemotes(repository: LocalRepository): LocalRepository['remotes'] {
-	return repository.remotes.filter(remote => remote.identity?.provider === 'github').sort((a, b) =>
-		Number(repository.head.upstream?.name.startsWith(`${b.name}/`) ?? false) - Number(repository.head.upstream?.name.startsWith(`${a.name}/`) ?? false));
+	return repository.remotes
+		.filter(remote => remote.identity?.provider === 'github')
+		.sort(
+			(a, b) =>
+				Number(repository.head.upstream?.name.startsWith(`${b.name}/`) ?? false) -
+				Number(repository.head.upstream?.name.startsWith(`${a.name}/`) ?? false),
+		);
 }

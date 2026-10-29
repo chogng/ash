@@ -18,7 +18,16 @@ export class SCMViewPaneContainer extends PaneComposite {
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
-		super(container, { ...options, mergeViewWithContainerWhenSingleView: true }, storageService, themeService, menuService, configurationService, instantiationService, contextKeyService);
+		super(
+			container,
+			{ ...options, mergeViewWithContainerWhenSingleView: true },
+			storageService,
+			themeService,
+			menuService,
+			configurationService,
+			instantiationService,
+			contextKeyService,
+		);
 		this.element.classList.add('ash-scm-viewlet');
 	}
 

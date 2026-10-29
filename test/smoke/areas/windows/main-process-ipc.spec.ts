@@ -25,13 +25,18 @@ interface IpcHarness {
 	active(): Promise<readonly [string, number][]>;
 }
 
-const test = baseTest.extend<{ ipcHarness: IpcHarness; }>({
+const test = baseTest.extend<{ ipcHarness: IpcHarness }>({
 	ipcHarness: async ({ target }, use, testInfo) => {
-		baseTest.skip(target.kind !== 'electron' || target.appServerMode !== 'disabled', 'Requires the Electron UI project.');
+		baseTest.skip(
+			target.kind !== 'electron' || target.appServerMode !== 'disabled',
+			'Requires the Electron UI project.',
+		);
 		const directory = await mkdtemp(join(tmpdir(), 'ash-ipc-'));
 		const configuration = resolveElectronConfiguration({ appServerMode: 'disabled', userDataDirectory: directory });
 		const entry = testInfo.outputPath('main-process-ipc.mjs');
-		await writeFile(entry, `
+		await writeFile(
+			entry,
+			`
 import { app, nativeTheme } from 'electron/main';
 import { bootstrapElectronMain } from ${JSON.stringify(pathToFileURL(join(mainOutput, 'bootstrap.js')).href)};
 bootstrapElectronMain();
@@ -71,90 +76,179 @@ Server.prototype.registerChannel = function(name, channel) {
 };
 const { startElectronApplication } = await import(${JSON.stringify(pathToFileURL(join(mainOutput, 'ash/code/electron-main/main.js')).href)});
 startElectronApplication();
-`);
-		const application = await _electron.launch({ executablePath: configuration.executablePath, args: configuration.args.map(argument => argument === desktop ? entry : argument), cwd: configuration.cwd, env: configuration.env });
+`,
+		);
+		const application = await _electron.launch({
+			executablePath: configuration.executablePath,
+			args: configuration.args.map(argument => (argument === desktop ? entry : argument)),
+			cwd: configuration.cwd,
+			env: configuration.env,
+		});
 		const errors: string[] = [];
 		try {
 			const page = await application.firstWindow();
 			page.on('pageerror', error => errors.push(error.message));
 			await new Workbench(page).waitForReady();
-			await use({ application, page, active: () => application.evaluate(() => [...(globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.active]) });
+			await use({
+				application,
+				page,
+				active: () =>
+					application.evaluate(() => [
+						...(globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.active,
+					]),
+			});
 			expect(errors).toEqual([]);
 		} finally {
 			await application.evaluate(({ BrowserWindow }) => {
-				(globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.releaseRead?.();
-				for (const window of BrowserWindow.getAllWindows()) { window.destroy(); }
+				(globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.releaseRead?.();
+				for (const window of BrowserWindow.getAllWindows()) {
+					window.destroy();
+				}
 			});
 			await application.close();
 			await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 		}
-	}
+	},
 });
 
-test('Main color subscriptions follow their own window through reload and close', async ({ ipcHarness: { application, page, active } }) => {
+test('Main color subscriptions follow their own window through reload and close', async ({
+	ipcHarness: { application, page, active },
+}) => {
 	const firstId = await application.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.id);
 	await expect.poll(active).toEqual([[`window:${firstId}`, 1]]);
 	const opened = application.waitForEvent('window');
-	await application.evaluate(({ app }) => { app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--new-window'], process.cwd(), {}); });
+	await application.evaluate(({ app }) => {
+		app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--new-window'], process.cwd(), {});
+	});
 	const second = await opened;
-	const secondId = await application.evaluate(({ BrowserWindow }, firstId) => BrowserWindow.getAllWindows().find(window => window.id !== firstId)!.id, firstId);
+	const secondId = await application.evaluate(
+		({ BrowserWindow }, firstId) => BrowserWindow.getAllWindows().find(window => window.id !== firstId)!.id,
+		firstId,
+	);
 	await expect(second.locator('.ash-workbench')).toBeVisible();
-	await expect.poll(active).toEqual([[`window:${firstId}`, 1], [`window:${secondId}`, 1]]);
-	await application.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'dark'; });
-	for (const window of [page, second]) { await expect(window.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark'); }
+	await expect.poll(active).toEqual([
+		[`window:${firstId}`, 1],
+		[`window:${secondId}`, 1],
+	]);
+	await application.evaluate(({ nativeTheme }) => {
+		nativeTheme.themeSource = 'dark';
+	});
+	for (const window of [page, second]) {
+		await expect(window.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark');
+	}
 	await page.reload();
 	await expect(page.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark');
-	await expect.poll(async () => [...await active()].sort()).toEqual([[`window:${firstId}`, 1], [`window:${secondId}`, 1]].sort());
-	await application.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'light'; });
-	for (const window of [page, second]) { await expect(window.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-light'); }
-	await application.evaluate(({ BrowserWindow }, id) => { BrowserWindow.fromId(id)!.destroy(); }, firstId);
+	await expect
+		.poll(async () => [...(await active())].sort())
+		.toEqual(
+			[
+				[`window:${firstId}`, 1],
+				[`window:${secondId}`, 1],
+			].sort(),
+		);
+	await application.evaluate(({ nativeTheme }) => {
+		nativeTheme.themeSource = 'light';
+	});
+	for (const window of [page, second]) {
+		await expect(window.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-light');
+	}
+	await application.evaluate(({ BrowserWindow }, id) => {
+		BrowserWindow.fromId(id)!.destroy();
+	}, firstId);
 	await expect.poll(active).toEqual([[`window:${secondId}`, 1]]);
-	await application.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'dark'; });
+	await application.evaluate(({ nativeTheme }) => {
+		nativeTheme.themeSource = 'dark';
+	});
 	await expect(second.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark');
 });
 
-test('reload cancels a pending Main call and an old reply cannot overwrite the new document', async ({ ipcHarness: { application, page, active } }) => {
-	await application.evaluate(() => { (globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.holdNextRead = true; });
+test('reload cancels a pending Main call and an old reply cannot overwrite the new document', async ({
+	ipcHarness: { application, page, active },
+}) => {
+	await application.evaluate(() => {
+		(globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.holdNextRead = true;
+	});
 	await page.reload();
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.waitingRead)).toBe(true);
+	await expect
+		.poll(() =>
+			application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.waitingRead),
+		)
+		.toBe(true);
 	await page.reload();
 	await expect(page.locator('.ash-workbench')).toBeVisible();
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.cancelled)).toBe(true);
-	await application.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'dark'; });
+	await expect
+		.poll(() =>
+			application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.cancelled),
+		)
+		.toBe(true);
+	await application.evaluate(({ nativeTheme }) => {
+		nativeTheme.themeSource = 'dark';
+	});
 	await expect(page.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark');
-	await application.evaluate(() => { (globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.releaseRead(); });
-	await expect.poll(() => application.evaluate(() => (globalThis as unknown as { ipcScenario: IpcScenario; }).ipcScenario.readReleased)).toBe(true);
+	await application.evaluate(() => {
+		(globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.releaseRead();
+	});
+	await expect
+		.poll(() =>
+			application.evaluate(
+				() => (globalThis as unknown as { ipcScenario: IpcScenario }).ipcScenario.readReleased,
+			),
+		)
+		.toBe(true);
 	await expect(page.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark');
 	await expect.poll(async () => (await active()).map(([, count]) => count)).toEqual([1]);
-	await application.evaluate(({ nativeTheme }) => { nativeTheme.themeSource = 'light'; });
+	await application.evaluate(({ nativeTheme }) => {
+		nativeTheme.themeSource = 'light';
+	});
 	await expect(page.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-light');
 });
 
-test('configuration changes reach other windows and survive document replacement', async ({ ipcHarness: { application, page } }) => {
+test('configuration changes reach other windows and survive document replacement', async ({
+	ipcHarness: { application, page },
+}) => {
 	const opened = application.waitForEvent('window');
-	await application.evaluate(({ app }) => { app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--new-window'], process.cwd(), {}); });
+	await application.evaluate(({ app }) => {
+		app.emit('second-instance', {}, [process.execPath, app.getAppPath(), '--new-window'], process.cwd(), {});
+	});
 	const second = await opened;
 	await new Workbench(second).waitForReady();
 	const first = new Workbench(page);
 	await first.settingsEditor.openUserSettingsUI();
 	await first.settingsEditor.selectGroup('workbench');
 	await first.settingsEditor.selectCategory('appearance');
-	const theme = first.settingsEditor.element.locator('[data-settings-item-id="workbench.colorTheme"]').getByRole('combobox');
+	const theme = first.settingsEditor.element
+		.locator('[data-settings-item-id="workbench.colorTheme"]')
+		.getByRole('combobox');
 	await theme.click();
 	await page.getByRole('option', { name: 'Ash Dark', exact: true }).click();
-	for (const window of [page, second]) { await expect(window.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark'); }
+	for (const window of [page, second]) {
+		await expect(window.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark');
+	}
 	await second.reload();
 	await new Workbench(second).waitForReady();
 	await expect(second.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-dark');
 	await theme.click();
 	await page.getByRole('option', { name: 'Ash Light', exact: true }).click();
-	for (const window of [page, second]) { await expect(window.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-light'); }
+	for (const window of [page, second]) {
+		await expect(window.locator('.ash-workbench')).toHaveAttribute('data-color-theme', 'ash-light');
+	}
 });
 
-test('Main IPC rejects removed acquisition routes and renderer-supplied window identity', async ({ ipcHarness: { application, page, active } }) => {
+test('Main IPC rejects removed acquisition routes and renderer-supplied window identity', async ({
+	ipcHarness: { application, page, active },
+}) => {
 	const initial = await active();
 	const errors = await page.evaluate(async () => {
-		const ipc = (globalThis as unknown as { ash: { ipcRenderer: { invoke(channel: string, arg?: unknown): Promise<unknown>; send(channel: string, arg?: unknown): void; }; }; }).ash.ipcRenderer;
+		const ipc = (
+			globalThis as unknown as {
+				ash: {
+					ipcRenderer: {
+						invoke(channel: string, arg?: unknown): Promise<unknown>;
+						send(channel: string, arg?: unknown): void;
+					};
+				};
+			}
+		).ash.ipcRenderer;
 		ipc.send('ash:hello', { context: 'window:other' });
 		const failures: string[] = [];
 		for (const [channel, arg] of [
@@ -162,7 +256,12 @@ test('Main IPC rejects removed acquisition routes and renderer-supplied window i
 			['ash:ipc:window-id', { id: 10 }],
 			['ash:native-host:get-color-scheme', undefined],
 		] as const) {
-			try { await ipc.invoke(channel, arg); failures.push('accepted'); } catch (error) { failures.push((error as Error).message); }
+			try {
+				await ipc.invoke(channel, arg);
+				failures.push('accepted');
+			} catch (error) {
+				failures.push((error as Error).message);
+			}
 		}
 		return failures;
 	});

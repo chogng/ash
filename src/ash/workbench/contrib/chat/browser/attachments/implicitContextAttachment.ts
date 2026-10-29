@@ -35,15 +35,26 @@ export class ImplicitContextAttachmentWidget extends Disposable {
 		this.domNode = h(container.ownerDocument, 'div');
 		this.domNode.className = 'ash-chat-suggested-context';
 		container.append(this.domNode);
-		this._register(toDisposable(() => { this.controller.abort(); this.domNode.remove(); }));
-		this.button = this._register(new Button(this.domNode, {
-			...defaultButtonStyles,
-			label: '',
-			icon: Lxicon.addSmall,
-			size: 'small',
-			presentation: 'quiet',
-		}));
-		this._register(this.button.onDidClick(() => { void this.attach(); }));
+		this._register(
+			toDisposable(() => {
+				this.controller.abort();
+				this.domNode.remove();
+			}),
+		);
+		this.button = this._register(
+			new Button(this.domNode, {
+				...defaultButtonStyles,
+				label: '',
+				icon: Lxicon.addSmall,
+				size: 'small',
+				presentation: 'quiet',
+			}),
+		);
+		this._register(
+			this.button.onDidClick(() => {
+				void this.attach();
+			}),
+		);
 		this._register(editors.onDidActiveEditorChange(() => this.render()));
 		this._register(attachments.onDidChange(() => this.render()));
 		this.render();
@@ -57,14 +68,24 @@ export class ImplicitContextAttachmentWidget extends Disposable {
 		if (input?.initialBytes || input?.contentType === 'application/octet-stream') return undefined;
 		const resource = input?.resource;
 		// Read-only Git snapshots carry text in the input even without a filesystem provider.
-		return resource && resource.scheme !== Schemas.internal && (input.initialText !== undefined || [Schemas.file, Schemas.untitled, Schemas.ashRemote, Schemas.vscodeUserData].includes(resource.scheme))
-			&& !this.attachments.attachments.some(attachment => attachment.kind === 'file' && extUri.isEqual(attachment.resource, resource))
-			? input : undefined;
+		return resource &&
+			resource.scheme !== Schemas.internal &&
+			(input.initialText !== undefined ||
+				[Schemas.file, Schemas.untitled, Schemas.ashRemote, Schemas.vscodeUserData].includes(
+					resource.scheme,
+				)) &&
+			!this.attachments.attachments.some(
+				attachment => attachment.kind === 'file' && extUri.isEqual(attachment.resource, resource),
+			)
+			? input
+			: undefined;
 	}
 
 	public get accessibleContent(): string | undefined {
 		const resource = this.editorInput?.resource;
-		return resource ? localize('chat.context.suggestedFile', 'Suggested file context: {0}', basename(resource)) : undefined;
+		return resource
+			? localize('chat.context.suggestedFile', 'Suggested file context: {0}', basename(resource))
+			: undefined;
 	}
 
 	private render(): void {
@@ -94,13 +115,19 @@ export class ImplicitContextAttachmentWidget extends Disposable {
 			const attached = await this.attachments.acquireContext(async draftSignal => {
 				const signal = AbortSignal.any([this.controller.signal, draftSignal]);
 				const attachment = await this.attachmentResolver.resolveEditorAttachContext(input, signal);
-				return !attachment || this.attachments.attachments.some(entry => entry.kind === 'file' && extUri.isEqual(entry.resource, resource)) ? [] : [attachment];
+				return !attachment ||
+					this.attachments.attachments.some(
+						entry => entry.kind === 'file' && extUri.isEqual(entry.resource, resource),
+					)
+					? []
+					: [attachment];
 			}, this.controller.signal);
 			if (this.isDisposed) return;
 			if (attached.length > 0) status(localize('chat.context.added', 'Added {0}', attached[0]!.name));
 			this.focusInput();
 		} catch (error) {
-			if (!this.isDisposed && !isCancellationError(error)) this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error)));
+			if (!this.isDisposed && !isCancellationError(error))
+				this.notifications.error(localize('chat.context.failed', 'Could not add context: {0}', String(error)));
 		} finally {
 			this.pending = false;
 			if (!this.isDisposed) this.render();

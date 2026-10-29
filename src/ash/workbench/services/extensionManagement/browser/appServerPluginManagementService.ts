@@ -1,8 +1,13 @@
-import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import type { IPluginManagementApi } from "../../../../platform/extensionManagement/common/pluginManagementApi.js";
-import type { IPluginManagementService, PluginCatalogView, PluginInstallation, PluginPackageView } from "../../../../platform/extensionManagement/common/pluginManagementService.js";
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import type { IPluginManagementApi } from '../../../../platform/extensionManagement/common/pluginManagementApi.js';
+import type {
+	IPluginManagementService,
+	PluginCatalogView,
+	PluginInstallation,
+	PluginPackageView,
+} from '../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { ILocalGitService } from '../../../../platform/git/common/localGitService.js';
 import { FileKind, IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
@@ -27,18 +32,35 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 	) {
 		super();
 		const subscription = events.subscribe(event => {
-			if (event.method === "plugin/changed") this._onDidChange.fire(event.params.revision);
+			if (event.method === 'plugin/changed') this._onDidChange.fire(event.params.revision);
 		});
 		this._register(toDisposable(() => subscription.dispose()));
 	}
 
 	async list(): Promise<PluginCatalogView> {
 		const catalog = await this.api.list();
-		return { ...catalog, packages: catalog.packages.map(({ uiTargets, ...plugin }) => ({ ...plugin, ...(uiTargets ? { uiTargets: uiTargets.map(target => target === 'ide' ? ExtensionUiTarget.IDE : ExtensionUiTarget.Agents) } : {}) })) };
+		return {
+			...catalog,
+			packages: catalog.packages.map(({ uiTargets, ...plugin }) => ({
+				...plugin,
+				...(uiTargets
+					? {
+							uiTargets: uiTargets.map(target =>
+								target === 'ide' ? ExtensionUiTarget.IDE : ExtensionUiTarget.Agents,
+							),
+						}
+					: {}),
+			})),
+		};
 	}
 
 	async installLocal(path: string, expectedRevision: number): Promise<PluginInstallation> {
-		const result = await this.api.installLocal({ commandId: `desktop-plugin-install-${crypto.randomUUID()}`, expectedRevision, path, dirId: null });
+		const result = await this.api.installLocal({
+			commandId: `desktop-plugin-install-${crypto.randomUUID()}`,
+			expectedRevision,
+			path,
+			dirId: null,
+		});
 		return { id: result.id, version: result.version, digest: result.digest };
 	}
 
@@ -52,7 +74,13 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 		const controller = new AbortController();
 		const lifetime = this.gitInstalls.add(toDisposable(() => controller.abort()));
 		try {
-			return await this.installGitPackage(folder, url, reference, packagePath, AbortSignal.any([signal, controller.signal]));
+			return await this.installGitPackage(
+				folder,
+				url,
+				reference,
+				packagePath,
+				AbortSignal.any([signal, controller.signal]),
+			);
 		} finally {
 			this.gitInstalls.delete(lifetime);
 			lifetime.dispose();
@@ -68,8 +96,18 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 	): Promise<PluginInstallation> {
 		// Validate the user-entered package path before joining it to any host resource.
 		const parts = packagePath === '' || packagePath === '.' ? [] : packagePath.split('/');
-		if (parts.some(part => !/^[a-zA-Z0-9._-]+$/.test(part) || part === '.' || part === '..' || part.toLowerCase() === '.git')) {
-			throw new Error(localize({ bundle: 'ash.extensions', key: 'invalidGitPackagePath' }, 'Enter a package path within the repository, using forward slashes.'));
+		if (
+			parts.some(
+				part =>
+					!/^[a-zA-Z0-9._-]+$/.test(part) || part === '.' || part === '..' || part.toLowerCase() === '.git',
+			)
+		) {
+			throw new Error(
+				localize(
+					{ bundle: 'ash.extensions', key: 'invalidGitPackagePath' },
+					'Enter a package path within the repository, using forward slashes.',
+				),
+			);
 		}
 		const operationId = crypto.randomUUID();
 		const checkoutName = `ash-plugin-checkout-${operationId}`;
@@ -77,30 +115,46 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 		const checkout = URI.joinPath(folder.uri, checkoutName);
 		const staging = URI.joinPath(folder.uri, packageName);
 		const targetPath = isRemoteResource(checkout) ? getRemoteWorkspacePath(checkout) : checkout.fsPath;
-		if (signal.aborted) { throw canceled(); }
-		const cancel = () => { void this.git.cancel(operationId).catch(() => undefined); };
+		if (signal.aborted) {
+			throw canceled();
+		}
+		const cancel = () => {
+			void this.git.cancel(operationId).catch(() => undefined);
+		};
 		signal.addEventListener('abort', cancel, { once: true });
 		try {
 			await this.git.clone(operationId, url, targetPath, reference);
 		} finally {
 			signal.removeEventListener('abort', cancel);
 		}
-		if (signal.aborted) { throw canceled(); }
+		if (signal.aborted) {
+			throw canceled();
+		}
 		let source = checkout;
 		for (const part of parts) {
 			source = URI.joinPath(source, part);
 			if ((await this.files.stat(source)).kind !== FileKind.Directory) {
-				throw new Error(localize({ bundle: 'ash.extensions', key: 'unsafeGitPackageEntry' }, 'The package contains a symbolic link or unsupported file: {0}', part));
+				throw new Error(
+					localize(
+						{ bundle: 'ash.extensions', key: 'unsafeGitPackageEntry' },
+						'The package contains a symbolic link or unsupported file: {0}',
+						part,
+					),
+				);
 			}
 		}
 		await this.files.createDirectory(staging);
 		try {
 			// Git configuration, credentials and hooks are checkout metadata, never package bytes.
 			await this.copyGitPackage(source, staging, signal);
-			if (signal.aborted) { throw canceled(); }
+			if (signal.aborted) {
+				throw canceled();
+			}
 			// Bind installation to the captured folder, even if the active workspace changed while cloning.
 			const catalog = await this.api.list();
-			if (signal.aborted) { throw canceled(); }
+			if (signal.aborted) {
+				throw canceled();
+			}
 			const result = await this.api.installLocal({
 				commandId: `desktop-plugin-git-${operationId}`,
 				expectedRevision: catalog.revision,
@@ -116,8 +170,12 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 
 	private async copyGitPackage(source: URI, destination: URI, signal: AbortSignal): Promise<void> {
 		for (const entry of await this.files.readDirectory(source)) {
-			if (signal.aborted) { throw canceled(); }
-			if (entry.name.toLowerCase() === '.git') { continue; }
+			if (signal.aborted) {
+				throw canceled();
+			}
+			if (entry.name.toLowerCase() === '.git') {
+				continue;
+			}
 			const target = URI.joinPath(destination, entry.name);
 			if (entry.kind === FileKind.Directory) {
 				await this.files.createDirectory(target);
@@ -125,7 +183,13 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 			} else if (entry.kind === FileKind.File) {
 				await this.files.copy(entry.resource, target);
 			} else {
-				throw new Error(localize({ bundle: 'ash.extensions', key: 'unsafeGitPackageEntry' }, 'The package contains a symbolic link or unsupported file: {0}', entry.name));
+				throw new Error(
+					localize(
+						{ bundle: 'ash.extensions', key: 'unsafeGitPackageEntry' },
+						'The package contains a symbolic link or unsupported file: {0}',
+						entry.name,
+					),
+				);
 			}
 		}
 	}
@@ -140,23 +204,23 @@ export class AppServerPluginManagementService extends Disposable implements IPlu
 	}
 
 	async enable(plugin: PluginPackageView, revision: number): Promise<void> {
-		await this.api.enable(command("enable", plugin, revision));
+		await this.api.enable(command('enable', plugin, revision));
 	}
 
 	async disable(plugin: PluginPackageView, revision: number): Promise<void> {
-		await this.api.disable(command("disable", plugin, revision));
+		await this.api.disable(command('disable', plugin, revision));
 	}
 
 	async grant(plugin: PluginPackageView, revision: number): Promise<void> {
-		await this.api.grant(command("grant", plugin, revision));
+		await this.api.grant(command('grant', plugin, revision));
 	}
 
 	async revokeGrant(plugin: PluginPackageView, revision: number): Promise<void> {
-		await this.api.revokeGrant(command("revoke", plugin, revision));
+		await this.api.revokeGrant(command('revoke', plugin, revision));
 	}
 
 	async uninstall(plugin: PluginPackageView, revision: number): Promise<void> {
-		await this.api.uninstall(command("uninstall", plugin, revision));
+		await this.api.uninstall(command('uninstall', plugin, revision));
 	}
 }
 

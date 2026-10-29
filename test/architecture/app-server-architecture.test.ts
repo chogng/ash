@@ -10,32 +10,60 @@ const generatedRoot = resolve(findDesktopRoot(import.meta.dirname), '.build/prot
 
 test('generated protocol dependencies stay in transport contracts and runtime adapters', () => {
 	assert.equal(existsSync(join(generatedRoot, 'index.ts')), true, 'consumers share the Rust-owned protocol snapshot');
-	assert.equal(existsSync(resolve(sourceRoot, '../../crates/app-server-protocol/schema')), false, 'generated contracts stay outside the source tree');
+	assert.equal(
+		existsSync(resolve(sourceRoot, '../../crates/app-server-protocol/schema')),
+		false,
+		'generated contracts stay outside the source tree',
+	);
 	assert.equal(existsSync(resolve(sourceRoot, '../../generated/app-server')), false, 'retired protocol snapshot');
-	assert.equal(existsSync(join(sourceRoot, 'platform/agentHost/common/generated')), false, 'retired frontend protocol copy');
+	assert.equal(
+		existsSync(join(sourceRoot, 'platform/agentHost/common/generated')),
+		false,
+		'retired frontend protocol copy',
+	);
 	const violations: string[] = [];
 	for (const file of files(sourceRoot)) {
 		const name = relative(sourceRoot, file).replaceAll('\\', '/');
 		if (name.includes('/test/') || name.includes('/generated/')) continue;
 		const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
-		const domainContract = /^platform\/agentHost\/common\/(?:agent|agentService|agentModels|agentExecutionSettingsService|agentHostFileSystemProvider)\.ts$/u.test(name)
-			|| name === 'platform/files/common/fileApi.ts';
-		const allowed = !domainContract && (/^platform\/agentHost\//u.test(name)
-			|| /^platform\/[^/]+\/common\/[^/]*Api\.ts$/u.test(name)
-			|| /^platform\/[^/]+\/(?:browser|electron-browser|electron-main|node)\//u.test(name)
-			|| /^(?:workbench|sessions)\/services\/[^/]+\/(?:browser|electron-browser)\//u.test(name)
-			|| /^sessions\/contrib\/providers\/agentHost\/browser\//u.test(name));
+		const domainContract =
+			/^platform\/agentHost\/common\/(?:agent|agentService|agentModels|agentExecutionSettingsService|agentHostFileSystemProvider)\.ts$/u.test(
+				name,
+			) || name === 'platform/files/common/fileApi.ts';
+		const allowed =
+			!domainContract &&
+			(/^platform\/agentHost\//u.test(name) ||
+				/^platform\/[^/]+\/common\/[^/]*Api\.ts$/u.test(name) ||
+				/^platform\/[^/]+\/(?:browser|electron-browser|electron-main|node)\//u.test(name) ||
+				/^(?:workbench|sessions)\/services\/[^/]+\/(?:browser|electron-browser)\//u.test(name) ||
+				/^sessions\/contrib\/providers\/agentHost\/browser\//u.test(name));
 		// Generated product definitions are metadata, not wire data or transport APIs.
 		const metadataOnly = source.statements.filter(ts.isImportDeclaration).every(statement => {
-			if (!ts.isStringLiteral(statement.moduleSpecifier) || protocolPath(file, statement.moduleSpecifier.text) === undefined) return true;
+			if (
+				!ts.isStringLiteral(statement.moduleSpecifier) ||
+				protocolPath(file, statement.moduleSpecifier.text) === undefined
+			)
+				return true;
 			const bindings = statement.importClause?.namedBindings;
-			return bindings && ts.isNamedImports(bindings) && bindings.elements.every(element =>
-				['APPROVAL_MODE_DEFINITIONS', 'PRODUCT_SLASH_COMMANDS'].includes((element.propertyName ?? element.name).text));
+			return (
+				bindings &&
+				ts.isNamedImports(bindings) &&
+				bindings.elements.every(element =>
+					['APPROVAL_MODE_DEFINITIONS', 'PRODUCT_SLASH_COMMANDS'].includes(
+						(element.propertyName ?? element.name).text,
+					),
+				)
+			);
 		});
 		function visit(node: ts.Node): void {
 			if (ts.isStringLiteral(node) && node.text.startsWith('.')) {
 				const target = protocolPath(file, node.text);
-				if (node.text.includes('generated/app-server') || node.text.includes('app-server/common/generated') || target !== undefined && (!allowed && !metadataOnly || target.startsWith('types/'))) violations.push(`${name}: ${node.text}`);
+				if (
+					node.text.includes('generated/app-server') ||
+					node.text.includes('app-server/common/generated') ||
+					(target !== undefined && ((!allowed && !metadataOnly) || target.startsWith('types/')))
+				)
+					violations.push(`${name}: ${node.text}`);
 			}
 			ts.forEachChild(node, visit);
 		}

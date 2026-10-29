@@ -2,8 +2,23 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 
 export type HttpCompatibilityMode = 'http2' | 'http1';
 export type NetworkPurpose = 'model' | 'signIn' | 'usage' | 'service';
-export type NetworkRoute = { readonly type: 'direct'; } | { readonly type: 'proxy'; readonly host: string; readonly port: number; } | { readonly type: 'blocked'; };
-export type NetworkFailure = 'dns' | 'proxy' | 'tls' | 'certificateConfiguration' | 'connect' | 'timeout' | 'policy' | 'configuration' | 'request' | 'authentication' | 'accountChanged' | 'accountOperation';
+export type NetworkRoute =
+	| { readonly type: 'direct' }
+	| { readonly type: 'proxy'; readonly host: string; readonly port: number }
+	| { readonly type: 'blocked' };
+export type NetworkFailure =
+	| 'dns'
+	| 'proxy'
+	| 'tls'
+	| 'certificateConfiguration'
+	| 'connect'
+	| 'timeout'
+	| 'policy'
+	| 'configuration'
+	| 'request'
+	| 'authentication'
+	| 'accountChanged'
+	| 'accountOperation';
 
 export interface NetworkTarget {
 	readonly id: string;
@@ -24,7 +39,10 @@ export interface NetworkSnapshot {
 export interface NetworkCheck {
 	readonly connection: string;
 	readonly targetId: string | null;
-	readonly outcome: { readonly type: 'reachable'; readonly httpStatus: number; } | { readonly type: 'accountAvailable'; } | { readonly type: 'failed'; readonly failure: NetworkFailure; };
+	readonly outcome:
+		| { readonly type: 'reachable'; readonly httpStatus: number }
+		| { readonly type: 'accountAvailable' }
+		| { readonly type: 'failed'; readonly failure: NetworkFailure };
 }
 
 export interface NetworkDiagnostics {
@@ -40,4 +58,5 @@ export interface INetworkDiagnosticsService {
 	run(): Promise<NetworkDiagnostics>;
 }
 
-export const INetworkDiagnosticsService = createServiceIdentifier<INetworkDiagnosticsService>('networkDiagnosticsService');
+export const INetworkDiagnosticsService =
+	createServiceIdentifier<INetworkDiagnosticsService>('networkDiagnosticsService');

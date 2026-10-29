@@ -3,7 +3,7 @@ const emptyArr: number[] = [];
 /**
  * Represents an immutable set that works best for a small number of elements (less than 32).
  * It uses bits to encode element membership efficiently.
-*/
+ */
 export class SmallImmutableSet<T> {
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	private static cache = new Array<SmallImmutableSet<any>>(129);
@@ -30,9 +30,8 @@ export class SmallImmutableSet<T> {
 
 	private constructor(
 		private readonly items: number,
-		private readonly additionalItems: readonly number[]
-	) {
-	}
+		private readonly additionalItems: readonly number[],
+	) {}
 
 	public add(value: T, keyProvider: IDenseKeyProvider<T>): SmallImmutableSet<T> {
 		const key = keyProvider.getKey(value);
@@ -133,12 +132,12 @@ export interface IDenseKeyProvider<T> {
 export const identityKeyProvider: IDenseKeyProvider<number> = {
 	getKey(value: number) {
 		return value;
-	}
+	},
 };
 
 /**
  * Assigns values a unique incrementing key.
-*/
+ */
 export class DenseKeyProvider<T> {
 	private readonly items = new Map<T, number>();
 

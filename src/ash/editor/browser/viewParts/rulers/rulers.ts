@@ -20,7 +20,10 @@ export class Rulers extends ViewPart {
 	private rulers: readonly IRulerOption[];
 	private typicalHalfwidthCharacterWidth: number;
 
-	constructor(context: ViewContext, private readonly options: RulersOptions) {
+	constructor(
+		context: ViewContext,
+		private readonly options: RulersOptions,
+	) {
 		super(context);
 		const element = h(options.host.ownerDocument, 'div');
 		this._register(toDisposable(() => element.remove()));
@@ -28,12 +31,14 @@ export class Rulers extends ViewPart {
 		this.domNode.setClassName('stanza-editor-rulers');
 		this.domNode.setAttribute('role', 'presentation');
 		this.domNode.setAttribute('aria-hidden', 'true');
-		({ rulers: this.rulers, typicalHalfwidthCharacterWidth: this.typicalHalfwidthCharacterWidth } = this.readConfiguration());
+		({ rulers: this.rulers, typicalHalfwidthCharacterWidth: this.typicalHalfwidthCharacterWidth } =
+			this.readConfiguration());
 	}
 
 	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
 		if (!event.hasChanged(EditorOption.rulers) && !event.hasChanged(EditorOption.fontInfo)) return false;
-		({ rulers: this.rulers, typicalHalfwidthCharacterWidth: this.typicalHalfwidthCharacterWidth } = this.readConfiguration());
+		({ rulers: this.rulers, typicalHalfwidthCharacterWidth: this.typicalHalfwidthCharacterWidth } =
+			this.readConfiguration());
 		return true;
 	}
 
@@ -41,8 +46,7 @@ export class Rulers extends ViewPart {
 		return event.scrollHeightChanged || event.scrollWidthChanged;
 	}
 
-	public override prepareRender(_context: RenderingContext): void {
-	}
+	public override prepareRender(_context: RenderingContext): void {}
 
 	public render(context: RestrictedRenderingContext): void {
 		this.ensureRulersCount();
@@ -59,7 +63,10 @@ export class Rulers extends ViewPart {
 		}
 	}
 
-	private readConfiguration(): { readonly rulers: readonly IRulerOption[]; readonly typicalHalfwidthCharacterWidth: number; } {
+	private readConfiguration(): {
+		readonly rulers: readonly IRulerOption[];
+		readonly typicalHalfwidthCharacterWidth: number;
+	} {
 		const editorOptions = this._context.configuration.options;
 		return {
 			rulers: editorOptions.get(EditorOption.rulers),

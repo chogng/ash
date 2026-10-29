@@ -4,9 +4,13 @@ import { Disposable } from '../../../../../base/common/lifecycle.js';
 /** A text snapshot of the displayed buffer, joining wrapped rows into logical lines. */
 export class BufferContentTracker extends Disposable {
 	private content: string[] = [];
-	get lines(): string[] { return this.content; }
+	get lines(): string[] {
+		return this.content;
+	}
 
-	constructor(private readonly xterm: { readonly raw: Terminal; }) { super(); }
+	constructor(private readonly xterm: { readonly raw: Terminal }) {
+		super();
+	}
 
 	update(): void {
 		if (this.isDisposed) return;
@@ -15,7 +19,10 @@ export class BufferContentTracker extends Disposable {
 		// Stop at the cursor or last nonempty row, retaining intentional blank lines.
 		let end = buffer.baseY + buffer.cursorY;
 		for (let row = buffer.length - 1; row > end; row--) {
-			if (buffer.getLine(row)?.translateToString(true)) { end = row; break; }
+			if (buffer.getLine(row)?.translateToString(true)) {
+				end = row;
+				break;
+			}
 		}
 		for (let row = 0; row <= end; row++) {
 			const line = buffer.getLine(row);

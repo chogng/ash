@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { NativeMenubarMainService, type INativeMenubarMainHost, type INativeMenubarMainMenuItem, type INativeMenubarMainWindow } from '../../../../platform/menubar/electron-main/menubarMainService.js';
+import {
+	NativeMenubarMainService,
+	type INativeMenubarMainHost,
+	type INativeMenubarMainMenuItem,
+	type INativeMenubarMainWindow,
+} from '../../../../platform/menubar/electron-main/menubarMainService.js';
 import type { INativeMenubarData } from '../../../../platform/menubar/common/nativeMenubar.js';
 
 test('application menubar follows workbench focus and survives individual window disposal', () => {
@@ -89,7 +94,11 @@ class TestMenubarHost implements INativeMenubarMainHost {
 		this.template = template;
 	}
 
-	setWindowTouchBar(_window: INativeMenubarMainWindow, items: readonly import('../../../../platform/menubar/common/nativeMenubar.js').INativeTouchBarItem[], select: (id: string) => void): void {
+	setWindowTouchBar(
+		_window: INativeMenubarMainWindow,
+		items: readonly import('../../../../platform/menubar/common/nativeMenubar.js').INativeTouchBarItem[],
+		select: (id: string) => void,
+	): void {
 		if (_window.isDestroyed()) throw new Error('Touch Bar cannot be changed after its window is destroyed');
 		this.touchBar = items;
 		this.touchBarSelect = select;
@@ -100,7 +109,7 @@ class TestBrowserWindow {
 	private readonly focusListeners = new Set<() => void>();
 	private focused = false;
 	private destroyed = false;
-	readonly selections: Array<{ readonly revision: number; readonly id: string; }> = [];
+	readonly selections: Array<{ readonly revision: number; readonly id: string }> = [];
 	readonly value: INativeMenubarMainWindow;
 
 	constructor(id: number) {
@@ -117,7 +126,7 @@ class TestBrowserWindow {
 				return this.value;
 			},
 			webContents: {
-				send: (_channel: string, selection: { readonly revision: number; readonly id: string; }) => {
+				send: (_channel: string, selection: { readonly revision: number; readonly id: string }) => {
 					this.selections.push(selection);
 				},
 			},
@@ -140,10 +149,7 @@ class TestBrowserWindow {
 function menuData(revision: number, label: string, id: string, altId?: string): INativeMenubarData {
 	return {
 		revision,
-		menus: [{
-			label: 'File',
-			items: [{ type: 'action', id, ...(altId ? { altId } : {}), label, enabled: true }],
-		}],
+		menus: [{ label: 'File', items: [{ type: 'action', id, ...(altId ? { altId } : {}), label, enabled: true }] }],
 	};
 }
 

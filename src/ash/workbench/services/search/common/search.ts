@@ -7,7 +7,11 @@ export const ISearchService = createDecorator<ISearchService>('searchService');
 
 export interface ISearchService {
 	fileSearch(query: IFileQuery, token?: CancellationToken): Promise<ISearchComplete>;
-	textSearch(query: ITextQuery, token?: CancellationToken, onProgress?: (result: ISearchProgressItem) => void): Promise<ISearchComplete>;
+	textSearch(
+		query: ITextQuery,
+		token?: CancellationToken,
+		onProgress?: (result: ISearchProgressItem) => void,
+	): Promise<ISearchComplete>;
 }
 
 /** A file-search implementation selected by the Workbench search service. */
@@ -86,5 +90,5 @@ export type ISearchProgressItem = IFileMatch | IProgressMessage;
 export interface ISearchComplete {
 	results: IFileMatch[];
 	limitHit?: boolean;
-	messages: { text: string; }[];
+	messages: { text: string }[];
 }

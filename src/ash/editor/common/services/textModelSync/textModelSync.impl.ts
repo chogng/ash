@@ -2,9 +2,26 @@ import { MutableDisposable, toDisposable, Disposable } from '../../../../base/co
 import { isNonNegativeSafeInteger, isPositiveSafeInteger } from '../../../../base/common/numbers.js';
 import { type TextModelChange, type TextSnapshot } from '../../core/textChange.js';
 import { ValidAnnotatedEditOperation, type ITextBuffer } from '../../model.js';
-import { type WorkerTextModelCodec, type WorkerTextModelResultStore, type LanguageWorkerDocumentSynchronizationObserver, type LanguageWorkerDocumentChange } from './textModelSync.protocol.js';
-import { WebWorkerClient, WebWorkerServer, type WebWorkerPort, type WebWorkerClientPort, type IWebWorkerClient } from '../../../../base/common/worker/webWorker.js';
-import { LanguageWorkerResultDisposition, type LanguageWorker, type LanguageWorkerRequest, type LanguageWorkerModelSynchronizer, type LanguageWorkerResultSettler } from '../../model/languageRequestCoordinator.js';
+import {
+	type WorkerTextModelCodec,
+	type WorkerTextModelResultStore,
+	type LanguageWorkerDocumentSynchronizationObserver,
+	type LanguageWorkerDocumentChange,
+} from './textModelSync.protocol.js';
+import {
+	WebWorkerClient,
+	WebWorkerServer,
+	type WebWorkerPort,
+	type WebWorkerClientPort,
+	type IWebWorkerClient,
+} from '../../../../base/common/worker/webWorker.js';
+import {
+	LanguageWorkerResultDisposition,
+	type LanguageWorker,
+	type LanguageWorkerRequest,
+	type LanguageWorkerModelSynchronizer,
+	type LanguageWorkerResultSettler,
+} from '../../model/languageRequestCoordinator.js';
 import { createPieceTreeTextBuffer } from '../../model/pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
 
 export const modelChannel = Object.freeze({ protocol: 'ash.text-model', version: 1 });
@@ -45,11 +62,17 @@ export class LanguageWorkerDocumentMirror extends Disposable {
 			length: snapshot.length,
 			lineCount: snapshot.lineCount,
 			getText: () => snapshot.getText(),
-			getTextBetweenOffsets: (startOffset: number, endOffset: number) => snapshot.getTextBetweenOffsets(startOffset, endOffset),
+			getTextBetweenOffsets: (startOffset: number, endOffset: number) =>
+				snapshot.getTextBetweenOffsets(startOffset, endOffset),
 		});
 	}
 
-	public synchronize(previousVersion: number, modelVersion: number, changes: readonly LanguageWorkerDocumentChange[], eol: '\n' | '\r\n' = this.buffer.getEOL()): void {
+	public synchronize(
+		previousVersion: number,
+		modelVersion: number,
+		changes: readonly LanguageWorkerDocumentChange[],
+		eol: '\n' | '\r\n' = this.buffer.getEOL(),
+	): void {
 		if (previousVersion !== this.versionValue || modelVersion !== this.versionValue + 1) {
 			throw new Error('Language worker sync version does not follow its document mirror');
 		}
@@ -63,34 +86,50 @@ export class LanguageWorkerDocumentMirror extends Disposable {
 				throw new TypeError('Language worker sync text must use the resulting document EOL');
 			}
 			const end = change.rangeOffset + change.rangeLength;
-			const ambiguousSharedStart = change.rangeOffset === previousStart && (change.rangeLength === 0 || previousEnd === previousStart);
+			const ambiguousSharedStart =
+				change.rangeOffset === previousStart && (change.rangeLength === 0 || previousEnd === previousStart);
 			if (change.rangeOffset < previousEnd || ambiguousSharedStart || end > this.buffer.getLength()) {
-				throw new RangeError('Language worker sync ranges must be ordered, non-overlapping, and inside the mirror');
+				throw new RangeError(
+					'Language worker sync ranges must be ordered, non-overlapping, and inside the mirror',
+				);
 			}
 			previousStart = change.rangeOffset;
 			previousEnd = end;
 		}
-		this.buffer.applyEdits(changes.map(change => new ValidAnnotatedEditOperation(
-			null,
-			this.buffer.getRangeAt(change.rangeOffset, change.rangeLength),
-			change.text,
+		this.buffer.applyEdits(
+			changes.map(
+				change =>
+					new ValidAnnotatedEditOperation(
+						null,
+						this.buffer.getRangeAt(change.rangeOffset, change.rangeLength),
+						change.text,
+						false,
+						false,
+						false,
+					),
+			),
 			false,
 			false,
-			false,
-		)), false, false);
+		);
 		this.buffer.setEOL(eol);
 		this.versionValue = modelVersion;
 	}
 }
 
 /** Encodes model requests and keeps the remote mirror at the requested version. */
-export class WorkerTextModelSyncClient<TLane extends string, TPayload, TResult> extends Disposable implements LanguageWorker<TLane, TPayload, TResult>, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler {
+export class WorkerTextModelSyncClient<TLane extends string, TPayload, TResult>
+	extends Disposable
+	implements LanguageWorker<TLane, TPayload, TResult>, LanguageWorkerModelSynchronizer, LanguageWorkerResultSettler
+{
 	private readonly transport: IWebWorkerClient<object>;
 	private readonly results: WorkerTextModelResultStore<TLane, TResult> | undefined;
 	private mirroredVersion: number | undefined;
 	public readonly onDidFail;
 
-	constructor(port: WebWorkerClientPort | IWebWorkerClient<object>, private readonly codec: WorkerTextModelCodec<TLane, TPayload, TResult>) {
+	constructor(
+		port: WebWorkerClientPort | IWebWorkerClient<object>,
+		private readonly codec: WorkerTextModelCodec<TLane, TPayload, TResult>,
+	) {
 		super();
 		this.transport = this._register('request' in port ? port : new WebWorkerClient(port, modelChannel));
 		this.results = codec.createResultStore?.();
@@ -115,16 +154,22 @@ export class WorkerTextModelSyncClient<TLane extends string, TPayload, TResult> 
 		if (encoded.establishesMirrorVersion !== undefined) {
 			this.mirroredVersion = encoded.establishesMirrorVersion;
 		}
-		return pending.then(value => {
-			this.transport.ensureAvailable();
-			signal.throwIfAborted();
-			const result = this.codec.decodeResult(request.lane, value, request.snapshot, base);
-			this.results?.stage(request.lane, Object.freeze({ requestId: request.requestId, snapshot: request.snapshot, result }));
-			return result;
-		}, error => {
-			this.mirroredVersion = undefined;
-			throw error;
-		});
+		return pending.then(
+			value => {
+				this.transport.ensureAvailable();
+				signal.throwIfAborted();
+				const result = this.codec.decodeResult(request.lane, value, request.snapshot, base);
+				this.results?.stage(
+					request.lane,
+					Object.freeze({ requestId: request.requestId, snapshot: request.snapshot, result }),
+				);
+				return result;
+			},
+			error => {
+				this.mirroredVersion = undefined;
+				throw error;
+			},
+		);
 	}
 
 	public synchronizeModel(change: TextModelChange): void {
@@ -159,15 +204,21 @@ export class WorkerTextModelSyncServer<TLane extends string, TPayload, TResult> 
 	private readonly mirror = this._register(new MutableDisposable<LanguageWorkerDocumentMirror>());
 	private readonly results: WorkerTextModelResultStore<TLane, TResult> | undefined;
 
-	constructor(port: WebWorkerPort, private readonly codec: WorkerTextModelCodec<TLane, TPayload, TResult>, private readonly worker: LanguageWorker<TLane, TPayload, TResult>) {
+	constructor(
+		port: WebWorkerPort,
+		private readonly codec: WorkerTextModelCodec<TLane, TPayload, TResult>,
+		private readonly worker: LanguageWorker<TLane, TPayload, TResult>,
+	) {
 		super();
 		this.results = codec.createResultStore?.();
 		this._register(worker);
 		this._register(toDisposable(() => this.results?.clear()));
-		this._register(new WebWorkerServer(port, modelChannel, {
-			handleRequest: (message, signal) => this.run(message, signal),
-			handleNotification: message => this.synchronize(message),
-		}));
+		this._register(
+			new WebWorkerServer(port, modelChannel, {
+				handleRequest: (message, signal) => this.run(message, signal),
+				handleNotification: message => this.synchronize(message),
+			}),
+		);
 	}
 
 	private synchronize(message: Record<string, unknown>): void {
@@ -187,10 +238,24 @@ export class WorkerTextModelSyncServer<TLane extends string, TPayload, TResult> 
 			if (!mirror) {
 				throw new Error('Model synchronization requires a document mirror');
 			}
-			const changes = Object.freeze(message.changes.map((change: LanguageWorkerDocumentChange) => Object.freeze({ rangeOffset: change.rangeOffset, rangeLength: change.rangeLength, text: change.text })));
+			const changes = Object.freeze(
+				message.changes.map((change: LanguageWorkerDocumentChange) =>
+					Object.freeze({
+						rangeOffset: change.rangeOffset,
+						rangeLength: change.rangeLength,
+						text: change.text,
+					}),
+				),
+			);
 			mirror.synchronize(message.previousVersion, message.modelVersion, changes, message.eol);
 			const observer = this.worker as Partial<LanguageWorkerDocumentSynchronizationObserver>;
-			observer.synchronizeDocument?.({ previousVersion: message.previousVersion, modelVersion: message.modelVersion, eol: message.eol, changes, snapshot: mirror.createSnapshot() });
+			observer.synchronizeDocument?.({
+				previousVersion: message.previousVersion,
+				modelVersion: message.modelVersion,
+				eol: message.eol,
+				changes,
+				snapshot: mirror.createSnapshot(),
+			});
 		} catch (error) {
 			this.mirror.clear();
 			throw error;
@@ -206,11 +271,19 @@ export class WorkerTextModelSyncServer<TLane extends string, TPayload, TResult> 
 		if (message.resultBaseRequestId !== undefined) {
 			assertPositiveSafeInteger(message.resultBaseRequestId, 'Result base request ID');
 		}
-		const decoded = decodeRequestSnapshot(message.snapshot as RequestWireMessage['snapshot'], this.mirror.value?.createSnapshot());
+		const decoded = decodeRequestSnapshot(
+			message.snapshot as RequestWireMessage['snapshot'],
+			this.mirror.value?.createSnapshot(),
+		);
 		if (decoded.replacesMirror) {
 			this.mirror.value = new LanguageWorkerDocumentMirror(decoded.snapshot);
 		}
-		const request = Object.freeze({ requestId: message.requestId, lane, snapshot: decoded.snapshot, payload: this.codec.decodePayload(lane, message.payload, decoded.snapshot) });
+		const request = Object.freeze({
+			requestId: message.requestId,
+			lane,
+			snapshot: decoded.snapshot,
+			payload: this.codec.decodePayload(lane, message.payload, decoded.snapshot),
+		});
 		const currentBase = this.results?.get(lane);
 		const base = currentBase?.requestId === message.resultBaseRequestId ? currentBase : undefined;
 		const result = await this.worker.run(request, signal);
@@ -233,7 +306,7 @@ interface DecodedRequestSnapshot {
 }
 
 interface RequestWireMessage {
-	readonly kind: "request";
+	readonly kind: 'request';
 	readonly requestId: number;
 	readonly lane: string;
 	readonly resultBaseRequestId?: number;
@@ -242,7 +315,7 @@ interface RequestWireMessage {
 }
 
 interface SyncWireMessage {
-	readonly kind: "sync";
+	readonly kind: 'sync';
 	readonly previousVersion: number;
 	readonly modelVersion: number;
 	readonly eol: '\n' | '\r\n';
@@ -250,7 +323,7 @@ interface SyncWireMessage {
 }
 
 interface FullSnapshotWireDto {
-	readonly kind: "full";
+	readonly kind: 'full';
 	readonly version: number;
 	readonly length: number;
 	readonly lineCount: number;
@@ -258,7 +331,7 @@ interface FullSnapshotWireDto {
 }
 
 interface ReferencedSnapshotWireDto {
-	readonly kind: "reference";
+	readonly kind: 'reference';
 	readonly version: number;
 	readonly length: number;
 	readonly lineCount: number;
@@ -270,75 +343,87 @@ interface ContentChangeWireDto {
 	readonly text: string;
 }
 
-function encodeRequestMessage<TLane extends string, TPayload, TResult>(request: LanguageWorkerRequest<TLane, TPayload>, codec: WorkerTextModelCodec<TLane, TPayload, TResult>, mirroredVersion: number | undefined, resultBaseRequestId: number | undefined): EncodedRequestWireMessage {
-	if (resultBaseRequestId !== undefined) assertPositiveSafeInteger(resultBaseRequestId, "Result base request ID");
-	const snapshot = mirroredVersion === request.snapshot.version
-		? encodeReferencedSnapshot(request.snapshot)
-		: encodeFullSnapshot(request.snapshot);
+function encodeRequestMessage<TLane extends string, TPayload, TResult>(
+	request: LanguageWorkerRequest<TLane, TPayload>,
+	codec: WorkerTextModelCodec<TLane, TPayload, TResult>,
+	mirroredVersion: number | undefined,
+	resultBaseRequestId: number | undefined,
+): EncodedRequestWireMessage {
+	if (resultBaseRequestId !== undefined) assertPositiveSafeInteger(resultBaseRequestId, 'Result base request ID');
+	const snapshot =
+		mirroredVersion === request.snapshot.version
+			? encodeReferencedSnapshot(request.snapshot)
+			: encodeFullSnapshot(request.snapshot);
 	return Object.freeze({
 		message: Object.freeze<RequestWireMessage>({
-			kind: "request",
+			kind: 'request',
 			requestId: request.requestId,
 			lane: request.lane,
 			...(resultBaseRequestId === undefined ? {} : { resultBaseRequestId }),
 			snapshot,
 			payload: codec.encodePayload(request.lane, request.payload),
 		}),
-		establishesMirrorVersion: snapshot.kind === "full" ? snapshot.version : undefined,
+		establishesMirrorVersion: snapshot.kind === 'full' ? snapshot.version : undefined,
 	});
 }
 
 function encodeSyncMessage(change: TextModelChange): SyncWireMessage {
-	assertPositiveSafeInteger(change.version, "Language worker sync model version");
+	assertPositiveSafeInteger(change.version, 'Language worker sync model version');
 	if (change.version <= 1) {
-		throw new RangeError("Language worker sync must describe one committed model version");
+		throw new RangeError('Language worker sync must describe one committed model version');
 	}
-	if (change.eol !== '\n' && change.eol !== '\r\n') throw new TypeError('Language worker sync EOL must be LF or CRLF');
+	if (change.eol !== '\n' && change.eol !== '\r\n')
+		throw new TypeError('Language worker sync EOL must be LF or CRLF');
 	const eol = change.eol;
 	return Object.freeze({
-		kind: "sync",
+		kind: 'sync',
 		previousVersion: change.version - 1,
 		modelVersion: change.version,
 		eol: change.eol,
-		changes: Object.freeze(change.changes.map(contentChange => {
-			assertNonNegativeSafeInteger(contentChange.rangeOffset, "Language worker sync range offset");
-			assertNonNegativeSafeInteger(contentChange.rangeLength, "Language worker sync range length");
-			if (typeof contentChange.text !== "string" || normalizeEOL(contentChange.text, eol) !== contentChange.text) {
-				throw new TypeError("Language worker sync text must use the resulting document EOL");
-			}
-			return Object.freeze({
-				rangeOffset: contentChange.rangeOffset,
-				rangeLength: contentChange.rangeLength,
-				text: contentChange.text,
-			});
-		})),
+		changes: Object.freeze(
+			change.changes.map(contentChange => {
+				assertNonNegativeSafeInteger(contentChange.rangeOffset, 'Language worker sync range offset');
+				assertNonNegativeSafeInteger(contentChange.rangeLength, 'Language worker sync range length');
+				if (
+					typeof contentChange.text !== 'string' ||
+					normalizeEOL(contentChange.text, eol) !== contentChange.text
+				) {
+					throw new TypeError('Language worker sync text must use the resulting document EOL');
+				}
+				return Object.freeze({
+					rangeOffset: contentChange.rangeOffset,
+					rangeLength: contentChange.rangeLength,
+					text: contentChange.text,
+				});
+			}),
+		),
 	});
 }
 
-function decodeRequestSnapshot(value: RequestWireMessage["snapshot"], mirror: TextSnapshot | undefined): DecodedRequestSnapshot {
-	assertRecord(value, "Language worker snapshot");
-	if (value.kind === "full") {
-		return Object.freeze({
-			snapshot: decodeFullSnapshot(value as FullSnapshotWireDto),
-			replacesMirror: true,
-		});
+function decodeRequestSnapshot(
+	value: RequestWireMessage['snapshot'],
+	mirror: TextSnapshot | undefined,
+): DecodedRequestSnapshot {
+	assertRecord(value, 'Language worker snapshot');
+	if (value.kind === 'full') {
+		return Object.freeze({ snapshot: decodeFullSnapshot(value as FullSnapshotWireDto), replacesMirror: true });
 	}
-	if (value.kind !== "reference") {
+	if (value.kind !== 'reference') {
 		throw new TypeError(`Unknown language worker snapshot kind '${String(value.kind)}'`);
 	}
 	assertSnapshotMetadata(value);
 	if (!mirror) {
-		throw new Error("Language worker request references an unavailable snapshot mirror");
+		throw new Error('Language worker request references an unavailable snapshot mirror');
 	}
 	if (mirror.version !== value.version || mirror.length !== value.length || mirror.lineCount !== value.lineCount) {
-		throw new Error("Language worker request snapshot reference does not match its mirror");
+		throw new Error('Language worker request snapshot reference does not match its mirror');
 	}
 	return Object.freeze({ snapshot: mirror, replacesMirror: false });
 }
 
 function encodeFullSnapshot(snapshot: TextSnapshot): FullSnapshotWireDto {
 	const value = Object.freeze({
-		kind: "full" as const,
+		kind: 'full' as const,
 		version: snapshot.version,
 		length: snapshot.length,
 		lineCount: snapshot.lineCount,
@@ -350,7 +435,7 @@ function encodeFullSnapshot(snapshot: TextSnapshot): FullSnapshotWireDto {
 
 function encodeReferencedSnapshot(snapshot: TextSnapshot): ReferencedSnapshotWireDto {
 	const value = Object.freeze({
-		kind: "reference" as const,
+		kind: 'reference' as const,
 		version: snapshot.version,
 		length: snapshot.length,
 		lineCount: snapshot.lineCount,
@@ -366,14 +451,14 @@ function decodeFullSnapshot(value: FullSnapshotWireDto): TextSnapshot {
 
 function assertFullSnapshot(value: FullSnapshotWireDto): void {
 	assertSnapshotMetadata(value);
-	if (typeof value.text !== "string" || !hasConsistentEOL(value.text)) {
-		throw new TypeError("Language worker snapshot text must use one consistent EOL sequence");
+	if (typeof value.text !== 'string' || !hasConsistentEOL(value.text)) {
+		throw new TypeError('Language worker snapshot text must use one consistent EOL sequence');
 	}
 	if (value.length !== value.text.length) {
-		throw new RangeError("Language worker snapshot length does not match its text");
+		throw new RangeError('Language worker snapshot length does not match its text');
 	}
 	if (value.lineCount !== countLines(value.text)) {
-		throw new RangeError("Language worker snapshot line count does not match its text");
+		throw new RangeError('Language worker snapshot line count does not match its text');
 	}
 }
 
@@ -384,20 +469,24 @@ function createSnapshot(version: number, text: string, lineCount = countLines(te
 		lineCount,
 		getText: () => text,
 		getTextBetweenOffsets: (startOffset: number, endOffset: number) => {
-			assertNonNegativeSafeInteger(startOffset, "Snapshot start offset");
-			assertNonNegativeSafeInteger(endOffset, "Snapshot end offset");
+			assertNonNegativeSafeInteger(startOffset, 'Snapshot start offset');
+			assertNonNegativeSafeInteger(endOffset, 'Snapshot end offset');
 			if (startOffset > endOffset || endOffset > text.length) {
-				throw new RangeError("Snapshot offset range is outside its text");
+				throw new RangeError('Snapshot offset range is outside its text');
 			}
 			return text.slice(startOffset, endOffset);
 		},
 	});
 }
 
-function assertSnapshotMetadata(value: { readonly version: unknown; readonly length: unknown; readonly lineCount: unknown; }): void {
-	assertPositiveSafeInteger(value.version, "Language worker snapshot version");
-	assertNonNegativeSafeInteger(value.length, "Language worker snapshot length");
-	assertPositiveSafeInteger(value.lineCount, "Language worker snapshot line count");
+function assertSnapshotMetadata(value: {
+	readonly version: unknown;
+	readonly length: unknown;
+	readonly lineCount: unknown;
+}): void {
+	assertPositiveSafeInteger(value.version, 'Language worker snapshot version');
+	assertNonNegativeSafeInteger(value.length, 'Language worker snapshot length');
+	assertPositiveSafeInteger(value.lineCount, 'Language worker snapshot line count');
 }
 
 function assertPositiveSafeInteger(value: unknown, owner: string): asserts value is number {
@@ -413,7 +502,7 @@ function assertNonNegativeSafeInteger(value: unknown, owner: string): asserts va
 }
 
 function assertRecord(value: unknown, owner: string): asserts value is Record<string, unknown> {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 		throw new TypeError(`${owner} must be an object`);
 	}
 }

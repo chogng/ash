@@ -8,8 +8,10 @@ export namespace BrowserViewUri {
 		return URI.from({ scheme, path: `/${id}` });
 	}
 
-	export function parse(resource: URI): { id: string; } | undefined {
-		if (resource.scheme !== scheme) { return undefined; }
+	export function parse(resource: URI): { id: string } | undefined {
+		if (resource.scheme !== scheme) {
+			return undefined;
+		}
 		const id = resource.path.replace(/^\//, '');
 		return id ? { id } : undefined;
 	}

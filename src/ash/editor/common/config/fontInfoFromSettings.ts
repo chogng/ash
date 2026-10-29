@@ -14,7 +14,17 @@ export function createBareFontInfoFromValidatedSettings(
 	const fontVariationSettings = options.get(EditorOption.fontVariations);
 	const lineHeight = options.get(EditorOption.lineHeight);
 	const letterSpacing = options.get(EditorOption.letterSpacing);
-	return BareFontInfo._create(fontFamily, fontWeight, fontSize, fontFeatureSettings, fontVariationSettings, lineHeight, letterSpacing, pixelRatio, ignoreEditorZoom);
+	return BareFontInfo._create(
+		fontFamily,
+		fontWeight,
+		fontSize,
+		fontFeatureSettings,
+		fontVariationSettings,
+		lineHeight,
+		letterSpacing,
+		pixelRatio,
+		ignoreEditorZoom,
+	);
 }
 
 /** Builds a bare font descriptor from raw settings at a trust boundary. */
@@ -39,5 +49,15 @@ export function createBareFontInfoFromRawSettings(
 	const fontVariationSettings = EditorOptions.fontVariations.validate(options.fontVariations);
 	const lineHeight = EditorOptions.lineHeight.validate(options.lineHeight);
 	const letterSpacing = EditorOptions.letterSpacing.validate(options.letterSpacing);
-	return BareFontInfo._create(fontFamily, fontWeight, fontSize, fontFeatureSettings, fontVariationSettings, lineHeight, letterSpacing, pixelRatio, ignoreEditorZoom);
+	return BareFontInfo._create(
+		fontFamily,
+		fontWeight,
+		fontSize,
+		fontFeatureSettings,
+		fontVariationSettings,
+		lineHeight,
+		letterSpacing,
+		pixelRatio,
+		ignoreEditorZoom,
+	);
 }

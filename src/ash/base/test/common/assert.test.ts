@@ -13,7 +13,16 @@ test('assert narrows successful conditions and reports invariant failures', () =
 });
 
 test('checkAdjacentItems validates every neighboring pair', () => {
-	assert.equal(checkAdjacentItems([1, 2, 3], (left, right) => left < right), true);
-	assert.equal(checkAdjacentItems([1, 3, 2], (left, right) => left < right), false);
-	assert.equal(checkAdjacentItems([], () => false), true);
+	assert.equal(
+		checkAdjacentItems([1, 2, 3], (left, right) => left < right),
+		true,
+	);
+	assert.equal(
+		checkAdjacentItems([1, 3, 2], (left, right) => left < right),
+		false,
+	);
+	assert.equal(
+		checkAdjacentItems([], () => false),
+		true,
+	);
 });

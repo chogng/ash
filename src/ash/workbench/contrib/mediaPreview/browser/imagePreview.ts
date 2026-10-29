@@ -9,7 +9,10 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { basename, extUri } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
-import { IAccessibleViewService, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	IAccessibleViewService,
+	AccessibilityVerbositySettingId,
+} from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
@@ -70,36 +73,60 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 		parent.append(this.domNode);
 		super.create(this.domNode);
 		ImagePreview.instances.set(this.domNode, this);
-		this._register(toDisposable(() => {
-			this.clearInput();
-			ImagePreview.instances.delete(this.domNode);
-			this.domNode.remove();
-		}));
+		this._register(
+			toDisposable(() => {
+				this.clearInput();
+				ImagePreview.instances.delete(this.domNode);
+				this.domNode.remove();
+			}),
+		);
 		this._register(this.contextKeys.createScoped(this.domNode)).createKey('imagePreviewFocused', true);
 		this.toolbar = this._register(new WorkbenchToolBar(controls, this.contextMenus));
-		this._register(addDisposableListener(this.domNode, 'keydown', event => {
-			if (event.key === '+' || event.key === '=') { this.zoom(1.25); }
-			else if (event.key === '-') { this.zoom(0.8); }
-			else if (event.key === '0') { this.setScale('fit'); }
-			else if (event.key === '1') { this.setScale(1); }
-			else { return; }
-			event.preventDefault();
-			event.stopPropagation();
-		}));
+		this._register(
+			addDisposableListener(this.domNode, 'keydown', event => {
+				if (event.key === '+' || event.key === '=') {
+					this.zoom(1.25);
+				} else if (event.key === '-') {
+					this.zoom(0.8);
+				} else if (event.key === '0') {
+					this.setScale('fit');
+				} else if (event.key === '1') {
+					this.setScale(1);
+				} else {
+					return;
+				}
+				event.preventDefault();
+				event.stopPropagation();
+			}),
+		);
 		const observer = new (getWindow(this.domNode).ResizeObserver)(() => this.updateImageGeometry());
 		observer.observe(this.viewportDomNode);
 		this._register(toDisposable(() => observer.disconnect()));
 		this._register(addDisposableListener(this.domNode, 'focusin', () => this.updateAriaLabel()));
-		this._register(this.files.onDidChangeFiles(event => {
-			const input = this.input;
-			if (!input || event.resources && !event.resources.some(resource => extUri.isEqual(resource, input.resource))) { return; }
-			const reload = this.load(input, new AbortController().signal, false);
-			const generation = this.generation;
-			void reload.catch(error => {
-				if (error instanceof CancellationError || this.isDisposed || generation !== this.generation || this.input !== input) { return; }
-				this.failLoad(input, error, generation);
-			});
-		}));
+		this._register(
+			this.files.onDidChangeFiles(event => {
+				const input = this.input;
+				if (
+					!input ||
+					(event.resources && !event.resources.some(resource => extUri.isEqual(resource, input.resource)))
+				) {
+					return;
+				}
+				const reload = this.load(input, new AbortController().signal, false);
+				const generation = this.generation;
+				void reload.catch(error => {
+					if (
+						error instanceof CancellationError ||
+						this.isDisposed ||
+						generation !== this.generation ||
+						this.input !== input
+					) {
+						return;
+					}
+					this.failLoad(input, error, generation);
+				});
+			}),
+		);
 		this.updateLabels();
 	}
 
@@ -111,10 +138,14 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 			await this.load(input, signal, true);
 		} catch (error) {
 			if (error instanceof CancellationError) {
-				if (this.generation === generation && this.input === input) { this.clearInput(); }
+				if (this.generation === generation && this.input === input) {
+					this.clearInput();
+				}
 				throw error;
 			}
-			if (this.isDisposed || this.generation !== generation || this.input !== input) { return; }
+			if (this.isDisposed || this.generation !== generation || this.input !== input) {
+				return;
+			}
 			this.failLoad(input, error, generation);
 		}
 	}
@@ -132,19 +163,35 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 		this.updateLabels();
 	}
 
-	public override layout(_dimension: IDimension): void { this.updateImageGeometry(); }
+	public override layout(_dimension: IDimension): void {
+		this.updateImageGeometry();
+	}
 	public override setVisible(visibility: boolean): void {
 		super.setVisible(visibility);
 		this.domNode.classList.toggle('hidden', !!this.domNode.hidden);
 	}
-	public override focus(): void { this.viewportDomNode.focus(); }
+	public override focus(): void {
+		this.viewportDomNode.focus();
+	}
 
 	public getAccessibleContent(): string {
 		const metadata = this.metadata;
 		if (!metadata || !this.input) {
-			return this.loadFailure === undefined ? localize('media.image.empty', 'No image loaded.') : localize('media.image.loadFailed', 'Could not load image: {0}', this.loadFailure);
+			return this.loadFailure === undefined
+				? localize('media.image.empty', 'No image loaded.')
+				: localize('media.image.loadFailed', 'Could not load image: {0}', this.loadFailure);
 		}
-		return localize('media.image.content', 'Image: {0}\nResource: {1}\nSize: {2} × {3} pixels\nFormat: {4}\nFile size: {5} bytes\nZoom: {6}', this.input.label ?? basename(this.input.resource), this.input.resource.toString(), metadata.width, metadata.height, metadata.mediaType, this.byteLength, this.zoomLabel());
+		return localize(
+			'media.image.content',
+			'Image: {0}\nResource: {1}\nSize: {2} × {3} pixels\nFormat: {4}\nFile size: {5} bytes\nZoom: {6}',
+			this.input.label ?? basename(this.input.resource),
+			this.input.resource.toString(),
+			metadata.width,
+			metadata.height,
+			metadata.mediaType,
+			this.byteLength,
+			this.zoomLabel(),
+		);
 	}
 
 	private async load(input: IResourceEditorInput, signal: AbortSignal, resetScale: boolean): Promise<void> {
@@ -156,20 +203,26 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 		const file = await raceCancellationError(this.files.readFileBytes(input.resource), combined);
 		const metadata = await raceCancellationError(inspectImage(file.bytes), combined);
 		throwIfCancelled(combined);
-		if (generation !== this.generation || this.isDisposed) { throw new CancellationError(); }
+		if (generation !== this.generation || this.isDisposed) {
+			throw new CancellationError();
+		}
 		this.resource.value = new ImageResource(file.bytes, metadata.mediaType);
 		this.metadata = metadata;
 		this.loadFailure = undefined;
 		this.input = input;
 		this.byteLength = file.bytes.length;
-		if (resetScale) { this.scale = 'fit'; }
+		if (resetScale) {
+			this.scale = 'fit';
+		}
 		this.imageDomNode.src = this.resource.value.url;
 		this.updateLabels();
 		this.updateImageGeometry();
 	}
 
 	private failLoad(input: IResourceEditorInput, error: unknown, generation: number): void {
-		if (this.isDisposed || this.generation !== generation || this.input !== input) { return; }
+		if (this.isDisposed || this.generation !== generation || this.input !== input) {
+			return;
+		}
 		this.clearInput();
 		// Retain the resource so the user can retry or see a later file-change recovery.
 		this.input = input;
@@ -179,9 +232,13 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 
 	private retry(): void {
 		const input = this.input;
-		if (!input || this.loadFailure === undefined) { return; }
+		if (!input || this.loadFailure === undefined) {
+			return;
+		}
 		void this.setInput(input, new AbortController().signal).catch(error => {
-			if (error instanceof CancellationError || this.isDisposed || this.input !== input) { return; }
+			if (error instanceof CancellationError || this.isDisposed || this.input !== input) {
+				return;
+			}
 			this.failLoad(input, error, this.generation);
 		});
 	}
@@ -191,15 +248,29 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 		this.toolbar.element.setAttribute('aria-label', localize('media.image.actions', 'Image preview controls'));
 		this.viewportDomNode.setAttribute('aria-label', localize('media.image.viewport', 'Image viewport'));
 		this.imageDomNode.alt = this.input?.label ?? (this.input ? basename(this.input.resource) : '');
-		const action = (id: string, label: string, run: () => void): IAction => ({ id, label, tooltip: label, enabled: this.metadata !== undefined, run });
+		const action = (id: string, label: string, run: () => void): IAction => ({
+			id,
+			label,
+			tooltip: label,
+			enabled: this.metadata !== undefined,
+			run,
+		});
 		const actions = [
 			action('imagePreview.fit', localize('media.image.fit', 'Fit to window'), () => this.setScale('fit')),
-			action('imagePreview.actualSize', localize('media.image.actualSize', 'Actual size'), () => this.setScale(1)),
+			action('imagePreview.actualSize', localize('media.image.actualSize', 'Actual size'), () =>
+				this.setScale(1),
+			),
 			action('imagePreview.zoomOut', localize('media.image.zoomOut', 'Zoom out'), () => this.zoom(0.8)),
 			action('imagePreview.zoomIn', localize('media.image.zoomIn', 'Zoom in'), () => this.zoom(1.25)),
 		];
 		if (this.loadFailure !== undefined) {
-			actions.push({ id: 'imagePreview.retry', label: localize('media.image.retry', 'Retry'), tooltip: localize('media.image.retry', 'Retry'), enabled: true, run: () => this.retry() });
+			actions.push({
+				id: 'imagePreview.retry',
+				label: localize('media.image.retry', 'Retry'),
+				tooltip: localize('media.image.retry', 'Retry'),
+				enabled: true,
+				run: () => this.retry(),
+			});
 		}
 		this.toolbar.setActions(actions);
 		this.summaryDomNode.setAttribute('role', this.loadFailure === undefined ? 'status' : 'alert');
@@ -208,7 +279,10 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 
 	private updateAriaLabel(): void {
 		const hint = this.accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.ImagePreview);
-		this.domNode.setAttribute('aria-label', [localize('media.image.preview', 'Image preview'), hint].filter(Boolean).join('. '));
+		this.domNode.setAttribute(
+			'aria-label',
+			[localize('media.image.preview', 'Image preview'), hint].filter(Boolean).join('. '),
+		);
 	}
 
 	private zoom(factor: number): void {
@@ -221,8 +295,14 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 	}
 
 	private effectiveScale(): number {
-		if (this.scale !== 'fit' || !this.metadata) { return this.scale === 'fit' ? 1 : this.scale; }
-		return Math.min(1, this.viewportDomNode.clientWidth / this.metadata.width, this.viewportDomNode.clientHeight / this.metadata.height);
+		if (this.scale !== 'fit' || !this.metadata) {
+			return this.scale === 'fit' ? 1 : this.scale;
+		}
+		return Math.min(
+			1,
+			this.viewportDomNode.clientWidth / this.metadata.width,
+			this.viewportDomNode.clientHeight / this.metadata.height,
+		);
 	}
 
 	private zoomLabel(): string {
@@ -230,7 +310,9 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 	}
 
 	private updateImageGeometry(): void {
-		if (!this.metadata) { return; }
+		if (!this.metadata) {
+			return;
+		}
 		const scale = this.effectiveScale();
 		this.imageDomNode.style.width = `${this.metadata.width * scale}px`;
 		this.imageDomNode.style.height = `${this.metadata.height * scale}px`;
@@ -241,7 +323,14 @@ export class ImagePreview extends EditorPane implements IEditorPane {
 		const metadata = this.metadata;
 		let summary = '';
 		if (metadata) {
-			summary = localize('media.image.summary', '{0} × {1} pixels · {2} bytes · {3}', metadata.width, metadata.height, this.byteLength, this.zoomLabel());
+			summary = localize(
+				'media.image.summary',
+				'{0} × {1} pixels · {2} bytes · {3}',
+				metadata.width,
+				metadata.height,
+				this.byteLength,
+				this.zoomLabel(),
+			);
 		} else if (this.loadFailure !== undefined) {
 			summary = localize('media.image.loadFailed', 'Could not load image: {0}', this.loadFailure);
 		}

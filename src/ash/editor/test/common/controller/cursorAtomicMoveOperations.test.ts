@@ -66,7 +66,11 @@ suite('Cursor move command test', () => {
 		for (const testCase of testCases) {
 			const maxPosition = testCase.expectedVisibleColumn.length;
 			for (let position = 0; position < maxPosition; position++) {
-				const actual = AtomicTabMoveOperations.whitespaceVisibleColumn(testCase.lineContent, position, testCase.tabSize);
+				const actual = AtomicTabMoveOperations.whitespaceVisibleColumn(
+					testCase.lineContent,
+					position,
+					testCase.tabSize,
+				);
 				const expected = [
 					testCase.expectedPrevTabStopPosition[position],
 					testCase.expectedPrevTabStopVisibleColumn[position],
@@ -125,20 +129,13 @@ suite('Cursor move command test', () => {
 
 		for (const testCase of testCases) {
 			for (const { direction, expected } of [
-				{
-					direction: Direction.Left,
-					expected: testCase.expectedLeft,
-				},
-				{
-					direction: Direction.Right,
-					expected: testCase.expectedRight,
-				},
-				{
-					direction: Direction.Nearest,
-					expected: testCase.expectedNearest,
-				},
+				{ direction: Direction.Left, expected: testCase.expectedLeft },
+				{ direction: Direction.Right, expected: testCase.expectedRight },
+				{ direction: Direction.Nearest, expected: testCase.expectedNearest },
 			]) {
-				const actual = expected.map((_, index) => AtomicTabMoveOperations.atomicPosition(testCase.lineContent, index, testCase.tabSize, direction));
+				const actual = expected.map((_, index) =>
+					AtomicTabMoveOperations.atomicPosition(testCase.lineContent, index, testCase.tabSize, direction),
+				);
 				assert.deepStrictEqual(actual, expected);
 			}
 		}

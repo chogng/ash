@@ -33,7 +33,8 @@ export function loadCommonJS(sources, root, separator, entry, ash) {
 		return file(prefix + 'index');
 	};
 	const resolve = (name, referrer) => {
-		if (typeof name !== 'string' || !name || name.includes('\0') || name.length > 32768) throw new TypeError('Invalid CommonJS module name');
+		if (typeof name !== 'string' || !name || name.includes('\0') || name.length > 32768)
+			throw new TypeError('Invalid CommonJS module name');
 		if (name === '@ash/sdk') return name;
 		if (name.startsWith('node:')) throw new Error('Unsupported extension module: ' + name);
 		const request = separator === '\\' ? name.replaceAll('\\', '/') : name;
@@ -43,7 +44,11 @@ export function loadCommonJS(sources, root, separator, entry, ash) {
 			found = lookup(normalize(request.slice(packageRoot.length + 1)));
 		} else if (request.startsWith('./') || request.startsWith('../')) {
 			found = lookup(normalize(directory(referrer) + '/' + request));
-		} else if (!request.startsWith('/') && !request.includes(':') && !request.split('/').some(part => !part || part === '.' || part === '..')) {
+		} else if (
+			!request.startsWith('/') &&
+			!request.includes(':') &&
+			!request.split('/').some(part => !part || part === '.' || part === '..')
+		) {
 			let current = directory(referrer);
 			while (true) {
 				found = lookup((current ? current + '/' : '') + 'node_modules/' + request);
@@ -59,7 +64,14 @@ export function loadCommonJS(sources, root, separator, entry, ash) {
 	const load = (name, parent = null) => {
 		const retained = cache.get(name);
 		if (retained) return retained;
-		const module = { id: filename(name), filename: filename(name), exports: {}, loaded: false, parent, children: [] };
+		const module = {
+			id: filename(name),
+			filename: filename(name),
+			exports: {},
+			loaded: false,
+			parent,
+			children: [],
+		};
 		const require = request => {
 			const target = resolve(request, name);
 			if (target === '@ash/sdk') return ash;
@@ -79,7 +91,14 @@ export function loadCommonJS(sources, root, separator, entry, ash) {
 			if (name.endsWith('.json')) {
 				module.exports = JSON.parse(text);
 			} else {
-				Function('exports', 'require', 'module', '__filename', '__dirname', text).call(module.exports, module.exports, require, module, module.filename, directory(name) ? filename(directory(name)) : root);
+				Function('exports', 'require', 'module', '__filename', '__dirname', text).call(
+					module.exports,
+					module.exports,
+					require,
+					module,
+					module.filename,
+					directory(name) ? filename(directory(name)) : root,
+				);
 			}
 			module.loaded = true;
 			return module;

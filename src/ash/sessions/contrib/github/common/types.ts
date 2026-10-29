@@ -1,6 +1,10 @@
 import type { URI } from '../../../../base/common/uri.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
-import type { GitHubPullRequestReference, GitHubIssueReference, GitHubIssue } from '../../../../platform/github/common/githubService.js';
+import type {
+	GitHubPullRequestReference,
+	GitHubIssueReference,
+	GitHubIssue,
+} from '../../../../platform/github/common/githubService.js';
 import type { ChatPullRequestState, IPullRequestIconStatus } from '../../../../workbench/common/chatPullRequest.js';
 import { localize } from '../../../../nls.js';
 
@@ -63,5 +67,7 @@ export function getIssueLabel(entry: IResolvedSessionIssue): string {
 			state = localize('sessions.github.issueDuplicate', 'Duplicate');
 		}
 	}
-	return [`${repository.host}/${repository.owner}/${repository.name} #${number}`, entry.issue?.title, state].filter(Boolean).join(' · ');
+	return [`${repository.host}/${repository.owner}/${repository.name} #${number}`, entry.issue?.title, state]
+		.filter(Boolean)
+		.join(' · ');
 }

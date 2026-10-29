@@ -23,11 +23,13 @@ export class MinimapTokensColorTracker extends Disposable {
 	private constructor() {
 		super();
 		this._updateColorMap();
-		this._register(TokenizationRegistry.onDidChange(e => {
-			if (e.changedColorMap) {
-				this._updateColorMap();
-			}
-		}));
+		this._register(
+			TokenizationRegistry.onDidChange(e => {
+				if (e.changedColorMap) {
+					this._updateColorMap();
+				}
+			}),
+		);
 	}
 
 	private _updateColorMap(): void {
@@ -69,5 +71,3 @@ export class MinimapTokensColorTracker extends Disposable {
 		return this._backgroundIsLight;
 	}
 }
-
-

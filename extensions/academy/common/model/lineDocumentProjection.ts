@@ -1,7 +1,20 @@
 import { resolveDocumentParagraphAttributes } from './documentParagraph.js';
 import type { DocumentAttributes, DocumentMark, DocumentNode } from './document.js';
 import type { DocumentSchema } from './documentSchema.js';
-import { createLineDocumentSnapshot, linePoint, type InlineAtom, type LineDocumentSnapshot, type LineFacet, type LineId, type LineRegion, type LineRelation, type LineSemanticAttributes, type LineSemanticValue, type ModelLine, type PersistentMark } from 'ash:editor/editor/common/model/lineDocument.js';
+import {
+	createLineDocumentSnapshot,
+	linePoint,
+	type InlineAtom,
+	type LineDocumentSnapshot,
+	type LineFacet,
+	type LineId,
+	type LineRegion,
+	type LineRelation,
+	type LineSemanticAttributes,
+	type LineSemanticValue,
+	type ModelLine,
+	type PersistentMark,
+} from 'ash:editor/editor/common/model/lineDocument.js';
 
 /** Converts a schema document into the line-first snapshot consumed by TextModel. */
 export function projectDocumentToLines(schema: DocumentSchema, document: DocumentNode): LineDocumentSnapshot {
@@ -19,7 +32,10 @@ class DocumentLineProjection {
 	private readonly relations: LineRelation[] = [];
 	private readonly lineIds = new Set<LineId>();
 
-	constructor(private readonly schema: DocumentSchema, private readonly document: DocumentNode) { }
+	constructor(
+		private readonly schema: DocumentSchema,
+		private readonly document: DocumentNode,
+	) {}
 
 	public visit(node: DocumentNode, ancestors: readonly DocumentNode[]): void {
 		const kind = this.schema.getNodeSpec(node.type)?.kind;
@@ -81,7 +97,8 @@ class DocumentLineProjection {
 	}
 
 	public finish(): LineDocumentSnapshot {
-		if (this.lines.length === 0) this.lines.push({ id: this.allocateLineId(`${this.document.id}:line`, 0), text: '' });
+		if (this.lines.length === 0)
+			this.lines.push({ id: this.allocateLineId(`${this.document.id}:line`, 0), text: '' });
 		return createLineDocumentSnapshot({
 			lines: this.lines,
 			marks: this.marks,
@@ -106,7 +123,11 @@ class DocumentLineProjection {
 		return line;
 	}
 
-	private appendInlineLines(owner: DocumentNode, content: readonly DocumentNode[], ancestors: readonly DocumentNode[]): void {
+	private appendInlineLines(
+		owner: DocumentNode,
+		content: readonly DocumentNode[],
+		ancestors: readonly DocumentNode[],
+	): void {
 		let lineIndex = 0;
 		let lineId = this.allocateLineId(owner.id, lineIndex);
 		let text = '';
@@ -134,7 +155,8 @@ class DocumentLineProjection {
 					text += segment;
 					for (let markIndex = 0; markIndex < child.marks.length; markIndex += 1) {
 						const mark = child.marks[markIndex]!;
-						if (segment.length > 0) pendingMarks.push(this.createMark(child.id, mark, markIndex, lineId, start, text.length));
+						if (segment.length > 0)
+							pendingMarks.push(this.createMark(child.id, mark, markIndex, lineId, start, text.length));
 					}
 					if (segmentIndex < segments.length - 1) startNextLine();
 				}
@@ -163,12 +185,26 @@ class DocumentLineProjection {
 				id: `${node.id}:facet:${lineId}`,
 				kind: node.type,
 				lineId,
-				attrs: { nodeId: node.id, ...toSemanticAttributes(node.attrs.styleId !== undefined && (node.type === 'paragraph' || node.type === 'heading') ? resolveDocumentParagraphAttributes(this.document, node) : node.attrs) },
+				attrs: {
+					nodeId: node.id,
+					...toSemanticAttributes(
+						node.attrs.styleId !== undefined && (node.type === 'paragraph' || node.type === 'heading')
+							? resolveDocumentParagraphAttributes(this.document, node)
+							: node.attrs,
+					),
+				},
 			});
 		}
 	}
 
-	private createMark(textNodeId: string, mark: DocumentMark, markIndex: number, lineId: LineId, start: number, end: number): PersistentMark {
+	private createMark(
+		textNodeId: string,
+		mark: DocumentMark,
+		markIndex: number,
+		lineId: LineId,
+		start: number,
+		end: number,
+	): PersistentMark {
 		return {
 			id: `${textNodeId}:mark:${markIndex}:${lineId}`,
 			kind: mark.type,
@@ -197,9 +233,11 @@ function isLegacyTextLine(node: DocumentNode): boolean {
 }
 
 function isBlockAtom(node: DocumentNode): boolean {
-	return node.type === 'imageBlock' ||
+	return (
+		node.type === 'imageBlock' ||
 		node.type === 'horizontalRule' ||
-		typeof node.attrs.src === 'string' && node.content.every(child => child.text === undefined);
+		(typeof node.attrs.src === 'string' && node.content.every(child => child.text === undefined))
+	);
 }
 
 function blockAtomKind(node: DocumentNode): string {

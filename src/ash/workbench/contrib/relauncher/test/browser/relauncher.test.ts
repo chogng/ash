@@ -5,11 +5,24 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { setNlsMessages, resetNlsResolver } from '../../../../../nls.js';
 import { isMacintosh } from '../../../../../base/common/platform.js';
-import { ConfigurationTarget, type IConfigurationChangeEvent, type IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
+import {
+	ConfigurationTarget,
+	type IConfigurationChangeEvent,
+	type IConfigurationService,
+} from '../../../../../platform/configuration/common/configuration.js';
 import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
-import type { IConfirmationDialogOptions, IConfirmationDialogResult, IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { parseMenuStyle, parseTitleBarStyle, resolveContextMenuStyle, type TitleBarStyleConfiguration } from '../../../../../platform/window/common/window.js';
+import type {
+	IConfirmationDialogOptions,
+	IConfirmationDialogResult,
+	IDialogService,
+} from '../../../../../platform/dialogs/common/dialogs.js';
+import {
+	parseMenuStyle,
+	parseTitleBarStyle,
+	resolveContextMenuStyle,
+	type TitleBarStyleConfiguration,
+} from '../../../../../platform/window/common/window.js';
 import type { INativeHostApi } from '../../../../../platform/native/common/nativeHost.js';
 import type { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import type { IHostService } from '../../../../services/host/browser/host.js';
@@ -27,26 +40,61 @@ function fixture(options: RelauncherFixtureOptions = {}) {
 	const confirm = options.confirm ?? (async () => ({ confirmed: true }));
 	const store = new DisposableStore();
 	const registry = new ConfigurationRegistry();
-	registry.registerConfiguration({ key: 'window.titleBarStyle', defaultValue: savedTitleBarStyle, parse: parseTitleBarStyle });
+	registry.registerConfiguration({
+		key: 'window.titleBarStyle',
+		defaultValue: savedTitleBarStyle,
+		parse: parseTitleBarStyle,
+	});
 	registry.registerConfiguration({ key: 'window.menuStyle', defaultValue: 'inherit', parse: parseMenuStyle });
 	const configuration = store.add(new InMemoryConfigurationService(registry));
 	const changes = store.add(new Emitter<IConfigurationChangeEvent>());
 	let source = ConfigurationTarget.USER;
 	store.add(configuration.onDidChangeConfiguration(event => changes.fire({ ...event, source })));
-	const observedConfiguration = { getValue: configuration.getValue.bind(configuration), onDidChangeConfiguration: changes.event } as IConfigurationService;
+	const observedConfiguration = {
+		getValue: configuration.getValue.bind(configuration),
+		onDidChangeConfiguration: changes.event,
+	} as IConfigurationService;
 	const prompts: IConfirmationDialogOptions[] = [];
 	let focused = true;
 	let restarts = 0;
-	const host = { get hasFocus() { return focused; }, restart: async () => { restarts++; } } as IHostService;
-	const dialogs = { confirm: (options: IConfirmationDialogOptions) => { prompts.push(options); return confirm(); } } as IDialogService;
-	const windowHost = { getTitleBarStyle: () => Promise.resolve(options.windowTitleBarStyle ?? savedTitleBarStyle) } as INativeHostApi;
-	const contextMenus = { contextMenuStyle: options.selectedMenuStyle ?? resolveContextMenuStyle('inherit', savedTitleBarStyle, isMacintosh ? 'macos' : 'desktop') } as IContextMenuService;
-	const relauncher = store.add(new SettingsChangeRelauncher(observedConfiguration, dialogs, host, windowHost, contextMenus));
+	const host = {
+		get hasFocus() {
+			return focused;
+		},
+		restart: async () => {
+			restarts++;
+		},
+	} as IHostService;
+	const dialogs = {
+		confirm: (options: IConfirmationDialogOptions) => {
+			prompts.push(options);
+			return confirm();
+		},
+	} as IDialogService;
+	const windowHost = {
+		getTitleBarStyle: () => Promise.resolve(options.windowTitleBarStyle ?? savedTitleBarStyle),
+	} as INativeHostApi;
+	const contextMenus = {
+		contextMenuStyle:
+			options.selectedMenuStyle ??
+			resolveContextMenuStyle('inherit', savedTitleBarStyle, isMacintosh ? 'macos' : 'desktop'),
+	} as IContextMenuService;
+	const relauncher = store.add(
+		new SettingsChangeRelauncher(observedConfiguration, dialogs, host, windowHost, contextMenus),
+	);
 	return {
-		configuration, prompts, relauncher,
-		get restarts() { return restarts; },
-		set focused(value: boolean) { focused = value; },
-		set source(value: ConfigurationTarget) { source = value; },
+		configuration,
+		prompts,
+		relauncher,
+		get restarts() {
+			return restarts;
+		},
+		set focused(value: boolean) {
+			focused = value;
+		},
+		set source(value: ConfigurationTarget) {
+			source = value;
+		},
 		[Symbol.dispose]: () => store.dispose(),
 	};
 }
@@ -112,7 +160,12 @@ suite('SettingsChangeRelauncher', () => {
 
 	test('confirmation cannot restart after the title bar is restored', async () => {
 		let finish!: (result: IConfirmationDialogResult) => void;
-		using f = fixture({ confirm: () => new Promise(resolve => { finish = resolve; }) });
+		using f = fixture({
+			confirm: () =>
+				new Promise(resolve => {
+					finish = resolve;
+				}),
+		});
 		await f.relauncher.onWorkspaceRestored();
 		await f.configuration.updateValue('window.titleBarStyle', 'system');
 		await f.configuration.updateValue('window.titleBarStyle', 'custom');
@@ -124,7 +177,13 @@ suite('SettingsChangeRelauncher', () => {
 
 	test('confirmation restarts if another changed setting still requires it', async () => {
 		let finish!: (result: IConfirmationDialogResult) => void;
-		using f = fixture({ confirm: () => new Promise(resolve => { finish = resolve; }), savedTitleBarStyle: 'system' });
+		using f = fixture({
+			confirm: () =>
+				new Promise(resolve => {
+					finish = resolve;
+				}),
+			savedTitleBarStyle: 'system',
+		});
 		await f.relauncher.onWorkspaceRestored();
 		await f.configuration.updateValue('window.titleBarStyle', 'custom');
 		await f.configuration.updateValue('window.menuStyle', 'custom');
@@ -165,7 +224,9 @@ suite('SettingsChangeRelauncher', () => {
 
 	test('configuration changes while Main reads the frame are checked when it answers', async () => {
 		let finish!: (style: TitleBarStyleConfiguration) => void;
-		const read = new Promise<TitleBarStyleConfiguration>(resolve => { finish = resolve; });
+		const read = new Promise<TitleBarStyleConfiguration>(resolve => {
+			finish = resolve;
+		});
 		using f = fixture({ confirm: async () => ({ confirmed: false }), windowTitleBarStyle: read });
 		await f.configuration.updateValue('window.titleBarStyle', 'system');
 		assert.equal(f.prompts.length, 0);
@@ -178,7 +239,9 @@ suite('SettingsChangeRelauncher', () => {
 
 	test('default changes while Main reads the frame do not prompt', async () => {
 		let finish!: (style: TitleBarStyleConfiguration) => void;
-		const read = new Promise<TitleBarStyleConfiguration>(resolve => { finish = resolve; });
+		const read = new Promise<TitleBarStyleConfiguration>(resolve => {
+			finish = resolve;
+		});
 		using f = fixture({ windowTitleBarStyle: read });
 		f.source = ConfigurationTarget.DEFAULT;
 		await f.configuration.updateValue('window.titleBarStyle', 'system');
@@ -190,7 +253,9 @@ suite('SettingsChangeRelauncher', () => {
 
 	test('a default menu change cannot suppress a pending user title bar change', async () => {
 		let finish!: (style: TitleBarStyleConfiguration) => void;
-		const read = new Promise<TitleBarStyleConfiguration>(resolve => { finish = resolve; });
+		const read = new Promise<TitleBarStyleConfiguration>(resolve => {
+			finish = resolve;
+		});
 		using f = fixture({ confirm: async () => ({ confirmed: false }), windowTitleBarStyle: read });
 		await f.configuration.updateValue('window.titleBarStyle', 'system');
 		f.source = ConfigurationTarget.DEFAULT;
@@ -203,7 +268,9 @@ suite('SettingsChangeRelauncher', () => {
 
 	test('disposing while Main reads the frame cannot prompt later', async () => {
 		let finish!: (style: TitleBarStyleConfiguration) => void;
-		const read = new Promise<TitleBarStyleConfiguration>(resolve => { finish = resolve; });
+		const read = new Promise<TitleBarStyleConfiguration>(resolve => {
+			finish = resolve;
+		});
 		using f = fixture({ savedTitleBarStyle: 'system', windowTitleBarStyle: read });
 		f.relauncher.dispose();
 		finish('custom');
@@ -219,12 +286,14 @@ suite('SettingsChangeRelauncher', () => {
 			using f = fixture();
 			await f.relauncher.onWorkspaceRestored();
 			await f.configuration.updateValue('window.titleBarStyle', 'system');
-			assert.deepEqual(f.prompts, [{
-				message: '某项设置已更改，需要重启才能生效。',
-				detail: '重启 Ash 以应用新的窗口外观。',
-				primaryButton: '立即重启',
-				cancelButton: '稍后',
-			}]);
+			assert.deepEqual(f.prompts, [
+				{
+					message: '某项设置已更改，需要重启才能生效。',
+					detail: '重启 Ash 以应用新的窗口外观。',
+					primaryButton: '立即重启',
+					cancelButton: '稍后',
+				},
+			]);
 		} finally {
 			resetNlsResolver();
 		}
@@ -232,7 +301,12 @@ suite('SettingsChangeRelauncher', () => {
 
 	test('pending confirmation is not duplicated and cannot restart a disposed window', async () => {
 		let finish!: (result: IConfirmationDialogResult) => void;
-		using f = fixture({ confirm: () => new Promise(resolve => { finish = resolve; }) });
+		using f = fixture({
+			confirm: () =>
+				new Promise(resolve => {
+					finish = resolve;
+				}),
+		});
 		await f.relauncher.onWorkspaceRestored();
 		await f.configuration.updateValue('window.titleBarStyle', 'system');
 		await f.configuration.updateValue('window.menuStyle', 'system');

@@ -1,6 +1,5 @@
 import { KeyboardLayoutContribution } from './_.contribution.js';
 
-
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 	layout: { name: '00000415', id: '', text: 'Polish (Programmers)' },
 	secondaryLayouts: [],
@@ -54,7 +53,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		BracketRight: [']', '}', '', '', 0, 'VK_OEM_6'],
 		Backslash: ['\\', '|', '', '', 0, 'VK_OEM_5'],
 		Semicolon: [';', ':', '', '', 0, 'VK_OEM_1'],
-		Quote: ['\'', '"', '', '', 0, 'VK_OEM_7'],
+		Quote: ["'", '"', '', '', 0, 'VK_OEM_7'],
 		Backquote: ['`', '~', '', '', 0, 'VK_OEM_3'],
 		Comma: [',', '<', '', '', 0, 'VK_OEM_COMMA'],
 		Period: ['.', '>', '', '', 0, 'VK_OEM_PERIOD'],
@@ -159,6 +158,6 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		BrowserForward: [],
 		BrowserStop: [],
 		BrowserRefresh: [],
-		BrowserFavorites: []
-	}
+		BrowserFavorites: [],
+	},
 });

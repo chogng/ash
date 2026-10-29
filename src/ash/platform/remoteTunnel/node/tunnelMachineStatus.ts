@@ -1,14 +1,16 @@
 import { decodeRemoteTunnelHostInfo } from '../../../../../.build/protocol/typescript/WebProtocolDecoder.js';
 
 export const TUNNEL_MACHINE_STATUS_PREFIX = '__ASH_TUNNEL_STATUS__';
-export type TunnelMachineStatus = {
-	readonly type: 'connected';
-	readonly tunnelName: string;
-	readonly tunnelId?: string;
-	readonly isAttached: boolean;
-	readonly link?: string;
-	readonly domain?: string;
-} | { readonly type: 'tokenError'; readonly message: string; };
+export type TunnelMachineStatus =
+	| {
+			readonly type: 'connected';
+			readonly tunnelName: string;
+			readonly tunnelId?: string;
+			readonly isAttached: boolean;
+			readonly link?: string;
+			readonly domain?: string;
+	  }
+	| { readonly type: 'tokenError'; readonly message: string };
 
 /** Decodes the helper's launch contract at the process boundary into the tunnel domain. */
 export function parseTunnelMachineStatus(message: string): TunnelMachineStatus | undefined {

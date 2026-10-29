@@ -4,7 +4,7 @@ import { localize } from '../../../nls.js';
 import { createUuid } from '../../../base/common/uuid.js';
 import type {
 	ProviderConfigDto,
-	ProviderModelsListFailureCodeDto
+	ProviderModelsListFailureCodeDto,
 } from '../../../../../.build/protocol/typescript/index.js';
 import type { AppServerProtocolClient } from './appServerProtocolClient.js';
 import { appServerRequest } from './appServerRequest.js';
@@ -30,7 +30,7 @@ export function createDisconnectedAgentModelsService(unavailable: UnavailableOpe
 		readModel: () => unavailable('model.readModel'),
 		readAdvisorDefault: () => unavailable('model.readAdvisorDefault'),
 		setAdvisorDefault: () => unavailable('model.setAdvisorDefault'),
-		setModel: () => unavailable('model.setModel')
+		setModel: () => unavailable('model.setModel'),
 	};
 }
 
@@ -38,11 +38,16 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 	return {
 		readDefaults: async () => {
 			const config = await appServerRequest(connection, 'config/read', {});
-			return { revision: config.revision, model: config.model ? { ...config.model } : null, reasoningEffort: config.modelReasoningEffort ?? null };
+			return {
+				revision: config.revision,
+				model: config.model ? { ...config.model } : null,
+				reasoningEffort: config.modelReasoningEffort ?? null,
+			};
 		},
 		configureDefaults: async (update, expectedRevision) => {
 			await appServerRequest(connection, 'config/update', {
-				commandId: createUuid(), expectedRevision,
+				commandId: createUuid(),
+				expectedRevision,
 				...(update.model !== undefined ? { model: update.model } : {}),
 				...(update.reasoningEffort !== undefined ? { modelReasoningEffort: update.reasoningEffort } : {}),
 			});
@@ -52,18 +57,18 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 			return selection.type === 'automatic'
 				? { type: 'automatic' }
 				: {
-					type: 'explicit',
-					model: { ...selection.model },
-					...(selection.connection != null ? { connection: selection.connection } : {}),
-					...(selection.reasoningEffort != null ? { reasoningEffort: selection.reasoningEffort } : {})
-				};
+						type: 'explicit',
+						model: { ...selection.model },
+						...(selection.connection != null ? { connection: selection.connection } : {}),
+						...(selection.reasoningEffort != null ? { reasoningEffort: selection.reasoningEffort } : {}),
+					};
 		},
-		setApprovalReviewModel: async (selection) => {
+		setApprovalReviewModel: async selection => {
 			const config = await appServerRequest(connection, 'config/read', {});
 			await appServerRequest(connection, 'config/update', {
 				commandId: createUuid(),
 				expectedRevision: config.revision,
-				approvalReviewModel: selection
+				approvalReviewModel: selection,
 			});
 		},
 		setModelPreferences: async (model, update) => {
@@ -73,14 +78,14 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 				expected_revision: snapshot.revision,
 				model,
 				...(update.acceleration !== undefined ? { acceleration: update.acceleration } : {}),
-				...(update.longContext !== undefined ? { long_context: update.longContext } : {})
+				...(update.longContext !== undefined ? { long_context: update.longContext } : {}),
 			});
 		},
 		listCustomProviders: async () => {
 			const snapshot = await appServerRequest(connection, 'config/read', {});
 			return Object.values(snapshot.connections)
-				.filter((config) => config.custom && config.connection.startsWith('custom-'))
-				.map((config) => ({
+				.filter(config => config.custom && config.connection.startsWith('custom-'))
+				.map(config => ({
 					id: config.connection,
 					name: config.custom!.name,
 					baseUrl: config.baseUrl ?? '',
@@ -88,19 +93,19 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 					order: config.custom!.order,
 					models: Object.entries(config.modelContext ?? {})
 						.filter(
-							(entry): entry is [string, (typeof entry)[1] & { contextWindow: number; }] =>
-								entry[1].contextWindow != null
+							(entry): entry is [string, (typeof entry)[1] & { contextWindow: number }] =>
+								entry[1].contextWindow != null,
 						)
 						.map(([id, context]) => ({
 							id,
 							contextWindow: context.contextWindow,
 							...(config.custom?.modelAliases?.[id]
 								? { upstreamModel: config.custom.modelAliases[id] }
-								: {})
-						}))
+								: {}),
+						})),
 				}));
 		},
-		saveCustomProvider: async (provider) => {
+		saveCustomProvider: async provider => {
 			const snapshot = await appServerRequest(connection, 'config/read', {});
 			const config = customProviderConfig(provider);
 			await appServerRequest(connection, 'provider/configure', {
@@ -112,16 +117,13 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 					modelContext: Object.fromEntries(
 						Object.entries(config.modelContext ?? {})
 							.filter(
-								(entry): entry is [string, (typeof entry)[1] & { contextWindow: number; }] =>
-									entry[1].contextWindow != null
+								(entry): entry is [string, (typeof entry)[1] & { contextWindow: number }] =>
+									entry[1].contextWindow != null,
 							)
 							.map(([id, context]) => [
 								id,
-								{
-									...snapshot.connections[provider.id]?.modelContext?.[id],
-									...context
-								}
-							])
+								{ ...snapshot.connections[provider.id]?.modelContext?.[id], ...context },
+							]),
 					),
 					custom: {
 						...config.custom!,
@@ -129,16 +131,16 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 						name: provider.name,
 						protocol: provider.apiFormat,
 						order: provider.order,
-						modelAliases: config.custom!.modelAliases
-					}
-				}
+						modelAliases: config.custom!.modelAliases,
+					},
+				},
 			});
 		},
 		testProviderModel: async (provider, model) => {
 			const result = await appServerRequest(connection, 'provider/probe', {
 				config: customProviderConfig(provider),
 				apiKey: null,
-				model
+				model,
 			});
 			return result.type === 'failed' ? result : { type: 'passed' };
 		},
@@ -146,20 +148,23 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 			const result = await withSecretStorageErrors(appServerRequest(connection, 'model/list', {}));
 			return {
 				models: result.models.map(modelCatalogEntry),
-				scopes: result.catalog_scopes?.map((scope) => ({ ...scope }))
+				scopes: result.catalog_scopes?.map(scope => ({ ...scope })),
 			};
 		},
 		listProviders: () => withSecretStorageErrors(appServerRequest(connection, 'provider/list', {})),
-		listProviderModels: async (provider) => {
+		listProviderModels: async provider => {
 			const result = await appServerRequest(connection, 'provider/models/list', { connection: provider });
 			if (result.type === 'failed') {
 				throw new Error(modelDiscoveryMessage(result.failure.code));
 			}
 			return result.type === 'models' ? result.models.map(modelCatalogEntry) : [];
 		},
-		setProviderApiKey: (params) => withSecretStorageErrors(appServerRequest(connection, 'provider/apiKey/set', params)),
-		removeProviderApiKey: async (provider) => {
-			await withSecretStorageErrors(appServerRequest(connection, 'provider/apiKey/remove', { connection: provider }));
+		setProviderApiKey: params =>
+			withSecretStorageErrors(appServerRequest(connection, 'provider/apiKey/set', params)),
+		removeProviderApiKey: async provider => {
+			await withSecretStorageErrors(
+				appServerRequest(connection, 'provider/apiKey/remove', { connection: provider }),
+			);
 		},
 		readModel: async () => (await appServerRequest(connection, 'config/read', {})).model,
 		readAdvisorDefault: async () => (await appServerRequest(connection, 'config/read', {})).advisor ?? null,
@@ -168,7 +173,7 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 			await appServerRequest(connection, 'config/update', {
 				commandId,
 				expectedRevision: config.revision,
-				advisor
+				advisor,
 			});
 		},
 		setModel: async ({ commandId, model }) => {
@@ -176,9 +181,9 @@ export function createAppServerAgentModelsService(connection: AppServerProtocolC
 			await appServerRequest(connection, 'config/update', {
 				commandId,
 				expectedRevision: config.revision,
-				model
+				model,
 			});
-		}
+		},
 	};
 }
 
@@ -194,12 +199,12 @@ function customProviderConfig(provider: CustomModelProvider): ProviderConfigDto 
 			contextWindow: 272_000,
 			model: null,
 			modelAliases: Object.fromEntries(
-				provider.models.filter((model) => model.upstreamModel).map((model) => [model.id, model.upstreamModel!])
-			)
+				provider.models.filter(model => model.upstreamModel).map(model => [model.id, model.upstreamModel!]),
+			),
 		},
 		modelContext: Object.fromEntries(
-			provider.models.map((model) => [model.id, { contextWindow: model.contextWindow }])
-		)
+			provider.models.map(model => [model.id, { contextWindow: model.contextWindow }]),
+		),
 	};
 }
 
@@ -212,28 +217,28 @@ function modelDiscoveryMessage(code: ProviderModelsListFailureCodeDto): string {
 		case 'unsupported':
 			return localize(
 				'models.discovery.unsupported',
-				'This endpoint does not provide a model list. Add model IDs manually.'
+				'This endpoint does not provide a model list. Add model IDs manually.',
 			);
 		case 'rateLimited':
 			return localize('models.discovery.rateLimited', 'The endpoint rate limit was reached. Try again later.');
 		case 'unreachable':
 			return localize(
 				'models.discovery.unreachable',
-				'Could not reach the endpoint. Check the Base URL and connection.'
+				'Could not reach the endpoint. Check the Base URL and connection.',
 			);
 		case 'providerUnavailable':
 			return localize('models.discovery.providerUnavailable', 'The endpoint is temporarily unavailable.');
 		case 'invalidRequest':
 			return localize(
 				'models.discovery.invalidRequest',
-				'The endpoint rejected the model list request. Check the API format and Base URL.'
+				'The endpoint rejected the model list request. Check the API format and Base URL.',
 			);
 		case 'invalidResponse':
 			return localize('models.discovery.invalidResponse', 'The endpoint returned an invalid model list.');
 		case 'invalidConfiguration':
 			return localize(
 				'models.discovery.invalidConfiguration',
-				'The provider configuration is invalid. Check its fields.'
+				'The provider configuration is invalid. Check its fields.',
 			);
 		case 'cancelled':
 			return localize('models.discovery.cancelled', 'Model discovery was cancelled.');
@@ -251,14 +256,14 @@ function modelCatalogEntry(entry: ModelListResult['models'][number]): ModelCatal
 		description: entry.description,
 		defaultContextWindow: entry.default_context_window,
 		maximumContextWindow: entry.maximum_context_window,
-		accelerationOptions: Object.freeze(entry.acceleration_options.map((option) => Object.freeze({ ...option }))),
+		accelerationOptions: Object.freeze(entry.acceleration_options.map(option => Object.freeze({ ...option }))),
 		selectedAcceleration: entry.selected_acceleration,
 		longContext: entry.long_context,
 		...(entry.discovered === true ? { discovered: true } : {}),
 		contextWindow: entry.context_window,
 		supportedReasoningEfforts: Object.freeze(
-			entry.supported_reasoning_efforts.map((option) => Object.freeze({ ...option }))
+			entry.supported_reasoning_efforts.map(option => Object.freeze({ ...option })),
 		),
-		...(entry.default_reasoning_effort != null ? { defaultReasoningEffort: entry.default_reasoning_effort } : {})
+		...(entry.default_reasoning_effort != null ? { defaultReasoningEffort: entry.default_reasoning_effort } : {}),
 	});
 }

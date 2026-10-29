@@ -13,10 +13,11 @@ if (process.exitCode === 0) {
 	const isScript = /\.[cm]?js$/.test(packageManager);
 	const executable = isScript ? process.execPath : packageManager;
 	const prefix = isScript ? [packageManager] : [];
-	const result = spawnSync(executable, [
-		...prefix, '--dir', '.', 'test:unit',
-		'--run', 'src/ash/workbench/test/common/design-tokens.test.ts',
-	], { cwd: root, stdio: 'inherit', windowsHide: true });
+	const result = spawnSync(
+		executable,
+		[...prefix, '--dir', '.', 'test:unit', '--run', 'src/ash/workbench/test/common/design-tokens.test.ts'],
+		{ cwd: root, stdio: 'inherit', windowsHide: true },
+	);
 	if (result.error) {
 		throw result.error;
 	}

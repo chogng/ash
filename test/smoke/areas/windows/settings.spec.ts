@@ -1,7 +1,13 @@
 import { readUserSettings, writeUserSettings } from '../../../automation/settings.js';
 import { expect, test } from '../../../automation/test.js';
 
-test('Path rule settings use editable lists and persist removal of default rules', async ({ workbench, application, restartWorkbench, reloadWorkbench, target }, testInfo) => {
+test('Path rule settings use editable lists and persist removal of default rules', async ({
+	workbench,
+	application,
+	restartWorkbench,
+	reloadWorkbench,
+	target,
+}, testInfo) => {
 	test.setTimeout(120_000);
 	for (const chinese of [false, true]) {
 		await workbench.settingsEditor.openUserSettingsUI();
@@ -18,7 +24,9 @@ test('Path rule settings use editable lists and persist removal of default rules
 		const saved = async () => JSON.parse((await readUserSettings(page)).content)['files.exclude'];
 		await expect(rows).toHaveCount(6);
 		await expect(control.getByRole('textbox')).toHaveCount(0);
-		await expect(control).toContainText(chinese ? '在资源管理器中隐藏匹配的文件和文件夹' : 'Hide matching files and folders in Explorer');
+		await expect(control).toContainText(
+			chinese ? '在资源管理器中隐藏匹配的文件和文件夹' : 'Hide matching files and folders in Explorer',
+		);
 		await search.hover();
 		await expect(dsStore.locator('.ash-pattern-row-actions')).toHaveCSS('opacity', '0');
 		await dsStore.focus();
@@ -29,8 +37,14 @@ test('Path rule settings use editable lists and persist removal of default rules
 		await expect(dsStore).toBeFocused();
 		await dsStore.press('Tab');
 		await expect(dsStore.getByRole('button').first()).toBeFocused();
-		const editRule = dsStore.getByRole('button', { name: chinese ? '编辑规则 **/.DS_Store' : 'Edit rule **/.DS_Store', exact: true });
-		const removeRule = dsStore.getByRole('button', { name: chinese ? '移除规则 **/.DS_Store' : 'Remove rule **/.DS_Store', exact: true });
+		const editRule = dsStore.getByRole('button', {
+			name: chinese ? '编辑规则 **/.DS_Store' : 'Edit rule **/.DS_Store',
+			exact: true,
+		});
+		const removeRule = dsStore.getByRole('button', {
+			name: chinese ? '移除规则 **/.DS_Store' : 'Remove rule **/.DS_Store',
+			exact: true,
+		});
 		await expect(editRule).toHaveText('');
 		await expect(editRule.locator('[data-ash-icon-id="edit"]')).toBeVisible();
 		await expect(removeRule).toHaveText('');
@@ -80,15 +94,20 @@ test('Path rule settings use editable lists and persist removal of default rules
 		await expect.poll(saved).toEqual({ '**/*.generated.js': { when: '$(basename).ts' } });
 		if (!chinese && target.kind === 'browser') {
 			for (const [colorScheme, forcedColors, theme] of [
-				['dark', 'none', 'ash-dark'], ['dark', 'active', 'ash-high-contrast-dark'],
-				['light', 'active', 'ash-high-contrast-light'], ['light', 'none', 'ash-light'],
+				['dark', 'none', 'ash-dark'],
+				['dark', 'active', 'ash-high-contrast-dark'],
+				['light', 'active', 'ash-high-contrast-light'],
+				['light', 'none', 'ash-light'],
 			] as const) {
 				await page.emulateMedia({ colorScheme, forcedColors });
 				await expect(workbench.element).toHaveAttribute('data-color-theme', theme);
 				await rows.first().focus();
 				await expect(rows.first()).toHaveCSS('outline-style', 'solid');
 				await expect(rows.first().locator('.ash-pattern-row-actions')).toHaveCSS('opacity', '1');
-				await testInfo.attach(`path-rules-${theme}`, { body: await settings.screenshot(), contentType: 'image/png' });
+				await testInfo.attach(`path-rules-${theme}`, {
+					body: await settings.screenshot(),
+					contentType: 'image/png',
+				});
 			}
 			await page.setViewportSize({ width: 720, height: 900 });
 			await expect(control).toBeVisible();
@@ -97,20 +116,30 @@ test('Path rule settings use editable lists and persist removal of default rules
 			await custom.press('Enter');
 			await expect(editor.getByRole('textbox').first()).toBeFocused();
 			expect(await editor.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-			await testInfo.attach('path-rules-narrow-editor', { body: await settings.screenshot(), contentType: 'image/png' });
+			await testInfo.attach('path-rules-narrow-editor', {
+				body: await settings.screenshot(),
+				contentType: 'image/png',
+			});
 			await editor.getByRole('textbox').first().press('Escape');
 			await page.setViewportSize({ width: 1440, height: 900 });
 		}
 		const size = await control.boundingBox();
 		expect(size!.width).toBeGreaterThan(200);
 		expect(await control.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-		await testInfo.attach(`path-rule-settings-${chinese ? 'zh-CN' : 'en'}`, { body: await control.screenshot(), contentType: 'image/png' });
-		await workbench.menus.select(application, () => control.locator('.ash-setting-item-actions-trigger').click(), [chinese ? '重置设置' : 'Reset Setting']);
+		await testInfo.attach(`path-rule-settings-${chinese ? 'zh-CN' : 'en'}`, {
+			body: await control.screenshot(),
+			contentType: 'image/png',
+		});
+		await workbench.menus.select(application, () => control.locator('.ash-setting-item-actions-trigger').click(), [
+			chinese ? '重置设置' : 'Reset Setting',
+		]);
 		await expect(rows).toHaveCount(6);
 		await expect.poll(saved).toBeUndefined();
 		await search.fill('@id:explorer.autoRevealExclude');
 		const reveal = settings.locator('[data-configuration-key="explorer.autoRevealExclude"]');
-		await expect(reveal).toContainText(chinese ? '文件仍会显示在资源管理器中' : 'The files remain visible in Explorer');
+		await expect(reveal).toContainText(
+			chinese ? '文件仍会显示在资源管理器中' : 'The files remain visible in Explorer',
+		);
 		await expect(reveal.locator('.ash-pattern-row')).toHaveCount(0);
 		if (!chinese) {
 			await settings.locator('.ash-modal-editor-close').click();
@@ -123,28 +152,45 @@ test('Path rule settings use editable lists and persist removal of default rules
 	}
 });
 
-test('Settings maturity labels and filters work in English and Chinese', async ({ workbench, application, restartWorkbench }, testInfo) => {
+test('Settings maturity labels and filters work in English and Chinese', async ({
+	workbench,
+	application,
+	restartWorkbench,
+}, testInfo) => {
 	test.setTimeout(120_000);
 	for (const locale of ['en', 'zh-CN']) {
 		await workbench.settingsEditor.openUserSettingsUI();
 		const settings = workbench.settingsEditor.element;
 		const search = settings.locator('.ash-settings-search input');
-		await workbench.menus.select(application, () => settings.locator('.ash-settings-search-filter').press('Enter'), [locale === 'en' ? 'Experimental' : '实验性']);
+		await workbench.menus.select(
+			application,
+			() => settings.locator('.ash-settings-search-filter').press('Enter'),
+			[locale === 'en' ? 'Experimental' : '实验性'],
+		);
 		await expect(search).toHaveValue('@tag:experimental');
 		await expect(search).toBeFocused();
 		const gpu = settings.locator('[data-settings-item-id="editor.experimentalGpuAcceleration"]');
 		await expect(gpu).toBeVisible();
 		await expect(gpu.locator('.ash-settings-maturity')).toHaveText(locale === 'en' ? 'Experimental' : '实验性');
 		await expect(gpu).toHaveAccessibleDescription(locale === 'en' ? 'Experimental' : '实验性');
-		await testInfo.attach(`experimental-settings-${locale}`, { body: await workbench.page.screenshot(), contentType: 'image/png' });
-		await workbench.menus.select(application, () => settings.locator('.ash-settings-search-filter').press('Enter'), [locale === 'en' ? 'Stable' : '稳定']);
+		await testInfo.attach(`experimental-settings-${locale}`, {
+			body: await workbench.page.screenshot(),
+			contentType: 'image/png',
+		});
+		await workbench.menus.select(
+			application,
+			() => settings.locator('.ash-settings-search-filter').press('Enter'),
+			[locale === 'en' ? 'Stable' : '稳定'],
+		);
 		await expect(search).toHaveValue('@stable');
 		await expect(gpu).not.toBeVisible();
 		await expect(settings.locator('[data-settings-item-id="editor.fontFamily"]')).toBeVisible();
 		await settings.locator('.ash-modal-editor-close').click();
 		if (locale === 'en') {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
-			const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
+			const language = workbench.page
+				.getByRole('dialog', { name: 'Select Display Language' })
+				.getByRole('combobox');
 			await language.fill('简体中文');
 			await language.press('Enter');
 			({ workbench, application } = await restartWorkbench());
@@ -152,11 +198,17 @@ test('Settings maturity labels and filters work in English and Chinese', async (
 	}
 });
 
-test('Configure Editors opens workbench editor settings from the title menu in English and Chinese', async ({ workbench, application, restartWorkbench }) => {
+test('Configure Editors opens workbench editor settings from the title menu in English and Chinese', async ({
+	workbench,
+	application,
+	restartWorkbench,
+}) => {
 	for (const locale of ['en', 'zh-CN']) {
 		const page = workbench.page;
 		await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
-		const more = page.locator('.ash-editor-title-actions:visible').getByRole('button', { name: locale === 'en' ? 'More Actions' : '更多操作', exact: true });
+		const more = page
+			.locator('.ash-editor-title-actions:visible')
+			.getByRole('button', { name: locale === 'en' ? 'More Actions' : '更多操作', exact: true });
 		const title = locale === 'en' ? 'Configure Editors' : '配置编辑器';
 		const items = await workbench.menus.inspect(application, () => more.press('Enter'));
 		expect(items.filter(item => item.label === title)).toHaveLength(1);
@@ -168,7 +220,13 @@ test('Configure Editors opens workbench editor settings from the title menu in E
 		await expect(search).toBeFocused();
 		const rows = settings.locator('.ash-settings-content-tree [data-settings-item-id]');
 		await expect(rows.first()).toBeVisible();
-		expect(await rows.evaluateAll(elements => elements.every(element => element.getAttribute('data-settings-item-id')?.startsWith('workbench.editor')))).toBe(true);
+		expect(
+			await rows.evaluateAll(elements =>
+				elements.every(element =>
+					element.getAttribute('data-settings-item-id')?.startsWith('workbench.editor'),
+				),
+			),
+		).toBe(true);
 		await settings.locator('.ash-modal-editor-close').click();
 		if (locale === 'en') {
 			await workbench.quickaccess.runCommand('workbench.action.configureLocale');
@@ -180,7 +238,10 @@ test('Configure Editors opens workbench editor settings from the title menu in E
 	}
 });
 
-test('accessibility signal settings validate modes and survive restart in Chinese', async ({ workbench, restartWorkbench }) => {
+test('accessibility signal settings validate modes and survive restart in Chinese', async ({
+	workbench,
+	restartWorkbench,
+}) => {
 	let page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	await workbench.settingsEditor.selectGroup('general');
@@ -201,7 +262,9 @@ test('accessibility signal settings validate modes and survive restart in Chines
 	await announcement.press('Tab');
 	await expect(announcement).toBeEnabled();
 	for (const name of ['taskCompleted', 'diffLineInserted']) {
-		const mode = settings.locator(`[data-configuration-key="accessibility.signals.${name}"]`).getByRole('textbox', { name: 'Mode 1', exact: true });
+		const mode = settings
+			.locator(`[data-configuration-key="accessibility.signals.${name}"]`)
+			.getByRole('textbox', { name: 'Mode 1', exact: true });
 		await mode.fill('on');
 		await mode.press('Tab');
 		await expect(mode).toBeEnabled();
@@ -239,7 +302,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-test('Color settings suggest registered keys and descriptions with keyboard and mouse selection', async ({ workbench, restartWorkbench }) => {
+test('Color settings suggest registered keys and descriptions with keyboard and mouse selection', async ({
+	workbench,
+	restartWorkbench,
+}) => {
 	let page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.openSettings');
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -261,7 +327,13 @@ test('Color settings suggest registered keys and descriptions with keyboard and 
 	await expect(value).toBeFocused();
 	await value.fill('#12345666');
 	await value.press('Tab');
-	await expect.poll(() => page.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-widget-shadow').trim())).toBe('rgba(18, 52, 86, 0.4)');
+	await expect
+		.poll(() =>
+			page
+				.locator('#app')
+				.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-widget-shadow').trim()),
+		)
+		.toBe('rgba(18, 52, 86, 0.4)');
 
 	await colors.getByRole('button', { name: 'Add Color', exact: true }).click();
 	row = colors.locator('.ash-string-map-row').last();
@@ -278,7 +350,13 @@ test('Color settings suggest registered keys and descriptions with keyboard and 
 	await key.press('Enter');
 	await row.locator('[data-pattern-part="value"]').fill('#00000029');
 	await row.locator('[data-pattern-part="value"]').press('Tab');
-	await expect.poll(() => page.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-sessions-inputShadow').trim())).toBe('rgba(0, 0, 0, 0.16)');
+	await expect
+		.poll(() =>
+			page
+				.locator('#app')
+				.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-sessions-inputShadow').trim()),
+		)
+		.toBe('rgba(0, 0, 0, 0.16)');
 
 	await colors.getByRole('button', { name: 'Add Color', exact: true }).click();
 	row = colors.locator('.ash-string-map-row').last();
@@ -295,7 +373,13 @@ test('Color settings suggest registered keys and descriptions with keyboard and 
 	await expect(settings).toContainText('Invalid theme color or hex value: hover.shadow');
 	await hoverValue.fill('#00000029');
 	await hoverValue.press('Tab');
-	await expect.poll(() => page.locator('#app').evaluate(element => getComputedStyle(element).getPropertyValue('--ash-hover-shadow').trim())).toBe('rgba(0, 0, 0, 0.16)');
+	await expect
+		.poll(() =>
+			page
+				.locator('#app')
+				.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-hover-shadow').trim()),
+		)
+		.toBe('rgba(0, 0, 0, 0.16)');
 	for (const theme of ['Ash Dark', 'Ash High Contrast Dark', 'Ash High Contrast Light']) {
 		await settings.locator('[data-settings-item-id="workbench.colorTheme"]').getByRole('combobox').click();
 		await page.getByRole('option', { name: theme, exact: true }).click();
@@ -323,13 +407,21 @@ test('Color settings suggest registered keys and descriptions with keyboard and 
 	const chineseSettings = page.getByRole('dialog', { name: 'Ash 设置' });
 	await chineseSettings.locator('[data-settings-group-id="workbench"]').click();
 	await chineseSettings.locator('[data-settings-category-id="appearance"]').click();
-	await expect.poll(() => colors.locator('[data-pattern-part="key"]').evaluateAll(elements => elements.map(element => (element as HTMLInputElement).value))).toEqual(['widget.shadow', 'sessions.inputShadow', 'hover.shadow']);
+	await expect
+		.poll(() =>
+			colors
+				.locator('[data-pattern-part="key"]')
+				.evaluateAll(elements => elements.map(element => (element as HTMLInputElement).value)),
+		)
+		.toEqual(['widget.shadow', 'sessions.inputShadow', 'hover.shadow']);
 	await expect(colors).toContainText('用方向键选择建议，再按 Enter 确认');
 	await colors.locator('.ash-string-map-row').nth(1).getByRole('button').click();
 	await colors.getByRole('button', { name: '添加颜色', exact: true }).click();
 	key = colors.locator('.ash-string-map-row').last().getByRole('combobox');
 	await key.fill('Sessions 输入卡片');
-	await expect(page.getByRole('option', { name: /^sessions\.inputShadow /u })).toContainText('Sessions 输入卡片周围的阴影。');
+	await expect(page.getByRole('option', { name: /^sessions\.inputShadow /u })).toContainText(
+		'Sessions 输入卡片周围的阴影。',
+	);
 	await key.press('Escape');
 	await expect(chineseSettings).toBeVisible();
 });
@@ -348,14 +440,19 @@ test('Settings sidebar stays at two levels and searches voice input inside Featu
 	await expect(settings.locator('[role="treeitem"][aria-level="3"]')).toHaveCount(0);
 	await expect(settings.locator('[data-settings-target-id]')).toHaveCount(0);
 	await workbench.settingsEditor.selectGroup('features');
-	const features = settings.getByRole('treeitem').filter({ has: page.locator('[data-settings-group-id="features"]') });
+	const features = settings
+		.getByRole('treeitem')
+		.filter({ has: page.locator('[data-settings-group-id="features"]') });
 	await expect(features).toHaveAttribute('aria-level', '1');
 	await expect(features).toHaveAttribute('aria-expanded', 'true');
 	const navigation = settings.getByRole('tree', { name: 'Settings categories' });
 	await navigation.focus();
 	await navigation.press('ArrowDown');
 	await navigation.press('Enter');
-	await expect(settings.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'accessibilitySignals');
+	await expect(settings.locator('[data-settings-container]')).toHaveAttribute(
+		'data-active-settings-category',
+		'accessibilitySignals',
+	);
 	for (const [category, key] of [
 		['explorer', 'explorer.autoReveal'],
 		['search', 'search.maxResults'],
@@ -387,13 +484,19 @@ test('Dictation settings entry reveals Voice input in Features', async ({ workbe
 	await workbench.quickaccess.runCommand('workbench.action.chat.showSpeechToTextIntroduction');
 	await page.getByRole('button', { name: 'Model and API settings', exact: true }).click();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await expect(settings.locator('[data-settings-container]')).toHaveAttribute('data-active-settings-category', 'voice-input');
+	await expect(settings.locator('[data-settings-container]')).toHaveAttribute(
+		'data-active-settings-category',
+		'voice-input',
+	);
 	await expect(settings.locator('[data-tree-id="voice-input"]')).toHaveAttribute('aria-selected', 'true');
 	await expect(settings.getByRole('heading', { name: 'Voice input', exact: true, level: 3 })).toBeInViewport();
 	await expect(settings.locator('[data-settings-category-id="dictation"]')).toHaveCount(0);
 });
 
-test('Dictation settings separate local models and cloud API connections with keyboard help', async ({ target, workbench }) => {
+test('Dictation settings separate local models and cloud API connections with keyboard help', async ({
+	target,
+	workbench,
+}) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -423,8 +526,11 @@ test('Dictation settings separate local models and cloud API connections with ke
 	await page.getByRole('option', { name: 'Cloud', exact: true }).click();
 	await expect(grid).toHaveCount(0);
 	await expect(settings.getByRole('combobox', { name: 'Cloud dictation provider' })).toBeVisible();
-	if (target.appServerMode === 'required') { await expect(settings.getByText('An API key is required.', { exact: false })).toBeVisible(); }
-	else { await expect(settings.getByText('Could not read the dictation connection.', { exact: true })).toBeVisible(); }
+	if (target.appServerMode === 'required') {
+		await expect(settings.getByText('An API key is required.', { exact: false })).toBeVisible();
+	} else {
+		await expect(settings.getByText('Could not read the dictation connection.', { exact: true })).toBeVisible();
+	}
 	await settings.getByRole('button', { name: 'Manage API connections' }).click();
 	await expect(settings.getByRole('heading', { name: 'API key' })).toBeVisible();
 	await expect(settings.locator('.ash-local-transcription-model-controls')).toHaveCount(0);
@@ -467,148 +573,186 @@ test('Local model management reports backend import errors and unavailable captu
 	}
 });
 
-test('Desktop Voice imports after Settings closes and shares model deletion with Sessions', { tag: '@electron-app-server' }, async ({ application, target, workbench }) => {
-	const source = process.env.ASH_DICTATION_MODEL_TEST_SOURCE;
-	test.skip(target.kind !== 'electron' || target.appServerMode !== 'required' || !source, 'Requires the connected desktop and a prepared voice model fixture');
-	if (!source || !('windows' in application)) { return; }
-	const page = workbench.page;
-	await workbench.settingsEditor.openUserSettingsUI();
-	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await workbench.settingsEditor.selectGroup('features');
-	await workbench.settingsEditor.selectCategory('voice-input');
-	const controls = settings.locator('.ash-local-transcription-model-controls');
-	await controls.locator('summary').click();
-	await controls.getByRole('textbox', { name: 'Prepared Paraformer model directory' }).fill(source);
-	await controls.getByRole('button', { name: 'Import model', exact: true }).click();
-	await settings.locator('.ash-modal-editor-close').click();
-	const sessionPagePromise = application.waitForEvent('window');
-	await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
-	const sessionsPage = await sessionPagePromise;
-	await sessionsPage.locator('.ash-sessions-activity-bottom button').last().click();
-	await sessionsPage.getByRole('menuitem', { name: 'Settings' }).click();
-	const sessionsSettings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
-	await sessionsSettings.getByRole('navigation').getByRole('button', { name: 'General', exact: true }).click();
-	const installed = sessionsSettings.getByRole('row').filter({ hasText: 'paraformer-large-online-ec6a3c64' });
-	await expect(installed).toContainText('paraformer-large-online-ec6a3c64', { timeout: 30000 });
-	await expect(installed.getByRole('button', { name: 'Current', exact: true })).toBeDisabled();
-	await expect(installed.getByRole('button', { name: 'Install', exact: true })).toBeHidden();
-	await installed.getByRole('button', { name: 'Uninstall' }).click();
-	await installed.getByRole('button', { name: 'Confirm uninstall' }).click();
-	await expect(installed).toContainText('Not installed');
-	await expect(sessionsSettings.locator('.ash-local-transcription-model-status')).toContainText('Model package not installed:');
-	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectGroup('features');
-	await workbench.settingsEditor.selectCategory('voice-input');
-	await expect(controls.getByRole('row').filter({ hasText: 'paraformer-large-online-ec6a3c64' })).toContainText('Not installed');
-	await expect(controls.getByRole('button', { name: 'Install', exact: true })).toBeEnabled();
-});
+test(
+	'Desktop Voice imports after Settings closes and shares model deletion with Sessions',
+	{ tag: '@electron-app-server' },
+	async ({ application, target, workbench }) => {
+		const source = process.env.ASH_DICTATION_MODEL_TEST_SOURCE;
+		test.skip(
+			target.kind !== 'electron' || target.appServerMode !== 'required' || !source,
+			'Requires the connected desktop and a prepared voice model fixture',
+		);
+		if (!source || !('windows' in application)) {
+			return;
+		}
+		const page = workbench.page;
+		await workbench.settingsEditor.openUserSettingsUI();
+		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+		await workbench.settingsEditor.selectGroup('features');
+		await workbench.settingsEditor.selectCategory('voice-input');
+		const controls = settings.locator('.ash-local-transcription-model-controls');
+		await controls.locator('summary').click();
+		await controls.getByRole('textbox', { name: 'Prepared Paraformer model directory' }).fill(source);
+		await controls.getByRole('button', { name: 'Import model', exact: true }).click();
+		await settings.locator('.ash-modal-editor-close').click();
+		const sessionPagePromise = application.waitForEvent('window');
+		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+		const sessionsPage = await sessionPagePromise;
+		await sessionsPage.locator('.ash-sessions-activity-bottom button').last().click();
+		await sessionsPage.getByRole('menuitem', { name: 'Settings' }).click();
+		const sessionsSettings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+		await sessionsSettings.getByRole('navigation').getByRole('button', { name: 'General', exact: true }).click();
+		const installed = sessionsSettings.getByRole('row').filter({ hasText: 'paraformer-large-online-ec6a3c64' });
+		await expect(installed).toContainText('paraformer-large-online-ec6a3c64', { timeout: 30000 });
+		await expect(installed.getByRole('button', { name: 'Current', exact: true })).toBeDisabled();
+		await expect(installed.getByRole('button', { name: 'Install', exact: true })).toBeHidden();
+		await installed.getByRole('button', { name: 'Uninstall' }).click();
+		await installed.getByRole('button', { name: 'Confirm uninstall' }).click();
+		await expect(installed).toContainText('Not installed');
+		await expect(sessionsSettings.locator('.ash-local-transcription-model-status')).toContainText(
+			'Model package not installed:',
+		);
+		await workbench.settingsEditor.openUserSettingsUI();
+		await workbench.settingsEditor.selectGroup('features');
+		await workbench.settingsEditor.selectCategory('voice-input');
+		await expect(controls.getByRole('row').filter({ hasText: 'paraformer-large-online-ec6a3c64' })).toContainText(
+			'Not installed',
+		);
+		await expect(controls.getByRole('button', { name: 'Install', exact: true })).toBeEnabled();
+	},
+);
 
-test('Workbench exposes current Tools and Sandbox capabilities', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	await workbench.settingsEditor.openUserSettingsUI();
-	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await settings.locator('[data-settings-group-id="agents"]').click();
-	await settings.locator('[data-settings-category-id="tools"]').click();
-	await expect(settings.locator('.ash-agent-capabilities-settings')).toBeVisible();
-	await expect(settings.locator('.ash-agent-capabilities-status')).toBeEmpty();
-	await expect(settings.getByText('Could not load agent capabilities.')).toHaveCount(0);
-	await settings.locator('[data-settings-category-id="sandbox"]').click();
-	await expect(settings.getByRole('heading', { name: 'Configured directory grants' })).toBeVisible();
-	await expect(settings.locator('.ash-agent-capabilities-note').first()).toContainText('process sandbox');
-	if (target.kind === 'browser') {
-		await expect(settings.getByText('Directory grants can only be inspected by the desktop host.')).toBeVisible();
-	} else {
-		await expect(settings.getByText('These saved grants are an upper bound.', { exact: false })).toBeVisible();
-	}
-	await expect(settings.getByText('Could not load agent capabilities.')).toHaveCount(0);
-});
+test(
+	'Workbench exposes current Tools and Sandbox capabilities',
+	{ tag: ['@browser-app-server', '@electron-app-server'] },
+	async ({ target, workbench }) => {
+		const page = workbench.page;
+		await workbench.settingsEditor.openUserSettingsUI();
+		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+		await settings.locator('[data-settings-group-id="agents"]').click();
+		await settings.locator('[data-settings-category-id="tools"]').click();
+		await expect(settings.locator('.ash-agent-capabilities-settings')).toBeVisible();
+		await expect(settings.locator('.ash-agent-capabilities-status')).toBeEmpty();
+		await expect(settings.getByText('Could not load agent capabilities.')).toHaveCount(0);
+		await settings.locator('[data-settings-category-id="sandbox"]').click();
+		await expect(settings.getByRole('heading', { name: 'Configured directory grants' })).toBeVisible();
+		await expect(settings.locator('.ash-agent-capabilities-note').first()).toContainText('process sandbox');
+		if (target.kind === 'browser') {
+			await expect(
+				settings.getByText('Directory grants can only be inspected by the desktop host.'),
+			).toBeVisible();
+		} else {
+			await expect(settings.getByText('These saved grants are an upper bound.', { exact: false })).toBeVisible();
+		}
+		await expect(settings.getByText('Could not load agent capabilities.')).toHaveCount(0);
+	},
+);
 
-test('Workbench and Sessions Models share model visibility', { tag: ['@electron-app-server'] }, async ({ application, target, workbench }) => {
-	if (target.kind !== 'electron' || !('windows' in application)) return;
-	const page = workbench.page;
-	if (process.platform === 'darwin') {
-		await (async () => {
-			const snapshot = await readUserSettings(page);
-			const settings = JSON.parse(snapshot.content) as Record<string, unknown>;
-			settings['window.menuStyle'] = 'custom';
-			await writeUserSettings(page, JSON.stringify(settings), snapshot.revision);
-		})();
-	}
-	await workbench.settingsEditor.openUserSettingsUI();
-	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await settings.locator('[data-settings-group-id="agents"]').click();
-	await settings.locator('[data-settings-category-id="models"]').click();
-	await expect(settings.getByRole('heading', { name: 'API key' })).toBeVisible();
-	const firstModel = settings.locator('.ash-models-settings-model-row').first();
-	await expect(firstModel).toBeVisible();
-	const modelLabel = await firstModel.getByRole('switch').getAttribute('aria-label');
-	if (!modelLabel) throw new Error('Model visibility switch has no label');
-	const modelSwitch = settings.getByRole('switch', { name: modelLabel, exact: true });
-	const initiallyVisible = await modelSwitch.isChecked();
-	await modelSwitch.locator('..').locator('.ash-switch-track').click();
-	await expect(modelSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
-	await expect(modelSwitch).not.toHaveAttribute('aria-busy', 'true');
-	await expect(modelSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
-	await expect(settings.locator('.ash-models-settings-status')).toBeHidden();
-	await settings.locator('.ash-modal-editor-close').click();
-	await expect(settings).toBeHidden();
-	const sessionPagePromise = application.waitForEvent('window');
-	await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
-	const sessionsPage = await sessionPagePromise;
-	const accounts = sessionsPage.locator('.ash-sessions-activity-bottom button').last();
-	await accounts.click();
-	await sessionsPage.getByRole('menuitem', { name: 'Settings' }).click();
-	const sessionsSettings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
-	await sessionsSettings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Models' }).click();
-	const sessionSwitch = sessionsSettings.getByRole('switch', { name: modelLabel });
-	await expect(sessionSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
-	await sessionSwitch.locator('..').locator('.ash-switch-track').click();
-	await expect(sessionSwitch).toHaveAttribute('aria-checked', String(initiallyVisible));
-	await expect(sessionSwitch).not.toHaveAttribute('aria-busy', 'true');
-});
+test(
+	'Workbench and Sessions Models share model visibility',
+	{ tag: ['@electron-app-server'] },
+	async ({ application, target, workbench }) => {
+		if (target.kind !== 'electron' || !('windows' in application)) return;
+		const page = workbench.page;
+		if (process.platform === 'darwin') {
+			await (async () => {
+				const snapshot = await readUserSettings(page);
+				const settings = JSON.parse(snapshot.content) as Record<string, unknown>;
+				settings['window.menuStyle'] = 'custom';
+				await writeUserSettings(page, JSON.stringify(settings), snapshot.revision);
+			})();
+		}
+		await workbench.settingsEditor.openUserSettingsUI();
+		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+		await settings.locator('[data-settings-group-id="agents"]').click();
+		await settings.locator('[data-settings-category-id="models"]').click();
+		await expect(settings.getByRole('heading', { name: 'API key' })).toBeVisible();
+		const firstModel = settings.locator('.ash-models-settings-model-row').first();
+		await expect(firstModel).toBeVisible();
+		const modelLabel = await firstModel.getByRole('switch').getAttribute('aria-label');
+		if (!modelLabel) throw new Error('Model visibility switch has no label');
+		const modelSwitch = settings.getByRole('switch', { name: modelLabel, exact: true });
+		const initiallyVisible = await modelSwitch.isChecked();
+		await modelSwitch.locator('..').locator('.ash-switch-track').click();
+		await expect(modelSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
+		await expect(modelSwitch).not.toHaveAttribute('aria-busy', 'true');
+		await expect(modelSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
+		await expect(settings.locator('.ash-models-settings-status')).toBeHidden();
+		await settings.locator('.ash-modal-editor-close').click();
+		await expect(settings).toBeHidden();
+		const sessionPagePromise = application.waitForEvent('window');
+		await page.locator("[data-action-id='workbench.action.chat.openAgentsWindow.titleBar'] button").click();
+		const sessionsPage = await sessionPagePromise;
+		const accounts = sessionsPage.locator('.ash-sessions-activity-bottom button').last();
+		await accounts.click();
+		await sessionsPage.getByRole('menuitem', { name: 'Settings' }).click();
+		const sessionsSettings = sessionsPage.getByRole('dialog', { name: 'Sessions Settings' });
+		await sessionsSettings
+			.getByRole('navigation', { name: 'Settings categories' })
+			.getByRole('button', { name: 'Models' })
+			.click();
+		const sessionSwitch = sessionsSettings.getByRole('switch', { name: modelLabel });
+		await expect(sessionSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
+		await sessionSwitch.locator('..').locator('.ash-switch-track').click();
+		await expect(sessionSwitch).toHaveAttribute('aria-checked', String(initiallyVisible));
+		await expect(sessionSwitch).not.toHaveAttribute('aria-busy', 'true');
+	},
+);
 
-test('Browser Workbench and Sessions persist model visibility across page navigation', { tag: ['@browser-app-server'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	await workbench.settingsEditor.openUserSettingsUI();
-	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await settings.locator('[data-settings-group-id="agents"]').click();
-	await settings.locator('[data-settings-category-id="models"]').click();
-	const firstModelSwitch = settings.locator('.ash-models-settings-model-row').first().getByRole('switch');
-	await expect(firstModelSwitch).toBeVisible();
-	const modelLabel = await firstModelSwitch.getAttribute('aria-label');
-	if (!modelLabel) throw new Error('Model visibility switch has no label');
-	const modelSwitch = settings.getByRole('switch', { name: modelLabel, exact: true });
-	const initiallyVisible = await modelSwitch.isChecked();
-	await modelSwitch.locator('..').locator('.ash-switch-track').click();
-	await expect(modelSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
-	await expect(modelSwitch).not.toHaveAttribute('aria-busy', 'true');
-	await settings.locator('.ash-modal-editor-close').click();
-	await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
-	await expect(page.locator('[data-part="sessions"]')).toBeVisible();
-	await page.locator('.ash-sessions-activity-bottom button').last().click();
-	await page.getByRole('menuitem', { name: 'Settings' }).click();
-	const sessionsSettings = page.getByRole('dialog', { name: 'Sessions Settings' });
-	await sessionsSettings.getByRole('navigation', { name: 'Settings categories' }).getByRole('button', { name: 'Models' }).click();
-	const sessionSwitch = sessionsSettings.getByRole('switch', { name: modelLabel });
-	await expect(sessionSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
-	await sessionSwitch.locator('..').locator('.ash-switch-track').click();
-	await expect(sessionSwitch).toHaveAttribute('aria-checked', String(initiallyVisible));
-	await expect(sessionSwitch).not.toHaveAttribute('aria-busy', 'true');
-	await page.keyboard.press('Escape');
-	await expect(sessionsSettings).toBeHidden();
-	await page.locator('.ash-sessions-activity-bottom button').last().click();
-	await page.getByRole('menuitem', { name: 'Return to Workbench' }).click();
-	await expect(page.locator('[data-action-id="ash.code.open-sessions"] button')).toBeVisible();
-	await workbench.settingsEditor.openUserSettingsUI();
-	await settings.locator('[data-settings-group-id="agents"]').click();
-	await settings.locator('[data-settings-category-id="models"]').click();
-	await expect(settings.getByRole('switch', { name: modelLabel })).toHaveAttribute('aria-checked', String(initiallyVisible));
-});
+test(
+	'Browser Workbench and Sessions persist model visibility across page navigation',
+	{ tag: ['@browser-app-server'] },
+	async ({ target, workbench }) => {
+		const page = workbench.page;
+		await workbench.settingsEditor.openUserSettingsUI();
+		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+		await settings.locator('[data-settings-group-id="agents"]').click();
+		await settings.locator('[data-settings-category-id="models"]').click();
+		const firstModelSwitch = settings.locator('.ash-models-settings-model-row').first().getByRole('switch');
+		await expect(firstModelSwitch).toBeVisible();
+		const modelLabel = await firstModelSwitch.getAttribute('aria-label');
+		if (!modelLabel) throw new Error('Model visibility switch has no label');
+		const modelSwitch = settings.getByRole('switch', { name: modelLabel, exact: true });
+		const initiallyVisible = await modelSwitch.isChecked();
+		await modelSwitch.locator('..').locator('.ash-switch-track').click();
+		await expect(modelSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
+		await expect(modelSwitch).not.toHaveAttribute('aria-busy', 'true');
+		await settings.locator('.ash-modal-editor-close').click();
+		await page.locator('[data-action-id="ash.code.open-sessions"] button').click();
+		await expect(page.locator('[data-part="sessions"]')).toBeVisible();
+		await page.locator('.ash-sessions-activity-bottom button').last().click();
+		await page.getByRole('menuitem', { name: 'Settings' }).click();
+		const sessionsSettings = page.getByRole('dialog', { name: 'Sessions Settings' });
+		await sessionsSettings
+			.getByRole('navigation', { name: 'Settings categories' })
+			.getByRole('button', { name: 'Models' })
+			.click();
+		const sessionSwitch = sessionsSettings.getByRole('switch', { name: modelLabel });
+		await expect(sessionSwitch).toHaveAttribute('aria-checked', String(!initiallyVisible));
+		await sessionSwitch.locator('..').locator('.ash-switch-track').click();
+		await expect(sessionSwitch).toHaveAttribute('aria-checked', String(initiallyVisible));
+		await expect(sessionSwitch).not.toHaveAttribute('aria-busy', 'true');
+		await page.keyboard.press('Escape');
+		await expect(sessionsSettings).toBeHidden();
+		await page.locator('.ash-sessions-activity-bottom button').last().click();
+		await page.getByRole('menuitem', { name: 'Return to Workbench' }).click();
+		await expect(page.locator('[data-action-id="ash.code.open-sessions"] button')).toBeVisible();
+		await workbench.settingsEditor.openUserSettingsUI();
+		await settings.locator('[data-settings-group-id="agents"]').click();
+		await settings.locator('[data-settings-category-id="models"]').click();
+		await expect(settings.getByRole('switch', { name: modelLabel })).toHaveAttribute(
+			'aria-checked',
+			String(initiallyVisible),
+		);
+	},
+);
 
 test('Editor settings have separate pages with keyboard navigation and global search', async ({ workbench }) => {
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = workbench.settingsEditor.element;
-	const editorGroup = settings.getByRole('treeitem').filter({ has: workbench.page.locator('[data-settings-group-id="editor"]') });
+	const editorGroup = settings
+		.getByRole('treeitem')
+		.filter({ has: workbench.page.locator('[data-settings-group-id="editor"]') });
 	await expect(editorGroup).toHaveAttribute('aria-expanded', 'false');
 	const navigation = settings.getByRole('tree', { name: 'Settings categories' });
 	await navigation.focus();
@@ -625,7 +769,9 @@ test('Editor settings have separate pages with keyboard navigation and global se
 	await expect(fontFamily).toHaveAttribute('placeholder', 'System default');
 	await expect(fontFamily).toHaveValue('');
 	await expect(settings.locator('[data-settings-item-id="editor.fontFamily"]')).toContainText('monospace');
-	await expect(settings.locator('[data-configuration-key="editor.fontSize"]')).toHaveValue(process.platform === 'darwin' ? '12' : '14');
+	await expect(settings.locator('[data-configuration-key="editor.fontSize"]')).toHaveValue(
+		process.platform === 'darwin' ? '12' : '14',
+	);
 	for (const [category, setting] of [
 		['editor-display', 'editor.renderWhitespace'],
 		['editor-editing', 'editor.tabSize'],
@@ -637,9 +783,10 @@ test('Editor settings have separate pages with keyboard navigation and global se
 		['editor-files', 'files.autoSave'],
 	]) {
 		await workbench.settingsEditor.selectEditorCategory(category!);
-		const control = category === 'editor-language'
-			? settings.locator(`[data-settings-item-id="${setting}"]`)
-			: settings.locator(`[data-configuration-key="${setting}"]`);
+		const control =
+			category === 'editor-language'
+				? settings.locator(`[data-settings-item-id="${setting}"]`)
+				: settings.locator(`[data-configuration-key="${setting}"]`);
 		await expect(control).toBeVisible();
 		await expect(settings.locator('[data-configuration-key="editor.fontFamily"]')).toHaveCount(0);
 	}
@@ -664,7 +811,9 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await workbench.settingsEditor.openUserSettingsUI();
 	await expect(page.locator('.ash-modal-editor')).toBeVisible();
 	await workbench.settingsEditor.selectEditorCategory('editor-display');
-	await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toBeHidden();
+	await expect(
+		page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title'),
+	).toBeHidden();
 	await expect(page.locator('.ash-settings-card').first()).toHaveCSS('border-radius', '8px');
 	await expect(page.locator('[data-configuration-key="editor.renderWhitespace"]')).toBeVisible();
 	await expect(page.locator('[data-configuration-key="editor.renderControlCharacters"]')).toBeVisible();
@@ -675,14 +824,19 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 
 	await workbench.settingsEditor.selectEditorCategory('editor-opening');
 	await expect(page.locator('.ash-settings-page h3')).toHaveText('Tabs and groups');
-	for (const [category, key] of [['editor-opening', 'workbench.editor.showTabs'], ['editor-files', 'workbench.editor.defaultBinaryEditor']]) {
+	for (const [category, key] of [
+		['editor-opening', 'workbench.editor.showTabs'],
+		['editor-files', 'workbench.editor.defaultBinaryEditor'],
+	]) {
 		await workbench.settingsEditor.selectEditorCategory(category!);
 		const row = page.locator(`[data-settings-item-id="${key}"]`);
 		const control = row.getByRole('combobox');
 		const [rowBounds, controlBounds] = await Promise.all([row.boundingBox(), control.boundingBox()]);
 		expect(rowBounds).not.toBeNull();
 		expect(controlBounds).not.toBeNull();
-		expect(Math.abs(rowBounds!.x + rowBounds!.width - 16 - controlBounds!.x - controlBounds!.width)).toBeLessThanOrEqual(1);
+		expect(
+			Math.abs(rowBounds!.x + rowBounds!.width - 16 - controlBounds!.x - controlBounds!.width),
+		).toBeLessThanOrEqual(1);
 	}
 
 	await workbench.settingsEditor.selectEditorCategory('editor-display');
@@ -696,8 +850,12 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 		await workbench.settingsEditor.selectGroup('features');
 		await workbench.settingsEditor.selectCategory('voice-input');
 		await expect(page.getByRole('heading', { name: 'Voice input', exact: true, level: 3 })).toBeVisible();
-		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title')).toBeHidden();
-		await expect(page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-description')).toHaveCount(0);
+		await expect(
+			page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-title'),
+		).toBeHidden();
+		await expect(
+			page.locator('.ash-settings-content-tree > .is-settings-root > .ash-settings-tree-group-description'),
+		).toHaveCount(0);
 		const voiceInput = page.locator('.ash-settings-page');
 		await expect(voiceInput.getByRole('combobox', { name: 'Dictation service' })).toBeVisible();
 		await expect(voiceInput.getByRole('grid', { name: 'Local dictation models' })).toBeVisible();
@@ -705,20 +863,34 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	}
 	await page.locator('[data-settings-group-id="workbench"]').click();
 	await page.locator('[data-settings-category-id="startup"]').click();
-	const startupNavigationRow = page.locator('.ash-tree-row', { has: page.locator('[data-settings-category-id="startup"]') });
+	const startupNavigationRow = page.locator('.ash-tree-row', {
+		has: page.locator('[data-settings-category-id="startup"]'),
+	});
 	await expect(startupNavigationRow).not.toHaveAttribute('aria-expanded');
-	await expect(page.locator('[data-settings-target-id="startup.group.startup-windows"], [data-settings-target-id="startup.group.startup-editor"]')).toHaveCount(0);
+	await expect(
+		page.locator(
+			'[data-settings-target-id="startup.group.startup-windows"], [data-settings-target-id="startup.group.startup-editor"]',
+		),
+	).toHaveCount(0);
 	await expect(rootTitle).toBeHidden();
 	await expect(rootDescription).toHaveCount(0);
-	if (target.kind === 'electron') await expect(page.locator('[data-configuration-key="window.restoreWindows"]')).toBeVisible();
+	if (target.kind === 'electron')
+		await expect(page.locator('[data-configuration-key="window.restoreWindows"]')).toBeVisible();
 	await expect(page.locator('[data-configuration-key="workbench.editor.restoreEditors"]')).toBeVisible();
 	const startupEditor = page.locator('[data-configuration-key="workbench.startupEditor"]').getByRole('combobox');
 	await expect(startupEditor).toBeVisible();
 	const startupRow = page.locator('[data-settings-item-id="workbench.startupEditor"]');
-	const [startupRowBounds, startupControlBounds] = await Promise.all([startupRow.boundingBox(), startupEditor.boundingBox()]);
+	const [startupRowBounds, startupControlBounds] = await Promise.all([
+		startupRow.boundingBox(),
+		startupEditor.boundingBox(),
+	]);
 	expect(startupRowBounds).not.toBeNull();
 	expect(startupControlBounds).not.toBeNull();
-	expect(Math.abs(startupRowBounds!.x + startupRowBounds!.width - 16 - startupControlBounds!.x - startupControlBounds!.width)).toBeLessThanOrEqual(1);
+	expect(
+		Math.abs(
+			startupRowBounds!.x + startupRowBounds!.width - 16 - startupControlBounds!.x - startupControlBounds!.width,
+		),
+	).toBeLessThanOrEqual(1);
 	await startupEditor.click();
 	await expect(page.getByRole('option', { name: 'Welcome in empty workbench' })).toBeVisible();
 	await page.keyboard.press('Escape');
@@ -726,7 +898,10 @@ test('Settings opens with editor display controls', async ({ target, workbench }
 	await expect(page.locator('[data-settings-category-id="sessions"]')).toHaveCount(0);
 });
 
-test('File opening settings save through their controls and survive reloading the window', async ({ target, workbench }) => {
+test('File opening settings save through their controls and survive reloading the window', async ({
+	target,
+	workbench,
+}) => {
 	const page = workbench.page;
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
 	const openSettings = async () => {
@@ -754,7 +929,9 @@ test('File opening settings save through their controls and survive reloading th
 	await workbench.waitForReady();
 	if (target.appServerMode === 'required') {
 		await expect(workbench.element).toHaveAttribute('data-workbench-state', 'folder');
-		await expect(page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true })).toBeAttached();
+		await expect(
+			page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }),
+		).toBeAttached();
 		await workbench.waitForUiIdle();
 	}
 	await openSettings();
@@ -763,64 +940,78 @@ test('File opening settings save through their controls and survive reloading th
 	await expect(threshold).toHaveValue('16');
 });
 
-test('editor settings apply immediately, persist after reload and reset to their default', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, target, workbench, reloadWorkbench }) => {
-	let page = workbench.page;
-	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
-	let numbers = workbench.editors.groupAt(0).editor.element.locator('.line-numbers');
-	await expect(numbers.first()).toHaveText('1');
-	let settings = workbench.settingsEditor;
-	await settings.openUserSettingsUI();
-	await settings.selectEditorCategory('editor-display');
-	await settings.element.getByRole('searchbox', { name: 'Search settings' }).fill('editor.lineNumbers');
-	let row = settings.element.locator('[data-settings-item-id="editor.lineNumbers"]');
-	let control = row.getByRole('switch');
-	await expect(control).toBeChecked();
-	await control.press('Space');
-	await expect(control).not.toBeChecked();
-	await expect(control).not.toHaveAttribute('aria-busy', 'true');
-	await settings.element.locator('.ash-modal-editor-close').click();
-	await expect(workbench.editors.groupAt(0).editor.element.locator('.view-line').first()).toContainText('const value = 1;');
-	await expect(numbers).toHaveCount(0);
-	({ application, workbench } = await reloadWorkbench());
-	page = workbench.page;
-	numbers = workbench.editors.groupAt(0).editor.element.locator('.line-numbers');
-	settings = workbench.settingsEditor;
-	row = settings.element.locator('[data-settings-item-id="editor.lineNumbers"]');
-	control = row.getByRole('switch');
-	await expect(workbench.editors.groupAt(0).editor.element.locator('.view-line').first()).toContainText('const value = 1;');
-	await expect(numbers).toHaveCount(0);
-	await settings.openUserSettingsUI();
-	await settings.selectEditorCategory('editor-display');
-	await settings.element.getByRole('searchbox', { name: 'Search settings' }).fill('editor.lineNumbers');
-	await expect(control).not.toBeChecked();
-	await row.hover();
-	await workbench.menus.select(application, () => row.locator('.ash-setting-item-actions-trigger').click(), ['Reset Setting']);
-	await expect(control).toBeChecked();
-	await settings.element.locator('.ash-modal-editor-close').click();
-	await expect(numbers.first()).toHaveText('1');
-});
+test(
+	'editor settings apply immediately, persist after reload and reset to their default',
+	{ tag: ['@browser-app-server', '@electron-app-server'] },
+	async ({ application, target, workbench, reloadWorkbench }) => {
+		let page = workbench.page;
+		await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.ts', exact: true }).dblclick();
+		let numbers = workbench.editors.groupAt(0).editor.element.locator('.line-numbers');
+		await expect(numbers.first()).toHaveText('1');
+		let settings = workbench.settingsEditor;
+		await settings.openUserSettingsUI();
+		await settings.selectEditorCategory('editor-display');
+		await settings.element.getByRole('searchbox', { name: 'Search settings' }).fill('editor.lineNumbers');
+		let row = settings.element.locator('[data-settings-item-id="editor.lineNumbers"]');
+		let control = row.getByRole('switch');
+		await expect(control).toBeChecked();
+		await control.press('Space');
+		await expect(control).not.toBeChecked();
+		await expect(control).not.toHaveAttribute('aria-busy', 'true');
+		await settings.element.locator('.ash-modal-editor-close').click();
+		await expect(workbench.editors.groupAt(0).editor.element.locator('.view-line').first()).toContainText(
+			'const value = 1;',
+		);
+		await expect(numbers).toHaveCount(0);
+		({ application, workbench } = await reloadWorkbench());
+		page = workbench.page;
+		numbers = workbench.editors.groupAt(0).editor.element.locator('.line-numbers');
+		settings = workbench.settingsEditor;
+		row = settings.element.locator('[data-settings-item-id="editor.lineNumbers"]');
+		control = row.getByRole('switch');
+		await expect(workbench.editors.groupAt(0).editor.element.locator('.view-line').first()).toContainText(
+			'const value = 1;',
+		);
+		await expect(numbers).toHaveCount(0);
+		await settings.openUserSettingsUI();
+		await settings.selectEditorCategory('editor-display');
+		await settings.element.getByRole('searchbox', { name: 'Search settings' }).fill('editor.lineNumbers');
+		await expect(control).not.toBeChecked();
+		await row.hover();
+		await workbench.menus.select(application, () => row.locator('.ash-setting-item-actions-trigger').click(), [
+			'Reset Setting',
+		]);
+		await expect(control).toBeChecked();
+		await settings.element.locator('.ash-modal-editor-close').click();
+		await expect(numbers.first()).toHaveText('1');
+	},
+);
 
 // Selectable built-in themes are contributed by the real extension host.
-test('Changing the color theme does not add a modified marker', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	await workbench.settingsEditor.openUserSettingsUI();
-	await page.locator('[data-settings-group-id="workbench"]').click();
-	await page.locator('[data-settings-category-id="appearance"]').click();
-	const setting = page.locator('[data-settings-item-id="workbench.colorTheme"]');
-	const control = setting.getByRole('combobox');
-	const initialHeight = (await setting.boundingBox())?.height;
-	expect(initialHeight).toBeDefined();
-	await control.click();
-	await page.getByRole('option', { name: 'Ash Dark', exact: true }).click();
-	await expect(control).toHaveText('Ash Dark');
-	await expect(setting.locator('.ash-settings-indicators')).toHaveCSS('display', 'none');
-	expect((await setting.boundingBox())?.height).toBeCloseTo(initialHeight!, 0);
-	if (target.kind === 'browser') {
-		await page.locator('.ash-settings-search-filter').click();
-		await expect(page.getByRole('menuitem', { name: 'Setting ID…' })).toBeVisible();
-		await expect(page.getByRole('menuitem', { name: 'Modified' })).toHaveCount(0);
-	}
-});
+test(
+	'Changing the color theme does not add a modified marker',
+	{ tag: ['@browser-app-server', '@electron-app-server'] },
+	async ({ target, workbench }) => {
+		const page = workbench.page;
+		await workbench.settingsEditor.openUserSettingsUI();
+		await page.locator('[data-settings-group-id="workbench"]').click();
+		await page.locator('[data-settings-category-id="appearance"]').click();
+		const setting = page.locator('[data-settings-item-id="workbench.colorTheme"]');
+		const control = setting.getByRole('combobox');
+		const initialHeight = (await setting.boundingBox())?.height;
+		expect(initialHeight).toBeDefined();
+		await control.click();
+		await page.getByRole('option', { name: 'Ash Dark', exact: true }).click();
+		await expect(control).toHaveText('Ash Dark');
+		await expect(setting.locator('.ash-settings-indicators')).toHaveCSS('display', 'none');
+		expect((await setting.boundingBox())?.height).toBeCloseTo(initialHeight!, 0);
+		if (target.kind === 'browser') {
+			await page.locator('.ash-settings-search-filter').click();
+			await expect(page.getByRole('menuitem', { name: 'Setting ID…' })).toBeVisible();
+			await expect(page.getByRole('menuitem', { name: 'Modified' })).toHaveCount(0);
+		}
+	},
+);
 
 test('Workbench boolean settings use keyboard-operable switches', async ({ workbench }) => {
 	const page = workbench.page;
@@ -856,21 +1047,30 @@ test('Saving a boolean setting does not move neighboring settings', async ({ wor
 	await page.evaluate(() => {
 		const row = document.querySelector<HTMLElement>('[data-settings-item-id="accessibility.verbosity.memories"]')!;
 		const indicator = row.querySelector<HTMLElement>('.ash-settings-indicators')!;
-		const measurements: { pending: boolean; height: number; }[] = [];
-		const sample = () => measurements.push({ pending: !indicator.hidden, height: row.getBoundingClientRect().height });
+		const measurements: { pending: boolean; height: number }[] = [];
+		const sample = () =>
+			measurements.push({ pending: !indicator.hidden, height: row.getBoundingClientRect().height });
 		const observer = new MutationObserver(sample);
 		observer.observe(indicator, { attributes: true, childList: true, subtree: true });
 		sample();
-		(window as Window & { settingRowMeasurements?: typeof measurements; settingRowObserver?: MutationObserver; }).settingRowMeasurements = measurements;
-		(window as Window & { settingRowObserver?: MutationObserver; }).settingRowObserver = observer;
+		(
+			window as Window & { settingRowMeasurements?: typeof measurements; settingRowObserver?: MutationObserver }
+		).settingRowMeasurements = measurements;
+		(window as Window & { settingRowObserver?: MutationObserver }).settingRowObserver = observer;
 	});
 	for (let index = 0; index < 4; index++) {
 		await row.locator('.ash-switch-track').click();
-		await expect(control).toHaveAttribute('aria-checked', String(index % 2 === 0 ? !initialChecked : initialChecked));
+		await expect(control).toHaveAttribute(
+			'aria-checked',
+			String(index % 2 === 0 ? !initialChecked : initialChecked),
+		);
 		await expect(row.locator('.ash-settings-indicators')).toBeHidden();
 	}
 	const measurements = await page.evaluate(() => {
-		const state = window as Window & { settingRowMeasurements?: { pending: boolean; height: number; }[]; settingRowObserver?: MutationObserver; };
+		const state = window as Window & {
+			settingRowMeasurements?: { pending: boolean; height: number }[];
+			settingRowObserver?: MutationObserver;
+		};
 		state.settingRowObserver!.disconnect();
 		return state.settingRowMeasurements!;
 	});
@@ -885,7 +1085,10 @@ test.describe('Manage menu', () => {
 		const page = workbench.page;
 		const manageButton = page.getByRole('button', { name: 'Manage' });
 		const layoutButton = page.locator('[data-action-id="workbench.action.toggleAuxiliaryBar"] button');
-		const [manageBounds, layoutBounds] = await Promise.all([manageButton.boundingBox(), layoutButton.boundingBox()]);
+		const [manageBounds, layoutBounds] = await Promise.all([
+			manageButton.boundingBox(),
+			layoutButton.boundingBox(),
+		]);
 		expect(manageBounds).not.toBeNull();
 		expect(layoutBounds).not.toBeNull();
 		expect(manageBounds!.x).toBeLessThan(layoutBounds!.x);
@@ -937,7 +1140,11 @@ test.describe('Manage menu', () => {
 		}
 	});
 
-	test('Activity Bar Manage menu opens Settings from the welcome page', async ({ application, target, workbench }) => {
+	test('Activity Bar Manage menu opens Settings from the welcome page', async ({
+		application,
+		target,
+		workbench,
+	}) => {
 		const page = workbench.page;
 		const manageButton = page.getByRole('button', { name: 'Manage' });
 		await manageButton.focus();
@@ -953,7 +1160,12 @@ test.describe('Manage menu', () => {
 		expect(tooltipBounds!.x).toBeGreaterThanOrEqual(buttonBounds!.x + buttonBounds!.width);
 		const items = await workbench.menus.inspect(application, () => manageButton.click());
 		expect(items.map(item => item.label)).toEqual([
-			expect.stringMatching(/^Command Palette/), expect.stringMatching(/^Settings/), 'Extensions', 'Keyboard Shortcuts', expect.stringMatching(/^Run Task/), 'Themes',
+			expect.stringMatching(/^Command Palette/),
+			expect.stringMatching(/^Settings/),
+			'Extensions',
+			'Keyboard Shortcuts',
+			expect.stringMatching(/^Run Task/),
+			'Themes',
 			...(target.kind === 'electron' ? ['Check for Updates...'] : []),
 		]);
 		await workbench.menus.select(application, () => manageButton.click(), ['Settings']);
@@ -974,7 +1186,9 @@ test.describe('Manage menu', () => {
 		}
 		await workbench.settingsEditor.selectGroup('features');
 		await workbench.settingsEditor.selectCategory('source-control');
-		const quickDiffWhitespace = page.locator('[data-configuration-key="scm.diffDecorationsIgnoreTrimWhitespace"]').getByRole('combobox');
+		const quickDiffWhitespace = page
+			.locator('[data-configuration-key="scm.diffDecorationsIgnoreTrimWhitespace"]')
+			.getByRole('combobox');
 		await expect(quickDiffWhitespace).toHaveCSS('height', '24px');
 		const autoFetchPeriod = page.locator('[data-configuration-key="git.autofetchPeriod"]');
 		await expect(autoFetchPeriod).toHaveCSS('height', '24px');
@@ -984,25 +1198,45 @@ test.describe('Manage menu', () => {
 		const autoFetch = page.locator('[data-configuration-key="git.autofetch"]').getByRole('combobox');
 		await autoFetch.click();
 		const autoFetchPopup = page.locator('.ash-context-view-default', { has: page.locator('.ash-select-box-list') });
-		const [autoFetchBounds, popupBounds] = await Promise.all([autoFetch.boundingBox(), autoFetchPopup.boundingBox()]);
+		const [autoFetchBounds, popupBounds] = await Promise.all([
+			autoFetch.boundingBox(),
+			autoFetchPopup.boundingBox(),
+		]);
 		expect(autoFetchBounds).not.toBeNull();
 		expect(popupBounds).not.toBeNull();
 		expect(popupBounds!.width).toBeGreaterThan(autoFetchBounds!.width);
-		expect(Math.abs(popupBounds!.x + popupBounds!.width - autoFetchBounds!.x - autoFetchBounds!.width)).toBeLessThanOrEqual(1);
+		expect(
+			Math.abs(popupBounds!.x + popupBounds!.width - autoFetchBounds!.x - autoFetchBounds!.width),
+		).toBeLessThanOrEqual(1);
 		await page.keyboard.press('Escape');
 		await page.locator('[data-settings-group-id="workbench"]').click();
-		const appearanceRow = page.locator('.ash-tree-row', { has: page.locator('[data-settings-category-id="appearance"]') });
+		const appearanceRow = page.locator('.ash-tree-row', {
+			has: page.locator('[data-settings-category-id="appearance"]'),
+		});
 		expect(await appearanceRow.getAttribute('aria-expanded')).toBeNull();
 		await expect(page.locator('[data-settings-target-id="appearance.group.theme"]')).toHaveCount(0);
 		await page.locator('[data-settings-category-id="appearance"]').click();
 		const appearanceGroups = page.locator('.ash-settings-content-group:not(.is-settings-root)');
-		await expect(appearanceGroups.locator(':scope > .ash-settings-tree-group-title')).toHaveText(['Color theme', 'Editor tips']);
+		await expect(appearanceGroups.locator(':scope > .ash-settings-tree-group-title')).toHaveText([
+			'Color theme',
+			'Editor tips',
+		]);
 		for (const card of await appearanceGroups.locator('.ash-settings-card').all()) {
 			await expect(card).toHaveCSS('border-radius', '8px');
 		}
-		await expect(page.locator('[data-configuration-key="workbench.colorTheme"]').getByRole('combobox')).toBeVisible();
-		const themeGroup = appearanceGroups.filter({ has: page.getByRole('heading', { name: 'Color theme', exact: true }) });
-		const appearanceSettings = themeGroup.locator('.ash-configuration-setting').filter({ has: page.locator('[data-configuration-key="workbench.colorTheme"], [data-configuration-key="workbench.iconTheme"], [data-configuration-key="workbench.productIconTheme"]') });
+		await expect(
+			page.locator('[data-configuration-key="workbench.colorTheme"]').getByRole('combobox'),
+		).toBeVisible();
+		const themeGroup = appearanceGroups.filter({
+			has: page.getByRole('heading', { name: 'Color theme', exact: true }),
+		});
+		const appearanceSettings = themeGroup
+			.locator('.ash-configuration-setting')
+			.filter({
+				has: page.locator(
+					'[data-configuration-key="workbench.colorTheme"], [data-configuration-key="workbench.iconTheme"], [data-configuration-key="workbench.productIconTheme"]',
+				),
+			});
 		await expect(appearanceSettings).toHaveCount(3);
 		for (const setting of await appearanceSettings.all()) {
 			await expect(setting.locator('.ash-settings-indicators')).toHaveCSS('display', 'none');
@@ -1013,7 +1247,8 @@ test.describe('Manage menu', () => {
 		const layoutStyle = page.locator('[data-configuration-key="workbench.layoutStyle"]');
 		await expect(layoutStyle).toBeVisible();
 		for (const key of ['window.titleBarStyle', 'window.menuStyle']) {
-			if (target.kind === 'electron') await expect(page.locator(`[data-configuration-key="${key}"]`)).toBeVisible();
+			if (target.kind === 'electron')
+				await expect(page.locator(`[data-configuration-key="${key}"]`)).toBeVisible();
 			else await expect(page.locator(`[data-configuration-key="${key}"]`)).toHaveCount(0);
 		}
 		await expect(page.locator('[data-configuration-key="sessions.activityBar.location"]')).toHaveCount(0);
@@ -1026,14 +1261,22 @@ test.describe('Manage menu', () => {
 		await expect(layoutIndicator).toHaveCSS('width', '16px');
 		await expect(layoutIndicator).toHaveCSS('height', '16px');
 		await layoutStyle.getByRole('combobox').click();
-		const selectedCheck = page.locator('.ash-select-box-option-selected .ash-select-box-option-check [data-ash-icon-id="check"]');
+		const selectedCheck = page.locator(
+			'.ash-select-box-option-selected .ash-select-box-option-check [data-ash-icon-id="check"]',
+		);
 		await expect(selectedCheck).toHaveCSS('width', '16px');
 		await expect(selectedCheck).toHaveCSS('height', '16px');
-		const clippedOptions = await page.locator('.ash-select-box-option-label').evaluateAll(labels => labels.some(label => label.scrollWidth > label.clientWidth));
+		const clippedOptions = await page
+			.locator('.ash-select-box-option-label')
+			.evaluateAll(labels => labels.some(label => label.scrollWidth > label.clientWidth));
 		expect(clippedOptions).toBe(false);
-		await expect(page.locator('.ash-context-view-default', { has: page.locator('.ash-select-box-list') })).toHaveCSS('border-radius', '6px');
+		await expect(
+			page.locator('.ash-context-view-default', { has: page.locator('.ash-select-box-list') }),
+		).toHaveCSS('border-radius', '6px');
 		const fontSizes = await page.evaluate(() => {
-			const trigger = document.querySelector('[data-configuration-key="workbench.layoutStyle"] .ash-dropdown-label');
+			const trigger = document.querySelector(
+				'[data-configuration-key="workbench.layoutStyle"] .ash-dropdown-label',
+			);
 			const option = document.querySelector('.ash-select-box-option-label');
 			return { trigger: getComputedStyle(trigger!).fontSize, option: getComputedStyle(option!).fontSize };
 		});
@@ -1056,18 +1299,33 @@ test.describe('Manage menu', () => {
 		await expect(fontSizeControl).toHaveCSS('justify-self', 'end');
 		await expect(page.locator('[data-configuration-key="editor.fontFamily"]')).toHaveCSS('height', '24px');
 		await workbench.settingsEditor.selectEditorCategory('editor-display');
-		await expect(page.locator('[data-configuration-key="editor.wordWrap"]').getByRole('combobox')).toHaveCSS('height', '24px');
+		await expect(page.locator('[data-configuration-key="editor.wordWrap"]').getByRole('combobox')).toHaveCSS(
+			'height',
+			'24px',
+		);
 		await workbench.settingsEditor.selectGroup('features');
 		await workbench.settingsEditor.selectCategory('explorer');
-		await expect(page.locator('[data-configuration-key="explorer.fileNesting.patterns"] .ash-string-map-row input').first()).toHaveCSS('height', '24px');
+		await expect(
+			page.locator('[data-configuration-key="explorer.fileNesting.patterns"] .ash-string-map-row input').first(),
+		).toHaveCSS('height', '24px');
 	});
 
-	test('Manage menu starts a desktop update check', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
-		const page = workbench.page;
-		await workbench.menus.select(application, () => page.getByRole('button', { name: 'Manage' }).click(), ['Check for Updates...']);
-		await expect(page.getByRole('region', { name: 'Notifications', exact: true }).getByText(/Could not check for updates\.|Ash .* is up to date\.|Ash .* is available\./)).toBeVisible({ timeout: 45_000 });
-		await expect(page.getByText('Checking for updates...')).toHaveCount(0);
-	});
+	test(
+		'Manage menu starts a desktop update check',
+		{ tag: ['@electron-ui', '@electron-app-server'] },
+		async ({ application, target, workbench }) => {
+			const page = workbench.page;
+			await workbench.menus.select(application, () => page.getByRole('button', { name: 'Manage' }).click(), [
+				'Check for Updates...',
+			]);
+			await expect(
+				page
+					.getByRole('region', { name: 'Notifications', exact: true })
+					.getByText(/Could not check for updates\.|Ash .* is up to date\.|Ash .* is available\./),
+			).toBeVisible({ timeout: 45_000 });
+			await expect(page.getByText('Checking for updates...')).toHaveCount(0);
+		},
+	);
 
 	test('editor More Actions tooltip clears the window controls', async ({ workbench }) => {
 		const page = workbench.page;

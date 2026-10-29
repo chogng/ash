@@ -7,8 +7,16 @@ import { selectLanguageIds, type LanguageSelector } from '../../common/languageS
 import { type LanguageConfiguration } from '../../common/languages/languageConfiguration.js';
 import { ILanguageService, type ILanguageExtensionPoint } from '../../common/languages/language.js';
 import { ILanguageConfigurationService } from '../../common/languages/languageConfigurationRegistry.js';
-import type { LanguageDescriptionChangeEvent, LanguageDescriptionContribution, LanguageDescriptionRegistration } from '../../common/services/languagesRegistry.js';
-import { ILanguageFeaturesService, type LanguageProviderBatch, type LanguageProviderBatchRegistration } from '../../common/services/languageFeatures.js';
+import type {
+	LanguageDescriptionChangeEvent,
+	LanguageDescriptionContribution,
+	LanguageDescriptionRegistration,
+} from '../../common/services/languagesRegistry.js';
+import {
+	ILanguageFeaturesService,
+	type LanguageProviderBatch,
+	type LanguageProviderBatchRegistration,
+} from '../../common/services/languageFeatures.js';
 import { StandaloneServices } from './standaloneServices.js';
 import { Color } from '../../../base/common/color.js';
 import { LanguageId, MetadataConsts, StandardTokenType, TokenMetadata } from '../../common/encodedTokenAttributes.js';
@@ -120,11 +128,23 @@ export function getLanguages(): ILanguageExtensionPoint[] {
 }
 
 export function onLanguage(languageId: string, callback: () => void): IDisposable {
-	return StandaloneServices.withServices(() => onLanguageEvent(StandaloneServices.get(ILanguageService).onDidRequestRichLanguageFeatures, languageId, callback));
+	return StandaloneServices.withServices(() =>
+		onLanguageEvent(
+			StandaloneServices.get(ILanguageService).onDidRequestRichLanguageFeatures,
+			languageId,
+			callback,
+		),
+	);
 }
 
 export function onLanguageEncountered(languageId: string, callback: () => void): IDisposable {
-	return StandaloneServices.withServices(() => onLanguageEvent(StandaloneServices.get(ILanguageService).onDidRequestBasicLanguageFeatures, languageId, callback));
+	return StandaloneServices.withServices(() =>
+		onLanguageEvent(
+			StandaloneServices.get(ILanguageService).onDidRequestBasicLanguageFeatures,
+			languageId,
+			callback,
+		),
+	);
 }
 
 function onLanguageEvent(event: Event<string>, languageId: string, callback: () => void): IDisposable {
@@ -139,41 +159,51 @@ function onLanguageEvent(event: Event<string>, languageId: string, callback: () 
 
 export function getEncodedLanguageId(languageId: string): number {
 	const service = StandaloneServices.get(ILanguageService);
-	return service.isRegisteredLanguageId(languageId) ? service.languageIdCodec.encodeLanguageId(languageId) : LanguageId.Null;
+	return service.isRegisteredLanguageId(languageId)
+		? service.languageIdCodec.encodeLanguageId(languageId)
+		: LanguageId.Null;
 }
 
 export function setColorMap(colorMap: string[] | null): void {
-	const colors = colorMap?.map((color, index) => index === 0 ? Color.transparent : Color.fromHex(color)) ?? null;
+	const colors = colorMap?.map((color, index) => (index === 0 ? Color.transparent : Color.fromHex(color))) ?? null;
 	StandaloneServices.get(IStandaloneThemeService).setColorMapOverride(colors);
 }
 
 export function registerTokensProviderFactory(languageId: string, factory: TokensProviderFactory): IDisposable {
 	const resources = new DisposableStore();
 	let pending: Promise<languages.ITokenizationSupport | null> | undefined;
-	resources.add(languages.TokenizationRegistry.registerFactory(languageId, {
-		get tokenizationSupport() {
-			return pending ??= Promise.resolve(factory.create()).then(provider => {
-				if (!provider || resources.isDisposed) {
-					return null;
-				}
-				if ('getInitialState' in provider) {
-					return tokenizationSupport(languageId, provider as TokensProvider | EncodedTokensProvider);
-				}
-				return resources.add(createMonarchSupport(languageId, provider));
-			});
-		},
-	}));
+	resources.add(
+		languages.TokenizationRegistry.registerFactory(languageId, {
+			get tokenizationSupport() {
+				return (pending ??= Promise.resolve(factory.create()).then(provider => {
+					if (!provider || resources.isDisposed) {
+						return null;
+					}
+					if ('getInitialState' in provider) {
+						return tokenizationSupport(languageId, provider as TokensProvider | EncodedTokensProvider);
+					}
+					return resources.add(createMonarchSupport(languageId, provider));
+				}));
+			},
+		}),
+	);
 	return resources;
 }
 
-export function setTokensProvider(languageId: string, provider: TokensProvider | EncodedTokensProvider | PromiseLike<TokensProvider | EncodedTokensProvider>): IDisposable {
+export function setTokensProvider(
+	languageId: string,
+	provider: TokensProvider | EncodedTokensProvider | PromiseLike<TokensProvider | EncodedTokensProvider>,
+): IDisposable {
 	if ('then' in provider) {
 		return registerTokensProviderFactory(languageId, { create: () => Promise.resolve(provider) });
 	}
 	return languages.TokenizationRegistry.register(languageId, tokenizationSupport(languageId, provider));
 }
 
-export function setMonarchTokensProvider(languageId: string, languageDef: IMonarchLanguage | PromiseLike<IMonarchLanguage>): IDisposable {
+export function setMonarchTokensProvider(
+	languageId: string,
+	languageDef: IMonarchLanguage | PromiseLike<IMonarchLanguage>,
+): IDisposable {
 	if ('then' in languageDef && typeof languageDef.then === 'function') {
 		return registerTokensProviderFactory(languageId, { create: () => Promise.resolve(languageDef) });
 	}
@@ -188,10 +218,17 @@ function createMonarchSupport(languageId: string, languageDef: IMonarchLanguage)
 	if (!StandaloneServices.get(ILanguageService).isRegisteredLanguageId(languageId)) {
 		throw new Error(`Cannot tokenize an unregistered language: ${languageId}`);
 	}
-	return StandaloneServices.get(IInstantiationService).createInstance(MonarchTokenizer, languageId, compile(languageId, languageDef));
+	return StandaloneServices.get(IInstantiationService).createInstance(
+		MonarchTokenizer,
+		languageId,
+		compile(languageId, languageDef),
+	);
 }
 
-function tokenizationSupport(languageId: string, provider: TokensProvider | EncodedTokensProvider): languages.ITokenizationSupport {
+function tokenizationSupport(
+	languageId: string,
+	provider: TokensProvider | EncodedTokensProvider,
+): languages.ITokenizationSupport {
 	const languageService = StandaloneServices.get(ILanguageService);
 	if (!languageService.isRegisteredLanguageId(languageId)) {
 		throw new Error(`Cannot tokenize an unregistered language: ${languageId}`);
@@ -212,7 +249,14 @@ function tokenizationSupport(languageId: string, provider: TokensProvider | Enco
 				const type = TokenMetadata.getTokenType(metadata);
 				tokens.push({
 					offset: result.tokens[index]!,
-					type: type === StandardTokenType.Comment ? 'comment' : type === StandardTokenType.String ? 'string' : type === StandardTokenType.RegEx ? 'regexp' : 'other',
+					type:
+						type === StandardTokenType.Comment
+							? 'comment'
+							: type === StandardTokenType.String
+								? 'string'
+								: type === StandardTokenType.RegEx
+									? 'regexp'
+									: 'other',
 					language: languageService.languageIdCodec.decodeLanguageId(TokenMetadata.getLanguageId(metadata)),
 				});
 			}
@@ -245,7 +289,9 @@ function normalizeTokens(tokens: IToken[], language: string): languages.Token[] 
 	});
 }
 
-export function registerLanguages(contributions: readonly LanguageDescriptionContribution[]): LanguageDescriptionRegistration {
+export function registerLanguages(
+	contributions: readonly LanguageDescriptionContribution[],
+): LanguageDescriptionRegistration {
 	return StandaloneServices.get(ILanguageService).registerLanguages(contributions);
 }
 
@@ -253,7 +299,8 @@ export function resolveLanguageId(input: TextResourceLanguageInput): string | un
 	return StandaloneServices.get(ILanguageService).resolveLanguageId(input);
 }
 
-export const onDidChangeLanguages: Event<LanguageDescriptionChangeEvent> = (listener, thisArgs, disposables) => StandaloneServices.get(ILanguageService).languages.onDidChange(listener, thisArgs, disposables);
+export const onDidChangeLanguages: Event<LanguageDescriptionChangeEvent> = (listener, thisArgs, disposables) =>
+	StandaloneServices.get(ILanguageService).languages.onDidChange(listener, thisArgs, disposables);
 
 export function setLanguageConfiguration(languageId: string, configuration: LanguageConfiguration): IDisposable {
 	return StandaloneServices.get(ILanguageConfigurationService).register(languageId, configuration);
@@ -269,73 +316,201 @@ export function registerSyntaxProvider(provider: languages.SyntaxProvider): IDis
 	return StandaloneServices.get(ILanguageFeaturesService).syntaxProvider.register(provider);
 }
 
-export function registerCompletionItemProvider(languageSelector: LanguageSelector, provider: Omit<languages.LanguageCompletionProvider, 'languageIds'>): IDisposable {
-	return StandaloneServices.get(ILanguageFeaturesService).completionProvider.register(withLanguageSelector(languageSelector, provider));
+export function registerCompletionItemProvider(
+	languageSelector: LanguageSelector,
+	provider: Omit<languages.LanguageCompletionProvider, 'languageIds'>,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).completionProvider.register(
+		withLanguageSelector(languageSelector, provider),
+	);
 }
 
-export function registerCodeActionProvider(languageSelector: LanguageSelector, provider: languages.LanguageCodeActionProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).codeActionProvider.register(languageSelector, provider); }
-export function registerCodeLensProvider(languageSelector: LanguageSelector, provider: languages.CodeLensProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).codeLensProvider.register(languageSelector, provider); }
-export function registerDocumentSymbolProvider(languageSelector: LanguageSelector, provider: languages.LanguageDocumentSymbolProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).documentSymbolProvider.register(languageSelector, provider); }
+export function registerCodeActionProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageCodeActionProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).codeActionProvider.register(languageSelector, provider);
+}
+export function registerCodeLensProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.CodeLensProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).codeLensProvider.register(languageSelector, provider);
+}
+export function registerDocumentSymbolProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageDocumentSymbolProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).documentSymbolProvider.register(languageSelector, provider);
+}
 export function registerDocumentFormattingEditProvider(
 	languageSelector: LanguageSelector,
 	provider: languages.DocumentFormattingEditProvider,
 ): IDisposable {
-	return StandaloneServices.get(ILanguageFeaturesService).documentFormattingEditProvider.register(languageSelector, provider);
+	return StandaloneServices.get(ILanguageFeaturesService).documentFormattingEditProvider.register(
+		languageSelector,
+		provider,
+	);
 }
 
 export function registerDocumentRangeFormattingEditProvider(
 	languageSelector: LanguageSelector,
 	provider: languages.DocumentRangeFormattingEditProvider,
 ): IDisposable {
-	return StandaloneServices.get(ILanguageFeaturesService).documentRangeFormattingEditProvider.register(languageSelector, provider);
+	return StandaloneServices.get(ILanguageFeaturesService).documentRangeFormattingEditProvider.register(
+		languageSelector,
+		provider,
+	);
 }
 
 export function registerOnTypeFormattingEditProvider(
 	languageSelector: LanguageSelector,
 	provider: languages.OnTypeFormattingEditProvider,
 ): IDisposable {
-	return StandaloneServices.get(ILanguageFeaturesService).onTypeFormattingEditProvider.register(languageSelector, provider);
+	return StandaloneServices.get(ILanguageFeaturesService).onTypeFormattingEditProvider.register(
+		languageSelector,
+		provider,
+	);
 }
-export function registerHoverProvider(languageSelector: LanguageSelector, provider: languages.LanguageHoverProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).hoverProvider.register(languageSelector, provider); }
-export function registerInlayHintsProvider(languageSelector: LanguageSelector, provider: languages.LanguageInlayHintsProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).inlayHintsProvider.register(languageSelector, provider); }
-export function registerInlineCompletionsProvider(languageSelector: LanguageSelector, provider: languages.LanguageInlineCompletionsProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).inlineCompletionsProvider.register(languageSelector, provider); }
-export function registerLinkedEditingRangeProvider(languageSelector: LanguageSelector, provider: languages.LinkedEditingRangeProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).linkedEditingRangeProvider.register(languageSelector, provider); }
-export function registerLinkProvider(languageSelector: LanguageSelector, provider: languages.LanguageLinkProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).linkProvider.register(languageSelector, provider); }
+export function registerHoverProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageHoverProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).hoverProvider.register(languageSelector, provider);
+}
+export function registerInlayHintsProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageInlayHintsProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).inlayHintsProvider.register(languageSelector, provider);
+}
+export function registerInlineCompletionsProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageInlineCompletionsProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).inlineCompletionsProvider.register(
+		languageSelector,
+		provider,
+	);
+}
+export function registerLinkedEditingRangeProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LinkedEditingRangeProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).linkedEditingRangeProvider.register(
+		languageSelector,
+		provider,
+	);
+}
+export function registerLinkProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageLinkProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).linkProvider.register(languageSelector, provider);
+}
 export function registerSignatureHelpProvider(
 	languageSelector: LanguageSelector,
 	provider: languages.LanguageParameterHintsProvider,
 ): IDisposable {
 	return StandaloneServices.get(ILanguageFeaturesService).signatureHelpProvider.register(languageSelector, provider);
 }
-export function registerRenameProvider(languageSelector: LanguageSelector, provider: languages.LanguageRenameProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).renameProvider.register(languageSelector, provider); }
-export function registerColorProvider(languageSelector: LanguageSelector, provider: languages.LanguageColorProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).colorProvider.register(languageSelector, provider); }
-export function registerDefinitionProvider(languageSelector: LanguageSelector, provider: languages.LanguageDefinitionProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).definitionProvider.register(languageSelector, provider); }
-export function registerDeclarationProvider(languageSelector: LanguageSelector, provider: languages.LanguageDeclarationProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).declarationProvider.register(languageSelector, provider); }
-export function registerImplementationProvider(languageSelector: LanguageSelector, provider: languages.LanguageImplementationProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).implementationProvider.register(languageSelector, provider); }
-export function registerTypeDefinitionProvider(languageSelector: LanguageSelector, provider: languages.LanguageTypeDefinitionProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).typeDefinitionProvider.register(languageSelector, provider); }
-export function registerReferenceProvider(languageSelector: LanguageSelector, provider: languages.LanguageReferenceProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).referenceProvider.register(languageSelector, provider); }
+export function registerRenameProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageRenameProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).renameProvider.register(languageSelector, provider);
+}
+export function registerColorProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageColorProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).colorProvider.register(languageSelector, provider);
+}
+export function registerDefinitionProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageDefinitionProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).definitionProvider.register(languageSelector, provider);
+}
+export function registerDeclarationProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageDeclarationProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).declarationProvider.register(languageSelector, provider);
+}
+export function registerImplementationProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageImplementationProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).implementationProvider.register(languageSelector, provider);
+}
+export function registerTypeDefinitionProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageTypeDefinitionProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).typeDefinitionProvider.register(languageSelector, provider);
+}
+export function registerReferenceProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageReferenceProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).referenceProvider.register(languageSelector, provider);
+}
 
 /** Ash workspace and hierarchy providers remain host-wide registrations. */
-export function registerWorkspaceSymbolProvider(provider: languages.LanguageWorkspaceSymbolProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).workspaceSymbolProvider.register('*', provider); }
-export function registerCallHierarchyProvider(languageSelector: LanguageSelector, provider: languages.LanguageCallHierarchyProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).callHierarchyProvider.register(languageSelector, provider); }
-export function registerTypeHierarchyProvider(languageSelector: LanguageSelector, provider: languages.LanguageTypeHierarchyProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).typeHierarchyProvider.register(languageSelector, provider); }
+export function registerWorkspaceSymbolProvider(provider: languages.LanguageWorkspaceSymbolProvider): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).workspaceSymbolProvider.register('*', provider);
+}
+export function registerCallHierarchyProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageCallHierarchyProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).callHierarchyProvider.register(languageSelector, provider);
+}
+export function registerTypeHierarchyProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageTypeHierarchyProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).typeHierarchyProvider.register(languageSelector, provider);
+}
 
 export function registerDocumentSemanticTokensProvider(
 	languageSelector: LanguageSelector,
 	provider: languages.LanguageSemanticTokensProvider,
 ): IDisposable {
-	return StandaloneServices.get(ILanguageFeaturesService).documentSemanticTokensProvider.register(languageSelector, provider);
+	return StandaloneServices.get(ILanguageFeaturesService).documentSemanticTokensProvider.register(
+		languageSelector,
+		provider,
+	);
 }
-export function registerFoldingRangeProvider(languageSelector: LanguageSelector, provider: languages.LanguageFoldingRangeProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).foldingRangeProvider.register(languageSelector, provider); }
-export function registerSelectionRangeProvider(languageSelector: LanguageSelector, provider: languages.LanguageSelectionRangeProvider): IDisposable { return StandaloneServices.get(ILanguageFeaturesService).selectionRangeProvider.register(languageSelector, provider); }
+export function registerFoldingRangeProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageFoldingRangeProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).foldingRangeProvider.register(languageSelector, provider);
+}
+export function registerSelectionRangeProvider(
+	languageSelector: LanguageSelector,
+	provider: languages.LanguageSelectionRangeProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).selectionRangeProvider.register(languageSelector, provider);
+}
 
-export function registerDocumentHighlightProvider(selector: LanguageSelector, provider: languages.DocumentHighlightProvider): IDisposable {
+export function registerDocumentHighlightProvider(
+	selector: LanguageSelector,
+	provider: languages.DocumentHighlightProvider,
+): IDisposable {
 	return StandaloneServices.get(ILanguageFeaturesService).documentHighlightProvider.register(selector, provider);
 }
 
 /** Ash's cross-document highlight provider carries its selector as part of the request owner. */
-export function registerMultiDocumentHighlightProvider(provider: languages.MultiDocumentHighlightProvider): IDisposable {
-	return StandaloneServices.get(ILanguageFeaturesService).multiDocumentHighlightProvider.register(provider.selector, provider);
+export function registerMultiDocumentHighlightProvider(
+	provider: languages.MultiDocumentHighlightProvider,
+): IDisposable {
+	return StandaloneServices.get(ILanguageFeaturesService).multiDocumentHighlightProvider.register(
+		provider.selector,
+		provider,
+	);
 }
 
 function languageIdsForSelector(selector: LanguageSelector): readonly string[] {
@@ -345,7 +520,10 @@ function languageIdsForSelector(selector: LanguageSelector): readonly string[] {
 	return Object.freeze([...result]);
 }
 
-function withLanguageSelector<TProvider extends object>(selector: LanguageSelector, provider: TProvider): TProvider & { readonly languageIds: readonly string[]; } {
+function withLanguageSelector<TProvider extends object>(
+	selector: LanguageSelector,
+	provider: TProvider,
+): TProvider & { readonly languageIds: readonly string[] } {
 	if (!provider || typeof provider !== 'object') throw new TypeError('Language feature provider must be an object');
 	return Object.freeze({ ...provider, languageIds: languageIdsForSelector(selector) });
 }

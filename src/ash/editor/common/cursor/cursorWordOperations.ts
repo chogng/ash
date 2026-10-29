@@ -1,8 +1,17 @@
 import { CharCode } from '../../../base/common/charCode.js';
 import * as strings from '../../../base/common/strings.js';
 import { type EditorAutoClosingEditStrategy, type EditorAutoClosingStrategy } from '../config/editorOptions.js';
-import { type CursorConfiguration, type ICursorSimpleModel, SelectionStartKind, SingleCursorState } from '../cursorCommon.js';
-import { WordCharacterClass, type WordCharacterClassifier, getMapForWordSeparators } from '../core/wordCharacterClassifier.js';
+import {
+	type CursorConfiguration,
+	type ICursorSimpleModel,
+	SelectionStartKind,
+	SingleCursorState,
+} from '../cursorCommon.js';
+import {
+	WordCharacterClass,
+	type WordCharacterClassifier,
+	getMapForWordSeparators,
+} from '../core/wordCharacterClassifier.js';
 import { type IWordAtPosition } from '../core/wordHelper.js';
 import { Position } from '../core/position.js';
 import { Range } from '../core/range.js';
@@ -43,7 +52,13 @@ export interface DeleteWordContext {
 }
 
 export class WordOperations {
-	public static moveWordLeft(wordSeparators: WordCharacterClassifier, model: ICursorSimpleModel, position: Position, wordNavigationType: WordNavigationType, hasMulticursor: boolean): Position {
+	public static moveWordLeft(
+		wordSeparators: WordCharacterClassifier,
+		model: ICursorSimpleModel,
+		position: Position,
+		wordNavigationType: WordNavigationType,
+		hasMulticursor: boolean,
+	): Position {
 		let lineNumber = position.lineNumber;
 		let column = position.column;
 		if (column === 1 && lineNumber > 1) {
@@ -51,21 +66,31 @@ export class WordOperations {
 			column = model.getLineMaxColumn(lineNumber);
 		}
 		let word = previousWord(wordSeparators, model, new Position(lineNumber, column));
-		if (wordNavigationType === WordNavigationType.WordStartFast && !hasMulticursor && isSingleSeparatorBeforeRegular(word)) {
+		if (
+			wordNavigationType === WordNavigationType.WordStartFast &&
+			!hasMulticursor &&
+			isSingleSeparatorBeforeRegular(word)
+		) {
 			word = previousWord(wordSeparators, model, new Position(lineNumber, word!.start + 1));
 		}
 		if (wordNavigationType === WordNavigationType.WordAccessibility) {
-			while (word?.type === WordBoundaryType.Separator) word = previousWord(wordSeparators, model, new Position(lineNumber, word.start + 1));
+			while (word?.type === WordBoundaryType.Separator)
+				word = previousWord(wordSeparators, model, new Position(lineNumber, word.start + 1));
 		}
 		if (wordNavigationType === WordNavigationType.WordEnd && word && column <= word.end + 1) {
 			word = previousWord(wordSeparators, model, new Position(lineNumber, word.start + 1));
 		}
-		return new Position(lineNumber, word ? (wordNavigationType === WordNavigationType.WordEnd ? word.end : word.start) + 1 : 1);
+		return new Position(
+			lineNumber,
+			word ? (wordNavigationType === WordNavigationType.WordEnd ? word.end : word.start) + 1 : 1,
+		);
 	}
 
 	public static _moveWordPartLeft(model: ICursorSimpleModel, position: Position): Position {
 		if (position.column === 1) {
-			return position.lineNumber > 1 ? new Position(position.lineNumber - 1, model.getLineMaxColumn(position.lineNumber - 1)) : position;
+			return position.lineNumber > 1
+				? new Position(position.lineNumber - 1, model.getLineMaxColumn(position.lineNumber - 1))
+				: position;
 		}
 		const line = model.getLineContent(position.lineNumber);
 		for (let column = position.column - 1; column > 1; column -= 1) {
@@ -74,7 +99,12 @@ export class WordOperations {
 		return new Position(position.lineNumber, 1);
 	}
 
-	public static moveWordRight(wordSeparators: WordCharacterClassifier, model: ICursorSimpleModel, position: Position, wordNavigationType: WordNavigationType): Position {
+	public static moveWordRight(
+		wordSeparators: WordCharacterClassifier,
+		model: ICursorSimpleModel,
+		position: Position,
+		wordNavigationType: WordNavigationType,
+	): Position {
 		let lineNumber = position.lineNumber;
 		let column = position.column;
 		let crossedLine = false;
@@ -85,7 +115,8 @@ export class WordOperations {
 		}
 		let word = nextWord(wordSeparators, model, new Position(lineNumber, column));
 		if (wordNavigationType === WordNavigationType.WordEnd) {
-			if (isSingleSeparatorBeforeRegular(word)) word = nextWord(wordSeparators, model, new Position(lineNumber, word!.end + 1));
+			if (isSingleSeparatorBeforeRegular(word))
+				word = nextWord(wordSeparators, model, new Position(lineNumber, word!.end + 1));
 			return new Position(lineNumber, word ? word.end + 1 : model.getLineMaxColumn(lineNumber));
 		}
 		if (wordNavigationType === WordNavigationType.WordAccessibility) {
@@ -122,15 +153,17 @@ export class WordOperations {
 
 	public static deleteWordLeft(context: DeleteWordContext, wordNavigationType: WordNavigationType): Range | null {
 		if (!context.selection.isEmpty()) return context.selection;
-		if (DeleteOperations.isAutoClosingPairDelete(
-			context.autoClosingDelete,
-			context.autoClosingBrackets,
-			context.autoClosingQuotes,
-			context.autoClosingPairs.autoClosingPairsOpenByEnd,
-			context.model,
-			[context.selection],
-			context.autoClosedCharacters,
-		)) {
+		if (
+			DeleteOperations.isAutoClosingPairDelete(
+				context.autoClosingDelete,
+				context.autoClosingBrackets,
+				context.autoClosingQuotes,
+				context.autoClosingPairs.autoClosingPairsOpenByEnd,
+				context.model,
+				[context.selection],
+				context.autoClosedCharacters,
+			)
+		) {
 			const position = context.selection.getPosition();
 			return new Range(position.lineNumber, position.column - 1, position.lineNumber, position.column + 1);
 		}
@@ -140,25 +173,43 @@ export class WordOperations {
 			const whitespace = this._deleteWordLeftWhitespace(context.model, position);
 			if (whitespace) return whitespace;
 		}
-		return Range.fromPositions(this.moveWordLeft(context.wordSeparators, context.model, position, wordNavigationType, false), position);
+		return Range.fromPositions(
+			this.moveWordLeft(context.wordSeparators, context.model, position, wordNavigationType, false),
+			position,
+		);
 	}
 
-	public static deleteInsideWord(wordSeparators: WordCharacterClassifier, model: ITextModel, selection: Selection, onlyWord = false): Range {
+	public static deleteInsideWord(
+		wordSeparators: WordCharacterClassifier,
+		model: ITextModel,
+		selection: Selection,
+		onlyWord = false,
+	): Range {
 		if (!selection.isEmpty()) return selection;
 		const position = selection.getPosition();
 		const whitespace = insideWhitespaceRange(model, position);
 		if (whitespace) return whitespace;
 		const line = model.getLineContent(position.lineNumber);
 		if (line.length === 0) {
-			if (position.lineNumber > 1) return new Range(position.lineNumber - 1, model.getLineMaxColumn(position.lineNumber - 1), position.lineNumber, 1);
-			if (position.lineNumber < model.getLineCount()) return new Range(position.lineNumber, 1, position.lineNumber + 1, 1);
+			if (position.lineNumber > 1)
+				return new Range(
+					position.lineNumber - 1,
+					model.getLineMaxColumn(position.lineNumber - 1),
+					position.lineNumber,
+					1,
+				);
+			if (position.lineNumber < model.getLineCount())
+				return new Range(position.lineNumber, 1, position.lineNumber + 1, 1);
 			return Range.fromPositions(position);
 		}
 		const previous = previousWord(wordSeparators, model, position);
 		const next = nextWord(wordSeparators, model, position);
-		const touching = [previous, next].find(word => word && word.start + 1 <= position.column && position.column <= word.end + 1);
+		const touching = [previous, next].find(
+			word => word && word.start + 1 <= position.column && position.column <= word.end + 1,
+		);
 		if (touching) return expandWordDeletion(line, position, touching, onlyWord);
-		if (previous && next) return orderedRange(position.lineNumber, previous.end + 1, next.start + 1, position.column);
+		if (previous && next)
+			return orderedRange(position.lineNumber, previous.end + 1, next.start + 1, position.column);
 		if (previous) return orderedRange(position.lineNumber, previous.start + 1, previous.end + 1, position.column);
 		if (next) return orderedRange(position.lineNumber, next.start + 1, next.end + 1, position.column);
 		return orderedRange(position.lineNumber, 1, line.length + 1, position.column);
@@ -173,18 +224,27 @@ export class WordOperations {
 		const line = model.getLineContent(position.lineNumber);
 		let index = position.column - 1;
 		while (index < line.length && isWhitespace(line, index)) index += 1;
-		return index > position.column - 1 ? new Range(position.lineNumber, position.column, position.lineNumber, index + 1) : null;
+		return index > position.column - 1
+			? new Range(position.lineNumber, position.column, position.lineNumber, index + 1)
+			: null;
 	}
 
 	public static deleteWordRight(context: DeleteWordContext, wordNavigationType: WordNavigationType): Range | null {
 		if (!context.selection.isEmpty()) return context.selection;
 		const position = context.selection.getPosition();
-		if (position.lineNumber === context.model.getLineCount() && position.column === context.model.getLineMaxColumn(position.lineNumber)) return null;
+		if (
+			position.lineNumber === context.model.getLineCount() &&
+			position.column === context.model.getLineMaxColumn(position.lineNumber)
+		)
+			return null;
 		if (context.whitespaceHeuristics) {
 			const whitespace = this._deleteWordRightWhitespace(context.model, position);
 			if (whitespace) return whitespace;
 		}
-		return Range.fromPositions(position, deleteWordRightTarget(context.wordSeparators, context.model, position, wordNavigationType));
+		return Range.fromPositions(
+			position,
+			deleteWordRightTarget(context.wordSeparators, context.model, position, wordNavigationType),
+		);
 	}
 
 	public static _deleteWordPartRight(model: ICursorSimpleModel, selection: Selection): Range {
@@ -192,20 +252,34 @@ export class WordOperations {
 		return Range.fromPositions(selection.getPosition(), this._moveWordPartRight(model, selection.getPosition()));
 	}
 
-	public static getWordAtPosition(model: ITextModel, wordSeparators: string, intlSegmenterLocales: string[], position: Position): IWordAtPosition | null {
+	public static getWordAtPosition(
+		model: ITextModel,
+		wordSeparators: string,
+		intlSegmenterLocales: string[],
+		position: Position,
+	): IWordAtPosition | null {
 		const classifier = getMapForWordSeparators(wordSeparators, intlSegmenterLocales);
 		const offset = position.column - 1;
-		const word = [previousWord(classifier, model, position), nextWord(classifier, model, position)]
-			.find(candidate => candidate?.type === WordBoundaryType.Regular && candidate.start <= offset && offset <= candidate.end);
+		const word = [previousWord(classifier, model, position), nextWord(classifier, model, position)].find(
+			candidate =>
+				candidate?.type === WordBoundaryType.Regular && candidate.start <= offset && offset <= candidate.end,
+		);
 		if (!word) return null;
 		const range = new Range(position.lineNumber, word.start + 1, position.lineNumber, word.end + 1);
 		return { word: model.getValueInRange(range), startColumn: range.startColumn, endColumn: range.endColumn };
 	}
 
-	public static word(config: CursorConfiguration, model: ICursorSimpleModel, cursor: SingleCursorState, inSelectionMode: boolean, position: Position): SingleCursorState {
+	public static word(
+		config: CursorConfiguration,
+		model: ICursorSimpleModel,
+		cursor: SingleCursorState,
+		inSelectionMode: boolean,
+		position: Position,
+	): SingleCursorState {
 		const classifier = getMapForWordSeparators(config.wordSeparators, config.wordSegmenterLocales);
 		const range = wordRangeAt(classifier, model, position);
-		if (!inSelectionMode) return new SingleCursorState(range, SelectionStartKind.Word, 0, range.getEndPosition(), 0);
+		if (!inSelectionMode)
+			return new SingleCursorState(range, SelectionStartKind.Word, 0, range.getEndPosition(), 0);
 		let active: Position;
 		if (cursor.selectionStart.containsPosition(position)) {
 			active = cursor.selectionStart.getEndPosition();
@@ -239,7 +313,12 @@ export class WordPartOperations extends WordOperations {
 		return candidates[0]!;
 	}
 
-	public static moveWordPartLeft(wordSeparators: WordCharacterClassifier, model: ICursorSimpleModel, position: Position, hasMulticursor: boolean): Position {
+	public static moveWordPartLeft(
+		wordSeparators: WordCharacterClassifier,
+		model: ICursorSimpleModel,
+		position: Position,
+		hasMulticursor: boolean,
+	): Position {
 		const candidates = [
 			WordOperations.moveWordLeft(wordSeparators, model, position, WordNavigationType.WordStart, hasMulticursor),
 			WordOperations.moveWordLeft(wordSeparators, model, position, WordNavigationType.WordEnd, hasMulticursor),
@@ -248,7 +327,11 @@ export class WordPartOperations extends WordOperations {
 		return candidates[candidates.length - 1]!;
 	}
 
-	public static moveWordPartRight(wordSeparators: WordCharacterClassifier, model: ICursorSimpleModel, position: Position): Position {
+	public static moveWordPartRight(
+		wordSeparators: WordCharacterClassifier,
+		model: ICursorSimpleModel,
+		position: Position,
+	): Position {
 		return [
 			WordOperations.moveWordRight(wordSeparators, model, position, WordNavigationType.WordStart),
 			WordOperations.moveWordRight(wordSeparators, model, position, WordNavigationType.WordEnd),
@@ -257,7 +340,11 @@ export class WordPartOperations extends WordOperations {
 	}
 }
 
-function previousWord(classifier: WordCharacterClassifier, model: ICursorSimpleModel, position: Position): WordBoundary | null {
+function previousWord(
+	classifier: WordCharacterClassifier,
+	model: ICursorSimpleModel,
+	position: Position,
+): WordBoundary | null {
 	const line = model.getLineContent(position.lineNumber);
 	const offset = position.column - 2;
 	const words = wordsOnLine(classifier, line);
@@ -267,7 +354,11 @@ function previousWord(classifier: WordCharacterClassifier, model: ICursorSimpleM
 	return null;
 }
 
-function nextWord(classifier: WordCharacterClassifier, model: ICursorSimpleModel, position: Position): WordBoundary | null {
+function nextWord(
+	classifier: WordCharacterClassifier,
+	model: ICursorSimpleModel,
+	position: Position,
+): WordBoundary | null {
 	const line = model.getLineContent(position.lineNumber);
 	const offset = position.column - 1;
 	return wordsOnLine(classifier, line).find(word => word.end > offset) ?? null;
@@ -289,14 +380,16 @@ function wordsOnLine(classifier: WordCharacterClassifier, line: string): WordBou
 			index += 1;
 			continue;
 		}
-		const type = current === WordCharacterClass.WordSeparator ? WordBoundaryType.Separator : WordBoundaryType.Regular;
+		const type =
+			current === WordCharacterClass.WordSeparator ? WordBoundaryType.Separator : WordBoundaryType.Regular;
 		const start = index;
 		index += 1;
 		while (index < line.length) {
 			if (classifier.findNextIntlWordAtOrAfterOffset(line, index)?.index === index) break;
 			const next = classifier.get(line.charCodeAt(index));
 			if (next === WordCharacterClass.Whitespace) break;
-			const nextType = next === WordCharacterClass.WordSeparator ? WordBoundaryType.Separator : WordBoundaryType.Regular;
+			const nextType =
+				next === WordCharacterClass.WordSeparator ? WordBoundaryType.Separator : WordBoundaryType.Regular;
 			if (nextType !== type) break;
 			index += 1;
 		}
@@ -313,18 +406,34 @@ function wordRangeAt(classifier: WordCharacterClassifier, model: ICursorSimpleMo
 	const offset = position.column - 1;
 	const previous = previousWord(classifier, model, position);
 	const next = nextWord(classifier, model, position);
-	const touched = [previous, next].find(candidate => candidate && candidate.start <= offset && (candidate.type === WordBoundaryType.Regular ? offset <= candidate.end : offset < candidate.end));
+	const touched = [previous, next].find(
+		candidate =>
+			candidate &&
+			candidate.start <= offset &&
+			(candidate.type === WordBoundaryType.Regular ? offset <= candidate.end : offset < candidate.end),
+	);
 	if (touched) return new Range(position.lineNumber, touched.start + 1, position.lineNumber, touched.end + 1);
-	return new Range(position.lineNumber, previous ? previous.end + 1 : 1, position.lineNumber, next ? next.start + 1 : model.getLineMaxColumn(position.lineNumber));
+	return new Range(
+		position.lineNumber,
+		previous ? previous.end + 1 : 1,
+		position.lineNumber,
+		next ? next.start + 1 : model.getLineMaxColumn(position.lineNumber),
+	);
 }
 
-function deleteWordRightTarget(classifier: WordCharacterClassifier, model: ICursorSimpleModel, position: Position, type: WordNavigationType): Position {
+function deleteWordRightTarget(
+	classifier: WordCharacterClassifier,
+	model: ICursorSimpleModel,
+	position: Position,
+	type: WordNavigationType,
+): Position {
 	let lineNumber = position.lineNumber;
 	let word = nextWord(classifier, model, position);
 	if (type === WordNavigationType.WordEnd) {
 		if (word) return new Position(lineNumber, word.end + 1);
 	} else {
-		if (word && position.column >= word.start + 1) word = nextWord(classifier, model, new Position(lineNumber, word.end + 1));
+		if (word && position.column >= word.start + 1)
+			word = nextWord(classifier, model, new Position(lineNumber, word.end + 1));
 		if (word) return new Position(lineNumber, word.start + 1);
 	}
 	if (position.column < model.getLineMaxColumn(lineNumber) || lineNumber === model.getLineCount()) {
@@ -369,18 +478,27 @@ function wordBoundary(start: number, end: number, type: WordBoundaryType, nextCl
 }
 
 function isSingleSeparatorBeforeRegular(value: WordBoundary | null): boolean {
-	return value?.type === WordBoundaryType.Separator && value.end - value.start === 1 && value.nextClass === WordCharacterClass.Regular;
+	return (
+		value?.type === WordBoundaryType.Separator &&
+		value.end - value.start === 1 &&
+		value.nextClass === WordCharacterClass.Regular
+	);
 }
 
 function isWordPartBoundary(line: string, column: number, direction: 'left' | 'right'): boolean {
 	const left = line.charCodeAt(column - 2);
 	const right = line.charCodeAt(column - 1);
 	if (direction === 'left' && (left === CharCode.Underline || left === CharCode.Dash) && left !== right) return true;
-	if (direction === 'right' && (right === CharCode.Underline || right === CharCode.Dash) && left !== right) return true;
-	if ((strings.isLowerAsciiLetter(left) || strings.isAsciiDigit(left)) && strings.isUpperAsciiLetter(right)) return true;
-	return strings.isUpperAsciiLetter(left) && strings.isUpperAsciiLetter(right)
-		&& column < line.length
-		&& (strings.isLowerAsciiLetter(line.charCodeAt(column)) || strings.isAsciiDigit(line.charCodeAt(column)));
+	if (direction === 'right' && (right === CharCode.Underline || right === CharCode.Dash) && left !== right)
+		return true;
+	if ((strings.isLowerAsciiLetter(left) || strings.isAsciiDigit(left)) && strings.isUpperAsciiLetter(right))
+		return true;
+	return (
+		strings.isUpperAsciiLetter(left) &&
+		strings.isUpperAsciiLetter(right) &&
+		column < line.length &&
+		(strings.isLowerAsciiLetter(line.charCodeAt(column)) || strings.isAsciiDigit(line.charCodeAt(column)))
+	);
 }
 
 function isWhitespace(text: string, index: number): boolean {

@@ -1,4 +1,4 @@
-import { CharCode } from "../../../../base/common/charCode.js";
+import { CharCode } from '../../../../base/common/charCode.js';
 
 export enum StringEOL {
 	Unknown = 0,
@@ -17,8 +17,10 @@ export function countEOL(text: string): [number, number, number, StringEOL] {
 		if (character === CharCode.CarriageReturn) {
 			if (count === 0) firstLineLength = index;
 			count += 1;
-			if (text.charCodeAt(index + 1) === CharCode.LineFeed) { eol |= StringEOL.CRLF; index += 1; }
-			else eol |= StringEOL.Invalid;
+			if (text.charCodeAt(index + 1) === CharCode.LineFeed) {
+				eol |= StringEOL.CRLF;
+				index += 1;
+			} else eol |= StringEOL.Invalid;
 			lastLineStart = index + 1;
 		} else if (character === CharCode.LineFeed) {
 			if (count === 0) firstLineLength = index;

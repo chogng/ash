@@ -9,7 +9,11 @@ test('Web preserves URI identity and consumes only addresses published by its ho
 	const uri = URI.parse('ash-remote://team+build/root%2Ffile?q=1#fragment');
 	assert.equal(await resolver.getCanonicalURI(uri), uri);
 	await assert.rejects(resolver.resolveAuthority(uri.authority), { _code: 'NoResolverFound' });
-	const authority = { authority: uri.authority, connectTo: new WebSocketRemoteConnection('localhost', 5000), connectionToken: undefined };
+	const authority = {
+		authority: uri.authority,
+		connectTo: new WebSocketRemoteConnection('localhost', 5000),
+		connectionToken: undefined,
+	};
 	const options = { isTrusted: false };
 	resolver._setResolvedAuthority(authority, options);
 	assert.deepEqual(await resolver.resolveAuthority(uri.authority), { authority, options });

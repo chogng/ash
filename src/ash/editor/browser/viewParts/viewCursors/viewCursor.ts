@@ -52,7 +52,7 @@ class ViewCursorRenderData {
 		public readonly height: number,
 		public readonly textContent: string,
 		public readonly presentation: ViewCursorCharacterPresentation | undefined,
-	) { }
+	) {}
 }
 
 interface CursorGrapheme {
@@ -72,7 +72,7 @@ interface DomCaretGeometry {
 export class ViewCursor {
 	private readonly fastDomNode: FastDomNode<HTMLDivElement>;
 	private isVisible = true;
-	private position = new Position((0) + 1, (0) + 1);
+	private position = new Position(0 + 1, 0 + 1);
 	private plurality = CursorPlurality.Single;
 	private style: TextEditorCursorStyle;
 	private lineWidth: number;
@@ -98,7 +98,8 @@ export class ViewCursor {
 		this.readVisualProjection = options.readVisualProjection;
 		this.readTextLeft = options.readTextLeft;
 		this.textMeasurer = options.textMeasurer;
-		this.isRightToLeftAtPosition = position => context.viewModel.getTextDirection(position.lineNumber) === TextDirection.RTL;
+		this.isRightToLeftAtPosition = position =>
+			context.viewModel.getTextDirection(position.lineNumber) === TextDirection.RTL;
 		this.style = configuration.get(EditorOption.effectiveCursorStyle);
 		this.lineWidth = Math.min(configuration.get(EditorOption.cursorWidth), fontInfo.typicalHalfwidthCharacterWidth);
 		this.lineHeight = configuration.get(EditorOption.cursorHeight);
@@ -163,7 +164,8 @@ export class ViewCursor {
 			return;
 		}
 		const characterWidth = caret.characterRange?.width ?? this.getCharacterWidth(grapheme);
-		const characterLeft = caret.characterRange?.left ?? (caret.isRightToLeft ? caret.left - characterWidth : caret.left);
+		const characterLeft =
+			caret.characterRange?.left ?? (caret.isRightToLeft ? caret.left - characterWidth : caret.left);
 		const width = cursorWidth(dom.getWindow(this.fastDomNode.domNode), this.style, this.lineWidth, characterWidth);
 		let left = cursorLeft(this.style, caret.left, characterLeft);
 		let paddingLeft = 0;
@@ -173,9 +175,11 @@ export class ViewCursor {
 		}
 		const rowHeight = context.viewportData.lineHeight;
 		const height = cursorHeight(this.style, this.lineHeight, rowHeight);
-		const rendersCharacter = this.style === TextEditorCursorStyle.Block || (this.style === TextEditorCursorStyle.Line && width > 2);
+		const rendersCharacter =
+			this.style === TextEditorCursorStyle.Block || (this.style === TextEditorCursorStyle.Line && width > 2);
 		this.renderData = new ViewCursorRenderData(
-			context.getVerticalOffsetForLineNumber(caret.visualLineIndex + 1) + cursorTop(this.style, rowHeight, height),
+			context.getVerticalOffsetForLineNumber(caret.visualLineIndex + 1) +
+				cursorTop(this.style, rowHeight, height),
 			left,
 			paddingLeft,
 			width,
@@ -191,14 +195,18 @@ export class ViewCursor {
 			this.fastDomNode.setDisplay('none');
 			return null;
 		}
-		this.fastDomNode.setClassName([
-			'cursor',
-			'stanza-editor-caret',
-			cursorStyleClass(this.style),
-			this.plurality === CursorPlurality.MultiSecondary ? '' : 'primary',
-			cursorPluralityClass(this.plurality),
-			...(renderData.presentation?.classNames ?? []),
-		].filter(Boolean).join(' '));
+		this.fastDomNode.setClassName(
+			[
+				'cursor',
+				'stanza-editor-caret',
+				cursorStyleClass(this.style),
+				this.plurality === CursorPlurality.MultiSecondary ? '' : 'primary',
+				cursorPluralityClass(this.plurality),
+				...(renderData.presentation?.classNames ?? []),
+			]
+				.filter(Boolean)
+				.join(' '),
+		);
 		if (this.lastRenderedContent !== renderData.textContent) {
 			this.lastRenderedContent = renderData.textContent;
 			this.fastDomNode.domNode.textContent = renderData.textContent;
@@ -227,11 +235,17 @@ export class ViewCursor {
 		if (this.position.column > line.length) {
 			return Object.freeze({ position: this.position, endColumn: this.position.column, character: '\u00a0' });
 		}
-		const [startColumnIndex, endColumnIndexExclusive] = strings.getCharContainingOffset(line, this.position.column - 1);
+		const [startColumnIndex, endColumnIndexExclusive] = strings.getCharContainingOffset(
+			line,
+			this.position.column - 1,
+		);
 		return Object.freeze({
 			position: new Position(this.position.lineNumber, startColumnIndex + 1),
 			endColumn: endColumnIndexExclusive + 1,
-			character: endColumnIndexExclusive === startColumnIndex ? '\u00a0' : line.slice(startColumnIndex, endColumnIndexExclusive),
+			character:
+				endColumnIndexExclusive === startColumnIndex
+					? '\u00a0'
+					: line.slice(startColumnIndex, endColumnIndexExclusive),
 		});
 	}
 
@@ -248,10 +262,13 @@ export class ViewCursor {
 				isRightToLeft: this.isRightToLeftAtPosition(grapheme.position),
 			});
 			if (grapheme.endColumn === grapheme.position.column) return geometry;
-			const range = Range.fromPositions(grapheme.position, new Position(grapheme.position.lineNumber, grapheme.endColumn));
-			const characterRange = context.linesVisibleRangesForRange(range, false)
-				?.find(candidate => candidate.lineNumber === visualLineIndex + 1)
-				?.ranges[0];
+			const range = Range.fromPositions(
+				grapheme.position,
+				new Position(grapheme.position.lineNumber, grapheme.endColumn),
+			);
+			const characterRange = context
+				.linesVisibleRangesForRange(range, false)
+				?.find(candidate => candidate.lineNumber === visualLineIndex + 1)?.ranges[0];
 			if (!characterRange) {
 				return geometry;
 			}
@@ -260,37 +277,52 @@ export class ViewCursor {
 				characterRange: new HorizontalRange(textLeft + characterRange.left, characterRange.width),
 			});
 		}
-		const modelPosition = this.context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(grapheme.position);
+		const modelPosition = this.context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(
+			grapheme.position,
+		);
 		const geometry = createStanzaVisualSelectionGeometry(
 			this.model,
 			[Selection.fromPositions(modelPosition)],
 			this.readVisualProjection(),
-			{ startLineIndex: context.viewportData.startLineNumber - 1, endLineIndexExclusive: context.viewportData.endLineNumber },
+			{
+				startLineIndex: context.viewportData.startLineNumber - 1,
+				endLineIndexExclusive: context.viewportData.endLineNumber,
+			},
 			this.readTextLeft(),
 			this.textMeasurer,
 		).carets[0];
-		return geometry ? Object.freeze({ visualLineIndex: geometry.visualLineIndex, left: geometry.left, isRightToLeft: false }) : undefined;
+		return geometry
+			? Object.freeze({ visualLineIndex: geometry.visualLineIndex, left: geometry.left, isRightToLeft: false })
+			: undefined;
 	}
 
 	private getCharacterWidth(grapheme: CursorGrapheme): number {
 		const line = this.context.viewModel.getLineContent(grapheme.position.lineNumber);
 		const prefix = line.slice(0, grapheme.position.column - 1);
 		const throughCursor = grapheme.character === '\u00a0' ? `${prefix} ` : `${prefix}${grapheme.character}`;
-		return Math.max(1, this.textMeasurer.measureLineWidth(throughCursor) - this.textMeasurer.measureLineWidth(prefix));
+		return Math.max(
+			1,
+			this.textMeasurer.measureLineWidth(throughCursor) - this.textMeasurer.measureLineWidth(prefix),
+		);
 	}
 
 	private getCharacterPresentation(position: Position): ViewCursorCharacterPresentation | undefined {
 		const modelPosition = this.context.viewModel.coordinatesConverter.convertViewPositionToModelPosition(position);
 		const columnIndex = modelPosition.column - 1;
-		const token = this.semanticTokenSource?.getLineTokens(modelPosition.lineNumber - 1)
+		const token = this.semanticTokenSource
+			?.getLineTokens(modelPosition.lineNumber - 1)
 			.find(candidate => candidate.startColumn <= columnIndex && columnIndex < candidate.endColumn);
 		if (!token) return undefined;
 		const syntaxFontStyle = token.syntaxPresentation?.fontStyle ?? [];
 		const decorations = syntaxFontStyle
 			.filter(style => style === 'underline' || style === 'strikethrough')
-			.map(style => style === 'strikethrough' ? 'line-through' : style);
+			.map(style => (style === 'strikethrough' ? 'line-through' : style));
 		return Object.freeze({
-			classNames: Object.freeze(['stanza-editor-token', ...(token.presentation ? [token.presentation] : []), ...(token.modifiers ?? [])]),
+			classNames: Object.freeze([
+				'stanza-editor-token',
+				...(token.presentation ? [token.presentation] : []),
+				...(token.modifiers ?? []),
+			]),
 			...(syntaxFontStyle.includes('italic') ? { fontStyle: 'italic' } : {}),
 			...(syntaxFontStyle.includes('bold') ? { fontWeight: 'bold' } : {}),
 			...(decorations.length > 0 ? { textDecoration: decorations.join(' ') } : {}),
@@ -304,25 +336,40 @@ function cursorLeft(style: TextEditorCursorStyle, caretLeft: number, characterLe
 
 function cursorStyleClass(style: TextEditorCursorStyle): string {
 	switch (style) {
-		case TextEditorCursorStyle.Block: return 'cursor-style-block';
-		case TextEditorCursorStyle.Underline: return 'cursor-style-underline';
-		case TextEditorCursorStyle.LineThin: return 'cursor-style-line-thin';
-		case TextEditorCursorStyle.BlockOutline: return 'cursor-style-block-outline';
-		case TextEditorCursorStyle.UnderlineThin: return 'cursor-style-underline-thin';
-		default: return 'cursor-style-line';
+		case TextEditorCursorStyle.Block:
+			return 'cursor-style-block';
+		case TextEditorCursorStyle.Underline:
+			return 'cursor-style-underline';
+		case TextEditorCursorStyle.LineThin:
+			return 'cursor-style-line-thin';
+		case TextEditorCursorStyle.BlockOutline:
+			return 'cursor-style-block-outline';
+		case TextEditorCursorStyle.UnderlineThin:
+			return 'cursor-style-underline-thin';
+		default:
+			return 'cursor-style-line';
 	}
 }
 
 function cursorPluralityClass(plurality: CursorPlurality): string {
 	switch (plurality) {
-		case CursorPlurality.MultiPrimary: return 'cursor-primary';
-		case CursorPlurality.MultiSecondary: return 'cursor-secondary';
-		default: return '';
+		case CursorPlurality.MultiPrimary:
+			return 'cursor-primary';
+		case CursorPlurality.MultiSecondary:
+			return 'cursor-secondary';
+		default:
+			return '';
 	}
 }
 
-function cursorWidth(ownerWindow: Window, style: TextEditorCursorStyle, lineWidth: number, characterWidth: number): number {
-	if (style === TextEditorCursorStyle.Line) return dom.computeScreenAwareSize(ownerWindow, lineWidth > 0 ? lineWidth : 2);
+function cursorWidth(
+	ownerWindow: Window,
+	style: TextEditorCursorStyle,
+	lineWidth: number,
+	characterWidth: number,
+): number {
+	if (style === TextEditorCursorStyle.Line)
+		return dom.computeScreenAwareSize(ownerWindow, lineWidth > 0 ? lineWidth : 2);
 	if (style === TextEditorCursorStyle.LineThin) return dom.computeScreenAwareSize(ownerWindow, 1);
 	return Math.max(1, characterWidth);
 }
@@ -337,6 +384,7 @@ function cursorHeight(style: TextEditorCursorStyle, lineHeight: number, rowHeigh
 }
 
 function cursorTop(style: TextEditorCursorStyle, rowHeight: number, height: number): number {
-	if (style === TextEditorCursorStyle.Underline || style === TextEditorCursorStyle.UnderlineThin) return rowHeight - height;
+	if (style === TextEditorCursorStyle.Underline || style === TextEditorCursorStyle.UnderlineThin)
+		return rowHeight - height;
 	return (rowHeight - height) / 2;
 }

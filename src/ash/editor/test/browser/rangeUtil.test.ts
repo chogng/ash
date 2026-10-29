@@ -7,7 +7,9 @@ const { DomReadingContext } = await import('../../browser/viewParts/viewLines/do
 const { RangeUtil } = await import('../../browser/viewParts/viewLines/rangeUtil.js');
 
 test('Inline objects use their reserved box for collapsed caret edges and full selection', () => {
-	const dom = new JSDOM('<!doctype html><body><div id="line"><span id="text"><span data-ash-inline-object="true">\uFFFC</span></span></div></body>');
+	const dom = new JSDOM(
+		'<!doctype html><body><div id="line"><span id="text"><span data-ash-inline-object="true">\uFFFC</span></span></div></body>',
+	);
 	using cleanup = { [Symbol.dispose]: () => dom.window.close() };
 	const line = dom.window.document.querySelector<HTMLElement>('#line')!;
 	const text = dom.window.document.querySelector<HTMLElement>('#text')!;
@@ -15,14 +17,17 @@ test('Inline objects use their reserved box for collapsed caret edges and full s
 	line.getBoundingClientRect = () => rectangle(100, 0, 200);
 	text.firstElementChild!.getBoundingClientRect = () => rectangle(120, 0, 160);
 	const context = new DomReadingContext(line, text);
-	const read = (start: number, end: number) => RangeUtil.readHorizontalRanges(text, 0, start, 0, end, context)?.map(({ left, width }) => ({ left, width }));
+	const read = (start: number, end: number) =>
+		RangeUtil.readHorizontalRanges(text, 0, start, 0, end, context)?.map(({ left, width }) => ({ left, width }));
 	assert.deepEqual(read(0, 0), [{ left: 20, width: 0 }]);
 	assert.deepEqual(read(1, 1), [{ left: 180, width: 0 }]);
 	assert.deepEqual(read(0, 1), [{ left: 20, width: 160 }]);
 });
 
 test('RangeUtil keeps one UTF-16 offset space across syntax spans', () => {
-	const dom = new JSDOM('<!doctype html><body><div id="line"><span id="text"><span>ab</span><span>😊</span><span>cd</span></span></div></body>');
+	const dom = new JSDOM(
+		'<!doctype html><body><div id="line"><span id="text"><span>ab</span><span>😊</span><span>cd</span></span></div></body>',
+	);
 	const line = dom.window.document.querySelector<HTMLElement>('#line');
 	const text = dom.window.document.querySelector<HTMLElement>('#text');
 	assert.ok(line);
@@ -44,13 +49,21 @@ test('RangeUtil keeps one UTF-16 offset space across syntax spans', () => {
 		},
 	});
 
-	assert.deepEqual(RangeUtil.readHorizontalRanges(text, 0, 1, 2, 1, new DomReadingContext(line, text))?.map(({ left, width }) => ({ left, width })), [{ left: 10, width: 20 }]);
+	assert.deepEqual(
+		RangeUtil.readHorizontalRanges(text, 0, 1, 2, 1, new DomReadingContext(line, text))?.map(({ left, width }) => ({
+			left,
+			width,
+		})),
+		[{ left: 10, width: 20 }],
+	);
 	assert.equal(selectedText, 'b😊c');
 	dom.window.close();
 });
 
 test('DomReadingContext scales, sorts, and merges browser rectangles once', () => {
-	const dom = new JSDOM('<!doctype html><body><div id="line"><span id="text"><span>abc אבג</span></span></div></body>');
+	const dom = new JSDOM(
+		'<!doctype html><body><div id="line"><span id="text"><span>abc אבג</span></span></div></body>',
+	);
 	const line = dom.window.document.querySelector<HTMLElement>('#line');
 	const text = dom.window.document.querySelector<HTMLElement>('#text');
 	assert.ok(line);
@@ -82,15 +95,28 @@ test('DomReadingContext scales, sorts, and merges browser rectangles once', () =
 	});
 	const context = new DomReadingContext(line, text);
 
-	assert.deepEqual(RangeUtil.readHorizontalRanges(text, 0, 0, 0, 3, context)?.map(({ left, width }) => ({ left, width })), [
-		{ left: 10, width: 10 },
-		{ left: 25, width: 10 },
-	]);
+	assert.deepEqual(
+		RangeUtil.readHorizontalRanges(text, 0, 0, 0, 3, context)?.map(({ left, width }) => ({ left, width })),
+		[
+			{ left: 10, width: 10 },
+			{ left: 25, width: 10 },
+		],
+	);
 	assert.equal(context.didDomLayout, true);
 	assert.equal(rootReads, 1);
 	dom.window.close();
 });
 
 function rectangle(left: number, top: number, width: number): DOMRect {
-	return { left, top, width, height: 20, right: left + width, bottom: top + 20, x: left, y: top, toJSON: () => ({}) } as DOMRect;
+	return {
+		left,
+		top,
+		width,
+		height: 20,
+		right: left + width,
+		bottom: top + 20,
+		x: left,
+		y: top,
+		toJSON: () => ({}),
+	} as DOMRect;
 }

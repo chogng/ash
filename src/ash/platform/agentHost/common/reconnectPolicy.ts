@@ -10,7 +10,11 @@ export interface IRemoteAgentHostReconnectPolicy {
 }
 
 /** The first scheduled retry is attempt 1. Jitter uses the upper half of the delay. */
-export function computeReconnectDelay(policy: IRemoteAgentHostReconnectPolicy, attempt: number, random: () => number = Math.random): number {
+export function computeReconnectDelay(
+	policy: IRemoteAgentHostReconnectPolicy,
+	attempt: number,
+	random: () => number = Math.random,
+): number {
 	const delay = Math.min(policy.maxDelayMs, policy.initialDelayMs * 2 ** (attempt - 1));
 	if (!policy.jitter) {
 		return delay;

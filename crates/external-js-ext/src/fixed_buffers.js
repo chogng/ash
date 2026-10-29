@@ -11,16 +11,24 @@
 		name: { value: 'ArrayBuffer' },
 		prototype: { value: Constructor.prototype },
 		isView: { value: Constructor.isView },
-		[Symbol.species]: { get() { return this; } },
+		[Symbol.species]: {
+			get() {
+				return this;
+			},
+		},
 	});
 	Object.defineProperty(Constructor.prototype, 'constructor', {
-		value: FixedArrayBuffer, writable: true, configurable: true,
+		value: FixedArrayBuffer,
+		writable: true,
+		configurable: true,
 	});
 	globalThis.ArrayBuffer = FixedArrayBuffer;
 	// Neither API is part of the extension contract. Both can allocate backing stores
 	// through the isolate group's page allocator, outside the fixed-buffer budget.
-	if (!Reflect.deleteProperty(globalThis, 'SharedArrayBuffer') ||
-		!Reflect.deleteProperty(globalThis, 'WebAssembly')) {
+	if (
+		!Reflect.deleteProperty(globalThis, 'SharedArrayBuffer') ||
+		!Reflect.deleteProperty(globalThis, 'WebAssembly')
+	) {
 		throw new Error('Unable to exclude unbudgeted memory APIs');
 	}
 })();

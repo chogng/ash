@@ -18,7 +18,7 @@ export class SSEParser {
 	private id: string | undefined;
 	private retry: number | undefined;
 
-	constructor(private readonly onEvent: SSEEventHandler) { }
+	constructor(private readonly onEvent: SSEEventHandler) {}
 
 	public feed(chunk: Uint8Array): void {
 		const text = this.decoder.decode(chunk, { stream: true });
@@ -43,12 +43,14 @@ export class SSEParser {
 
 	private acceptLine(line: string): void {
 		if (line.length === 0) {
-			const event: ISSEEvent | undefined = this.data.length ? {
-				type: this.type || 'message',
-				data: this.data.join('\n'),
-				...(this.id === undefined ? {} : { id: this.id }),
-				...(this.retry === undefined ? {} : { retry: this.retry }),
-			} : undefined;
+			const event: ISSEEvent | undefined = this.data.length
+				? {
+						type: this.type || 'message',
+						data: this.data.join('\n'),
+						...(this.id === undefined ? {} : { id: this.id }),
+						...(this.retry === undefined ? {} : { retry: this.retry }),
+					}
+				: undefined;
 			this.type = '';
 			this.data.length = 0;
 			if (event) this.onEvent(event);
@@ -59,9 +61,15 @@ export class SSEParser {
 		let value = colon < 0 ? '' : line.slice(colon + 1);
 		if (value.startsWith(' ')) value = value.slice(1);
 		switch (field) {
-			case 'data': this.data.push(value); break;
-			case 'event': this.type = value; break;
-			case 'id': if (!value.includes('\0')) this.id = value; break;
+			case 'data':
+				this.data.push(value);
+				break;
+			case 'event':
+				this.type = value;
+				break;
+			case 'id':
+				if (!value.includes('\0')) this.id = value;
+				break;
 			case 'retry':
 				if (/^\d+$/.test(value) && Number.isSafeInteger(Number(value))) this.retry = Number(value);
 				break;

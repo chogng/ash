@@ -7,7 +7,7 @@ import type { IPartsSplash } from '../../../../platform/theme/common/themeServic
 import { ISplashStorageService, browserSplashStorageKey } from './splash.js';
 
 class SplashStorageService implements ISplashStorageService {
-	constructor(@ILayoutService private readonly layoutService: ILayoutService) { }
+	constructor(@ILayoutService private readonly layoutService: ILayoutService) {}
 
 	async saveWindowSplash(splash: IPartsSplash): Promise<void> {
 		const ownerWindow = this.layoutService.mainContainer.ownerDocument.defaultView!;
@@ -17,8 +17,6 @@ class SplashStorageService implements ISplashStorageService {
 
 registerSingleton(ISplashStorageService, SplashStorageService, InstantiationType.Delayed);
 
-registerWorkbenchContribution(
-	PartsSplash.ID,
-	WorkbenchPhase.BlockStartup,
-	accessor => accessor.get(IInstantiationService).createInstance(PartsSplash),
+registerWorkbenchContribution(PartsSplash.ID, WorkbenchPhase.BlockStartup, accessor =>
+	accessor.get(IInstantiationService).createInstance(PartsSplash),
 );

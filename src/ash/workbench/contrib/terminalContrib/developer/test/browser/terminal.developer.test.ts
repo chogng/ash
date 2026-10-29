@@ -11,7 +11,13 @@ import { InstantiationService } from '../../../../../../platform/instantiation/c
 import { IQuickInputService } from '../../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../../services/commands/common/commandService.js';
 import { IStatusbarService, StatusbarAlignment } from '../../../../../services/statusbar/browser/statusbar.js';
-import { ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance, type IXtermTerminal } from '../../../../terminal/browser/terminal.js';
+import {
+	ITerminalEditorService,
+	ITerminalGroupService,
+	ITerminalService,
+	type ITerminalInstance,
+	type IXtermTerminal,
+} from '../../../../terminal/browser/terminal.js';
 import type { IProcessDataEvent } from '../../../../../../platform/terminal/common/terminal.js';
 import { TerminalDeveloperCommandId } from '../../common/terminal.developer.js';
 import '../../browser/terminal.developer.contribution.js';
@@ -24,7 +30,7 @@ function fixture(owner: DisposableStore) {
 	const exit = owner.add(new Emitter<number | undefined>());
 	const output = owner.add(new Emitter<IProcessDataEvent>());
 	const input = owner.add(new Emitter<string>());
-	const resized = owner.add(new Emitter<{ cols: number; rows: number; }>());
+	const resized = owner.add(new Emitter<{ cols: number; rows: number }>());
 	const prompt = new DeferredPromise<string | undefined>();
 	const prompted = new DeferredPromise<void>();
 	const started = new DeferredPromise<void>();
@@ -34,15 +40,28 @@ function fixture(owner: DisposableStore) {
 	let panelCalls = 0;
 	let creationOptions: unknown;
 	const screen = {
-		isDisposed: false, dimensions: () => ({ cols: 80, rows: 24 }), focus: () => { focusCalls++; },
+		isDisposed: false,
+		dimensions: () => ({ cols: 80, rows: 24 }),
+		focus: () => {
+			focusCalls++;
+		},
 		raw: {
-			write: (data: string, callback: () => void) => { displayWrites.push(data); callback(); },
-			onData: input.event, onResize: resized.event,
+			write: (data: string, callback: () => void) => {
+				displayWrites.push(data);
+				callback();
+			},
+			onData: input.event,
+			onResize: resized.event,
 		},
 	} as unknown as IXtermTerminal;
 	const instance = {
-		processId: 1, instanceId: 1, state: 'running', xtermReadyPromise: Promise.resolve(screen),
-		onDidChangeState: changed.event, onDidExit: exit.event, onDidWriteData: output.event,
+		processId: 1,
+		instanceId: 1,
+		state: 'running',
+		xtermReadyPromise: Promise.resolve(screen),
+		onDidChangeState: changed.event,
+		onDidExit: exit.event,
+		onDidWriteData: output.event,
 		start: () => {
 			assert.equal(output.hasListeners(), true);
 			assert.equal(input.hasListeners(), true);
@@ -52,22 +71,60 @@ function fixture(owner: DisposableStore) {
 	} as unknown as ITerminalInstance;
 	let active: ITerminalInstance | undefined = instance;
 	services.registerInstance(ITerminalService, {
-		instances: [instance], get activeInstance() { return active; },
-		onDidChangeActiveInstance: activeChanged.event, onDidDisposeInstance: disposed.event,
-		setActiveInstance: (value: ITerminalInstance) => { active = value; activeChanged.fire(value); },
-		createTerminal: async (options: unknown) => { creationOptions = options; return instance; },
+		instances: [instance],
+		get activeInstance() {
+			return active;
+		},
+		onDidChangeActiveInstance: activeChanged.event,
+		onDidDisposeInstance: disposed.event,
+		setActiveInstance: (value: ITerminalInstance) => {
+			active = value;
+			activeChanged.fire(value);
+		},
+		createTerminal: async (options: unknown) => {
+			creationOptions = options;
+			return instance;
+		},
 	} as unknown as ITerminalService);
-	services.registerInstance(ITerminalGroupService, { showPanel: async () => { panelCalls++; } } as unknown as ITerminalGroupService);
+	services.registerInstance(ITerminalGroupService, {
+		showPanel: async () => {
+			panelCalls++;
+		},
+	} as unknown as ITerminalGroupService);
 	services.registerInstance(ITerminalEditorService, {} as ITerminalEditorService);
-	services.registerInstance(IQuickInputService, { input: async () => { void prompted.complete(); return prompt.p; } } as unknown as IQuickInputService);
-	services.registerInstance(IClipboardService, { writeText: async (text: string) => { clipboard.push(text); } } as IClipboardService);
+	services.registerInstance(IQuickInputService, {
+		input: async () => {
+			void prompted.complete();
+			return prompt.p;
+		},
+	} as unknown as IQuickInputService);
+	services.registerInstance(IClipboardService, {
+		writeText: async (text: string) => {
+			clipboard.push(text);
+		},
+	} as IClipboardService);
 	const statusbar = owner.add(new StatusbarService());
 	services.registerInstance(IStatusbarService, statusbar);
 	const commands = owner.add(new CommandService(services));
 	services.registerInstance(ICommandService, commands);
 	return {
-		commands, statusbar, screen, instance, prompt, prompted, started, changed, disposed, output, input, resized,
-		activeChanged, displayWrites, clipboard, focusCalls: () => focusCalls, panelCalls: () => panelCalls,
+		commands,
+		statusbar,
+		screen,
+		instance,
+		prompt,
+		prompted,
+		started,
+		changed,
+		disposed,
+		output,
+		input,
+		resized,
+		activeChanged,
+		displayWrites,
+		clipboard,
+		focusCalls: () => focusCalls,
+		panelCalls: () => panelCalls,
 		creationOptions: () => creationOptions,
 	};
 }
@@ -113,14 +170,22 @@ test('Developer Record Session subscribes before process startup, captures outpu
 		mock.timers.tick(5000);
 		await command;
 		assert.deepEqual(JSON.parse(f.clipboard[0]), {
-			replay: { events: [{ cols: 80, rows: 24, data: 'first child output' }, { cols: 92, rows: 30, data: 'second output' }] },
-			events: [{ type: 'input', data: 'typed input' }], truncated: false,
+			replay: {
+				events: [
+					{ cols: 80, rows: 24, data: 'first child output' },
+					{ cols: 92, rows: 30, data: 'second output' },
+				],
+			},
+			events: [{ type: 'input', data: 'typed input' }],
+			truncated: false,
 		});
 		assert.equal(f.statusbar.getEntries(StatusbarAlignment.Left).length, 0);
 		assert.equal(f.input.hasListeners(), false);
 		assert.equal(f.output.hasListeners(), false);
 		assert.equal(f.resized.hasListeners(), false);
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('Developer Record Session status entry stops recording and disposed terminals settle it once without retained listeners', async () => {

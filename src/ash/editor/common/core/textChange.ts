@@ -1,22 +1,45 @@
-import { Range } from "./range.js";
-import type { Selection } from "./selection.js";
-import { decodeUTF16LE } from "./stringBuilder.js";
+import { Range } from './range.js';
+import type { Selection } from './selection.js';
+import { decodeUTF16LE } from './stringBuilder.js';
 
 /** A compact offset change used by incremental buffers and worker protocols. */
 export class TextChange {
-	private static _writeStringSize(text: string): number { return encodedStringSize(text); }
-	private static _writeString(buffer: Uint8Array, text: string, offset: number): number { return writeString(buffer, text, offset); }
+	private static _writeStringSize(text: string): number {
+		return encodedStringSize(text);
+	}
+	private static _writeString(buffer: Uint8Array, text: string, offset: number): number {
+		return writeString(buffer, text, offset);
+	}
 	private static _readString(buffer: Uint8Array, offset: number): string {
 		const length = readUInt32BE(buffer, offset);
 		return decodeUTF16LE(buffer, offset + 4, length);
 	}
-	get oldLength(): number { return this.oldText.length; }
-	get oldEnd(): number { return this.oldPosition + this.oldText.length; }
-	get newLength(): number { return this.newText.length; }
-	get newEnd(): number { return this.newPosition + this.newText.length; }
+	get oldLength(): number {
+		return this.oldText.length;
+	}
+	get oldEnd(): number {
+		return this.oldPosition + this.oldText.length;
+	}
+	get newLength(): number {
+		return this.newText.length;
+	}
+	get newEnd(): number {
+		return this.newPosition + this.newText.length;
+	}
 
-	constructor(readonly oldPosition: number, readonly oldText: string, readonly newPosition: number, readonly newText: string) {
-		if (!Number.isSafeInteger(oldPosition) || !Number.isSafeInteger(newPosition) || oldPosition < 0 || newPosition < 0) throw new RangeError("Text change positions must be non-negative safe integers");
+	constructor(
+		readonly oldPosition: number,
+		readonly oldText: string,
+		readonly newPosition: number,
+		readonly newText: string,
+	) {
+		if (
+			!Number.isSafeInteger(oldPosition) ||
+			!Number.isSafeInteger(newPosition) ||
+			oldPosition < 0 ||
+			newPosition < 0
+		)
+			throw new RangeError('Text change positions must be non-negative safe integers');
 	}
 
 	toString(): string {
@@ -27,19 +50,27 @@ export class TextChange {
 		return `(replace@${this.oldPosition} \"${oldText}\" with \"${newText}\")`;
 	}
 
-	writeSize(): number { return 8 + TextChange._writeStringSize(this.oldText) + TextChange._writeStringSize(this.newText); }
+	writeSize(): number {
+		return 8 + TextChange._writeStringSize(this.oldText) + TextChange._writeStringSize(this.newText);
+	}
 	write(buffer: Uint8Array, offset: number): number {
-		writeUInt32BE(buffer, this.oldPosition, offset); offset += 4;
-		writeUInt32BE(buffer, this.newPosition, offset); offset += 4;
+		writeUInt32BE(buffer, this.oldPosition, offset);
+		offset += 4;
+		writeUInt32BE(buffer, this.newPosition, offset);
+		offset += 4;
 		offset = TextChange._writeString(buffer, this.oldText, offset);
 		return TextChange._writeString(buffer, this.newText, offset);
 	}
 
 	static read(buffer: Uint8Array, offset: number, destination: TextChange[]): number {
-		const oldPosition = readUInt32BE(buffer, offset); offset += 4;
-		const newPosition = readUInt32BE(buffer, offset); offset += 4;
-		const oldText = TextChange._readString(buffer, offset); offset += TextChange._writeStringSize(oldText);
-		const newText = TextChange._readString(buffer, offset); offset += TextChange._writeStringSize(newText);
+		const oldPosition = readUInt32BE(buffer, offset);
+		offset += 4;
+		const newPosition = readUInt32BE(buffer, offset);
+		offset += 4;
+		const oldText = TextChange._readString(buffer, offset);
+		offset += TextChange._writeStringSize(oldText);
+		const newText = TextChange._readString(buffer, offset);
+		offset += TextChange._writeStringSize(newText);
 		destination.push(new TextChange(oldPosition, oldText, newPosition, newText));
 		return offset;
 	}
@@ -54,14 +85,14 @@ export function compressConsecutiveTextChanges(previous: TextChange[] | null, cu
 
 /** The operation that committed one text-model version. */
 export enum TextModelChangeReason {
-	Edit = "edit",
-	EOL = "eol",
+	Edit = 'edit',
+	EOL = 'eol',
 	/** Text changed as part of an atomic rich-document transaction. */
-	Extension = "extension",
-	Reset = "reset",
-	Undo = "undo",
-	Redo = "redo",
-	HistoryCancellation = "historyCancellation",
+	Extension = 'extension',
+	Reset = 'reset',
+	Undo = 'undo',
+	Redo = 'redo',
+	HistoryCancellation = 'historyCancellation',
 }
 
 /** One normalized replacement reported after a transaction commits. */
@@ -106,14 +137,19 @@ export interface TextSnapshot {
 }
 
 export function normalizeTextLineEndings(text: string): string {
-	return text.replace(/\r\n?|\u2028|\u2029/g, "\n");
+	return text.replace(/\r\n?|\u2028|\u2029/g, '\n');
 }
 
-function escapeNewline(text: string): string { return text.replace(/\n/g, "\\n").replace(/\r/g, "\\r"); }
-function encodedStringSize(text: string): number { return 4 + text.length * 2; }
+function escapeNewline(text: string): string {
+	return text.replace(/\n/g, '\\n').replace(/\r/g, '\\r');
+}
+function encodedStringSize(text: string): number {
+	return 4 + text.length * 2;
+}
 
 function writeUInt32BE(buffer: Uint8Array, value: number, offset: number): void {
-	if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff || offset < 0 || offset + 4 > buffer.length) throw new RangeError("Invalid uint32 write");
+	if (!Number.isSafeInteger(value) || value < 0 || value > 0xffffffff || offset < 0 || offset + 4 > buffer.length)
+		throw new RangeError('Invalid uint32 write');
 	buffer[offset] = value >>> 24;
 	buffer[offset + 1] = value >>> 16;
 	buffer[offset + 2] = value >>> 8;
@@ -121,14 +157,17 @@ function writeUInt32BE(buffer: Uint8Array, value: number, offset: number): void 
 }
 
 function readUInt32BE(buffer: Uint8Array, offset: number): number {
-	if (!Number.isSafeInteger(offset) || offset < 0 || offset + 4 > buffer.length) throw new RangeError("Invalid uint32 read");
-	return buffer[offset]! * 0x1000000 + buffer[offset + 1]! * 0x10000 + buffer[offset + 2]! * 0x100 + buffer[offset + 3]!;
+	if (!Number.isSafeInteger(offset) || offset < 0 || offset + 4 > buffer.length)
+		throw new RangeError('Invalid uint32 read');
+	return (
+		buffer[offset]! * 0x1000000 + buffer[offset + 1]! * 0x10000 + buffer[offset + 2]! * 0x100 + buffer[offset + 3]!
+	);
 }
 
 function writeString(buffer: Uint8Array, text: string, offset: number): number {
 	writeUInt32BE(buffer, text.length, offset);
 	offset += 4;
-	if (offset + text.length * 2 > buffer.length) throw new RangeError("Text change buffer is too small");
+	if (offset + text.length * 2 > buffer.length) throw new RangeError('Text change buffer is too small');
 	for (let index = 0; index < text.length; index += 1) {
 		const code = text.charCodeAt(index);
 		buffer[offset++] = code;
@@ -142,7 +181,10 @@ class TextChangeCompressor {
 	private previousDelta = 0;
 	private currentDelta = 0;
 
-	constructor(private readonly previous: TextChange[], private readonly current: TextChange[]) { }
+	constructor(
+		private readonly previous: TextChange[],
+		private readonly current: TextChange[],
+	) {}
 
 	compress(): TextChange[] {
 		let previousIndex = 0;
@@ -171,13 +213,19 @@ class TextChangeCompressor {
 				continue;
 			}
 			if (current.oldPosition < previous.newPosition) {
-				const [first, rest] = TextChangeCompressor.splitCurrent(current, previous.newPosition - current.oldPosition);
+				const [first, rest] = TextChangeCompressor.splitCurrent(
+					current,
+					previous.newPosition - current.oldPosition,
+				);
 				this.acceptCurrent(first);
 				current = rest;
 				continue;
 			}
 			if (previous.newPosition < current.oldPosition) {
-				const [first, rest] = TextChangeCompressor.splitPrevious(previous, current.oldPosition - previous.newPosition);
+				const [first, rest] = TextChangeCompressor.splitPrevious(
+					previous,
+					current.oldPosition - previous.newPosition,
+				);
 				this.acceptPrevious(first);
 				previous = rest;
 				continue;
@@ -203,7 +251,14 @@ class TextChangeCompressor {
 				previous = this.previous[++previousIndex] ?? null;
 				current = rest;
 			}
-			this.result.push(new TextChange(mergedPrevious.oldPosition, mergedPrevious.oldText, mergedCurrent.newPosition, mergedCurrent.newText));
+			this.result.push(
+				new TextChange(
+					mergedPrevious.oldPosition,
+					mergedPrevious.oldText,
+					mergedCurrent.newPosition,
+					mergedCurrent.newText,
+				),
+			);
 			this.previousDelta += mergedPrevious.newLength - mergedPrevious.oldLength;
 			this.currentDelta += mergedCurrent.newLength - mergedCurrent.oldLength;
 		}
@@ -211,26 +266,30 @@ class TextChangeCompressor {
 	}
 
 	private acceptCurrent(change: TextChange): void {
-		this.result.push(new TextChange(change.oldPosition - this.previousDelta, change.oldText, change.newPosition, change.newText));
+		this.result.push(
+			new TextChange(change.oldPosition - this.previousDelta, change.oldText, change.newPosition, change.newText),
+		);
 		this.currentDelta += change.newLength - change.oldLength;
 	}
 
 	private acceptPrevious(change: TextChange): void {
-		this.result.push(new TextChange(change.oldPosition, change.oldText, change.newPosition + this.currentDelta, change.newText));
+		this.result.push(
+			new TextChange(change.oldPosition, change.oldText, change.newPosition + this.currentDelta, change.newText),
+		);
 		this.previousDelta += change.newLength - change.oldLength;
 	}
 
 	private static splitPrevious(change: TextChange, offset: number): [TextChange, TextChange] {
 		return [
 			new TextChange(change.oldPosition, change.oldText, change.newPosition, change.newText.slice(0, offset)),
-			new TextChange(change.oldEnd, "", change.newPosition + offset, change.newText.slice(offset)),
+			new TextChange(change.oldEnd, '', change.newPosition + offset, change.newText.slice(offset)),
 		];
 	}
 
 	private static splitCurrent(change: TextChange, offset: number): [TextChange, TextChange] {
 		return [
 			new TextChange(change.oldPosition, change.oldText.slice(0, offset), change.newPosition, change.newText),
-			new TextChange(change.oldPosition + offset, change.oldText.slice(offset), change.newEnd, ""),
+			new TextChange(change.oldPosition + offset, change.oldText.slice(offset), change.newEnd, ''),
 		];
 	}
 
@@ -240,12 +299,23 @@ class TextChangeCompressor {
 		let previous = changes[0]!;
 		for (let index = 1; index < changes.length; index += 1) {
 			const current = changes[index]!;
-			if (previous.oldEnd === current.oldPosition) previous = new TextChange(previous.oldPosition, previous.oldText + current.oldText, previous.newPosition, previous.newText + current.newText);
-			else { result.push(previous); previous = current; }
+			if (previous.oldEnd === current.oldPosition)
+				previous = new TextChange(
+					previous.oldPosition,
+					previous.oldText + current.oldText,
+					previous.newPosition,
+					previous.newText + current.newText,
+				);
+			else {
+				result.push(previous);
+				previous = current;
+			}
 		}
 		result.push(previous);
 		return result;
 	}
 
-	private static removeNoOps(changes: readonly TextChange[]): TextChange[] { return changes.filter(change => change.oldText !== change.newText); }
+	private static removeNoOps(changes: readonly TextChange[]): TextChange[] {
+		return changes.filter(change => change.oldText !== change.newText);
+	}
 }

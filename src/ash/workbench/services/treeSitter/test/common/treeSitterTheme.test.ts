@@ -11,25 +11,37 @@ import { createTestSyntaxBackend as createTreeSitterSyntaxTokenBackend } from '.
 
 test('Tree-sitter resolves capture styles directly through the current theme, including embedded languages', async () => {
 	using model = new TextModel('call run', { languageId: 'javascript' });
-	using themes = new TestThemeService(parseUserColorTheme(JSON.stringify({
-		semanticTokenColors: {
-			function: '#112233',
-			'function.builtin:python': { foreground: '#abcdef', bold: true },
-		},
-	}), 'direct-theme'));
+	using themes = new TestThemeService(
+		parseUserColorTheme(
+			JSON.stringify({
+				semanticTokenColors: {
+					function: '#112233',
+					'function.builtin:python': { foreground: '#abcdef', bold: true },
+				},
+			}),
+			'direct-theme',
+		),
+	);
 	const library: ITreeSitterLibraryService = {
 		_serviceBrand: undefined,
 		onDidChange: Event.None,
 		supportsLanguage: () => true,
 		createSession: () => ({
-			...toDisposable(() => { }), setTabSize() { }, update() { },
+			...toDisposable(() => {}),
+			setTabSize() {},
+			update() {},
 			request: async () => ({
-				revision: model.version, measures: [], rows: [{
-					row: 0, tokens: [
-						{ start: 0, end: 4, name: 'function.builtin' },
-						{ start: 5, end: 8, name: 'function.builtin', languageId: 'python' },
-					]
-				}],
+				revision: model.version,
+				measures: [],
+				rows: [
+					{
+						row: 0,
+						tokens: [
+							{ start: 0, end: 4, name: 'function.builtin' },
+							{ start: 5, end: 8, name: 'function.builtin', languageId: 'python' },
+						],
+					},
+				],
 			}),
 		}),
 	};
@@ -37,15 +49,26 @@ test('Tree-sitter resolves capture styles directly through the current theme, in
 	using backend = createTreeSitterSyntaxTokenBackend(model, configuration, library, themes)!;
 	await backend.whenReady(new AbortController().signal);
 	const tokens = backend.getLanguageTokens(1);
-	assert.deepEqual(tokens.map(token => ({ type: token.tokenType, modifiers: token.modifiers, style: token.presentation })), [
-		{ type: 'function', modifiers: ['builtin'], style: { foreground: '#112233' } },
-		{ type: 'function', modifiers: ['builtin'], style: { foreground: '#abcdef', fontStyle: ['bold'] } },
-	]);
+	assert.deepEqual(
+		tokens.map(token => ({ type: token.tokenType, modifiers: token.modifiers, style: token.presentation })),
+		[
+			{ type: 'function', modifiers: ['builtin'], style: { foreground: '#112233' } },
+			{ type: 'function', modifiers: ['builtin'], style: { foreground: '#abcdef', fontStyle: ['bold'] } },
+		],
+	);
 
-	themes.setColorTheme(parseUserColorTheme('{"semanticTokenColors":{"function":{"foreground":"#445566","italic":true}}}', 'replacement-theme'));
+	themes.setColorTheme(
+		parseUserColorTheme(
+			'{"semanticTokenColors":{"function":{"foreground":"#445566","italic":true}}}',
+			'replacement-theme',
+		),
+	);
 	backend.resetStyles();
-	assert.deepEqual(backend.getLanguageTokens(1).map(token => token.presentation), [
-		{ foreground: '#445566', fontStyle: ['italic'] },
-		{ foreground: '#445566', fontStyle: ['italic'] },
-	]);
+	assert.deepEqual(
+		backend.getLanguageTokens(1).map(token => token.presentation),
+		[
+			{ foreground: '#445566', fontStyle: ['italic'] },
+			{ foreground: '#445566', fontStyle: ['italic'] },
+		],
+	);
 });

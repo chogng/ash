@@ -39,9 +39,14 @@ export interface IAgentHostEditorState {
 }
 
 export type AgentHostEditorUpdate =
-	| { readonly kind: 'request'; readonly resource: UriComponents; readonly isNewSession: boolean; readonly requestSequence: number; }
-	| { readonly kind: 'sessions'; readonly sessions: readonly Omit<IAgentHostEditorSession, 'windowId'>[]; }
-	| { readonly kind: 'delete'; readonly resources: readonly UriComponents[]; };
+	| {
+			readonly kind: 'request';
+			readonly resource: UriComponents;
+			readonly isNewSession: boolean;
+			readonly requestSequence: number;
+	  }
+	| { readonly kind: 'sessions'; readonly sessions: readonly Omit<IAgentHostEditorSession, 'windowId'>[] }
+	| { readonly kind: 'delete'; readonly resources: readonly UriComponents[] };
 
 export function hasAgentsWindowInvitationSessionCooldownElapsed(state: IAgentHostEditorState): boolean {
 	return !state.lastShown || state.editorSessionCount - state.lastShown.editorSessionCount >= 5;
@@ -59,16 +64,21 @@ export class AgentsWindowInvitationState extends Disposable {
 
 	constructor(
 		private readonly now: () => number,
-		history: Pick<IAgentHostEditorState, 'editorSessionCount' | 'lastShown' | 'agentsWindowSessionCount' | 'lastAgentsWindowSessionCreated'>,
+		history: Pick<
+			IAgentHostEditorState,
+			'editorSessionCount' | 'lastShown' | 'agentsWindowSessionCount' | 'lastAgentsWindowSessionCreated'
+		>,
 	) {
 		super();
 		this.state = { ...history, revision: 0, sessions: [], invitation: undefined };
 	}
 
-	getState(): IAgentHostEditorState { return this.state; }
+	getState(): IAgentHostEditorState {
+		return this.state;
+	}
 
 	update(windowId: number, update: AgentHostEditorUpdate): void;
-	update(windowId: undefined, update: Extract<AgentHostEditorUpdate, { kind: 'request'; }>): void;
+	update(windowId: undefined, update: Extract<AgentHostEditorUpdate, { kind: 'request' }>): void;
 	update(windowId: number | undefined, update: AgentHostEditorUpdate): void {
 		if (this.isDisposed) return;
 		const key = (resource: UriComponents): string => URI.revive(resource).toString();
@@ -83,9 +93,15 @@ export class AgentsWindowInvitationState extends Disposable {
 			this.requestSequences.set(resourceKey, update.requestSequence);
 			const previous = sessions.find(session => key(session.resource) === resourceKey);
 			sessions = sessions.filter(session => key(session.resource) !== resourceKey);
-			if (invitation && key(invitation.resource) === resourceKey && invitation.windowId !== windowId) invitation = undefined;
+			if (invitation && key(invitation.resource) === resourceKey && invitation.windowId !== windowId)
+				invitation = undefined;
 			if (windowId !== undefined) {
-				sessions.push({ resource: update.resource, windowId, inProgress: previous?.windowId === windowId ? previous.inProgress : false, needsInput: false });
+				sessions.push({
+					resource: update.resource,
+					windowId,
+					inProgress: previous?.windowId === windowId ? previous.inProgress : false,
+					needsInput: false,
+				});
 				if (update.isNewSession && !this.countedEditorResources.has(resourceKey)) {
 					this.countedEditorResources.add(resourceKey);
 					editorSessionCount = Math.min(editorSessionCount + 1, Number.MAX_SAFE_INTEGER);
@@ -106,22 +122,53 @@ export class AgentsWindowInvitationState extends Disposable {
 				});
 			} else {
 				const removed = new Set(update.resources.map(key));
-				sessions = sessions.filter(session => session.windowId !== windowId || !removed.has(key(session.resource)));
+				sessions = sessions.filter(
+					session => session.windowId !== windowId || !removed.has(key(session.resource)),
+				);
 			}
-			if (invitation && !sessions.some(session => key(session.resource) === key(invitation!.resource) && session.windowId === invitation!.windowId)) invitation = undefined;
+			if (
+				invitation &&
+				!sessions.some(
+					session =>
+						key(session.resource) === key(invitation!.resource) &&
+						session.windowId === invitation!.windowId,
+				)
+			)
+				invitation = undefined;
 		}
-		this.publish({ ...this.state, sessions, invitation, editorSessionCount, agentsWindowSessionCount, lastAgentsWindowSessionCreated });
+		this.publish({
+			...this.state,
+			sessions,
+			invitation,
+			editorSessionCount,
+			agentsWindowSessionCount,
+			lastAgentsWindowSessionCreated,
+		});
 	}
 
 	claim(windowId: number, resource: URI): IAgentsWindowInvitation | undefined {
 		if (this.isDisposed) return undefined;
 		const activity = getAgentHostEditorActivity(this.state, windowId, resource);
 		const day = 24 * 60 * 60 * 1000;
-		const activeAgentsUser = this.state.agentsWindowSessionCount >= 3
-			&& (this.state.lastAgentsWindowSessionCreated === undefined || this.now() - this.state.lastAgentsWindowSessionCreated < 30 * day);
-		if (!activity || this.state.invitation || activeAgentsUser || !hasAgentsWindowInvitationSessionCooldownElapsed(this.state)
-			|| this.state.lastShown && this.now() - this.state.lastShown.timestamp < day) return undefined;
-		const invitation: IAgentsWindowInvitation = { id: createUuid(), revision: this.state.revision + 1, windowId, resource: resource.toJSON(), shown: false };
+		const activeAgentsUser =
+			this.state.agentsWindowSessionCount >= 3 &&
+			(this.state.lastAgentsWindowSessionCreated === undefined ||
+				this.now() - this.state.lastAgentsWindowSessionCreated < 30 * day);
+		if (
+			!activity ||
+			this.state.invitation ||
+			activeAgentsUser ||
+			!hasAgentsWindowInvitationSessionCooldownElapsed(this.state) ||
+			(this.state.lastShown && this.now() - this.state.lastShown.timestamp < day)
+		)
+			return undefined;
+		const invitation: IAgentsWindowInvitation = {
+			id: createUuid(),
+			revision: this.state.revision + 1,
+			windowId,
+			resource: resource.toJSON(),
+			shown: false,
+		};
 		this.publish({ ...this.state, invitation });
 		return invitation;
 	}
@@ -130,33 +177,60 @@ export class AgentsWindowInvitationState extends Disposable {
 		if (this.isDisposed) return;
 		const invitation = this.state.invitation;
 		if (!invitation || invitation.windowId !== windowId || invitation.id !== id || invitation.shown) return;
-		this.publish({ ...this.state, invitation: { ...invitation, shown: true }, lastShown: { timestamp: this.now(), editorSessionCount: this.state.editorSessionCount } });
+		this.publish({
+			...this.state,
+			invitation: { ...invitation, shown: true },
+			lastShown: { timestamp: this.now(), editorSessionCount: this.state.editorSessionCount },
+		});
 	}
 
 	release(windowId: number, id: string): void {
 		if (this.isDisposed) return;
-		if (this.state.invitation?.windowId === windowId && this.state.invitation.id === id) this.publish({ ...this.state, invitation: undefined });
+		if (this.state.invitation?.windowId === windowId && this.state.invitation.id === id)
+			this.publish({ ...this.state, invitation: undefined });
 	}
 
 	resetWindow(windowId: number): void {
 		if (this.isDisposed) return;
-		this.publish({ ...this.state, sessions: this.state.sessions.filter(session => session.windowId !== windowId), invitation: this.state.invitation?.windowId === windowId ? undefined : this.state.invitation });
+		this.publish({
+			...this.state,
+			sessions: this.state.sessions.filter(session => session.windowId !== windowId),
+			invitation: this.state.invitation?.windowId === windowId ? undefined : this.state.invitation,
+		});
 	}
 
 	private publish(state: IAgentHostEditorState): void {
 		this.state = Object.freeze({
 			...state,
 			revision: this.state.revision + 1,
-			sessions: Object.freeze(state.sessions.map(session => Object.freeze({ ...session, resource: Object.freeze({ ...session.resource }) }))),
-			invitation: state.invitation && Object.freeze({ ...state.invitation, resource: Object.freeze({ ...state.invitation.resource }) }),
+			sessions: Object.freeze(
+				state.sessions.map(session =>
+					Object.freeze({ ...session, resource: Object.freeze({ ...session.resource }) }),
+				),
+			),
+			invitation:
+				state.invitation &&
+				Object.freeze({ ...state.invitation, resource: Object.freeze({ ...state.invitation.resource }) }),
 			lastShown: state.lastShown && Object.freeze({ ...state.lastShown }),
 		});
 		this.changed.fire(this.state);
 	}
 }
 
-export function getAgentHostEditorActivity(state: IAgentHostEditorState, windowId: number, resource: URI): { readonly sameWindow: number; readonly acrossWindows: boolean; } | undefined {
+export function getAgentHostEditorActivity(
+	state: IAgentHostEditorState,
+	windowId: number,
+	resource: URI,
+): { readonly sameWindow: number; readonly acrossWindows: boolean } | undefined {
 	const working = state.sessions.filter(session => session.inProgress && !session.needsInput);
-	if (!working.some(session => session.windowId === windowId && URI.revive(session.resource).toString() === resource.toString())) return undefined;
-	return { sameWindow: working.filter(session => session.windowId === windowId).length, acrossWindows: working.some(session => session.windowId !== windowId) };
+	if (
+		!working.some(
+			session => session.windowId === windowId && URI.revive(session.resource).toString() === resource.toString(),
+		)
+	)
+		return undefined;
+	return {
+		sameWindow: working.filter(session => session.windowId === windowId).length,
+		acrossWindows: working.some(session => session.windowId !== windowId),
+	};
 }

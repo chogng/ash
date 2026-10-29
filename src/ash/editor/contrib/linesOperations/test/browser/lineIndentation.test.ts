@@ -9,11 +9,17 @@ import { TextModel } from '../../../../common/model/textModel.js';
 import { installEditorTestDom } from '../../../../test/browser/editorTestGlobals.js';
 
 const moduleDom = new JSDOM('<!doctype html><body></body>');
-const installedGlobals = installEditorTestDom(moduleDom, [
-	'Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent',
-], {
-	ResizeObserver: class TestResizeObserver { observe(): void { } unobserve(): void { } disconnect(): void { } },
-});
+const installedGlobals = installEditorTestDom(
+	moduleDom,
+	['Node', 'Element', 'HTMLElement', 'Event', 'InputEvent', 'KeyboardEvent'],
+	{
+		ResizeObserver: class TestResizeObserver {
+			observe(): void {}
+			unobserve(): void {}
+			disconnect(): void {}
+		},
+	},
+);
 const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 await import('../../browser/linesOperations.js');
@@ -42,7 +48,12 @@ test('selected-line Tab remains available to the host keybinding', () => {
 });
 
 function key(target: JSDOM['window'], value: string, options: KeyboardEventInit = {}): KeyboardEvent {
-	return new target.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: value, ...options }) as unknown as KeyboardEvent;
+	return new target.KeyboardEvent('keydown', {
+		bubbles: true,
+		cancelable: true,
+		key: value,
+		...options,
+	}) as unknown as KeyboardEvent;
 }
 
 const codeFeatures = registerTestCodeEditorFeatures();

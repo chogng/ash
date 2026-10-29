@@ -2,7 +2,6 @@ import { arrayInsert } from '../../../base/common/arrays.js';
 import { toUint32 } from '../../../base/common/uint.js';
 
 export class PrefixSumComputer {
-
 	/**
 	 * values[i] is the value at index i
 	 */
@@ -158,7 +157,7 @@ export class PrefixSumComputer {
 		let midStart = 0;
 
 		while (low <= high) {
-			mid = low + ((high - low) / 2) | 0;
+			mid = (low + (high - low) / 2) | 0;
 
 			midStop = this.prefixSum[mid];
 			midStart = midStop - this.values[mid];
@@ -180,7 +179,7 @@ export class PrefixSumComputer {
  * {@link getIndexOf} has an amortized runtime complexity of O(1).
  *
  * ({@link PrefixSumComputer.getIndexOf} is just  O(log n))
-*/
+ */
 export class ConstantTimePrefixSumComputer {
 	private _values: number[];
 	private _isValid: boolean;
@@ -193,7 +192,7 @@ export class ConstantTimePrefixSumComputer {
 
 	/**
 	 * _indexBySum[sum] = idx => _prefixSum[idx - 1] <= sum < _prefixSum[idx]
-	*/
+	 */
 	private _indexBySum: number[];
 
 	constructor(values: number[]) {
@@ -289,17 +288,14 @@ export class ConstantTimePrefixSumComputer {
 	}
 }
 
-
 export class PrefixSumIndexOfResult {
 	_prefixSumIndexOfResultBrand: void = undefined;
 
 	constructor(
 		public readonly index: number,
-		public readonly remainder: number
+		public readonly remainder: number,
 	) {
 		this.index = index;
 		this.remainder = remainder;
 	}
 }
-
-

@@ -10,10 +10,21 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { eventLabel } from '../../../../workbench/contrib/chat/browser/chatDebug/agentTraceModel.js';
-import { createAgentTraceResource, readAgentTraceLocation } from '../../../../workbench/contrib/chat/browser/chatDebug/chatDebugEditorInput.js';
-import { IOutputService, OUTPUT_VIEW_ID, type IOutputChannel, type IOutputEntryInput } from '../../../../workbench/services/output/common/output.js';
+import {
+	createAgentTraceResource,
+	readAgentTraceLocation,
+} from '../../../../workbench/contrib/chat/browser/chatDebug/chatDebugEditorInput.js';
+import {
+	IOutputService,
+	OUTPUT_VIEW_ID,
+	type IOutputChannel,
+	type IOutputEntryInput,
+} from '../../../../workbench/services/output/common/output.js';
 import { IChatDebugService } from '../../../../workbench/contrib/chat/common/chatDebugService.js';
-import type { AgentTraceDiagnosticEvent, AgentTraceEvent } from '../../../../workbench/contrib/chat/common/chatDebugEvents.js';
+import type {
+	AgentTraceDiagnosticEvent,
+	AgentTraceEvent,
+} from '../../../../workbench/contrib/chat/common/chatDebugEvents.js';
 import { IViewsService } from '../../../../workbench/services/views/common/viewsService.js';
 import { ISessionsService } from '../../../services/sessions/browser/sessionsService.js';
 
@@ -26,8 +37,12 @@ export const IAgentTraceOutput = createServiceIdentifier<IAgentTraceOutput>('age
 export class AgentTraceOutput extends Disposable implements IAgentTraceOutput {
 	private readonly channel = this._register(new MutableDisposable<IOutputChannel>());
 	private readonly channelListener = this._register(new MutableDisposable<IDisposable>());
-	private readonly poll = this._register(new RunOnceScheduler(() => { void this.refresh(); }, 1000));
-	private target: { readonly sessionId: string; readonly title: string; } | undefined;
+	private readonly poll = this._register(
+		new RunOnceScheduler(() => {
+			void this.refresh();
+		}, 1000),
+	);
+	private target: { readonly sessionId: string; readonly title: string } | undefined;
 	private cursors: Readonly<Record<string, number>> = {};
 	private diagnosticCursor = 0;
 	private pending: object | undefined;
@@ -49,50 +64,86 @@ export class AgentTraceOutput extends Disposable implements IAgentTraceOutput {
 	) {
 		super();
 		this.createChannel();
-		this._register(autorun(reader => {
-			const selected = sessions.getSelection(reader).activeSelection;
-			// Once selected, the reader stays with that Session until Show Agent Output is invoked.
-			if (!this.target && selected?.kind === 'session') this.select(selected.active.session);
-		}));
+		this._register(
+			autorun(reader => {
+				const selected = sessions.getSelection(reader).activeSelection;
+				// Once selected, the reader stays with that Session until Show Agent Output is invoked.
+				if (!this.target && selected?.kind === 'session') this.select(selected.active.session);
+			}),
+		);
 		this._register(output.onDidChangeActiveChannel(() => this.updatePolling()));
-		this._register(views.onDidChangeViewVisibility(event => { if (event.id === OUTPUT_VIEW_ID) this.updatePolling(); }));
-		this._register(languages.linkProvider.register({ scheme: 'output' }, {
-			provideLinks: (request, signal) => {
-				if (signal.aborted || request.resource?.toString() !== this.channel.value?.uri.toString()) return [];
-				return request.snapshot.getText().split('\n').flatMap((line, index) => [...line.matchAll(/ash-agent-trace:\/[^\s]+/g)].flatMap(match => {
-					try {
-						const uri = URI.parse(match[0]);
-						if (!readAgentTraceLocation(uri)) return [];
-						return [{ range: new Range(index + 1, match.index + 1, index + 1, match.index + match[0].length + 1), target: uri.toString(), tooltip: localize('agentOutput.openTrace', 'Open Execution Trace') }];
-					} catch { return []; }
-				}));
-			},
-		}));
-		this._register(openers.registerOpener({
-			open: async target => {
-				const uri = typeof target === 'string' ? URI.parse(target) : target;
-				if (uri.scheme !== 'ash-agent-trace') return false;
-				const location = readAgentTraceLocation(uri);
-				if (!location) return false;
-				await commands.executeCommand('sessions.trace.open', location);
-				return true;
-			}
-		}));
+		this._register(
+			views.onDidChangeViewVisibility(event => {
+				if (event.id === OUTPUT_VIEW_ID) this.updatePolling();
+			}),
+		);
+		this._register(
+			languages.linkProvider.register(
+				{ scheme: 'output' },
+				{
+					provideLinks: (request, signal) => {
+						if (signal.aborted || request.resource?.toString() !== this.channel.value?.uri.toString())
+							return [];
+						return request.snapshot
+							.getText()
+							.split('\n')
+							.flatMap((line, index) =>
+								[...line.matchAll(/ash-agent-trace:\/[^\s]+/g)].flatMap(match => {
+									try {
+										const uri = URI.parse(match[0]);
+										if (!readAgentTraceLocation(uri)) return [];
+										return [
+											{
+												range: new Range(
+													index + 1,
+													match.index + 1,
+													index + 1,
+													match.index + match[0].length + 1,
+												),
+												target: uri.toString(),
+												tooltip: localize('agentOutput.openTrace', 'Open Execution Trace'),
+											},
+										];
+									} catch {
+										return [];
+									}
+								}),
+							);
+					},
+				},
+			),
+		);
+		this._register(
+			openers.registerOpener({
+				open: async target => {
+					const uri = typeof target === 'string' ? URI.parse(target) : target;
+					if (uri.scheme !== 'ash-agent-trace') return false;
+					const location = readAgentTraceLocation(uri);
+					if (!location) return false;
+					await commands.executeCommand('sessions.trace.open', location);
+					return true;
+				},
+			}),
+		);
 		this.updatePolling();
 	}
 
 	showCurrent(): void {
 		const selected = this.sessions.activeSelection;
-		if (selected?.kind !== 'session') throw new Error(localize('agentOutput.selectSession', 'Select an Agent conversation to show its output.'));
+		if (selected?.kind !== 'session')
+			throw new Error(localize('agentOutput.selectSession', 'Select an Agent conversation to show its output.'));
 		this.select(selected.active.session);
 		this.channel.value!.show();
 	}
 
 	private createChannel(): void {
 		this.channel.value = this.output.createChannel({
-			id: 'agent', label: this.target
+			id: 'agent',
+			label: this.target
 				? localize('agentOutput.namedChannel', 'Agent · {0} ({1})', this.target.title, this.target.sessionId)
-				: localize('agentOutput.channel', 'Agent'), kind: 'log', source: 'core'
+				: localize('agentOutput.channel', 'Agent'),
+			kind: 'log',
+			source: 'core',
 		});
 		this.channelListener.value = this.channel.value.onDidChange(change => {
 			if (change.kind !== 'clear') return;
@@ -100,10 +151,13 @@ export class AgentTraceOutput extends Disposable implements IAgentTraceOutput {
 			this.suppressTrace ||= this.pendingRead === 'trace' || !this.traceCaughtUp;
 			this.suppressDiagnostics ||= this.pendingRead === 'diagnostics' || !this.diagnosticsCaughtUp;
 		});
-		if (!this.target) this.channel.value.appendLine({ text: localize('agentOutput.selectSession', 'Select an Agent conversation to show its output.') });
+		if (!this.target)
+			this.channel.value.appendLine({
+				text: localize('agentOutput.selectSession', 'Select an Agent conversation to show its output.'),
+			});
 	}
 
-	private select(target: { readonly sessionId: string; readonly title: string; }): void {
+	private select(target: { readonly sessionId: string; readonly title: string }): void {
 		if (target.sessionId === this.target?.sessionId) return;
 		const selected = this.output.activeChannel === this.channel.value;
 		this.poll.cancel();
@@ -117,18 +171,33 @@ export class AgentTraceOutput extends Disposable implements IAgentTraceOutput {
 		this.failed = false;
 		this.channel.clear();
 		this.createChannel();
-		this.channel.value!.appendLine({ text: localize('agentOutput.context', 'Session: {0} ({1})', target.title, target.sessionId) + '\n' + createAgentTraceResource(target.sessionId).toString() });
+		this.channel.value!.appendLine({
+			text:
+				localize('agentOutput.context', 'Session: {0} ({1})', target.title, target.sessionId) +
+				'\n' +
+				createAgentTraceResource(target.sessionId).toString(),
+		});
 		if (selected) this.output.selectChannel('agent');
 		this.updatePolling();
 	}
 
 	private get reading(): boolean {
-		return !this.isDisposed && !!this.target && this.output.activeChannel === this.channel.value && this.views.isViewVisible(OUTPUT_VIEW_ID);
+		return (
+			!this.isDisposed &&
+			!!this.target &&
+			this.output.activeChannel === this.channel.value &&
+			this.views.isViewVisible(OUTPUT_VIEW_ID)
+		);
 	}
 
 	private updatePolling(): void {
-		if (this.reading) { if (!this.pending) this.poll.schedule(0); }
-		else { this.poll.cancel(); this.pending = undefined; this.pendingRead = undefined; }
+		if (this.reading) {
+			if (!this.pending) this.poll.schedule(0);
+		} else {
+			this.poll.cancel();
+			this.pending = undefined;
+			this.pendingRead = undefined;
+		}
 	}
 
 	private async refresh(): Promise<void> {
@@ -168,7 +237,16 @@ export class AgentTraceOutput extends Disposable implements IAgentTraceOutput {
 			this.failed = false;
 		} catch (error) {
 			if (current() && !this.failed) {
-				this.channel.value!.appendLine({ severity: 'error', text: localize('agentOutput.readFailed', 'Could not read Agent output: {0}', String(error).replace(/[\r\n]+/g, ' ').slice(0, 500)) });
+				this.channel.value!.appendLine({
+					severity: 'error',
+					text: localize(
+						'agentOutput.readFailed',
+						'Could not read Agent output: {0}',
+						String(error)
+							.replace(/[\r\n]+/g, ' ')
+							.slice(0, 500),
+					),
+				});
 				this.failed = true;
 			}
 		} finally {
@@ -188,15 +266,57 @@ function diagnosticRecord(record: AgentTraceDiagnosticEvent): AgentTraceEvent {
 function outputSummary(sessionId: string, record: AgentTraceEvent): IOutputEntryInput | undefined {
 	const event = record.event;
 	const item = isRecord(event.item) ? event.item : undefined;
-	const tool = event.type === 'toolExecutionStarted' || (event.type === 'itemCompleted' && (item?.type === 'toolCall' || item?.type === 'toolResult'));
-	const model = ['modelAttemptStarted', 'modelAttemptCompleted', 'modelAttemptFailed', 'modelAttemptCancelled', 'modelAttemptAbandoned', 'modelInvocationRecorded', 'modelResponseEvaluated'].includes(event.type);
-	const agent = ['threadCreated', 'turnAccepted', 'turnStarted', 'turnCompleted', 'turnFailed', 'turnCancelling', 'turnInterrupted', 'delegationRequested', 'delegationStarted', 'delegationResultProduced', 'delegationResultReceived', 'agentJoinRequested', 'agentJoinSatisfied', 'contextOverflowRecoveryCommitted', 'contextCheckpointCommitted'].includes(event.type);
+	const tool =
+		event.type === 'toolExecutionStarted' ||
+		(event.type === 'itemCompleted' && (item?.type === 'toolCall' || item?.type === 'toolResult'));
+	const model = [
+		'modelAttemptStarted',
+		'modelAttemptCompleted',
+		'modelAttemptFailed',
+		'modelAttemptCancelled',
+		'modelAttemptAbandoned',
+		'modelInvocationRecorded',
+		'modelResponseEvaluated',
+	].includes(event.type);
+	const agent = [
+		'threadCreated',
+		'turnAccepted',
+		'turnStarted',
+		'turnCompleted',
+		'turnFailed',
+		'turnCancelling',
+		'turnInterrupted',
+		'delegationRequested',
+		'delegationStarted',
+		'delegationResultProduced',
+		'delegationResultReceived',
+		'agentJoinRequested',
+		'agentJoinSatisfied',
+		'contextOverflowRecoveryCommitted',
+		'contextCheckpointCommitted',
+	].includes(event.type);
 	if (!tool && !model && !agent) return undefined;
-	const failed = event.type === 'turnFailed' || event.type === 'modelAttemptFailed' || event.type === 'modelAttemptAbandoned' || item?.isError === true || (isRecord(event.record) && event.record.outcome === 'failed') || (isRecord(event.decision) && event.decision.action === 'fail');
-	const cancelled = event.type === 'turnInterrupted' || event.type === 'turnCancelling' || event.type === 'modelAttemptCancelled';
-	const location = createAgentTraceResource({ sessionId, threadId: event.threadId, ...(typeof event.turnId === 'string' ? { turnId: event.turnId } : {}), eventId: record.eventId });
+	const failed =
+		event.type === 'turnFailed' ||
+		event.type === 'modelAttemptFailed' ||
+		event.type === 'modelAttemptAbandoned' ||
+		item?.isError === true ||
+		(isRecord(event.record) && event.record.outcome === 'failed') ||
+		(isRecord(event.decision) && event.decision.action === 'fail');
+	const cancelled =
+		event.type === 'turnInterrupted' || event.type === 'turnCancelling' || event.type === 'modelAttemptCancelled';
+	const location = createAgentTraceResource({
+		sessionId,
+		threadId: event.threadId,
+		...(typeof event.turnId === 'string' ? { turnId: event.turnId } : {}),
+		eventId: record.eventId,
+	});
 	return {
-		timestamp: record.recordedAt, severity: failed ? 'error' : cancelled ? 'warning' : 'information', category: tool ? 'tool' : model ? 'model' : 'agent',
-		text: `${event.threadId} · ${eventLabel(record).replace(/[\r\n\t]+/g, ' ').slice(0, 500)}\n${location.toString()}`
+		timestamp: record.recordedAt,
+		severity: failed ? 'error' : cancelled ? 'warning' : 'information',
+		category: tool ? 'tool' : model ? 'model' : 'agent',
+		text: `${event.threadId} · ${eventLabel(record)
+			.replace(/[\r\n\t]+/g, ' ')
+			.slice(0, 500)}\n${location.toString()}`,
 	};
 }

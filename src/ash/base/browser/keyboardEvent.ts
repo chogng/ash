@@ -1,10 +1,5 @@
-import { stopEvent } from "./dom.js";
-import {
-	keyCodeFromKeyboardEvent,
-	KeyCode,
-	ScanCode,
-	ScanCodeUtils,
-} from "../common/keyCodes.js";
+import { stopEvent } from './dom.js';
+import { keyCodeFromKeyboardEvent, KeyCode, ScanCode, ScanCodeUtils } from '../common/keyCodes.js';
 
 export interface KeyChord {
 	/** Physical key identity, such as `KeyP` or `ArrowDown`. */
@@ -30,7 +25,7 @@ export interface IKeyboardEvent {
 	readonly isComposing: boolean;
 	readonly repeat: boolean;
 	matches(chord: KeyChord): boolean;
-	stop(options?: { readonly preventDefault?: boolean; readonly immediate?: boolean; }): void;
+	stop(options?: { readonly preventDefault?: boolean; readonly immediate?: boolean }): void;
 }
 
 /**
@@ -69,25 +64,24 @@ export class StandardKeyboardEvent implements IKeyboardEvent {
 		this.shiftKey = browserEvent.shiftKey;
 		this.altKey = browserEvent.altKey;
 		this.metaKey = browserEvent.metaKey;
-		this.altGraphKey = browserEvent.getModifierState?.("AltGraph") ?? false;
+		this.altGraphKey = browserEvent.getModifierState?.('AltGraph') ?? false;
 		this.isComposing = browserEvent.isComposing;
 		this.repeat = browserEvent.repeat;
 	}
 
 	matches(chord: KeyChord): boolean {
-		return !this.isComposing &&
+		return (
+			!this.isComposing &&
 			!this.altGraphKey &&
 			this.code === chord.code &&
 			this.ctrlKey === Boolean(chord.ctrlKey) &&
 			this.shiftKey === Boolean(chord.shiftKey) &&
 			this.altKey === Boolean(chord.altKey) &&
-			this.metaKey === Boolean(chord.metaKey);
+			this.metaKey === Boolean(chord.metaKey)
+		);
 	}
 
-	stop(options?: {
-		readonly preventDefault?: boolean;
-		readonly immediate?: boolean;
-	}): void {
+	stop(options?: { readonly preventDefault?: boolean; readonly immediate?: boolean }): void {
 		stopEvent(this.browserEvent, options);
 	}
 }
@@ -97,8 +91,5 @@ export function hasModifierKeys(event: KeyboardEvent): boolean {
 }
 
 export function isModifierKey(event: KeyboardEvent): boolean {
-	return event.key === "Control" ||
-		event.key === "Shift" ||
-		event.key === "Alt" ||
-		event.key === "Meta";
+	return event.key === 'Control' || event.key === 'Shift' || event.key === 'Alt' || event.key === 'Meta';
 }

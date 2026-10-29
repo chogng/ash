@@ -10,23 +10,39 @@ import type { AppServerProtocolClient } from '../../../agentHost/browser/appServ
 import type { FileFuzzyResult } from '../../../../../../.build/protocol/typescript/index.js';
 import { createAppServerFileSearchApi } from '../../browser/fileSearchApi.js';
 
-const directory = { resource: URI.parse('ssh://host/workspace'), target: { type: 'workspace' as const, dirId: 'folder' } };
+const directory = {
+	resource: URI.parse('ssh://host/workspace'),
+	target: { type: 'workspace' as const, dirId: 'folder' },
+};
 
 test('fuzzy RPC preserves backend scores, root URI and an explicit query', async () => {
 	const connection = {
 		generation: 1,
 		state: 'ready',
 		onStateChange: () => Disposable.None,
-		async request(definition: { method: string; }, params: { operationId: string; }): Promise<FileFuzzyResult> {
+		async request(definition: { method: string }, params: { operationId: string }): Promise<FileFuzzyResult> {
 			assert.equal(definition.method, 'file/search/fuzzy');
 			assert.ok(params.operationId);
-			assert.deepEqual({ ...params, operationId: undefined }, { operationId: undefined, target: directory.target, query: '中文 service', maxResults: 100 });
+			assert.deepEqual(
+				{ ...params, operationId: undefined },
+				{ operationId: undefined, target: directory.target, query: '中文 service', maxResults: 100 },
+			);
 			return { matches: [{ path: 'src/中文Service.ts', score: 42 }], totalMatches: 1, freshness: 'indexed' };
 		},
 	} as unknown as AppServerProtocolClient;
-	assert.deepEqual(await createAppServerFileSearchApi(connection).fuzzy(directory, { query: '中文 service', maxResults: 100 }), {
-		matches: [{ path: 'src/中文Service.ts', score: 42, resource: URI.joinPath(directory.resource, 'src/中文Service.ts') }], totalMatches: 1,
-	});
+	assert.deepEqual(
+		await createAppServerFileSearchApi(connection).fuzzy(directory, { query: '中文 service', maxResults: 100 }),
+		{
+			matches: [
+				{
+					path: 'src/中文Service.ts',
+					score: 42,
+					resource: URI.joinPath(directory.resource, 'src/中文Service.ts'),
+				},
+			],
+			totalMatches: 1,
+		},
+	);
 });
 
 test('fuzzy cancellation keeps the terminal response and discards its late matches', async () => {
@@ -37,8 +53,11 @@ test('fuzzy cancellation keeps the terminal response and discards its late match
 		generation: 1,
 		state: 'ready',
 		onStateChange: () => Disposable.None,
-		async request(definition: { method: string; }, params: { operationId: string; }): Promise<unknown> {
-			if (definition.method === 'file/search/fuzzy') { operationId = params.operationId; return response.p; }
+		async request(definition: { method: string }, params: { operationId: string }): Promise<unknown> {
+			if (definition.method === 'file/search/fuzzy') {
+				operationId = params.operationId;
+				return response.p;
+			}
 			assert.equal(definition.method, 'file/search/fuzzy/cancel');
 			assert.equal(params.operationId, operationId);
 			cancelled.complete();
@@ -46,7 +65,11 @@ test('fuzzy cancellation keeps the terminal response and discards its late match
 		},
 	} as unknown as AppServerProtocolClient;
 	const controller = new AbortController();
-	const pending = createAppServerFileSearchApi(connection).fuzzy(directory, { query: 'main', maxResults: 1 }, controller.signal);
+	const pending = createAppServerFileSearchApi(connection).fuzzy(
+		directory,
+		{ query: 'main', maxResults: 1 },
+		controller.signal,
+	);
 	const rejected = assert.rejects(pending, isCancellationError);
 	controller.abort();
 	await cancelled.p;
@@ -64,24 +87,40 @@ for (const kind of ['glob', 'fuzzy'] as const) {
 				generation: 1,
 				state: 'ready' as AppServerConnectionState,
 				onStateChange: changed.event,
-				request: async (definition: { method: string; }) => {
+				request: async (definition: { method: string }) => {
 					methods.push(definition.method);
 					return methods.length === 1 ? response.p : {};
 				},
 			};
 			const api = createAppServerFileSearchApi(connection as unknown as AppServerProtocolClient);
 			const controller = new AbortController();
-			const pending = kind === 'glob'
-				? api.glob(directory, { includePatterns: [], excludePatterns: [], maxResults: 1 }, controller.signal)
-				: api.fuzzy(directory, { query: 'main', maxResults: 1 }, controller.signal);
+			const pending =
+				kind === 'glob'
+					? api.glob(
+							directory,
+							{ includePatterns: [], excludePatterns: [], maxResults: 1 },
+							controller.signal,
+						)
+					: api.fuzzy(directory, { query: 'main', maxResults: 1 }, controller.signal);
 			const rejected = assert.rejects(pending, isCancellationError);
-			if (replacement) { connection.generation++; }
-			else { connection.state = 'stopped'; }
+			if (replacement) {
+				connection.generation++;
+			} else {
+				connection.state = 'stopped';
+			}
 			changed.fire(connection.state);
 			controller.abort();
-			await response.complete(kind === 'glob' ? { paths: ['main.ts'], totalMatches: 1 } : { matches: [{ path: 'main.ts', score: 1 }], totalMatches: 1 });
+			await response.complete(
+				kind === 'glob'
+					? { paths: ['main.ts'], totalMatches: 1 }
+					: { matches: [{ path: 'main.ts', score: 1 }], totalMatches: 1 },
+			);
 			await rejected;
-			assert.deepEqual(methods, [`file/search/${kind}`], 'an obsolete cancel handle must not send through a replacement connection');
+			assert.deepEqual(
+				methods,
+				[`file/search/${kind}`],
+				'an obsolete cancel handle must not send through a replacement connection',
+			);
 			assert.equal(changed.hasListeners(), false);
 		});
 	}
@@ -96,11 +135,16 @@ for (const kind of ['glob', 'fuzzy'] as const) {
 			request: () => response.p,
 		};
 		const api = createAppServerFileSearchApi(connection as unknown as AppServerProtocolClient);
-		const pending = kind === 'glob'
-			? api.glob(directory, { includePatterns: [], excludePatterns: [], maxResults: 1 })
-			: api.fuzzy(directory, { query: 'main', maxResults: 1 });
+		const pending =
+			kind === 'glob'
+				? api.glob(directory, { includePatterns: [], excludePatterns: [], maxResults: 1 })
+				: api.fuzzy(directory, { query: 'main', maxResults: 1 });
 		const rejected = assert.rejects(pending, isCancellationError);
-		void response.complete(kind === 'glob' ? { paths: ['main.ts'], totalMatches: 1 } : { matches: [{ path: 'main.ts', score: 1 }], totalMatches: 1 });
+		void response.complete(
+			kind === 'glob'
+				? { paths: ['main.ts'], totalMatches: 1 }
+				: { matches: [{ path: 'main.ts', score: 1 }], totalMatches: 1 },
+		);
 		connection.state = 'stopped';
 		changed.fire('stopped');
 		await rejected;
@@ -109,10 +153,12 @@ for (const kind of ['glob', 'fuzzy'] as const) {
 }
 
 test('filename RPC carries filtering constraints to the owning backend before truncation', async () => {
-	const requests: { method: string; params: unknown; }[] = [];
+	const requests: { method: string; params: unknown }[] = [];
 	const connection = {
-		generation: 1, state: 'ready', onStateChange: () => Disposable.None,
-		async request(definition: { method: string; }, params: Record<string, unknown>) {
+		generation: 1,
+		state: 'ready',
+		onStateChange: () => Disposable.None,
+		async request(definition: { method: string }, params: Record<string, unknown>) {
 			requests.push({ method: definition.method, params: { ...params, operationId: undefined } });
 			return definition.method === 'file/search/glob'
 				? { paths: ['src/needle.ts'], totalMatches: 1 }
@@ -124,7 +170,18 @@ test('filename RPC carries filtering constraints to the owning backend before tr
 	await api.glob(directory, { ...constraints, requiredPattern: '**/*needle*' });
 	await api.fuzzy(directory, { ...constraints, query: 'needle' });
 	assert.deepEqual(requests, [
-		{ method: 'file/search/glob', params: { operationId: undefined, target: directory.target, ...constraints, requiredPattern: '**/*needle*' } },
-		{ method: 'file/search/fuzzy', params: { operationId: undefined, target: directory.target, ...constraints, query: 'needle' } },
+		{
+			method: 'file/search/glob',
+			params: {
+				operationId: undefined,
+				target: directory.target,
+				...constraints,
+				requiredPattern: '**/*needle*',
+			},
+		},
+		{
+			method: 'file/search/fuzzy',
+			params: { operationId: undefined, target: directory.target, ...constraints, query: 'needle' },
+		},
 	]);
 });

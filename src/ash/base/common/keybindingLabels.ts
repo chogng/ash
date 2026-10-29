@@ -1,14 +1,10 @@
-import {
-	KeybindingChordKind,
-	type ResolvedKeybinding,
-	type ResolvedKeybindingChord,
-} from "./keybindings.js";
-import { OperatingSystem } from "./platform.js";
+import { KeybindingChordKind, type ResolvedKeybinding, type ResolvedKeybindingChord } from './keybindings.js';
+import { OperatingSystem } from './platform.js';
 
 export enum KeybindingLabelStyle {
-	UI = "ui",
-	Aria = "aria",
-	UserSettings = "userSettings",
+	UI = 'ui',
+	Aria = 'aria',
+	UserSettings = 'userSettings',
 }
 
 export interface KeybindingLabelPart {
@@ -19,21 +15,11 @@ export interface KeybindingLabelPart {
 }
 
 /** Returns one visual and accessible label for each chord. */
-export function getKeybindingLabelParts(
-	keybinding: ResolvedKeybinding,
-): readonly KeybindingLabelPart[] {
-	return keybinding.chords.map((chord) => ({
+export function getKeybindingLabelParts(keybinding: ResolvedKeybinding): readonly KeybindingLabelPart[] {
+	return keybinding.chords.map(chord => ({
 		keys: chordLabelParts(chord, keybinding.operatingSystem, KeybindingLabelStyle.UI),
-		label: formatChord(
-			chord,
-			keybinding.operatingSystem,
-			KeybindingLabelStyle.UI,
-		),
-		ariaLabel: formatChord(
-			chord,
-			keybinding.operatingSystem,
-			KeybindingLabelStyle.Aria,
-		),
+		label: formatChord(chord, keybinding.operatingSystem, KeybindingLabelStyle.UI),
+		ariaLabel: formatChord(chord, keybinding.operatingSystem, KeybindingLabelStyle.Aria),
 	}));
 }
 
@@ -42,12 +28,8 @@ export function getKeybindingLabel(
 	keybinding: ResolvedKeybinding,
 	style: KeybindingLabelStyle = KeybindingLabelStyle.UI,
 ): string {
-	const separator = style === KeybindingLabelStyle.Aria ? ", " : " ";
-	return keybinding.chords
-		.map((chord) =>
-			formatChord(chord, keybinding.operatingSystem, style)
-		)
-		.join(separator);
+	const separator = style === KeybindingLabelStyle.Aria ? ', ' : ' ';
+	return keybinding.chords.map(chord => formatChord(chord, keybinding.operatingSystem, style)).join(separator);
 }
 
 function formatChord(
@@ -58,9 +40,8 @@ function formatChord(
 	if (style === KeybindingLabelStyle.UserSettings) {
 		return singleModifierLabel(chord, operatingSystem, style) ?? formatUserSettingsChord(chord, operatingSystem);
 	}
-	const labels = style === KeybindingLabelStyle.Aria
-		? ariaModifierLabels(operatingSystem)
-		: uiModifierLabels(operatingSystem);
+	const labels =
+		style === KeybindingLabelStyle.Aria ? ariaModifierLabels(operatingSystem) : uiModifierLabels(operatingSystem);
 	return chordLabelParts(chord, operatingSystem, style).join(labels.separator);
 }
 
@@ -74,9 +55,8 @@ function chordLabelParts(
 		return [singleModifier];
 	}
 
-	const labels = style === KeybindingLabelStyle.Aria
-		? ariaModifierLabels(operatingSystem)
-		: uiModifierLabels(operatingSystem);
+	const labels =
+		style === KeybindingLabelStyle.Aria ? ariaModifierLabels(operatingSystem) : uiModifierLabels(operatingSystem);
 	const parts: string[] = [];
 	if (chord.ctrlKey) parts.push(labels.ctrl);
 	if (chord.shiftKey) parts.push(labels.shift);
@@ -94,42 +74,40 @@ function singleModifierLabel(
 	if (chord.ctrlKey || chord.shiftKey || chord.altKey || chord.metaKey) {
 		return undefined;
 	}
-	const key = chord.key.toLocaleLowerCase("en-US");
-	if (key !== "ctrl" && key !== "shift" && key !== "alt" && key !== "meta") {
+	const key = chord.key.toLocaleLowerCase('en-US');
+	if (key !== 'ctrl' && key !== 'shift' && key !== 'alt' && key !== 'meta') {
 		return undefined;
 	}
 	if (style === KeybindingLabelStyle.UserSettings) {
-		return key === "meta"
-			? operatingSystem === OperatingSystem.Macintosh ? "cmd" : operatingSystem === OperatingSystem.Windows ? "win" : "meta"
+		return key === 'meta'
+			? operatingSystem === OperatingSystem.Macintosh
+				? 'cmd'
+				: operatingSystem === OperatingSystem.Windows
+					? 'win'
+					: 'meta'
 			: key;
 	}
-	const labels = style === KeybindingLabelStyle.Aria
-		? ariaModifierLabels(operatingSystem)
-		: uiModifierLabels(operatingSystem);
-	return key === "ctrl" ? labels.ctrl :
-		key === "shift" ? labels.shift :
-			key === "alt" ? labels.alt : labels.meta;
+	const labels =
+		style === KeybindingLabelStyle.Aria ? ariaModifierLabels(operatingSystem) : uiModifierLabels(operatingSystem);
+	return key === 'ctrl' ? labels.ctrl : key === 'shift' ? labels.shift : key === 'alt' ? labels.alt : labels.meta;
 }
 
-function formatUserSettingsChord(
-	chord: ResolvedKeybindingChord,
-	operatingSystem: OperatingSystem,
-): string {
+function formatUserSettingsChord(chord: ResolvedKeybindingChord, operatingSystem: OperatingSystem): string {
 	const parts: string[] = [];
-	if (chord.ctrlKey) parts.push("ctrl");
-	if (chord.shiftKey) parts.push("shift");
-	if (chord.altKey) parts.push("alt");
+	if (chord.ctrlKey) parts.push('ctrl');
+	if (chord.shiftKey) parts.push('shift');
+	if (chord.altKey) parts.push('alt');
 	if (chord.metaKey) {
-		parts.push(operatingSystem === OperatingSystem.Macintosh
-			? "cmd"
-			: operatingSystem === OperatingSystem.Windows
-				? "win"
-				: "meta");
+		parts.push(
+			operatingSystem === OperatingSystem.Macintosh
+				? 'cmd'
+				: operatingSystem === OperatingSystem.Windows
+					? 'win'
+					: 'meta',
+		);
 	}
-	parts.push(chord.kind === KeybindingChordKind.Physical
-		? `[${chord.key}]`
-		: chord.key);
-	return parts.join("+");
+	parts.push(chord.kind === KeybindingChordKind.Physical ? `[${chord.key}]` : chord.key);
+	return parts.join('+');
 }
 
 interface ModifierLabels {
@@ -140,66 +118,57 @@ interface ModifierLabels {
 	readonly separator: string;
 }
 
-function uiModifierLabels(
-	operatingSystem: OperatingSystem,
-): ModifierLabels {
+function uiModifierLabels(operatingSystem: OperatingSystem): ModifierLabels {
 	if (operatingSystem === OperatingSystem.Macintosh) {
-		return {
-			ctrl: "⌃",
-			shift: "⇧",
-			alt: "⌥",
-			meta: "⌘",
-			separator: "",
-		};
+		return { ctrl: '⌃', shift: '⇧', alt: '⌥', meta: '⌘', separator: '' };
 	}
 	return {
-		ctrl: "Ctrl",
-		shift: "Shift",
-		alt: "Alt",
-		meta: operatingSystem === OperatingSystem.Windows ? "Windows" : "Super",
-		separator: "+",
+		ctrl: 'Ctrl',
+		shift: 'Shift',
+		alt: 'Alt',
+		meta: operatingSystem === OperatingSystem.Windows ? 'Windows' : 'Super',
+		separator: '+',
 	};
 }
 
-function ariaModifierLabels(
-	operatingSystem: OperatingSystem,
-): ModifierLabels {
+function ariaModifierLabels(operatingSystem: OperatingSystem): ModifierLabels {
 	return {
-		ctrl: "Control",
-		shift: "Shift",
-		alt: operatingSystem === OperatingSystem.Macintosh ? "Option" : "Alt",
-		meta: operatingSystem === OperatingSystem.Macintosh
-			? "Command"
-			: operatingSystem === OperatingSystem.Windows
-				? "Windows"
-				: "Super",
-		separator: "+",
+		ctrl: 'Control',
+		shift: 'Shift',
+		alt: operatingSystem === OperatingSystem.Macintosh ? 'Option' : 'Alt',
+		meta:
+			operatingSystem === OperatingSystem.Macintosh
+				? 'Command'
+				: operatingSystem === OperatingSystem.Windows
+					? 'Windows'
+					: 'Super',
+		separator: '+',
 	};
 }
 
 function displayKey(chord: ResolvedKeybindingChord): string {
 	if (chord.label) {
-		return chord.label.length === 1
-			? chord.label.toLocaleUpperCase("en-US")
-			: chord.label;
+		return chord.label.length === 1 ? chord.label.toLocaleUpperCase('en-US') : chord.label;
 	}
 	if (chord.kind === KeybindingChordKind.Physical) {
 		if (/^Key[A-Z]$/.test(chord.key)) return chord.key.slice(3);
 		if (/^Digit[0-9]$/.test(chord.key)) return chord.key.slice(5);
 	}
 	const knownKeys: Readonly<Record<string, string>> = {
-		arrowdown: "Down",
-		arrowleft: "Left",
-		arrowright: "Right",
-		arrowup: "Up",
-		escape: "Escape",
-		enter: "Enter",
-		backspace: "Backspace",
-		delete: "Delete",
-		pageup: "Page Up",
-		pagedown: "Page Down",
-		" ": "Space",
+		arrowdown: 'Down',
+		arrowleft: 'Left',
+		arrowright: 'Right',
+		arrowup: 'Up',
+		escape: 'Escape',
+		enter: 'Enter',
+		backspace: 'Backspace',
+		delete: 'Delete',
+		pageup: 'Page Up',
+		pagedown: 'Page Down',
+		' ': 'Space',
 	};
-	return knownKeys[chord.key.toLocaleLowerCase("en-US")] ??
-		(chord.key.length === 1 ? chord.key.toLocaleUpperCase("en-US") : chord.key);
+	return (
+		knownKeys[chord.key.toLocaleLowerCase('en-US')] ??
+		(chord.key.length === 1 ? chord.key.toLocaleUpperCase('en-US') : chord.key)
+	);
 }

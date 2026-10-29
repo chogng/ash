@@ -1,4 +1,4 @@
-import { shell } from "electron";
+import { shell } from 'electron';
 import { normalizeExternalUrl, type IExternalOpener } from '../common/opener.js';
 
 /** Electron shell adapter for validated external URLs. */

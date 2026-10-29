@@ -7,6 +7,9 @@ export const IWebWorkerService = createDecorator<IWebWorkerService>('IWebWorkerS
 /** The caller owns each returned client; a window service owns no domain state. */
 export interface IWebWorkerService {
 	readonly _serviceBrand: undefined;
-	createWorkerClient<T extends object>(workerDescriptor: WebWorkerDescriptor | Worker | Promise<Worker>, channel?: WebWorkerChannel): IWebWorkerClient<T>;
+	createWorkerClient<T extends object>(
+		workerDescriptor: WebWorkerDescriptor | Worker | Promise<Worker>,
+		channel?: WebWorkerChannel,
+	): IWebWorkerClient<T>;
 	getWorkerUrl(descriptor: WebWorkerDescriptor): string;
 }

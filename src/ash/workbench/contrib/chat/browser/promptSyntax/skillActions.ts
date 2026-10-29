@@ -7,13 +7,19 @@ import { OPEN_EXTENSIONS_COMMAND_ID } from '../../../../../platform/extensionMan
 export const CONFIGURE_SKILLS_ACTION_ID = 'workbench.action.chat.configure.skills';
 
 export function registerSkillActions(): void {
-	registerAction2(class extends Action2 {
-		constructor() {
-			super({ id: CONFIGURE_SKILLS_ACTION_ID, title: localize2({ bundle: 'ash', key: 'skills.open' }, 'Open skills'), f1: true });
-		}
+	registerAction2(
+		class extends Action2 {
+			constructor() {
+				super({
+					id: CONFIGURE_SKILLS_ACTION_ID,
+					title: localize2({ bundle: 'ash', key: 'skills.open' }, 'Open skills'),
+					f1: true,
+				});
+			}
 
-		public override async run(accessor: ServicesAccessor): Promise<void> {
-			await accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { view: 'skills' });
-		}
-	});
+			public override async run(accessor: ServicesAccessor): Promise<void> {
+				await accessor.get(ICommandService).executeCommand(OPEN_EXTENSIONS_COMMAND_ID, { view: 'skills' });
+			}
+		},
+	);
 }

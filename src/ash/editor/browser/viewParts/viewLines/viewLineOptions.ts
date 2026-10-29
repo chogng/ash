@@ -29,7 +29,8 @@ export class ViewLineOptions {
 		this.spaceWidth = fontInfo.spaceWidth;
 		this.middotWidth = fontInfo.middotWidth;
 		this.wsmiddotWidth = fontInfo.wsmiddotWidth;
-		this.useMonospaceOptimizations = fontInfo.isTrusted && fontInfo.isMonospace && !options.get(EditorOption.disableMonospaceOptimizations);
+		this.useMonospaceOptimizations =
+			fontInfo.isTrusted && fontInfo.isMonospace && !options.get(EditorOption.disableMonospaceOptimizations);
 		this.canUseHalfwidthRightwardsArrow = fontInfo.canUseHalfwidthRightwardsArrow;
 		this.lineHeight = options.get(EditorOption.lineHeight);
 		this.stopRenderingLineAfter = options.get(EditorOption.stopRenderingLineAfter);
@@ -39,7 +40,8 @@ export class ViewLineOptions {
 	}
 
 	public equals(other: ViewLineOptions): boolean {
-		return this.themeType === other.themeType &&
+		return (
+			this.themeType === other.themeType &&
 			this.renderWhitespace === other.renderWhitespace &&
 			this.experimentalWhitespaceRendering === other.experimentalWhitespaceRendering &&
 			this.renderControlCharacters === other.renderControlCharacters &&
@@ -52,6 +54,7 @@ export class ViewLineOptions {
 			this.stopRenderingLineAfter === other.stopRenderingLineAfter &&
 			this.fontLigatures === other.fontLigatures &&
 			this.verticalScrollbarSize === other.verticalScrollbarSize &&
-			this.useGpu === other.useGpu;
+			this.useGpu === other.useGpu
+		);
 	}
 }

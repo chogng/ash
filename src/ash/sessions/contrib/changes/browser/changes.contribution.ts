@@ -29,7 +29,8 @@ registerSingleton(IChecksOperationService, ChecksOperationService, Instantiation
 registerEditorPane({
 	id: SessionChangesEditor.ID,
 	name: 'Changes',
-	canOpen: input => input.resource.scheme === 'ash-session-changes' ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	canOpen: input =>
+		input.resource.scheme === 'ash-session-changes' ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => options.instantiationService!.createInstance(SessionChangesEditor, options),
 });
 
@@ -41,13 +42,15 @@ SessionsViewRegistry.registerStaticViewContainer({
 	icon: Lxicon.diff,
 	order: 1,
 });
-SessionsViewRegistry.registerStaticViews(CHANGES_VIEW_CONTAINER_ID, [{
-	id: CHANGES_VIEW_ID,
-	title: 'Changes',
-	localizationKey: { bundle: 'ash', key: 'sessions.changes.title' },
-	ctorDescriptor: new SyncDescriptor(ChangesViewPane),
-	canToggleVisibility: false,
-}]);
+SessionsViewRegistry.registerStaticViews(CHANGES_VIEW_CONTAINER_ID, [
+	{
+		id: CHANGES_VIEW_ID,
+		title: 'Changes',
+		localizationKey: { bundle: 'ash', key: 'sessions.changes.title' },
+		ctorDescriptor: new SyncDescriptor(ChangesViewPane),
+		canToggleVisibility: false,
+	},
+]);
 
 for (const provider of getSessionsChangesAccessibilityProviders()) {
 	AccessibleViewRegistry.register(provider);

@@ -39,8 +39,14 @@ test('page and buffer moves clamp to document edges', () => {
 
 	assert.equal(MoveOperations.moveDown(config, model, source, false, 20).position.lineNumber, 4);
 	assert.equal(MoveOperations.moveUp(config, model, source, false, 20).position.lineNumber, 1);
-	assert.deepEqual(MoveOperations.moveToBeginningOfBuffer(config, model, source, true).selection, new Selection(2, 2, 1, 1));
-	assert.deepEqual(MoveOperations.moveToEndOfBuffer(config, model, source, true).selection, new Selection(2, 2, 4, 5));
+	assert.deepEqual(
+		MoveOperations.moveToBeginningOfBuffer(config, model, source, true).selection,
+		new Selection(2, 2, 1, 1),
+	);
+	assert.deepEqual(
+		MoveOperations.moveToEndOfBuffer(config, model, source, true).selection,
+		new Selection(2, 2, 4, 5),
+	);
 });
 
 test('atomic tab stops only apply inside indentation', () => {
@@ -49,8 +55,14 @@ test('atomic tab stops only apply inside indentation', () => {
 	const config = createTestCursorConfiguration(model, languages, { stickyTabStops: true });
 
 	assert.equal(MoveOperations.moveLeft(config, model, state(new Selection(1, 9, 1, 9)), false, 1).position.column, 5);
-	assert.equal(MoveOperations.moveRight(config, model, state(new Selection(1, 1, 1, 1)), false, 1).position.column, 5);
-	assert.equal(MoveOperations.moveRight(config, model, state(new Selection(1, 9, 1, 9)), false, 1).position.column, 10);
+	assert.equal(
+		MoveOperations.moveRight(config, model, state(new Selection(1, 1, 1, 1)), false, 1).position.column,
+		5,
+	);
+	assert.equal(
+		MoveOperations.moveRight(config, model, state(new Selection(1, 9, 1, 9)), false, 1).position.column,
+		10,
+	);
 });
 
 function state(selection: Selection): SingleCursorState {

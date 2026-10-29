@@ -5,7 +5,11 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
-import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
+import {
+	EditorAction,
+	registerEditorAction,
+	type ServicesAccessor,
+} from '../../../browser/editorFeatureRegistration.js';
 import type { ICodeEditor } from '../../../browser/editorBrowser.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import type { LanguageDocumentSymbol } from '../../../common/languages.js';
@@ -41,26 +45,29 @@ export class StandaloneGotoSymbolQuickAccessProvider extends Disposable {
 		picker.value = query;
 		this._register(picker.onDidHide(() => this.dispose()));
 		this._register(picker.onDidBlur(() => this.dispose()));
-		this._register(picker.onDidChangeValue(value => {
-			if (!value.startsWith('>') && !value.startsWith('?')) {
-				return;
-			}
-			const commandAction = this.editor.getAction('editor.action.quickCommand');
-			if (!commandAction?.isSupported()) {
-				return;
-			}
-			picker.hide();
-			void commandAction.run(value).catch(error => this.notifications.error(String(error)));
-		}));
-		this._register(picker.onDidAccept(() => {
-			const item = picker.selectedItems[0];
-			if (!item) return;
+		this._register(
+			picker.onDidChangeValue(value => {
+				if (!value.startsWith('>') && !value.startsWith('?')) {
+					return;
+				}
+				const commandAction = this.editor.getAction('editor.action.quickCommand');
+				if (!commandAction?.isSupported()) {
+					return;
+				}
+				picker.hide();
+				void commandAction.run(value).catch(error => this.notifications.error(String(error)));
+			}),
+		);
+		this._register(
+			picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
 
-			picker.hide();
-			this.editor.setSelection(item.symbol.selectionRange, 'editor.action.quickOutline');
-			this.editor.revealRange(item.symbol.selectionRange);
-
-		}));
+				picker.hide();
+				this.editor.setSelection(item.symbol.selectionRange, 'editor.action.quickOutline');
+				this.editor.revealRange(item.symbol.selectionRange);
+			}),
+		);
 
 		const request = new AbortController();
 		this._register(toDisposable(() => request.abort()));
@@ -72,21 +79,22 @@ export class StandaloneGotoSymbolQuickAccessProvider extends Disposable {
 		this._register(model.onDidChangeLanguage(close));
 		this._register(this.languageFeatures.documentSymbolProvider.onDidChange(close));
 		picker.show();
-		void OutlineModel.create(
-			this.languageFeatures.documentSymbolProvider,
-			model,
-			request.signal,
-			error => this.notifications.error(String(error)),
-		).then(outline => {
-			if (request.signal.aborted || !outline) {
-				return;
-			}
-			picker.items = outline.asListOfDocumentSymbols().map(symbol => ({ symbol, label: symbol.name, description: symbol.detail }));
-		}).catch(error => {
-			if (!request.signal.aborted) {
-				this.notifications.error(String(error));
-			}
-		});
+		void OutlineModel.create(this.languageFeatures.documentSymbolProvider, model, request.signal, error =>
+			this.notifications.error(String(error)),
+		)
+			.then(outline => {
+				if (request.signal.aborted || !outline) {
+					return;
+				}
+				picker.items = outline
+					.asListOfDocumentSymbols()
+					.map(symbol => ({ symbol, label: symbol.name, description: symbol.detail }));
+			})
+			.catch(error => {
+				if (!request.signal.aborted) {
+					this.notifications.error(String(error));
+				}
+			});
 	}
 }
 
@@ -107,7 +115,10 @@ export class GotoSymbolAction extends EditorAction {
 	}
 
 	public run(accessor: ServicesAccessor, editor: ICodeEditor, args?: unknown): void {
-		accessor.get(IInstantiationService).createInstance(StandaloneGotoSymbolQuickAccessProvider, editor).show(typeof args === 'string' ? args : '');
+		accessor
+			.get(IInstantiationService)
+			.createInstance(StandaloneGotoSymbolQuickAccessProvider, editor)
+			.show(typeof args === 'string' ? args : '');
 	}
 }
 

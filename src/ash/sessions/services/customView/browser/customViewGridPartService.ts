@@ -6,4 +6,5 @@ export interface ICustomViewGridPartService {
 	focusActiveView(): void;
 }
 
-export const ICustomViewGridPartService = createServiceIdentifier<ICustomViewGridPartService>('customViewGridPartService');
+export const ICustomViewGridPartService =
+	createServiceIdentifier<ICustomViewGridPartService>('customViewGridPartService');

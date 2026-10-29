@@ -447,13 +447,23 @@ for (let scanCode = ScanCode.None; scanCode < ScanCode.MaxValue; scanCode += 1) 
 /** Legacy DOM keyCode to logical key identity, retained for Electron/browser edge cases. */
 export const EVENT_KEY_CODE_MAP: KeyCode[] = new Array<KeyCode>(230).fill(KeyCode.Unknown);
 /** Native Windows virtual-key name to logical key identity. */
-export const NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE: Readonly<Record<string, KeyCode>> = Object.create(null) as Record<string, KeyCode>;
+export const NATIVE_WINDOWS_KEY_CODE_TO_KEY_CODE: Readonly<Record<string, KeyCode>> = Object.create(null) as Record<
+	string,
+	KeyCode
+>;
 /** W3C code name to its legacy DOM keyCode when one exists. */
-export const SCAN_CODE_STR_TO_EVENT_KEY_CODE: Readonly<Record<string, number>> = Object.create(null) as Record<string, number>;
+export const SCAN_CODE_STR_TO_EVENT_KEY_CODE: Readonly<Record<string, number>> = Object.create(null) as Record<
+	string,
+	number
+>;
 /** Layout-independent physical-to-logical mappings; other entries remain layout-dependent. */
-export const IMMUTABLE_CODE_TO_KEY_CODE: KeyCode[] = new Array<KeyCode>(ScanCode.MaxValue + 1).fill(KeyCode.DependsOnKeyboardLayout);
+export const IMMUTABLE_CODE_TO_KEY_CODE: KeyCode[] = new Array<KeyCode>(ScanCode.MaxValue + 1).fill(
+	KeyCode.DependsOnKeyboardLayout,
+);
 /** Layout-independent logical-to-physical mappings; other entries remain layout-dependent. */
-export const IMMUTABLE_KEY_CODE_TO_CODE: ScanCode[] = new Array<ScanCode>(KeyCode.MaxValue + 1).fill(ScanCode.DependsOnKeyboardLayout);
+export const IMMUTABLE_KEY_CODE_TO_CODE: ScanCode[] = new Array<ScanCode>(KeyCode.MaxValue + 1).fill(
+	ScanCode.DependsOnKeyboardLayout,
+);
 
 function registerKeyIdentity(
 	scanCode: ScanCode,
@@ -482,7 +492,13 @@ function registerKeyIdentity(
 }
 
 for (let index = 0; index < 26; index += 1) {
-	registerKeyIdentity(ScanCode.KeyA + index, KeyCode.KeyA + index, 65 + index, `VK_${String.fromCharCode(65 + index)}`, false);
+	registerKeyIdentity(
+		ScanCode.KeyA + index,
+		KeyCode.KeyA + index,
+		65 + index,
+		`VK_${String.fromCharCode(65 + index)}`,
+		false,
+	);
 }
 for (let digit = 0; digit <= 9; digit += 1) {
 	const scanCode = digit === 0 ? ScanCode.Digit0 : ScanCode.Digit1 + digit - 1;
@@ -627,21 +643,21 @@ export const KeyCodeUtils = {
 			return undefined;
 		}
 		switch (keyCode) {
-			case KeyCode.UpArrow: return 'Up';
-			case KeyCode.DownArrow: return 'Down';
-			case KeyCode.LeftArrow: return 'Left';
-			case KeyCode.RightArrow: return 'Right';
-			default: return this.toString(keyCode);
+			case KeyCode.UpArrow:
+				return 'Up';
+			case KeyCode.DownArrow:
+				return 'Down';
+			case KeyCode.LeftArrow:
+				return 'Left';
+			case KeyCode.RightArrow:
+				return 'Right';
+			default:
+				return this.toString(keyCode);
 		}
 	},
 };
 
-export function keyCodeFromKeyboardEvent(
-	key: string,
-	legacyKeyCode = 0,
-	code = '',
-	location = 0,
-): KeyCode {
+export function keyCodeFromKeyboardEvent(key: string, legacyKeyCode = 0, code = '', location = 0): KeyCode {
 	if (legacyKeyCode === 229) {
 		return KeyCode.KeyInComposition;
 	}
@@ -652,7 +668,7 @@ export function keyCodeFromKeyboardEvent(
 		}
 	}
 	const keyCode = KeyCodeUtils.fromString(key);
-	return keyCode !== KeyCode.Unknown ? keyCode : EVENT_KEY_CODE_MAP[legacyKeyCode] ?? KeyCode.Unknown;
+	return keyCode !== KeyCode.Unknown ? keyCode : (EVENT_KEY_CODE_MAP[legacyKeyCode] ?? KeyCode.Unknown);
 }
 
 export const enum KeyMod {
@@ -663,7 +679,7 @@ export const enum KeyMod {
 }
 
 export function KeyChord(firstPart: number, secondPart: number): number {
-	const chordPart = ((secondPart & 0x0000FFFF) << 16) >>> 0;
+	const chordPart = ((secondPart & 0x0000ffff) << 16) >>> 0;
 	return (firstPart | chordPart) >>> 0;
 }
 
@@ -673,22 +689,39 @@ export function isModifierKey(keyCode: KeyCode): boolean {
 
 function userSettingsAlias(keyCode: KeyCode, usStandard: boolean): string {
 	switch (keyCode) {
-		case KeyCode.LeftArrow: return 'left';
-		case KeyCode.UpArrow: return 'up';
-		case KeyCode.RightArrow: return 'right';
-		case KeyCode.DownArrow: return 'down';
-		case KeyCode.Delete: return 'delete';
-		case KeyCode.Semicolon: return usStandard ? ';' : 'oem_1';
-		case KeyCode.Equal: return usStandard ? '=' : 'oem_plus';
-		case KeyCode.Comma: return usStandard ? ',' : 'oem_comma';
-		case KeyCode.Minus: return usStandard ? '-' : 'oem_minus';
-		case KeyCode.Period: return usStandard ? '.' : 'oem_period';
-		case KeyCode.Slash: return usStandard ? '/' : 'oem_2';
-		case KeyCode.Backquote: return usStandard ? '`' : 'oem_3';
-		case KeyCode.BracketLeft: return usStandard ? '[' : 'oem_4';
-		case KeyCode.Backslash: return usStandard ? '\\' : 'oem_5';
-		case KeyCode.BracketRight: return usStandard ? ']' : 'oem_6';
-		case KeyCode.Quote: return usStandard ? "'" : 'oem_7';
-		default: return KeyCodeUtils.toUserSettings(keyCode);
+		case KeyCode.LeftArrow:
+			return 'left';
+		case KeyCode.UpArrow:
+			return 'up';
+		case KeyCode.RightArrow:
+			return 'right';
+		case KeyCode.DownArrow:
+			return 'down';
+		case KeyCode.Delete:
+			return 'delete';
+		case KeyCode.Semicolon:
+			return usStandard ? ';' : 'oem_1';
+		case KeyCode.Equal:
+			return usStandard ? '=' : 'oem_plus';
+		case KeyCode.Comma:
+			return usStandard ? ',' : 'oem_comma';
+		case KeyCode.Minus:
+			return usStandard ? '-' : 'oem_minus';
+		case KeyCode.Period:
+			return usStandard ? '.' : 'oem_period';
+		case KeyCode.Slash:
+			return usStandard ? '/' : 'oem_2';
+		case KeyCode.Backquote:
+			return usStandard ? '`' : 'oem_3';
+		case KeyCode.BracketLeft:
+			return usStandard ? '[' : 'oem_4';
+		case KeyCode.Backslash:
+			return usStandard ? '\\' : 'oem_5';
+		case KeyCode.BracketRight:
+			return usStandard ? ']' : 'oem_6';
+		case KeyCode.Quote:
+			return usStandard ? "'" : 'oem_7';
+		default:
+			return KeyCodeUtils.toUserSettings(keyCode);
 	}
 }

@@ -14,7 +14,7 @@ export interface ILexer extends ILexerMin {
 	start: string;
 	maxStack: number;
 	tokenPostfix: string;
-	tokenizer: { [name: string]: IRule[]; };
+	tokenizer: { [name: string]: IRule[] };
 	brackets: IMonarchLanguageBracket[];
 }
 
@@ -30,7 +30,7 @@ export function createError(lexer: ILexerMin, message: string): Error {
 
 export function findRules(lexer: ILexer, state: string): IRule[] | null {
 	let name = state;
-	for (; ;) {
+	for (;;) {
 		if (Object.hasOwn(lexer.tokenizer, name)) {
 			return lexer.tokenizer[name]!;
 		}
@@ -42,7 +42,13 @@ export function findRules(lexer: ILexer, state: string): IRule[] | null {
 	}
 }
 
-export function substituteMatches(lexer: ILexerMin, value: string, id: string, matches: string[], state: string): string {
+export function substituteMatches(
+	lexer: ILexerMin,
+	value: string,
+	id: string,
+	matches: string[],
+	state: string,
+): string {
 	const parts = state.split('.');
 	return value.replace(/\$(\$|#|[sS]\d+|\d+|@[\w]+)/g, (_, reference: string) => {
 		if (reference === '$') {
@@ -53,7 +59,7 @@ export function substituteMatches(lexer: ILexerMin, value: string, id: string, m
 		}
 		if (/^[sS]/.test(reference)) {
 			const index = Number(reference.slice(1));
-			return index === 0 ? state : parts[index - 1] ?? '';
+			return index === 0 ? state : (parts[index - 1] ?? '');
 		}
 		if (reference.startsWith('@')) {
 			return String(lexer[reference.slice(1)] ?? '');
@@ -66,6 +72,6 @@ export function substituteMatchesRe(_lexer: ILexerMin, value: string, state: str
 	const parts = state.split('.');
 	return value.replace(/\$[sS](\d+)/g, (_, rawIndex: string) => {
 		const index = Number(rawIndex);
-		return escapeRegExpCharacters(index === 0 ? state : parts[index - 1] ?? '');
+		return escapeRegExpCharacters(index === 0 ? state : (parts[index - 1] ?? ''));
 	});
 }

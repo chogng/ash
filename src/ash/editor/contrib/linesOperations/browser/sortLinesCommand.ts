@@ -1,7 +1,11 @@
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
-import { type ICommand, type ICursorStateComputerData, type IEditOperationBuilder } from '../../../common/editorCommon.js';
+import {
+	type ICommand,
+	type ICursorStateComputerData,
+	type IEditOperationBuilder,
+} from '../../../common/editorCommon.js';
 import { type ITextModel } from '../../../common/model.js';
 
 /** Sorts the selected physical lines while preserving the selection. */
@@ -11,7 +15,7 @@ export class SortLinesCommand implements ICommand {
 	constructor(
 		private readonly selection: Selection,
 		private readonly descending: boolean,
-	) { }
+	) {}
 
 	getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
 		this.selectionId = builder.trackSelection(this.selection);

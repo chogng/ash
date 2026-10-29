@@ -31,7 +31,7 @@ export function checksumChannel(applicationRoot: string, isBuilt: boolean, servi
 				throw new TypeError('Invalid application checksum read');
 			}
 			result ??= readApplicationChecksums(applicationRoot, isBuilt, service);
-			return await result as T;
+			return (await result) as T;
 		},
 		listen<T>(): never {
 			throw new TypeError('Application checksums have no subscription');
@@ -39,7 +39,11 @@ export function checksumChannel(applicationRoot: string, isBuilt: boolean, servi
 	};
 }
 
-async function readApplicationChecksums(applicationRoot: string, isBuilt: boolean, service: IChecksumService): Promise<ApplicationChecksums> {
+async function readApplicationChecksums(
+	applicationRoot: string,
+	isBuilt: boolean,
+	service: IChecksumService,
+): Promise<ApplicationChecksums> {
 	if (!isBuilt) {
 		return { isBuilt: false, proof: [] };
 	}
@@ -52,14 +56,21 @@ async function readApplicationChecksums(applicationRoot: string, isBuilt: boolea
 		throw new TypeError('Invalid application checksum manifest');
 	}
 	const entries = Object.entries(checksums);
-	const required = ['dist/main/src/main.js', 'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs', 'dist/renderer/ash/electron-browser/workbench/workbench.html'];
+	const required = [
+		'dist/main/src/main.js',
+		'dist/preload/src/ash/base/parts/sandbox/electron-browser/preload.cjs',
+		'dist/renderer/ash/electron-browser/workbench/workbench.html',
+	];
 	if (required.some(path => !Object.hasOwn(checksums, path))) {
 		throw new TypeError('Application checksum manifest omits required entrypoints');
 	}
 	// Validate the whole persisted manifest before accessing any of its paths.
 	for (const [path, expected] of entries) {
-		const invalidPath = !/^(dist|resources)\//u.test(path) || path.includes('\\') || path.includes('\0')
-			|| path.split('/').some(segment => !segment || segment === '.' || segment === '..');
+		const invalidPath =
+			!/^(dist|resources)\//u.test(path) ||
+			path.includes('\\') ||
+			path.includes('\0') ||
+			path.split('/').some(segment => !segment || segment === '.' || segment === '..');
 		const invalidChecksum = typeof expected !== 'string' || !/^[a-f0-9]{64}$/u.test(expected);
 		if (invalidPath || invalidChecksum) {
 			throw new TypeError('Invalid application checksum entry');

@@ -1,7 +1,13 @@
 import type { Event } from '../../../../base/common/event.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type { ICreateContributedTerminalProfileOptions, IExtensionTerminalProfile, IShellLaunchConfig, ITerminalProfile, TerminalArguments } from '../../../../platform/terminal/common/terminal.js';
+import type {
+	ICreateContributedTerminalProfileOptions,
+	IExtensionTerminalProfile,
+	IShellLaunchConfig,
+	ITerminalProfile,
+	TerminalArguments,
+} from '../../../../platform/terminal/common/terminal.js';
 import type { OperatingSystem } from '../../../../base/common/platform.js';
 import type { ThemeIcon } from '../../../../base/common/themables.js';
 import type Severity from '../../../../base/common/severity.js';
@@ -75,7 +81,7 @@ export const enum TerminalCommandId {
 	FocusPreviousPane = 'workbench.action.terminal.focusPreviousPane',
 }
 
-export const TERMINAL_VIEW_ID = "ash.terminal";
+export const TERMINAL_VIEW_ID = 'ash.terminal';
 
 export interface ITerminalStatus {
 	readonly id: string;
@@ -98,7 +104,8 @@ export interface ITerminalContributionService extends IDisposable {
 	readonly onDidChangeTerminalProfiles: Event<readonly IExtensionTerminalProfile[]>;
 }
 
-export const ITerminalContributionService = createServiceIdentifier<ITerminalContributionService>('terminalContributionService');
+export const ITerminalContributionService =
+	createServiceIdentifier<ITerminalContributionService>('terminalContributionService');
 
 /** Available trusted shells and the effective interactive default in this window. */
 export interface ITerminalProfileService extends IDisposable {
@@ -115,7 +122,11 @@ export interface ITerminalProfileService extends IDisposable {
 	registerContributedProfile(args: IRegisterContributedProfileArgs): Promise<void>;
 	registerInternalContributedProfile(profile: IExtensionTerminalProfile): IDisposable;
 	getContributedProfileProvider(extensionIdentifier: string, id: string): ITerminalProfileProvider | undefined;
-	registerTerminalProfileProvider(extensionIdentifier: string, id: string, provider: ITerminalProfileProvider): IDisposable;
+	registerTerminalProfileProvider(
+		extensionIdentifier: string,
+		id: string,
+		provider: ITerminalProfileProvider,
+	): IDisposable;
 	overrideDefaultProfile(extensionIdentifier: string, id: string): IDisposable;
 }
 
@@ -141,12 +152,20 @@ export interface IShellLaunchConfigResolveOptions {
 export interface ITerminalProfileResolverService {
 	readonly defaultProfileName: string | undefined;
 	resolveIcon(shellLaunchConfig: IShellLaunchConfig, os: OperatingSystem): void;
-	resolveShellLaunchConfig(shellLaunchConfig: IShellLaunchConfig, options: IShellLaunchConfigResolveOptions): Promise<void>;
+	resolveShellLaunchConfig(
+		shellLaunchConfig: IShellLaunchConfig,
+		options: IShellLaunchConfigResolveOptions,
+	): Promise<void>;
 	getDefaultProfile(options: IShellLaunchConfigResolveOptions): Promise<ITerminalProfile>;
 	getDefaultShell(options: IShellLaunchConfigResolveOptions): Promise<string>;
 	getDefaultShellArgs(options: IShellLaunchConfigResolveOptions): Promise<TerminalArguments>;
 	getDefaultIcon(): ThemeIcon;
-	getEnvironment(remoteAuthority: string | undefined, workspaceFolder?: IWorkspaceFolder): Promise<Readonly<Record<string, string>>>;
+	getEnvironment(
+		remoteAuthority: string | undefined,
+		workspaceFolder?: IWorkspaceFolder,
+	): Promise<Readonly<Record<string, string>>>;
 }
 
-export const ITerminalProfileResolverService = createServiceIdentifier<ITerminalProfileResolverService>('terminalProfileResolverService');
+export const ITerminalProfileResolverService = createServiceIdentifier<ITerminalProfileResolverService>(
+	'terminalProfileResolverService',
+);

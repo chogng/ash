@@ -1,7 +1,13 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Position } from '../../../../editor/common/core/position.js';
 import { Range } from '../../../../editor/common/core/range.js';
-import { LanguageCompletionItemKind, LanguageCompletionInsertTextFormat, type LanguageCompletionProvider, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResult } from '../../../../editor/common/languages.js';
+import {
+	LanguageCompletionItemKind,
+	LanguageCompletionInsertTextFormat,
+	type LanguageCompletionProvider,
+	type LanguageCompletionProviderRequest,
+	type LanguageCompletionProviderResult,
+} from '../../../../editor/common/languages.js';
 import { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import { ISnippetsService } from './snippets.js';
 
@@ -18,7 +24,10 @@ export class SnippetCompletionProvider extends Disposable implements LanguageCom
 		this._register(snippets.onDidChange(() => registration.replace([this])));
 	}
 
-	public provideCompletions(request: LanguageCompletionProviderRequest, signal: AbortSignal): LanguageCompletionProviderResult | undefined {
+	public provideCompletions(
+		request: LanguageCompletionProviderRequest,
+		signal: AbortSignal,
+	): LanguageCompletionProviderResult | undefined {
 		this.assertNotDisposed();
 		signal.throwIfAborted();
 		const line = request.snapshot.getText().split('\n')[request.position.lineNumber - 1];
@@ -31,7 +40,10 @@ export class SnippetCompletionProvider extends Disposable implements LanguageCom
 			const lowerPrefix = snippet.prefix.toLowerCase();
 			for (let length = Math.min(before.length, snippet.prefix.length); length > 0; length--) {
 				const start = before.length - length;
-				if (!lowerPrefix.startsWith(before.slice(start).toLowerCase()) || start > 0 && /[\p{L}\p{N}_]/u.test(before[start - 1])) {
+				if (
+					!lowerPrefix.startsWith(before.slice(start).toLowerCase()) ||
+					(start > 0 && /[\p{L}\p{N}_]/u.test(before[start - 1]))
+				) {
 					continue;
 				}
 				items.push({

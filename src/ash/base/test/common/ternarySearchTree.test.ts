@@ -7,7 +7,13 @@ suite('URI ancestor index', () => {
 	test('finds nearest complete segments regardless of insertion order', () => {
 		const index = TernarySearchTree.forUris<string>();
 		for (const path of ['/work/z', '/work/a/b', '/other', '/work', '/']) index.set(URI.file(path), path);
-		for (const [path, expected] of [['/work/a/b/file.ts', '/work/a/b'], ['/work/a/file.ts', '/work'], ['/work/zebra', '/work'], ['/elsewhere', '/'], ['/work/z', '/work/z']]) {
+		for (const [path, expected] of [
+			['/work/a/b/file.ts', '/work/a/b'],
+			['/work/a/file.ts', '/work'],
+			['/work/zebra', '/work'],
+			['/elsewhere', '/'],
+			['/work/z', '/work/z'],
+		]) {
 			assert.equal(index.findSubstr(URI.file(path!)), expected);
 		}
 		assert.equal(index.findSubstr(URI.parse('ash-remote://ssh+build/work/a/b')), undefined);
@@ -21,14 +27,22 @@ suite('URI ancestor index', () => {
 		index.set(URI.parse('ash-remote://ssh+build/work/a/b'), 'nested');
 		index.set(URI.parse('ash-remote://ssh+build/work/a//b'), 'repeated');
 		index.set(URI.parse('ash-remote://ssh+build/work/a%5Cb'), 'backslash');
-		for (const [path, expected] of [['a%2fb/file', 'escaped'], ['a/b/file', 'nested'], ['a//b/file', 'repeated'], ['a%5cb/file', 'backslash']]) {
+		for (const [path, expected] of [
+			['a%2fb/file', 'escaped'],
+			['a/b/file', 'nested'],
+			['a//b/file', 'repeated'],
+			['a%5cb/file', 'backslash'],
+		]) {
 			assert.equal(index.findSubstr(URI.parse(`ash-remote://ssh+build/work/${path}`)), expected);
 		}
 		assert.equal(index.findSubstr(URI.parse('ash-remote://ssh+other/work/a/b')), undefined);
 	});
 
 	test('uses per-resource casing and optionally ignores query and fragment', () => {
-		const index = TernarySearchTree.forUris<string>(resource => resource.scheme === 'file', () => true);
+		const index = TernarySearchTree.forUris<string>(
+			resource => resource.scheme === 'file',
+			() => true,
+		);
 		index.set(URI.parse('file:///C:/Work/%61'), 'local');
 		index.set(URI.parse('ash-remote://ssh+BUILD/Work/a'), 'remote');
 		assert.equal(index.findSubstr(URI.parse('file:///c:/WORK/A/file?preview#L2')), 'local');

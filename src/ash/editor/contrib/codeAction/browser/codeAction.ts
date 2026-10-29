@@ -1,6 +1,16 @@
 import { type LanguageFeatureRegistry } from '../../../common/languageFeatureRegistry.js';
-import { isLanguageFeatureRequestCurrent, type LanguageCodeActionProvider, type LanguageCodeActionRequest } from '../../../common/languages.js';
-import { CodeActionItem, CodeActionKind, filtersAction, type CodeActionFilter, type CodeActionSet } from '../common/types.js';
+import {
+	isLanguageFeatureRequestCurrent,
+	type LanguageCodeActionProvider,
+	type LanguageCodeActionRequest,
+} from '../../../common/languages.js';
+import {
+	CodeActionItem,
+	CodeActionKind,
+	filtersAction,
+	type CodeActionFilter,
+	type CodeActionSet,
+} from '../common/types.js';
 import { HierarchicalKind } from '../../../../base/common/hierarchicalKind.js';
 import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { Disposable, type IDisposable } from '../../../../base/common/lifecycle.js';
@@ -14,7 +24,9 @@ class CodeActionResults extends Disposable implements CodeActionSet {
 	constructor(signal: AbortSignal) {
 		super();
 		this._register(addDisposableListener(signal, 'abort', () => this.dispose(), { once: true }));
-		if (signal.aborted) { this.dispose(); }
+		if (signal.aborted) {
+			this.dispose();
+		}
 	}
 
 	public retain(resource: IDisposable): void {
@@ -26,7 +38,11 @@ class CodeActionResults extends Disposable implements CodeActionSet {
 	}
 
 	public get hasAutoFix(): boolean {
-		return this.validActions.some(item => CodeActionKind.QuickFix.contains(new HierarchicalKind(item.action.kind ?? '')) && item.action.isPreferred === true);
+		return this.validActions.some(
+			item =>
+				CodeActionKind.QuickFix.contains(new HierarchicalKind(item.action.kind ?? '')) &&
+				item.action.isPreferred === true,
+		);
 	}
 
 	public get hasAIFix(): boolean {
@@ -43,13 +59,14 @@ export async function getCodeActions(
 	request: LanguageCodeActionRequest,
 	filter: CodeActionFilter,
 	onError: (error: unknown) => void,
-
 ): Promise<CodeActionSet> {
 	const actions: CodeActionItem[] = [];
 	const result = new CodeActionResults(request.signal);
 	try {
 		for (const provider of registry.ordered(request.model)) {
-			if (!isLanguageFeatureRequestCurrent(request)) { break; }
+			if (!isLanguageFeatureRequestCurrent(request)) {
+				break;
+			}
 			let list: LanguageCodeActionList | undefined;
 			try {
 				const provided: unknown = await provider.provideCodeActions(request, request.signal);
@@ -57,8 +74,14 @@ export async function getCodeActions(
 				if (Array.isArray(provided)) {
 					entries = provided;
 				} else {
-					if (!provided || typeof provided !== 'object' || !('dispose' in provided) || typeof provided.dispose !== 'function'
-						|| !(Symbol.dispose in provided) || typeof provided[Symbol.dispose] !== 'function') {
+					if (
+						!provided ||
+						typeof provided !== 'object' ||
+						!('dispose' in provided) ||
+						typeof provided.dispose !== 'function' ||
+						!(Symbol.dispose in provided) ||
+						typeof provided[Symbol.dispose] !== 'function'
+					) {
 						throw new TypeError('Code action provider must return an array or a disposable action list');
 					}
 					list = provided as LanguageCodeActionList;
@@ -67,12 +90,23 @@ export async function getCodeActions(
 					}
 					entries = list.actions;
 				}
-				if (!isLanguageFeatureRequestCurrent(request)) { break; }
+				if (!isLanguageFeatureRequestCurrent(request)) {
+					break;
+				}
 				const accepted: CodeActionItem[] = [];
 				for (const original of entries) {
 					const item = new CodeActionItem(original, provider);
-					if (request.only && !request.only.some(kind => item.action.kind === kind || item.action.kind?.startsWith(kind + '.'))) { continue; }
-					if (filtersAction(filter, item.action)) { accepted.push(item); }
+					if (
+						request.only &&
+						!request.only.some(
+							kind => item.action.kind === kind || item.action.kind?.startsWith(kind + '.'),
+						)
+					) {
+						continue;
+					}
+					if (filtersAction(filter, item.action)) {
+						accepted.push(item);
+					}
 				}
 				if (list) {
 					result.retain(list);
@@ -80,7 +114,9 @@ export async function getCodeActions(
 				}
 				actions.push(...accepted);
 			} catch (error) {
-				if (isLanguageFeatureRequestCurrent(request)) { onError(error); }
+				if (isLanguageFeatureRequestCurrent(request)) {
+					onError(error);
+				}
 			} finally {
 				// Failed validation and late provider replies never transfer ownership.
 				list?.dispose();

@@ -47,27 +47,27 @@ export async function showLoadedScriptMenu(accessor: ServicesAccessor): Promise<
 		picker.show();
 		void Promise.all(
 			debug.sessions
-				.filter((session) => session.capabilities.supportsLoadedSourcesRequest)
-				.map(async (session) => {
+				.filter(session => session.capabilities.supportsLoadedSourcesRequest)
+				.map(async session => {
 					const sources = await session.loadedSources();
 					return debug.getSession(session.id) === session
-						? sources.map((source) => ({
-							label: source.name ?? source.path ?? localize('debug.repl.source', 'Source'),
-							description: session.name,
-							detail: source.path,
-							session,
-							source,
-						}))
+						? sources.map(source => ({
+								label: source.name ?? source.path ?? localize('debug.repl.source', 'Source'),
+								description: session.name,
+								detail: source.path,
+								session,
+								source,
+							}))
 						: [];
 				}),
 		).then(
-			(items) => {
+			items => {
 				if (current) {
 					picker.items = items.flat();
 					picker.busy = false;
 				}
 			},
-			(error) => {
+			error => {
 				if (current) {
 					reject(error);
 					picker.hide();

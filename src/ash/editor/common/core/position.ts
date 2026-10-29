@@ -68,12 +68,7 @@ export class Position {
 		if (!a && !b) {
 			return true;
 		}
-		return (
-			!!a &&
-			!!b &&
-			a.lineNumber === b.lineNumber &&
-			a.column === b.column
-		);
+		return !!a && !!b && a.lineNumber === b.lineNumber && a.column === b.column;
 	}
 
 	/**
@@ -164,16 +159,11 @@ export class Position {
 	 */
 	public static isIPosition(obj: unknown): obj is IPosition {
 		return (
-			!!obj
-			&& (typeof (obj as IPosition).lineNumber === 'number')
-			&& (typeof (obj as IPosition).column === 'number')
+			!!obj && typeof (obj as IPosition).lineNumber === 'number' && typeof (obj as IPosition).column === 'number'
 		);
 	}
 
 	public toJSON(): IPosition {
-		return {
-			lineNumber: this.lineNumber,
-			column: this.column
-		};
+		return { lineNumber: this.lineNumber, column: this.column };
 	}
 }

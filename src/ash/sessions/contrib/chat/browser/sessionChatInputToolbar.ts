@@ -1,7 +1,12 @@
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { defaultButtonStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { createUuid } from '../../../../base/common/uuid.js';
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	AccessibleContentProvider,
+	AccessibleViewProviderId,
+	AccessibleViewType,
+	AccessibilityVerbositySettingId,
+} from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
 import './media/sessionChatInputToolbar.css';
@@ -18,7 +23,12 @@ import { colorCssVariable } from '../../../../platform/theme/common/colorUtils.j
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { IGitHubService } from '../../github/browser/githubService.js';
-import { getIssueLabel, getPullRequestLabel, type IResolvedSessionIssue, type IResolvedSessionPullRequest } from '../../github/common/types.js';
+import {
+	getIssueLabel,
+	getPullRequestLabel,
+	type IResolvedSessionIssue,
+	type IResolvedSessionPullRequest,
+} from '../../github/common/types.js';
 
 /** Shows durable Issue associations and PRs resolved for the active Session. */
 export class SessionChatInputToolbar extends Disposable {
@@ -35,7 +45,7 @@ export class SessionChatInputToolbar extends Disposable {
 
 	constructor(
 		container: HTMLElement,
-		private readonly model: { readonly sessionId: string | undefined; readonly onDidChange: Event<void>; },
+		private readonly model: { readonly sessionId: string | undefined; readonly onDidChange: Event<void> },
 		@IGitHubService private readonly github: IGitHubService,
 		@IOpenerService private readonly opener: IOpenerService,
 		@INotificationService private readonly notifications: INotificationService,
@@ -48,18 +58,36 @@ export class SessionChatInputToolbar extends Disposable {
 		this.domNode.setAttribute('role', 'group');
 		this.domNode.setAttribute('aria-label', localize('sessions.github.references', 'Session GitHub references'));
 		container.append(this.domNode);
-		this.attachDomNode = this._register(new Button(this.domNode, {
-			...defaultButtonStyles, label: localize('sessions.github.attach', 'Attach PR'), presentation: 'secondary', size: 'small',
-		})).domNode;
+		this.attachDomNode = this._register(
+			new Button(this.domNode, {
+				...defaultButtonStyles,
+				label: localize('sessions.github.attach', 'Attach PR'),
+				presentation: 'secondary',
+				size: 'small',
+			}),
+		).domNode;
 		this.attachDomNode.classList.add('ash-session-chat-input-pr-action');
 		this.domNode.append(this.attachDomNode);
-		this._register(addDisposableListener(this.attachDomNode, 'click', () => { void this.attach().catch(error => this.notifications.error(error)); }));
-		this.attachIssueDomNode = this._register(new Button(this.domNode, {
-			...defaultButtonStyles, label: localize('sessions.github.attachIssue', 'Attach issue'), presentation: 'secondary', size: 'small',
-		})).domNode;
+		this._register(
+			addDisposableListener(this.attachDomNode, 'click', () => {
+				void this.attach().catch(error => this.notifications.error(error));
+			}),
+		);
+		this.attachIssueDomNode = this._register(
+			new Button(this.domNode, {
+				...defaultButtonStyles,
+				label: localize('sessions.github.attachIssue', 'Attach issue'),
+				presentation: 'secondary',
+				size: 'small',
+			}),
+		).domNode;
 		this.attachIssueDomNode.classList.add('ash-session-chat-input-pr-action');
 		this.domNode.append(this.attachIssueDomNode);
-		this._register(addDisposableListener(this.attachIssueDomNode, 'click', () => { void this.attachIssue().catch(error => this.notifications.error(error)); }));
+		this._register(
+			addDisposableListener(this.attachIssueDomNode, 'click', () => {
+				void this.attachIssue().catch(error => this.notifications.error(error));
+			}),
+		);
 		this.issuesDomNode = h(container.ownerDocument, 'div');
 		this.issuesDomNode.className = 'ash-session-chat-input-issues';
 		this.issuesDomNode.setAttribute('role', 'group');
@@ -76,34 +104,54 @@ export class SessionChatInputToolbar extends Disposable {
 		this.issueListDomNode.hidden = true;
 		this.issuesDomNode.append(this.issueSummaryDomNode, this.issueListDomNode);
 		this.domNode.append(this.issuesDomNode);
-		this._register(addDisposableListener(this.issueSummaryDomNode, 'click', () => {
-			const expanded = this.issueListDomNode.hidden;
-			this.issueListDomNode.hidden = !expanded;
-			this.issueSummaryDomNode.setAttribute('aria-expanded', String(expanded));
-		}));
-		this._register(addDisposableListener(this.issueListDomNode, 'keydown', event => {
-			if (event.key === 'Escape') {
-				event.stopPropagation();
-				this.issueListDomNode.hidden = true;
-				this.issueSummaryDomNode.setAttribute('aria-expanded', 'false');
-				this.issueSummaryDomNode.focus();
-			}
-		}));
+		this._register(
+			addDisposableListener(this.issueSummaryDomNode, 'click', () => {
+				const expanded = this.issueListDomNode.hidden;
+				this.issueListDomNode.hidden = !expanded;
+				this.issueSummaryDomNode.setAttribute('aria-expanded', String(expanded));
+			}),
+		);
+		this._register(
+			addDisposableListener(this.issueListDomNode, 'keydown', event => {
+				if (event.key === 'Escape') {
+					event.stopPropagation();
+					this.issueListDomNode.hidden = true;
+					this.issueSummaryDomNode.setAttribute('aria-expanded', 'false');
+					this.issueSummaryDomNode.focus();
+				}
+			}),
+		);
 		this._register(autorun(reader => this.renderIssues(reader)));
-		this._register(AccessibleViewRegistry.register({
-			name: `sessionIssues-${createUuid()}`, type: AccessibleViewType.View, priority: 95,
-			getProvider: () => {
-				const focused = this.domNode.ownerDocument.activeElement as HTMLElement | null;
-				if (!focused || !this.issuesDomNode.contains(focused)) { return undefined; }
-				return new AccessibleContentProvider(
-					AccessibleViewProviderId.SessionsChat,
-					{ type: AccessibleViewType.View },
-					() => [this.issueSummaryDomNode.textContent, ...this.github.getSessionIssues(this.model.sessionId!).map(getIssueLabel)].join('\n'),
-					() => { if (focused.isConnected) { focused.focus(); } else { this.attachIssueDomNode.focus(); } },
-					AccessibilityVerbositySettingId.Chat,
-				);
-			},
-		}));
+		this._register(
+			AccessibleViewRegistry.register({
+				name: `sessionIssues-${createUuid()}`,
+				type: AccessibleViewType.View,
+				priority: 95,
+				getProvider: () => {
+					const focused = this.domNode.ownerDocument.activeElement as HTMLElement | null;
+					if (!focused || !this.issuesDomNode.contains(focused)) {
+						return undefined;
+					}
+					return new AccessibleContentProvider(
+						AccessibleViewProviderId.SessionsChat,
+						{ type: AccessibleViewType.View },
+						() =>
+							[
+								this.issueSummaryDomNode.textContent,
+								...this.github.getSessionIssues(this.model.sessionId!).map(getIssueLabel),
+							].join('\n'),
+						() => {
+							if (focused.isConnected) {
+								focused.focus();
+							} else {
+								this.attachIssueDomNode.focus();
+							}
+						},
+						AccessibilityVerbositySettingId.Chat,
+					);
+				},
+			}),
+		);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(github.onDidChange(() => this.render()));
 		this._register(model.onDidChange(() => this.render()));
@@ -117,15 +165,27 @@ export class SessionChatInputToolbar extends Disposable {
 			present.add(key);
 			let entry = this.entries.get(key);
 			if (!entry) {
-				entry = this.entries.set(key, new PullRequestEntry(this.domNode, request, this.opener, this.notifications, this.editors, async reference => {
-					const sessionId = this.model.sessionId;
-					if (!sessionId) { return; }
-					await this.github.detachPullRequest(sessionId, reference);
-					if (!this.isDisposed) {
-						this.attachDomNode.focus();
-						status(localize('sessions.github.detached', 'Pull request attachment removed.'));
-					}
-				}));
+				entry = this.entries.set(
+					key,
+					new PullRequestEntry(
+						this.domNode,
+						request,
+						this.opener,
+						this.notifications,
+						this.editors,
+						async reference => {
+							const sessionId = this.model.sessionId;
+							if (!sessionId) {
+								return;
+							}
+							await this.github.detachPullRequest(sessionId, reference);
+							if (!this.isDisposed) {
+								this.attachDomNode.focus();
+								status(localize('sessions.github.detached', 'Pull request attachment removed.'));
+							}
+						},
+					),
+				);
 				this.domNode.insertBefore(entry.containerDomNode, this.attachDomNode);
 			}
 			entry.update(request);
@@ -146,9 +206,18 @@ export class SessionChatInputToolbar extends Disposable {
 		this.issueIconDomNode.replaceChildren();
 		appendIcon(icon, this.issueIconDomNode);
 		this.issueIconDomNode.style.color = `var(${colorCssVariable(icon.color!.id)})`;
-		const unresolved = issues.filter(entry => !entry.issue || !['open', 'closed'].includes(entry.issue.state)).length;
+		const unresolved = issues.filter(
+			entry => !entry.issue || !['open', 'closed'].includes(entry.issue.state),
+		).length;
 		const open = issues.filter(entry => entry.issue?.state === 'open').length;
-		const summary = localize('sessions.github.issueSummary', '{0} issues · {1} open · {2} closed · {3} unavailable', issues.length, open, issues.length - open - unresolved, unresolved);
+		const summary = localize(
+			'sessions.github.issueSummary',
+			'{0} issues · {1} open · {2} closed · {3} unavailable',
+			issues.length,
+			open,
+			issues.length - open - unresolved,
+			unresolved,
+		);
 		this.issueLabelDomNode.textContent = summary;
 		this.issueSummaryDomNode.setAttribute('aria-label', summary);
 		this.issueSummaryDomNode.title = summary;
@@ -158,50 +227,75 @@ export class SessionChatInputToolbar extends Disposable {
 			present.add(key);
 			let entry = this.issueEntries.get(key);
 			if (!entry) {
-				entry = this.issueEntries.set(key, new IssueEntry(this.issueListDomNode, issue, this.opener, this.notifications, async reference => {
-					const sessionId = this.model.sessionId;
-					if (!sessionId) { return; }
-					await this.github.detachIssue(sessionId, reference);
-					if (!this.isDisposed) {
-						this.attachIssueDomNode.focus();
-						status(localize('sessions.github.issueDetached', 'Issue attachment removed.'));
-					}
-				}));
+				entry = this.issueEntries.set(
+					key,
+					new IssueEntry(this.issueListDomNode, issue, this.opener, this.notifications, async reference => {
+						const sessionId = this.model.sessionId;
+						if (!sessionId) {
+							return;
+						}
+						await this.github.detachIssue(sessionId, reference);
+						if (!this.isDisposed) {
+							this.attachIssueDomNode.focus();
+							status(localize('sessions.github.issueDetached', 'Issue attachment removed.'));
+						}
+					}),
+				);
 			}
 			entry.update(issue);
 		}
 		for (const key of this.issueEntries.keys()) {
-			if (!present.has(key)) { this.issueEntries.deleteAndDispose(key); }
+			if (!present.has(key)) {
+				this.issueEntries.deleteAndDispose(key);
+			}
 		}
 	}
 
 	private async attachIssue(): Promise<void> {
 		const sessionId = this.model.sessionId;
-		if (!sessionId || this.attachIssueDomNode.disabled) { return; }
+		if (!sessionId || this.attachIssueDomNode.disabled) {
+			return;
+		}
 		this.attachIssueDomNode.disabled = true;
 		try {
-			const url = await this.quickInput.input({ title: localize('sessions.github.attachIssueTitle', 'Attach an issue to this session'), placeHolder: 'https://github.com/owner/repo/issues/123' });
-			if (url === undefined || this.isDisposed || this.model.sessionId !== sessionId) { return; }
+			const url = await this.quickInput.input({
+				title: localize('sessions.github.attachIssueTitle', 'Attach an issue to this session'),
+				placeHolder: 'https://github.com/owner/repo/issues/123',
+			});
+			if (url === undefined || this.isDisposed || this.model.sessionId !== sessionId) {
+				return;
+			}
 			await this.github.attachIssue(sessionId, url);
 			status(localize('sessions.github.issueAttached', 'Issue attached.'));
 		} finally {
 			this.attachIssueDomNode.disabled = false;
-			if (!this.isDisposed) { this.attachIssueDomNode.focus(); }
+			if (!this.isDisposed) {
+				this.attachIssueDomNode.focus();
+			}
 		}
 	}
 
 	private async attach(): Promise<void> {
 		const sessionId = this.model.sessionId;
-		if (!sessionId || this.attachDomNode.disabled) { return; }
+		if (!sessionId || this.attachDomNode.disabled) {
+			return;
+		}
 		this.attachDomNode.disabled = true;
 		try {
-			const url = await this.quickInput.input({ title: localize('sessions.github.attachTitle', 'Attach a pull request to this session'), placeHolder: 'https://github.com/owner/repo/pull/123' });
-			if (url === undefined || this.isDisposed || this.model.sessionId !== sessionId) { return; }
+			const url = await this.quickInput.input({
+				title: localize('sessions.github.attachTitle', 'Attach a pull request to this session'),
+				placeHolder: 'https://github.com/owner/repo/pull/123',
+			});
+			if (url === undefined || this.isDisposed || this.model.sessionId !== sessionId) {
+				return;
+			}
 			await this.github.attachPullRequest(sessionId, url);
 			status(localize('sessions.github.attached', 'Pull request attached.'));
 		} finally {
 			this.attachDomNode.disabled = false;
-			if (!this.isDisposed) { this.attachDomNode.focus(); }
+			if (!this.isDisposed) {
+				this.attachDomNode.focus();
+			}
 		}
 	}
 }
@@ -214,7 +308,14 @@ class PullRequestEntry extends Disposable {
 	private readonly removeDomNode: HTMLButtonElement;
 	private request: IResolvedSessionPullRequest;
 
-	constructor(container: HTMLElement, request: IResolvedSessionPullRequest, opener: IOpenerService, notifications: INotificationService, editors: IEditorService, detach: (reference: NonNullable<IResolvedSessionPullRequest['recordedReference']>) => Promise<void>) {
+	constructor(
+		container: HTMLElement,
+		request: IResolvedSessionPullRequest,
+		opener: IOpenerService,
+		notifications: INotificationService,
+		editors: IEditorService,
+		detach: (reference: NonNullable<IResolvedSessionPullRequest['recordedReference']>) => Promise<void>,
+	) {
 		super();
 		this.request = request;
 		this.containerDomNode = h(container.ownerDocument, 'div');
@@ -226,38 +327,85 @@ class PullRequestEntry extends Disposable {
 		this.labelDomNode = h(container.ownerDocument, 'span');
 		this.labelDomNode.className = 'ash-session-chat-input-pr-label';
 		this.domNode.append(this.iconDomNode, this.labelDomNode);
-		this.removeDomNode = this._register(new Button(this.containerDomNode, {
-			...defaultButtonStyles, label: localize('sessions.github.remove', 'Remove'), presentation: 'secondary', size: 'small',
-		})).domNode;
+		this.removeDomNode = this._register(
+			new Button(this.containerDomNode, {
+				...defaultButtonStyles,
+				label: localize('sessions.github.remove', 'Remove'),
+				presentation: 'secondary',
+				size: 'small',
+			}),
+		).domNode;
 		this.removeDomNode.classList.add('ash-session-chat-input-pr-action');
-		const reviewDomNode = this._register(new Button(this.containerDomNode, {
-			...defaultButtonStyles, label: localize('sessions.github.review', 'Review'), presentation: 'secondary', size: 'small',
-		})).domNode;
+		const reviewDomNode = this._register(
+			new Button(this.containerDomNode, {
+				...defaultButtonStyles,
+				label: localize('sessions.github.review', 'Review'),
+				presentation: 'secondary',
+				size: 'small',
+			}),
+		).domNode;
 		reviewDomNode.classList.add('ash-session-chat-input-pr-action');
-		reviewDomNode.setAttribute('aria-label', localize('sessions.github.reviewLabel', 'Review pull request {0}/{1} #{2} in Ash', request.owner, request.repo, request.number));
-		this._register(addDisposableListener(reviewDomNode, 'click', () => {
-			const resource = this.request.uri.with({ scheme: 'ash-github', query: '', fragment: '' });
-			void editors.openEditor({ resource, label: getPullRequestLabel(this.request), readOnly: true, showBreadcrumbs: false }).catch(error => notifications.error(error));
-		}));
+		reviewDomNode.setAttribute(
+			'aria-label',
+			localize(
+				'sessions.github.reviewLabel',
+				'Review pull request {0}/{1} #{2} in Ash',
+				request.owner,
+				request.repo,
+				request.number,
+			),
+		);
+		this._register(
+			addDisposableListener(reviewDomNode, 'click', () => {
+				const resource = this.request.uri.with({ scheme: 'ash-github', query: '', fragment: '' });
+				void editors
+					.openEditor({
+						resource,
+						label: getPullRequestLabel(this.request),
+						readOnly: true,
+						showBreadcrumbs: false,
+					})
+					.catch(error => notifications.error(error));
+			}),
+		);
 		this.containerDomNode.append(this.domNode, reviewDomNode, this.removeDomNode);
 		container.append(this.containerDomNode);
-		this._register(addDisposableListener(this.domNode, 'click', event => {
-			event.preventDefault();
-			void opener.open(this.request.uri, { openExternal: true }).catch(error => notifications.error(error));
-		}));
-		this._register(addDisposableListener(this.removeDomNode, 'click', () => {
-			const reference = this.request.recordedReference;
-			if (!reference || this.removeDomNode.disabled) { return; }
-			this.removeDomNode.disabled = true;
-			void detach(reference).catch(error => notifications.error(error)).finally(() => { this.removeDomNode.disabled = false; });
-		}));
+		this._register(
+			addDisposableListener(this.domNode, 'click', event => {
+				event.preventDefault();
+				void opener.open(this.request.uri, { openExternal: true }).catch(error => notifications.error(error));
+			}),
+		);
+		this._register(
+			addDisposableListener(this.removeDomNode, 'click', () => {
+				const reference = this.request.recordedReference;
+				if (!reference || this.removeDomNode.disabled) {
+					return;
+				}
+				this.removeDomNode.disabled = true;
+				void detach(reference)
+					.catch(error => notifications.error(error))
+					.finally(() => {
+						this.removeDomNode.disabled = false;
+					});
+			}),
+		);
 		this._register(toDisposable(() => this.containerDomNode.remove()));
 	}
 
 	public update(request: IResolvedSessionPullRequest): void {
 		this.request = request;
 		this.removeDomNode.hidden = !request.recordedReference;
-		this.removeDomNode.setAttribute('aria-label', localize('sessions.github.removeLabel', 'Remove attached pull request {0}/{1} #{2}', request.owner, request.repo, request.number));
+		this.removeDomNode.setAttribute(
+			'aria-label',
+			localize(
+				'sessions.github.removeLabel',
+				'Remove attached pull request {0}/{1} #{2}',
+				request.owner,
+				request.repo,
+				request.number,
+			),
+		);
 		this.iconDomNode.replaceChildren();
 		appendIcon(request.icon, this.iconDomNode);
 		this.iconDomNode.style.color = `var(${colorCssVariable(request.icon.color!.id)})`;
@@ -277,7 +425,13 @@ class IssueEntry extends Disposable {
 	private readonly removeDomNode: HTMLButtonElement;
 	private entry: IResolvedSessionIssue;
 
-	constructor(container: HTMLElement, entry: IResolvedSessionIssue, opener: IOpenerService, notifications: INotificationService, detach: (reference: IResolvedSessionIssue['reference']) => Promise<void>) {
+	constructor(
+		container: HTMLElement,
+		entry: IResolvedSessionIssue,
+		opener: IOpenerService,
+		notifications: INotificationService,
+		detach: (reference: IResolvedSessionIssue['reference']) => Promise<void>,
+	) {
 		super();
 		this.entry = entry;
 		this.domNode = h(container.ownerDocument, 'div');
@@ -288,22 +442,37 @@ class IssueEntry extends Disposable {
 		this.labelDomNode = h(container.ownerDocument, 'span');
 		this.labelDomNode.className = 'ash-session-chat-input-issue-label';
 		this.linkDomNode.append(this.iconDomNode, this.labelDomNode);
-		this.removeDomNode = this._register(new Button(this.domNode, {
-			...defaultButtonStyles, label: localize('sessions.github.remove', 'Remove'), presentation: 'secondary', size: 'small',
-		})).domNode;
+		this.removeDomNode = this._register(
+			new Button(this.domNode, {
+				...defaultButtonStyles,
+				label: localize('sessions.github.remove', 'Remove'),
+				presentation: 'secondary',
+				size: 'small',
+			}),
+		).domNode;
 		this.removeDomNode.classList.add('ash-session-chat-input-pr-action');
 		this.domNode.append(this.linkDomNode, this.removeDomNode);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
-		this._register(addDisposableListener(this.linkDomNode, 'click', event => {
-			event.preventDefault();
-			void opener.open(this.entry.uri, { openExternal: true }).catch(error => notifications.error(error));
-		}));
-		this._register(addDisposableListener(this.removeDomNode, 'click', () => {
-			if (this.removeDomNode.disabled) { return; }
-			this.removeDomNode.disabled = true;
-			void detach(this.entry.reference).catch(error => notifications.error(error)).finally(() => { this.removeDomNode.disabled = false; });
-		}));
+		this._register(
+			addDisposableListener(this.linkDomNode, 'click', event => {
+				event.preventDefault();
+				void opener.open(this.entry.uri, { openExternal: true }).catch(error => notifications.error(error));
+			}),
+		);
+		this._register(
+			addDisposableListener(this.removeDomNode, 'click', () => {
+				if (this.removeDomNode.disabled) {
+					return;
+				}
+				this.removeDomNode.disabled = true;
+				void detach(this.entry.reference)
+					.catch(error => notifications.error(error))
+					.finally(() => {
+						this.removeDomNode.disabled = false;
+					});
+			}),
+		);
 	}
 
 	public update(entry: IResolvedSessionIssue): void {
@@ -318,6 +487,16 @@ class IssueEntry extends Disposable {
 		appendIcon(icon, this.iconDomNode);
 		this.iconDomNode.style.color = `var(${colorCssVariable(icon.color!.id)})`;
 		const { repository, number } = entry.reference;
-		this.removeDomNode.setAttribute('aria-label', localize('sessions.github.removeIssueLabel', 'Remove attached issue {0}/{1}/{2} #{3}', repository.host, repository.owner, repository.name, number));
+		this.removeDomNode.setAttribute(
+			'aria-label',
+			localize(
+				'sessions.github.removeIssueLabel',
+				'Remove attached issue {0}/{1}/{2} #{3}',
+				repository.host,
+				repository.owner,
+				repository.name,
+				number,
+			),
+		);
 	}
 }

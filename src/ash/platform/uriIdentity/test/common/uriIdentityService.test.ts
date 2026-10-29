@@ -19,15 +19,17 @@ suite('Provider-aware URI identity', () => {
 		using changes = new Emitter<void>();
 		let reads = 0;
 		let path = '/first';
-		const provider = new class extends MemoryFileService {
+		const provider = new (class extends MemoryFileService {
 			readonly onDidChangePathIdentity = changes.event;
-			retainPathIdentity() { return Disposable.None; }
-			async resolvePathIdentity(): Promise<void> { }
+			retainPathIdentity() {
+				return Disposable.None;
+			}
+			async resolvePathIdentity(): Promise<void> {}
 			getPathIdentity(resource: URI) {
 				reads++;
 				return { comparisonResource: resource.with({ path }) };
 			}
-		}([]);
+		})([]);
 		using files = new FileService();
 		using registration = files.registerProvider('identity', provider);
 		using services = new TestUriIdentityServices(files);
@@ -43,7 +45,10 @@ suite('Provider-aware URI identity', () => {
 		assert.equal(reads, 2);
 		assert.notEqual(identity.extUri.getComparisonKey(resource.with({ query: 'revision=2' })), full);
 		assert.notEqual(identity.extUri.getComparisonKey(resource.with({ fragment: 'two' })), full);
-		assert.equal(identity.extUri.getComparisonKeyIgnoringFragment(resource.with({ fragment: 'two' })), withoutFragment);
+		assert.equal(
+			identity.extUri.getComparisonKeyIgnoringFragment(resource.with({ fragment: 'two' })),
+			withoutFragment,
+		);
 		path = '/second';
 		changes.fire();
 		assert.notEqual(identity.extUri.getComparisonKey(resource), full);
@@ -64,11 +69,17 @@ suite('Provider-aware URI identity', () => {
 		provider.capabilities |= FileSystemProviderCapabilities.PathCaseSensitive;
 		changes.fire();
 		assert.equal(identity.extUri.isEqual(lower, upper), false);
-		assert.notEqual(identity.extUri.getComparisonKeyIgnoringFragment(lower), identity.extUri.getComparisonKeyIgnoringFragment(upper));
+		assert.notEqual(
+			identity.extUri.getComparisonKeyIgnoringFragment(lower),
+			identity.extUri.getComparisonKeyIgnoringFragment(upper),
+		);
 		registration.dispose();
 		using replacement = files.registerProvider('identity', new IdentityProvider(false));
 		assert.equal(identity.extUri.isEqual(lower, upper), true);
-		assert.equal(identity.extUri.getComparisonKeyIgnoringFragment(lower), identity.extUri.getComparisonKeyIgnoringFragment(upper));
+		assert.equal(
+			identity.extUri.getComparisonKeyIgnoringFragment(lower),
+			identity.extUri.getComparisonKeyIgnoringFragment(upper),
+		);
 	});
 
 	test('provider capabilities select path casing independently of the renderer OS', () => {
@@ -77,7 +88,12 @@ suite('Provider-aware URI identity', () => {
 		using sensitive = files.registerProvider('sensitive', new IdentityProvider(true));
 		using services = new TestUriIdentityServices(files);
 		const identity = services.get(IUriIdentityService);
-		assert.deepEqual(['insensitive', 'sensitive', 'unknown'].map(scheme => identity.extUri.isEqual(URI.parse(`${scheme}:/Root/File`), URI.parse(`${scheme}:/root/file`))), [true, false, false]);
+		assert.deepEqual(
+			['insensitive', 'sensitive', 'unknown'].map(scheme =>
+				identity.extUri.isEqual(URI.parse(`${scheme}:/Root/File`), URI.parse(`${scheme}:/root/file`)),
+			),
+			[true, false, false],
+		);
 	});
 
 	test('canonical spelling normalizes registered paths while retaining query and requested fragments', () => {
@@ -87,12 +103,22 @@ suite('Provider-aware URI identity', () => {
 		const identity = services.get(IUriIdentityService);
 		const first = URI.parse('identity:/Root/file?revision=1#first');
 		assert.equal(identity.asCanonicalUri(first), first);
-		assert.deepEqual([
-			identity.asCanonicalUri(URI.parse('identity:/ROOT/./folder/../FILE?revision=1#second%2Fanchor')).toString(),
-			identity.asCanonicalUri(URI.parse('identity:/ROOT/FILE?revision=2')).toString(),
-			identity.asCanonicalUri(URI.parse('identity:/Root/a%2Fb')).toString(),
-			identity.asCanonicalUri(URI.parse('identity:/Root/a/b')).toString(),
-		], ['identity:/Root/file?revision=1#second%2Fanchor', 'identity:/ROOT/FILE?revision=2', 'identity:/Root/a%2Fb', 'identity:/Root/a/b']);
+		assert.deepEqual(
+			[
+				identity
+					.asCanonicalUri(URI.parse('identity:/ROOT/./folder/../FILE?revision=1#second%2Fanchor'))
+					.toString(),
+				identity.asCanonicalUri(URI.parse('identity:/ROOT/FILE?revision=2')).toString(),
+				identity.asCanonicalUri(URI.parse('identity:/Root/a%2Fb')).toString(),
+				identity.asCanonicalUri(URI.parse('identity:/Root/a/b')).toString(),
+			],
+			[
+				'identity:/Root/file?revision=1#second%2Fanchor',
+				'identity:/ROOT/FILE?revision=2',
+				'identity:/Root/a%2Fb',
+				'identity:/Root/a/b',
+			],
+		);
 	});
 
 	test('unregistered schemes preserve their URI without applying file path normalization', () => {
@@ -167,7 +193,9 @@ class IdentityProvider extends MemoryFileService {
 
 	constructor(caseSensitive: boolean, changes: EventContract<void> = Event.None) {
 		super([]);
-		this.capabilities = FileSystemProviderCapabilities.FileReadWrite | (caseSensitive ? FileSystemProviderCapabilities.PathCaseSensitive : FileSystemProviderCapabilities.None);
+		this.capabilities =
+			FileSystemProviderCapabilities.FileReadWrite |
+			(caseSensitive ? FileSystemProviderCapabilities.PathCaseSensitive : FileSystemProviderCapabilities.None);
 		this.onDidChangeCapabilities = changes;
 	}
 }

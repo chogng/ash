@@ -30,7 +30,9 @@ export class ChatEditor extends EditorPane {
 		@IViewsService private readonly views: IViewsService,
 		@IThemeService theme: IThemeService,
 		@IStorageService storage: IStorageService,
-	) { super(ChatEditorInput.EditorID, theme, storage); }
+	) {
+		super(ChatEditorInput.EditorID, theme, storage);
+	}
 
 	override create(parent: HTMLElement): void {
 		this.element = h(parent.ownerDocument, 'div', { className: 'ash-chat-editor' });
@@ -41,11 +43,15 @@ export class ChatEditor extends EditorPane {
 	override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		const view = await this.views.openView<ChatEditorHost>(CHAT_VIEW_ID);
 		signal.throwIfAborted();
-		if (!view || typeof view.attachEditor !== 'function') throw new Error('Chat editor requires its window conversation owner');
+		if (!view || typeof view.attachEditor !== 'function')
+			throw new Error('Chat editor requires its window conversation owner');
 		if (!(input instanceof ChatEditorInput)) throw new TypeError('Invalid Chat editor input');
 		input.closeHandler = {
 			showConfirm: () => true,
-			confirm: async () => { await view.captureActiveDraft(); return ConfirmResult.DONT_SAVE; },
+			confirm: async () => {
+				await view.captureActiveDraft();
+				return ConfirmResult.DONT_SAVE;
+			},
 		};
 		this.view = view;
 		this.mount.value = view.attachEditor(this.element);
@@ -68,6 +74,11 @@ export class ChatEditor extends EditorPane {
 		this.element.style.height = `${dimension.height}px`;
 	}
 
-	override focus(): void { this.view?.focus(); }
-	protected override disposeCore(): void { this.clearInput(); super.disposeCore(); }
+	override focus(): void {
+		this.view?.focus();
+	}
+	protected override disposeCore(): void {
+		this.clearInput();
+		super.disposeCore();
+	}
 }

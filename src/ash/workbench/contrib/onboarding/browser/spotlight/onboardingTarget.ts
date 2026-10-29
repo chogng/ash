@@ -25,7 +25,7 @@ class OnboardingTargetRegistry {
 	}
 
 	public resolve(id: string, scope: string | undefined): HTMLElement | undefined {
-		const matches = [...this.providers.get(id) ?? []]
+		const matches = [...(this.providers.get(id) ?? [])]
 			.map(provider => provider(scope))
 			.filter((element): element is HTMLElement => !!element?.isConnected);
 		return matches.length === 1 ? matches[0] : undefined;

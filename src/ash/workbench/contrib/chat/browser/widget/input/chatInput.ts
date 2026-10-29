@@ -1,16 +1,26 @@
 import type { ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
-import type { AgentResponse, ApprovalMode, ChatAgent, ChatMode, ModelCatalogEntry, SkillSelectorDefinition, SlashCommandDefinition, TurnInteraction, TurnChangeSetSummary } from "../../../../../services/chat/common/chatService.js";
-import type { SkillReference } from "../../../../../../platform/agentHost/common/appServerApi.js";
-import type { ModelRef } from "../../../../../services/chat/common/chatService.js";
-import type { ModelReasoningEffort } from "../../../../../services/chat/common/modelCatalog.js";
-import type { ChatContextAttachment } from "../../../../../services/chat/common/chatContextService.js";
+import type {
+	AgentResponse,
+	ApprovalMode,
+	ChatAgent,
+	ChatMode,
+	ModelCatalogEntry,
+	SkillSelectorDefinition,
+	SlashCommandDefinition,
+	TurnInteraction,
+	TurnChangeSetSummary,
+} from '../../../../../services/chat/common/chatService.js';
+import type { SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
+import type { ModelRef } from '../../../../../services/chat/common/chatService.js';
+import type { ModelReasoningEffort } from '../../../../../services/chat/common/modelCatalog.js';
+import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 
 import type { ICommandService } from '../../../../../../platform/commands/common/commands.js';
 
 /** Line totals can be partial when the Git provider cannot read some workspace files. */
-export type ChatChangesStatistics = TurnChangeSetSummary['statistics'] & { readonly partial?: boolean; };
+export type ChatChangesStatistics = TurnChangeSetSummary['statistics'] & { readonly partial?: boolean };
 
-export type ChatInputPhase = "loading" | "ready" | "submitting" | "error";
+export type ChatInputPhase = 'loading' | 'ready' | 'submitting' | 'error';
 
 export interface ChatInputCommandInvocation {
 	readonly commandId: string;
@@ -24,9 +34,9 @@ export interface ChatInputServerCommandInvocation {
 
 /** State required to render the input area for the selected Thread. */
 export interface ChatInputState {
-	readonly conversation?: { readonly sessionId: string; readonly threadId: string; };
+	readonly conversation?: { readonly sessionId: string; readonly threadId: string };
 	/** Generation changes on navigation, but stays stable when first send materializes a draft. */
-	readonly draftIdentity?: { readonly id: string; readonly generation: number; };
+	readonly draftIdentity?: { readonly id: string; readonly generation: number };
 	readonly mode: ChatMode;
 	readonly activeMode?: ChatMode;
 	readonly queuedMessages: number;
@@ -57,9 +67,21 @@ export interface ChatInputState {
 
 /** Operations that the input area may request from its owning Chat pane. */
 export interface ChatInputDelegate {
-	readonly voiceConversation?: { readonly isAvailable: boolean; readonly isActive: boolean; readonly isConnected: boolean; toggle(): Promise<void>; interrupt(): Promise<void>; };
+	readonly voiceConversation?: {
+		readonly isAvailable: boolean;
+		readonly isActive: boolean;
+		readonly isConnected: boolean;
+		toggle(): Promise<void>;
+		interrupt(): Promise<void>;
+	};
 	/** Carries the original composer lifetime through the host’s asynchronous context resolution. */
-	send(text: string, mode: ChatMode, skills?: readonly SkillReference[], contexts?: readonly ChatContextAttachment[], submissionSignal?: AbortSignal): Promise<void>;
+	send(
+		text: string,
+		mode: ChatMode,
+		skills?: readonly SkillReference[],
+		contexts?: readonly ChatContextAttachment[],
+		submissionSignal?: AbortSignal,
+	): Promise<void>;
 	executeCommand(invocation: ChatInputCommandInvocation): Promise<void>;
 	executeServerCommand(invocation: ChatInputServerCommandInvocation, submissionSignal?: AbortSignal): Promise<void>;
 	interrupt(): Promise<void>;
@@ -88,8 +110,15 @@ export async function readWorkspaceChanges(commands: ICommandService): Promise<C
 	if (!result || typeof result !== 'object') throw new TypeError('Invalid workspace changes summary');
 	const value = result as Record<string, unknown>;
 	for (const key of ['files', 'additions', 'deletions']) {
-		if (typeof value[key] !== 'number' || !Number.isSafeInteger(value[key]) || value[key] < 0) throw new TypeError('Invalid workspace change statistics');
+		if (typeof value[key] !== 'number' || !Number.isSafeInteger(value[key]) || value[key] < 0)
+			throw new TypeError('Invalid workspace change statistics');
 	}
-	if (value.partial !== undefined && typeof value.partial !== 'boolean') throw new TypeError('Invalid workspace change coverage');
-	return { files: value.files as number, additions: value.additions as number, deletions: value.deletions as number, partial: value.partial === true };
+	if (value.partial !== undefined && typeof value.partial !== 'boolean')
+		throw new TypeError('Invalid workspace change coverage');
+	return {
+		files: value.files as number,
+		additions: value.additions as number,
+		deletions: value.deletions as number,
+		partial: value.partial === true,
+	};
 }

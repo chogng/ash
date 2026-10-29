@@ -1,5 +1,5 @@
-import { CharCode } from "../../../../base/common/charCode.js";
-import { NodeColor } from "./rbTreeBase.js";
+import { CharCode } from '../../../../base/common/charCode.js';
+import { NodeColor } from './rbTreeBase.js';
 
 export enum PieceBuffer {
 	Original,

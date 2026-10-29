@@ -1,9 +1,9 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import "./media/editortabscontrol.css";
-import type { TabListDropPosition } from "../../../../base/browser/ui/tablist/tabList.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { h } from "../../../../base/browser/dom.js";
-import type { EditorInstanceId } from "../../../services/editor/common/editorState.js";
+import './media/editortabscontrol.css';
+import type { TabListDropPosition } from '../../../../base/browser/ui/tablist/tabList.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { h } from '../../../../base/browser/dom.js';
+import type { EditorInstanceId } from '../../../services/editor/common/editorState.js';
 
 /** One open Editor presented by an EditorTabsControl. */
 export interface EditorTabDescriptor {
@@ -21,7 +21,7 @@ export interface EditorTabDescriptor {
 /** Callbacks through which an Editor tab presentation requests group-level mutations. */
 export interface EditorTabsDelegate {
 	activate(input: IResourceEditorInput): void;
-	select?(input: IResourceEditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean; }): boolean;
+	select?(input: IResourceEditorInput, modifiers: { readonly toggle: boolean; readonly range: boolean }): boolean;
 	preview(input: IResourceEditorInput): void;
 	close(input: IResourceEditorInput): void;
 	showContextMenu?(input: IResourceEditorInput, event: MouseEvent | KeyboardEvent, tab: HTMLElement): void;
@@ -40,13 +40,17 @@ export abstract class EditorTabsControl extends Disposable {
 
 	protected constructor(container: HTMLElement) {
 		super();
-		this.domNode = h(container.ownerDocument, "div");
-		this.domNode.className = "ash-editor-tabs-control";
+		this.domNode = h(container.ownerDocument, 'div');
+		this.domNode.className = 'ash-editor-tabs-control';
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
-	abstract setEditors(editors: readonly EditorTabDescriptor[], activeInput: IResourceEditorInput | undefined, selectedIds?: ReadonlySet<EditorInstanceId>): void;
+	abstract setEditors(
+		editors: readonly EditorTabDescriptor[],
+		activeInput: IResourceEditorInput | undefined,
+		selectedIds?: ReadonlySet<EditorInstanceId>,
+	): void;
 }
 
 export function editorInputKey(input: IResourceEditorInput): string {

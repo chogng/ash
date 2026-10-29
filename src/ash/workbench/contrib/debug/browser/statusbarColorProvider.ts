@@ -28,7 +28,7 @@ export class StatusBarColorProvider extends Disposable {
 		super();
 		const update = (): void => {
 			const active = debug.sessions.some(
-				(session) =>
+				session =>
 					session.sessionOptions?.noDebug !== true &&
 					session.resolvedConfiguration?.arguments.noDebug !== true &&
 					session.state !== 'terminated' &&

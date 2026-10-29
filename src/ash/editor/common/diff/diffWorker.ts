@@ -12,7 +12,12 @@ export const diffWorkerChannel = { protocol: 'ash.editor.diff', version: 1 };
 export const diffWorkerHandler: WebWorkerRequestHandler = {
 	async handleRequest(message, signal) {
 		const request = message.request;
-		if (!isRecord(request) || !isDocument(request.original) || !isDocument(request.modified) || !isOptions(request.options)) {
+		if (
+			!isRecord(request) ||
+			!isDocument(request.original) ||
+			!isDocument(request.modified) ||
+			!isOptions(request.options)
+		) {
 			throw new TypeError('Invalid editor diff request');
 		}
 		return new DefaultLinesDiffComputer().computeDiffAsync(
@@ -29,7 +34,12 @@ export const diffWorkerHandler: WebWorkerRequestHandler = {
 
 /** Validates Worker coordinates and restores the standard diff value classes. */
 export function readDiffResult(value: unknown, request: DiffComputationRequest): LinesDiff {
-	if (!isRecord(value) || !Array.isArray(value.changes) || !Array.isArray(value.moves) || typeof value.hitTimeout !== 'boolean') {
+	if (
+		!isRecord(value) ||
+		!Array.isArray(value.changes) ||
+		!Array.isArray(value.moves) ||
+		typeof value.hitTimeout !== 'boolean'
+	) {
 		throw new TypeError('Invalid editor diff result');
 	}
 	const original = request.original.text.split('\n');
@@ -40,14 +50,20 @@ export function readDiffResult(value: unknown, request: DiffComputationRequest):
 		if (!isRecord(item)) throw new TypeError('Invalid editor diff change');
 		const left = readLineRange(item.original, original.length);
 		const right = readLineRange(item.modified, modified.length);
-		if (left.startLineNumber < originalEnd || right.startLineNumber < modifiedEnd
-			|| left.startLineNumber - originalEnd !== right.startLineNumber - modifiedEnd
-			|| left.isEmpty && right.isEmpty) {
+		if (
+			left.startLineNumber < originalEnd ||
+			right.startLineNumber < modifiedEnd ||
+			left.startLineNumber - originalEnd !== right.startLineNumber - modifiedEnd ||
+			(left.isEmpty && right.isEmpty)
+		) {
 			throw new RangeError('Invalid editor diff change order');
 		}
 		originalEnd = left.endLineNumberExclusive;
 		modifiedEnd = right.endLineNumberExclusive;
-		const innerChanges = item.innerChanges === undefined ? undefined : readRangeMappings(item.innerChanges, original, modified, left, right);
+		const innerChanges =
+			item.innerChanges === undefined
+				? undefined
+				: readRangeMappings(item.innerChanges, original, modified, left, right);
 		return new DetailedLineRangeMapping(left, right, innerChanges);
 	});
 	if (original.length + 1 - originalEnd !== modified.length + 1 - modifiedEnd) {
@@ -66,8 +82,13 @@ export function readDiffResult(value: unknown, request: DiffComputationRequest):
 			if (!left.containsRange(changeLeft) || !right.containsRange(changeRight)) {
 				throw new RangeError('Invalid editor diff move change range');
 			}
-			return new DetailedLineRangeMapping(changeLeft, changeRight,
-				change.innerChanges === undefined ? undefined : readRangeMappings(change.innerChanges, original, modified, changeLeft, changeRight));
+			return new DetailedLineRangeMapping(
+				changeLeft,
+				changeRight,
+				change.innerChanges === undefined
+					? undefined
+					: readRangeMappings(change.innerChanges, original, modified, changeLeft, changeRight),
+			);
 		});
 		return new MovedText(new LineRangeMapping(left, right), moveChanges);
 	});
@@ -75,15 +96,26 @@ export function readDiffResult(value: unknown, request: DiffComputationRequest):
 }
 
 function readLineRange(value: unknown, lineCount: number): LineRange {
-	if (!isRecord(value) || !isIndex(value.startLineNumber) || !isIndex(value.endLineNumberExclusive)
-		|| value.startLineNumber < 1 || value.startLineNumber > value.endLineNumberExclusive
-		|| value.endLineNumberExclusive > lineCount + 1) {
+	if (
+		!isRecord(value) ||
+		!isIndex(value.startLineNumber) ||
+		!isIndex(value.endLineNumberExclusive) ||
+		value.startLineNumber < 1 ||
+		value.startLineNumber > value.endLineNumberExclusive ||
+		value.endLineNumberExclusive > lineCount + 1
+	) {
 		throw new RangeError('Invalid editor diff line range');
 	}
 	return new LineRange(value.startLineNumber, value.endLineNumberExclusive);
 }
 
-function readRangeMappings(value: unknown, original: readonly string[], modified: readonly string[], left: LineRange, right: LineRange): RangeMapping[] {
+function readRangeMappings(
+	value: unknown,
+	original: readonly string[],
+	modified: readonly string[],
+	left: LineRange,
+	right: LineRange,
+): RangeMapping[] {
 	if (!Array.isArray(value)) throw new TypeError('Invalid editor diff inner changes');
 	let previousOriginal: Range | undefined;
 	let previousModified: Range | undefined;
@@ -91,8 +123,10 @@ function readRangeMappings(value: unknown, original: readonly string[], modified
 		if (!isRecord(item)) throw new TypeError('Invalid editor diff inner change');
 		const originalRange = readRange(item.originalRange, original, left);
 		const modifiedRange = readRange(item.modifiedRange, modified, right);
-		if ((previousOriginal && startsBeforeEnd(originalRange, previousOriginal))
-			|| (previousModified && startsBeforeEnd(modifiedRange, previousModified))) {
+		if (
+			(previousOriginal && startsBeforeEnd(originalRange, previousOriginal)) ||
+			(previousModified && startsBeforeEnd(modifiedRange, previousModified))
+		) {
 			throw new RangeError('Invalid editor diff inner change order');
 		}
 		previousOriginal = originalRange;
@@ -102,34 +136,44 @@ function readRangeMappings(value: unknown, original: readonly string[], modified
 }
 
 function startsBeforeEnd(next: Range, previous: Range): boolean {
-	return next.startLineNumber < previous.endLineNumber
-		|| (next.startLineNumber === previous.endLineNumber && next.startColumn < previous.endColumn);
+	return (
+		next.startLineNumber < previous.endLineNumber ||
+		(next.startLineNumber === previous.endLineNumber && next.startColumn < previous.endColumn)
+	);
 }
 
 function readRange(value: unknown, lines: readonly string[], parent: LineRange): Range {
-	if (!isRecord(value) || !isIndex(value.startLineNumber) || !isIndex(value.endLineNumber)
-		|| !isIndex(value.startColumn) || !isIndex(value.endColumn)
-		|| value.startLineNumber !== value.endLineNumber
-		|| !parent.contains(value.startLineNumber)
-		|| value.startColumn < 1 || value.startColumn > value.endColumn
-		|| value.endColumn > lines[value.startLineNumber - 1]!.length + 1) {
+	if (
+		!isRecord(value) ||
+		!isIndex(value.startLineNumber) ||
+		!isIndex(value.endLineNumber) ||
+		!isIndex(value.startColumn) ||
+		!isIndex(value.endColumn) ||
+		value.startLineNumber !== value.endLineNumber ||
+		!parent.contains(value.startLineNumber) ||
+		value.startColumn < 1 ||
+		value.startColumn > value.endColumn ||
+		value.endColumn > lines[value.startLineNumber - 1]!.length + 1
+	) {
 		throw new RangeError('Invalid editor diff text range');
 	}
 	return new Range(value.startLineNumber, value.startColumn, value.endLineNumber, value.endColumn);
 }
 
-function isDocument(value: unknown): value is { version: number; text: string; } {
+function isDocument(value: unknown): value is { version: number; text: string } {
 	return isRecord(value) && isIndex(value.version) && typeof value.text === 'string';
 }
 
 function isOptions(value: unknown): value is DiffComputationRequest['options'] {
-	return isRecord(value)
-		&& typeof value.ignoreTrimWhitespace === 'boolean'
-		&& typeof value.computeMoves === 'boolean'
-		&& typeof value.maxComputationTimeMs === 'number'
-		&& Number.isFinite(value.maxComputationTimeMs)
-		&& value.maxComputationTimeMs >= 0
-		&& (value.extendToSubwords === undefined || typeof value.extendToSubwords === 'boolean');
+	return (
+		isRecord(value) &&
+		typeof value.ignoreTrimWhitespace === 'boolean' &&
+		typeof value.computeMoves === 'boolean' &&
+		typeof value.maxComputationTimeMs === 'number' &&
+		Number.isFinite(value.maxComputationTimeMs) &&
+		value.maxComputationTimeMs >= 0 &&
+		(value.extendToSubwords === undefined || typeof value.extendToSubwords === 'boolean')
+	);
 }
 
 function isIndex(value: unknown): value is number {

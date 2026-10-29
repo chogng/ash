@@ -1,9 +1,9 @@
 import type { FileReadOperation } from '../../../../platform/files/common/files.js';
-import { type URI } from "../../../../base/common/uri.js";
+import { type URI } from '../../../../base/common/uri.js';
 
 export enum TextFileContentSource {
-	Bootstrap = "bootstrap",
-	FileSystem = "fileSystem",
+	Bootstrap = 'bootstrap',
+	FileSystem = 'fileSystem',
 }
 
 export interface TextFileResolveRequest {
@@ -53,20 +53,27 @@ export interface ITextFileSaveEvent {
 export class TextFileSaveConflictError extends Error {
 	constructor(readonly resource: URI) {
 		super(`Text file changed since it was resolved: ${resource.toString()}`);
-		this.name = "TextFileSaveConflictError";
+		this.name = 'TextFileSaveConflictError';
 	}
 }
 
 export class TextFileBinaryError extends Error {
-	constructor(readonly resource: URI, message = "The file is binary or uses an unsupported text encoding", options?: ErrorOptions) {
+	constructor(
+		readonly resource: URI,
+		message = 'The file is binary or uses an unsupported text encoding',
+		options?: ErrorOptions,
+	) {
 		super(`${message}: ${resource.toString()}`, options);
-		this.name = "TextFileBinaryError";
+		this.name = 'TextFileBinaryError';
 	}
 }
 
 export class TextFileTooLargeError extends Error {
-	constructor(readonly resource: URI, readonly sizeBytes: number) {
+	constructor(
+		readonly resource: URI,
+		readonly sizeBytes: number,
+	) {
 		super(`The text file is too large to open safely (${sizeBytes} bytes): ${resource.toString()}`);
-		this.name = "TextFileTooLargeError";
+		this.name = 'TextFileTooLargeError';
 	}
 }

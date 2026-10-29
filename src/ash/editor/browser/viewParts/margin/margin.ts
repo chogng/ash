@@ -1,8 +1,8 @@
 import { h } from '../../../../base/browser/dom.js';
-import "./margin.css";
-import { createFastDomNode, FastDomNode } from "../../../../base/browser/fastDomNode.js";
-import { type RenderingContext, type RestrictedRenderingContext } from "../../view/renderingContext.js";
-import { ViewPart } from "../../view/viewPart.js";
+import './margin.css';
+import { createFastDomNode, FastDomNode } from '../../../../base/browser/fastDomNode.js';
+import { type RenderingContext, type RestrictedRenderingContext } from '../../view/renderingContext.js';
+import { ViewPart } from '../../view/viewPart.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import * as viewEvents from '../../../common/viewEvents.js';
@@ -66,7 +66,7 @@ export class Margin extends ViewPart {
 		return super.onScrollChanged(event) || event.scrollTopChanged || event.scrollLeftChanged;
 	}
 
-	public override prepareRender(_context: RenderingContext): void { }
+	public override prepareRender(_context: RenderingContext): void {}
 
 	public render(context: RestrictedRenderingContext): void {
 		this._domNode.setLayerHinting(this._canUseLayerHinting);

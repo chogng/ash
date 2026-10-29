@@ -8,7 +8,10 @@ import { BrowserTextModelService } from '../../../textmodelResolver/browser/brow
 import { EditorTitleControl } from '../../../../browser/parts/editor/editorTitleControl.js';
 import { EditorGroupModel } from '../../../../common/editor/editorGroupModel.js';
 import { createDiffEditorInput } from '../../../../common/editor/diffEditorInput.js';
-import { EditorShowIconsConfiguration, EditorTabsModeConfiguration } from '../../../editor/common/editorConfiguration.js';
+import {
+	EditorShowIconsConfiguration,
+	EditorTabsModeConfiguration,
+} from '../../../editor/common/editorConfiguration.js';
 import type { EditorTabsDelegate } from '../../../../browser/parts/editor/editorTabsControl.js';
 import { ITelemetryService } from '../../../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../../../platform/telemetry/common/telemetryUtils.js';
@@ -43,32 +46,54 @@ test('Seti TODO filenames retain their checkbox glyph and Markdown color in ever
 	const theme = await FileIconThemeData.load('vs-seti', 'Seti', document, path => readFile(directory + path));
 	using languages = new LanguageService();
 	using markdown = languages.registerLanguage({ id: 'markdown', extensions: ['.md'] });
-	for (const scheme of [ColorScheme.Dark, ColorScheme.Light, ColorScheme.HighContrastDark, ColorScheme.HighContrastLight]) {
+	for (const scheme of [
+		ColorScheme.Dark,
+		ColorScheme.Light,
+		ColorScheme.HighContrastDark,
+		ColorScheme.HighContrastLight,
+	]) {
 		for (const name of ['TODO', 'todo.txt', 'TODO.md', 'ToDo.md']) {
-			const icon = theme.resolveFileIcon(getIconClasses(undefined, languages, URI.file('/workspace/' + name)), scheme);
+			const icon = theme.resolveFileIcon(
+				getIconClasses(undefined, languages, URI.file('/workspace/' + name)),
+				scheme,
+			);
 			assert.equal(icon?.character, '\uE096', `${name} in ${scheme}`);
 		}
-		const todo = theme.resolveFileIcon(getIconClasses(undefined, languages, URI.file('/workspace/TODO.md')), scheme);
-		const markdown = theme.resolveFileIcon(getIconClasses(undefined, languages, URI.file('/workspace/notes.md')), scheme);
+		const todo = theme.resolveFileIcon(
+			getIconClasses(undefined, languages, URI.file('/workspace/TODO.md')),
+			scheme,
+		);
+		const markdown = theme.resolveFileIcon(
+			getIconClasses(undefined, languages, URI.file('/workspace/notes.md')),
+			scheme,
+		);
 		assert.equal(todo?.color, markdown?.color);
-		assert.equal(todo?.color, scheme === ColorScheme.Light || scheme === ColorScheme.HighContrastLight ? '#498ba7' : '#519aba');
+		assert.equal(
+			todo?.color,
+			scheme === ColorScheme.Light || scheme === ColorScheme.HighContrastLight ? '#498ba7' : '#519aba',
+		);
 	}
 });
 
 test('specific associations outrank scheme variants while equal matches use the active scheme', async () => {
-	const theme = await FileIconThemeData.load('precedence', 'Precedence', {
-		fonts: [{ id: 'icons', src: [{ path: 'icons.woff', format: 'woff' }] }],
-		iconDefinitions: {
-			file: { fontCharacter: 'F', fontColor: '#111111' },
-			compound: { fontCharacter: 'C' },
-			light: { fontCharacter: 'L', fontColor: '#222222' },
-			contrast: { fontCharacter: 'H', fontColor: '#ffffff' },
+	const theme = await FileIconThemeData.load(
+		'precedence',
+		'Precedence',
+		{
+			fonts: [{ id: 'icons', src: [{ path: 'icons.woff', format: 'woff' }] }],
+			iconDefinitions: {
+				file: { fontCharacter: 'F', fontColor: '#111111' },
+				compound: { fontCharacter: 'C' },
+				light: { fontCharacter: 'L', fontColor: '#222222' },
+				contrast: { fontCharacter: 'H', fontColor: '#ffffff' },
+			},
+			file: 'file',
+			fileExtensions: { 'test.ts': 'compound', ts: 'file' },
+			light: { fileExtensions: { ts: 'light' } },
+			highContrast: { fileExtensions: { ts: 'contrast' } },
 		},
-		file: 'file',
-		fileExtensions: { 'test.ts': 'compound', ts: 'file' },
-		light: { fileExtensions: { ts: 'light' } },
-		highContrast: { fileExtensions: { ts: 'contrast' } },
-	}, async () => new Uint8Array([1]));
+		async () => new Uint8Array([1]),
+	);
 	for (const [scheme, character, color] of [
 		[ColorScheme.Dark, 'F', '#111111'],
 		[ColorScheme.Light, 'L', '#222222'],
@@ -89,7 +114,9 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 	registration.replace([theme]);
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
-		Object.defineProperty(browser.window, 'matchMedia', { value: () => ({ matches: false, addEventListener() { }, removeEventListener() { } }) });
+		Object.defineProperty(browser.window, 'matchMedia', {
+			value: () => ({ matches: false, addEventListener() {}, removeEventListener() {} }),
+		});
 		using configuration = new WorkbenchConfigurationService();
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
@@ -100,7 +127,19 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		services.registerInstance(ILanguageService, languages);
 		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
 		services.registerInstance(IHostColorSchemeService, hostColors);
-		using models = uriIdentityServices.createInstance(BrowserTextModelService, { onDidChange: Event.None, resolve: async request => ({ resource: request.resource, text: request.bootstrapText ?? '', revision: undefined }), save: async () => ({ revision: undefined }) } satisfies ITextResourceStore, { languageService: languages });
+		using models = uriIdentityServices.createInstance(
+			BrowserTextModelService,
+			{
+				onDidChange: Event.None,
+				resolve: async request => ({
+					resource: request.resource,
+					text: request.bootstrapText ?? '',
+					revision: undefined,
+				}),
+				save: async () => ({ revision: undefined }),
+			} satisfies ITextResourceStore,
+			{ languageService: languages },
+		);
 		services.registerInstance(IFileTextModelService, models);
 		using themes = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		themes.initialize();
@@ -123,7 +162,12 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		let iconChanges = 0;
 		using iconListener = themes.onDidChangeResourceIcons(() => iconChanges++);
 		using workspace = new TestWorkspaceService({ id: 'workspace', uri: URI.file('C:/project') });
-		using labels = new ResourceLabels(DEFAULT_LABELS_CONTAINER, { workspaceContextService: workspace, resourceIconRenderer: themes, fileModels: models, languageService: languages });
+		using labels = new ResourceLabels(DEFAULT_LABELS_CONTAINER, {
+			workspaceContextService: workspace,
+			resourceIconRenderer: themes,
+			fileModels: models,
+			languageService: languages,
+		});
 		const label = labels.create(browser.window.document.body);
 		label.setFile(URI.file('C:/project/source.custom'));
 		services.registerInstance(IResourceIconRenderer, themes);
@@ -131,8 +175,31 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		const group = new EditorGroupModel();
 		const input = { resource: URI.file('C:/project/main.ts') };
 		group.openEditor(input);
-		const delegate: EditorTabsDelegate = { activate() { }, preview() { }, close() { }, pinEditor() { }, unstickEditor() { }, startDrag() { }, isDragging: () => false, drop() { }, dropExternal() { }, endDrag() { } };
-		using title = editorServices.createInstance(EditorTitleControl, browser.window.document.body, delegate, group, undefined, configuration, undefined, undefined, undefined, undefined, undefined);
+		const delegate: EditorTabsDelegate = {
+			activate() {},
+			preview() {},
+			close() {},
+			pinEditor() {},
+			unstickEditor() {},
+			startDrag() {},
+			isDragging: () => false,
+			drop() {},
+			dropExternal() {},
+			endDrag() {},
+		};
+		using title = editorServices.createInstance(
+			EditorTitleControl,
+			browser.window.document.body,
+			delegate,
+			group,
+			undefined,
+			configuration,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+		);
 		const editors = [{ instanceId: 'main', input, panelId: 'main-panel', tabId: 'main-tab' }];
 		title.setEditors(editors, input);
 		const tab = title.domNode.querySelector<HTMLButtonElement>('[role="tab"]')!;
@@ -153,15 +220,24 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		await configuration.updateValue(EditorTabsModeConfiguration, 'single');
 		assert.notEqual(title.domNode.querySelector('.ash-icon-label-icon')?.textContent, '');
 		await configuration.updateValue(EditorTabsModeConfiguration, 'multiple');
-		const comparison = createDiffEditorInput({ resource: URI.file('/project/old.rs') }, { resource: URI.parse('git-change:/unstaged/main.test.ts?revision=1') }, 'Renamed test');
-		const comparisons = [{ instanceId: 'comparison', input: comparison, panelId: 'comparison-panel', tabId: 'comparison-tab' }];
+		const comparison = createDiffEditorInput(
+			{ resource: URI.file('/project/old.rs') },
+			{ resource: URI.parse('git-change:/unstaged/main.test.ts?revision=1') },
+			'Renamed test',
+		);
+		const comparisons = [
+			{ instanceId: 'comparison', input: comparison, panelId: 'comparison-panel', tabId: 'comparison-tab' },
+		];
 		group.closeEditor(input);
 		group.openEditor(comparison);
 		title.setEditors(comparisons, comparison);
 		const assertComparisonIcon = (): void => {
 			const comparisonTab = title.domNode.querySelector<HTMLElement>('[role="tab"]')!;
 			const comparisonIcon = comparisonTab.querySelector<HTMLElement>('.ash-icon-label-icon')!;
-			assert.deepEqual([comparisonIcon.textContent, comparisonIcon.style.color], [render('main.test.ts').textContent, render('main.test.ts').style.color]);
+			assert.deepEqual(
+				[comparisonIcon.textContent, comparisonIcon.style.color],
+				[render('main.test.ts').textContent, render('main.test.ts').style.color],
+			);
 			assert(comparisonIcon.classList.contains('typescript-lang-file-icon'));
 			assert.equal(comparisonIcon.classList.contains('rust-lang-file-icon'), false);
 			assert.equal(comparisonIcon.getAttribute('aria-hidden'), 'true');
@@ -178,7 +254,10 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		title.setEditors(editors, input);
 		group.stick(input);
 		title.setEditors([{ ...editors[0]!, sticky: true }], input);
-		assert.notEqual(title.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-icon-label-icon')?.textContent, '');
+		assert.notEqual(
+			title.domNode.querySelector('.ash-sticky-editor-tabs-row .ash-icon-label-icon')?.textContent,
+			'',
+		);
 		const labelIcon = label.element.querySelector('.ash-icon-label-icon');
 		const beforeRegistration = labelIcon?.textContent;
 		using custom = languages.registerLanguage({ id: 'javascript', extensions: ['.custom'] });
@@ -186,7 +265,10 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		assert.notEqual(labelIcon?.textContent, beforeRegistration);
 		assert.equal(labelIcon?.classList.contains('javascript-lang-file-icon'), true);
 		let themeStateChanges = 0;
-		using themeStateListener = themes.onDidFileIconThemeChange(state => { themeStateChanges++; assert.equal(state, themes.getFileIconTheme()); });
+		using themeStateListener = themes.onDidFileIconThemeChange(state => {
+			themeStateChanges++;
+			assert.equal(state, themes.getFileIconTheme());
+		});
 		assert.equal(themes.getFileIconTheme().hasFileIcons, true);
 		await configuration.updateValue(WorkbenchConfiguration.iconTheme, null);
 		themes.renderFileIcon(URI.file('C:/project/main.ts'), ts);
@@ -201,30 +283,54 @@ test('packaged Seti resolves filenames, extensions and light variants and can be
 		editorServices.dispose();
 		themes.dispose();
 		assert.equal(browser.window.document.head.querySelector('style'), null);
-	} finally { browser.window.close(); }
+	} finally {
+		browser.window.close();
+	}
 });
 
 test('icon documents reject escaping assets and missing definitions before activation', async () => {
 	let reads = 0;
-	const read = async (): Promise<Uint8Array> => { reads++; return new Uint8Array(); };
-	await assert.rejects(FileIconThemeData.load('bad', 'Bad', { fonts: [{ id: 'font', src: [{ path: '../outside.woff', format: 'woff' }] }], iconDefinitions: {} }, read), /inside/);
+	const read = async (): Promise<Uint8Array> => {
+		reads++;
+		return new Uint8Array();
+	};
+	await assert.rejects(
+		FileIconThemeData.load(
+			'bad',
+			'Bad',
+			{ fonts: [{ id: 'font', src: [{ path: '../outside.woff', format: 'woff' }] }], iconDefinitions: {} },
+			read,
+		),
+		/inside/,
+	);
 	assert.equal(reads, 0);
-	await assert.rejects(FileIconThemeData.load('bad', 'Bad', { iconDefinitions: {}, file: 'absent' }, read), /Unknown file icon/);
-	await assert.rejects(FileIconThemeData.load('bad', 'Bad', { iconDefinitions: {}, hidesExplorerArrows: 'yes' }, read), /must be a boolean/);
+	await assert.rejects(
+		FileIconThemeData.load('bad', 'Bad', { iconDefinitions: {}, file: 'absent' }, read),
+		/Unknown file icon/,
+	);
+	await assert.rejects(
+		FileIconThemeData.load('bad', 'Bad', { iconDefinitions: {}, hidesExplorerArrows: 'yes' }, read),
+		/must be a boolean/,
+	);
 });
 
 test('folder completion classes resolve folder theme associations', async () => {
-	const theme = await FileIconThemeData.load('folders', 'Folders', {
-		iconDefinitions: {
-			folder: { iconPath: 'folder.svg' },
-			src: { iconPath: 'src.svg' },
-			lightSrc: { iconPath: 'light-src.svg' },
+	const theme = await FileIconThemeData.load(
+		'folders',
+		'Folders',
+		{
+			iconDefinitions: {
+				folder: { iconPath: 'folder.svg' },
+				src: { iconPath: 'src.svg' },
+				lightSrc: { iconPath: 'light-src.svg' },
+			},
+			folder: 'folder',
+			hidesExplorerArrows: true,
+			folderNames: { src: 'src' },
+			light: { folderNames: { src: 'lightSrc' } },
 		},
-		folder: 'folder',
-		hidesExplorerArrows: true,
-		folderNames: { src: 'src' },
-		light: { folderNames: { src: 'lightSrc' } },
-	}, async path => new TextEncoder().encode(path));
+		async path => new TextEncoder().encode(path),
+	);
 	assert.deepEqual([theme.hasFileIcons, theme.hasFolderIcons, theme.hidesExplorerArrows], [false, true, true]);
 	const fallback = theme.resolveFileIcon(['folder-icon'], ColorScheme.Dark);
 	const dark = theme.resolveFileIcon(['folder-icon', 'src-name-folder-icon'], ColorScheme.Dark);
@@ -235,12 +341,17 @@ test('folder completion classes resolve folder theme associations', async () => 
 });
 
 test('high contrast file associations and font descriptors reach resource and suggestion renderers', async () => {
-	const theme = await FileIconThemeData.load('contrast-font', 'Contrast font', {
-		fonts: [{ id: 'icons', weight: '700', style: 'italic', src: [{ path: 'icons.woff', format: 'woff' }] }],
-		iconDefinitions: { normal: { fontCharacter: 'N' }, contrast: { fontCharacter: 'H', fontColor: '#ffffff' } },
-		file: 'normal',
-		highContrast: { fileExtensions: { ts: 'contrast' } },
-	}, async () => new Uint8Array([1]));
+	const theme = await FileIconThemeData.load(
+		'contrast-font',
+		'Contrast font',
+		{
+			fonts: [{ id: 'icons', weight: '700', style: 'italic', src: [{ path: 'icons.woff', format: 'woff' }] }],
+			iconDefinitions: { normal: { fontCharacter: 'N' }, contrast: { fontCharacter: 'H', fontColor: '#ffffff' } },
+			file: 'normal',
+			highContrast: { fileExtensions: { ts: 'contrast' } },
+		},
+		async () => new Uint8Array([1]),
+	);
 	const classes = ['file-icon', 'ts-ext-file-icon'];
 	assert.equal(theme.resolveFileIcon(classes, ColorScheme.Dark)?.character, 'N');
 	for (const scheme of [ColorScheme.HighContrastDark, ColorScheme.HighContrastLight]) {
@@ -249,7 +360,16 @@ test('high contrast file associations and font descriptors reach resource and su
 	}
 	assert.match(theme.styleSheetContent, /font-weight:700;font-style:italic/);
 	assert.match(theme.styleSheetContent, /data-color-scheme="hcDark"/);
-	await assert.rejects(FileIconThemeData.load('invalid-font', 'Invalid font', {
-		fonts: [{ id: 'icons', weight: 'heavy', src: [{ path: 'icons.woff', format: 'woff' }] }], iconDefinitions: {},
-	}, async () => new Uint8Array([1])), /weight or style/);
+	await assert.rejects(
+		FileIconThemeData.load(
+			'invalid-font',
+			'Invalid font',
+			{
+				fonts: [{ id: 'icons', weight: 'heavy', src: [{ path: 'icons.woff', format: 'woff' }] }],
+				iconDefinitions: {},
+			},
+			async () => new Uint8Array([1]),
+		),
+		/weight or style/,
+	);
 });

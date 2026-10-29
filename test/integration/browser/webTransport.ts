@@ -1,5 +1,10 @@
 import { AppServerWebSocketTransport } from '../../../src/ash/platform/agentHost/browser/appServerWebSocketTransport.js';
-import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT } from '../../../src/ash/platform/agentHost/common/appServerTransport.js';
+import {
+	WEB_APP_SERVER_CLOSED_EVENT,
+	WEB_APP_SERVER_CONNECTED_EVENT,
+	WEB_APP_SERVER_CONNECT_EVENT,
+	WEB_APP_SERVER_FRAME_EVENT,
+} from '../../../src/ash/platform/agentHost/common/appServerTransport.js';
 
 declare global {
 	interface Window {
@@ -8,23 +13,34 @@ declare global {
 			reconnect(): void;
 			send(frame: string): void;
 			dispose(): void;
-			messages: Array<{ event: string; payload: unknown; }>;
+			messages: Array<{ event: string; payload: unknown }>;
 		};
 	}
 }
 
 let transport: AppServerWebSocketTransport | undefined;
-const messages: Array<{ event: string; payload: unknown; }> = [];
+const messages: Array<{ event: string; payload: unknown }> = [];
 window.ashWebTransportIntegration = {
 	start() {
-		transport = new AppServerWebSocketTransport(new URL(location.origin), { token: 'a'.repeat(64), workspaceId: 'test', workspaceRoot: '/test', workspace: { id: 'test', configuration: null, folders: [{ id: 'test', path: '/test', name: null }] } });
+		transport = new AppServerWebSocketTransport(new URL(location.origin), {
+			token: 'a'.repeat(64),
+			workspaceId: 'test',
+			workspaceRoot: '/test',
+			workspace: { id: 'test', configuration: null, folders: [{ id: 'test', path: '/test', name: null }] },
+		});
 		for (const event of [WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT]) {
 			transport.on(event, payload => messages.push({ event, payload }));
 		}
 		transport.send(WEB_APP_SERVER_CONNECT_EVENT, { protocolVersion: 1 });
 	},
-	reconnect() { transport?.send(WEB_APP_SERVER_CONNECT_EVENT, { protocolVersion: 1 }); },
-	send(frame) { transport?.send(WEB_APP_SERVER_FRAME_EVENT, { frame }); },
-	dispose() { transport?.dispose(); },
+	reconnect() {
+		transport?.send(WEB_APP_SERVER_CONNECT_EVENT, { protocolVersion: 1 });
+	},
+	send(frame) {
+		transport?.send(WEB_APP_SERVER_FRAME_EVENT, { frame });
+	},
+	dispose() {
+		transport?.dispose();
+	},
 	messages,
 };

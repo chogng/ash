@@ -25,8 +25,12 @@ export class ElementSizeObserver extends Disposable {
 		this._register(toDisposable(() => this.stopObserving()));
 	}
 
-	public getWidth(): number { return this._width; }
-	public getHeight(): number { return this._height; }
+	public getWidth(): number {
+		return this._width;
+	}
+	public getHeight(): number {
+		return this._height;
+	}
 
 	public startObserving(): void {
 		if (this._resizeObserver || !this._referenceDomElement) return;
@@ -50,7 +54,9 @@ export class ElementSizeObserver extends Disposable {
 		this._pendingDimension = undefined;
 	}
 
-	public observe(dimension?: IDimension): void { this.measureReferenceDomElement(true, dimension); }
+	public observe(dimension?: IDimension): void {
+		this.measureReferenceDomElement(true, dimension);
+	}
 
 	private flushResize(): void {
 		if (!this._resizePending || !this._referenceDomElement) return;

@@ -13,33 +13,75 @@ import { Emitter, Event } from '../../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { DecorationAddon } from '../../../browser/xterm/decorationAddon.js';
-import { TerminalCapability, type ICommandDetectionCapability, type ITerminalCommand } from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
+import {
+	TerminalCapability,
+	type ICommandDetectionCapability,
+	type ITerminalCommand,
+} from '../../../../../../platform/terminal/common/capabilities/capabilities.js';
 import { BufferMarkCapability } from '../../../../../../platform/terminal/common/capabilities/bufferMarkCapability.js';
 import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import '../../../common/terminalConfiguration.js';
 
-const menus: IContextMenuService = { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { assert.fail('Unexpected command menu'); }, hideContextMenu() { } };
+const menus: IContextMenuService = {
+	contextMenuStyle: 'custom',
+	onDidShowContextMenu: Event.None,
+	onDidHideContextMenu: Event.None,
+	showContextMenu() {
+		assert.fail('Unexpected command menu');
+	},
+	hideContextMenu() {},
+};
 
 function rendererBoundary(lifetime: DisposableStore) {
-	const created: { marker: IMarker; trimmed: Emitter<void>; render: Emitter<HTMLElement>; disposed: boolean; element?: HTMLElement; options?: IDecorationOptions; }[] = [];
+	const created: {
+		marker: IMarker;
+		trimmed: Emitter<void>;
+		render: Emitter<HTMLElement>;
+		disposed: boolean;
+		element?: HTMLElement;
+		options?: IDecorationOptions;
+	}[] = [];
 	const terminal = {
 		registerMarker() {
 			const trimmed = lifetime.add(new Emitter<void>());
 			const render = lifetime.add(new Emitter<HTMLElement>());
 			let isDisposed = false;
 			const marker: IMarker = {
-				id: created.length + 1, line: created.length,
-				get isDisposed() { return isDisposed; }, onDispose: trimmed.event,
-				dispose() { if (!isDisposed) { isDisposed = true; trimmed.fire(); } },
+				id: created.length + 1,
+				line: created.length,
+				get isDisposed() {
+					return isDisposed;
+				},
+				onDispose: trimmed.event,
+				dispose() {
+					if (!isDisposed) {
+						isDisposed = true;
+						trimmed.fire();
+					}
+				},
 			};
 			created.push({ marker, trimmed, render, disposed: false });
 			return marker;
 		},
-		refresh() { }, rows: 24,
+		refresh() {},
+		rows: 24,
 		registerDecoration(options: IDecorationOptions) {
 			const item = created.find(item => item.marker === options.marker)!;
 			item.options = options;
-			return { options, get element() { return item.element; }, onRender: (listener: (element: HTMLElement) => void) => item.render.event(element => { item.element = element; listener(element); }), dispose() { item.disposed = true; } };
+			return {
+				options,
+				get element() {
+					return item.element;
+				},
+				onRender: (listener: (element: HTMLElement) => void) =>
+					item.render.event(element => {
+						item.element = element;
+						listener(element);
+					}),
+				dispose() {
+					item.disposed = true;
+				},
+			};
 		},
 	};
 	return { terminal: terminal as unknown as Terminal, created };
@@ -55,20 +97,41 @@ suite('Terminal command decoration lifecycle', () => {
 			setIconResolver(dom.window.document, icon => getIconDefinition(icon));
 			const boundary = rendererBoundary(lifetime);
 			const capabilities = lifetime.add(new TerminalCapabilityStore());
-			capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(boundary.terminal)));
+			capabilities.add(
+				TerminalCapability.BufferMarkDetection,
+				lifetime.add(new BufferMarkCapability(boundary.terminal)),
+			);
 			const marker = boundary.terminal.registerMarker(0)!;
 			lifetime.add(toDisposable(() => marker.dispose()));
 			const command = { marker, id: 'one', command: 'echo test', getOutput: () => undefined } as ITerminalCommand;
-			capabilities.add(TerminalCapability.CommandDetection, { commands: [command] } as unknown as ICommandDetectionCapability);
+			capabilities.add(TerminalCapability.CommandDetection, {
+				commands: [command],
+			} as unknown as ICommandDetectionCapability);
 			let shown = 0;
 			let hidden = 0;
 			let closeMenu: (() => void) | undefined;
 			const contextMenus: IContextMenuService = {
 				...menus,
-				showContextMenu: delegate => { shown++; closeMenu?.(); closeMenu = () => delegate.onHide?.(false); },
-				hideContextMenu: () => { hidden++; closeMenu?.(); closeMenu = undefined; },
+				showContextMenu: delegate => {
+					shown++;
+					closeMenu?.();
+					closeMenu = () => delegate.onHide?.(false);
+				},
+				hideContextMenu: () => {
+					hidden++;
+					closeMenu?.();
+					closeMenu = undefined;
+				},
 			};
-			const addon = lifetime.add(new DecorationAddon(capabilities, lifetime.add(new TestConfigurationService()), lifetime.add(new TestThemeService(lightColorTheme)), lifetime.add(new BrowserClipboardService(undefined)), contextMenus));
+			const addon = lifetime.add(
+				new DecorationAddon(
+					capabilities,
+					lifetime.add(new TestConfigurationService()),
+					lifetime.add(new TestThemeService(lightColorTheme)),
+					lifetime.add(new BrowserClipboardService(undefined)),
+					contextMenus,
+				),
+			);
 			addon.activate(boundary.terminal);
 			addon.registerCommandDecoration({ commandId: 'one', status: 'succeeded', exitCode: 0 }, 10, marker);
 			const first = dom.window.document.createElement('div');
@@ -95,9 +158,20 @@ suite('Terminal command decoration lifecycle', () => {
 		using lifetime = new DisposableStore();
 		const boundary = rendererBoundary(lifetime);
 		const capabilities = lifetime.add(new TerminalCapabilityStore());
-		capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(boundary.terminal)));
+		capabilities.add(
+			TerminalCapability.BufferMarkDetection,
+			lifetime.add(new BufferMarkCapability(boundary.terminal)),
+		);
 		const themes = lifetime.add(new TestThemeService(lightColorTheme));
-		const addon = lifetime.add(new DecorationAddon(capabilities, lifetime.add(new TestConfigurationService()), themes, lifetime.add(new BrowserClipboardService(undefined)), menus));
+		const addon = lifetime.add(
+			new DecorationAddon(
+				capabilities,
+				lifetime.add(new TestConfigurationService()),
+				themes,
+				lifetime.add(new BrowserClipboardService(undefined)),
+				menus,
+			),
+		);
 		addon.activate(boundary.terminal);
 		const marker = boundary.terminal.registerMarker(0)!;
 		lifetime.add(toDisposable(() => marker.dispose()));
@@ -105,7 +179,14 @@ suite('Terminal command decoration lifecycle', () => {
 		assert.equal(boundary.created[0]!.options?.overviewRulerOptions?.position, 'left');
 		addon.registerCommandDecoration({ commandId: '1', status: 'failed', exitCode: 7 }, 10, marker);
 		assert.deepEqual(boundary.created[0]!.options?.overviewRulerOptions, { color: '#cf222e', position: 'right' });
-		themes.setColorTheme(createColorTheme({ id: 'overview-test', label: 'Overview test', colorScheme: lightColorTheme.colorScheme, colorOverrides: { 'terminalCommandDecoration.errorBackground': '#123456' } }));
+		themes.setColorTheme(
+			createColorTheme({
+				id: 'overview-test',
+				label: 'Overview test',
+				colorScheme: lightColorTheme.colorScheme,
+				colorOverrides: { 'terminalCommandDecoration.errorBackground': '#123456' },
+			}),
+		);
 		assert.deepEqual(boundary.created[0]!.options?.overviewRulerOptions, { color: '#123456', position: 'right' });
 		addon.registerCommandDecoration({ commandId: '1', status: 'succeeded', exitCode: 0 }, 10, marker);
 		assert.deepEqual(boundary.created[0]!.options?.overviewRulerOptions, { color: '#0969da', position: 'left' });
@@ -119,19 +200,38 @@ suite('Terminal command decoration lifecycle', () => {
 			setIconResolver(dom.window.document, icon => getIconDefinition(icon));
 			const boundary = rendererBoundary(lifetime);
 			const capabilities = lifetime.add(new TerminalCapabilityStore());
-			capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(boundary.terminal)));
+			capabilities.add(
+				TerminalCapability.BufferMarkDetection,
+				lifetime.add(new BufferMarkCapability(boundary.terminal)),
+			);
 			const configuration = lifetime.add(new TestConfigurationService());
-			const addon = lifetime.add(new DecorationAddon(capabilities, configuration, lifetime.add(new TestThemeService(lightColorTheme)), lifetime.add(new BrowserClipboardService(undefined)), menus));
+			const addon = lifetime.add(
+				new DecorationAddon(
+					capabilities,
+					configuration,
+					lifetime.add(new TestThemeService(lightColorTheme)),
+					lifetime.add(new BrowserClipboardService(undefined)),
+					menus,
+				),
+			);
 			addon.activate(boundary.terminal);
 			const marker = boundary.terminal.registerMarker(0)!;
 			lifetime.add(toDisposable(() => marker.dispose()));
 			const command = { marker, id: 'one', command: 'echo test', getOutput: () => undefined } as ITerminalCommand;
-			capabilities.add(TerminalCapability.CommandDetection, { commands: [command] } as unknown as ICommandDetectionCapability);
+			capabilities.add(TerminalCapability.CommandDetection, {
+				commands: [command],
+			} as unknown as ICommandDetectionCapability);
 			addon.registerCommandDecoration({ commandId: 'one', status: 'succeeded', exitCode: 0 }, 10, marker);
 			const element = dom.window.document.createElement('div');
 			const item = boundary.created[0]!;
 			item.render.fire(element);
-			for (const [mode, gutter, overview] of [['both', true, true], ['gutter', true, false], ['overviewRuler', false, true], ['never', false, false], ['both', true, true]] as const) {
+			for (const [mode, gutter, overview] of [
+				['both', true, true],
+				['gutter', true, false],
+				['overviewRuler', false, true],
+				['never', false, false],
+				['both', true, true],
+			] as const) {
 				await configuration.updateValue('terminal.integrated.shellIntegration.decorationsEnabled', mode);
 				assert.equal(element.style.visibility !== 'hidden', gutter, mode);
 				assert.equal(element.getAttribute('aria-hidden'), gutter ? null : 'true', mode);
@@ -191,8 +291,19 @@ suite('Terminal command decoration lifecycle', () => {
 		using lifetime = new DisposableStore();
 		const boundary = rendererBoundary(lifetime);
 		const capabilities = lifetime.add(new TerminalCapabilityStore());
-		capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(boundary.terminal)));
-		const addon = lifetime.add(new DecorationAddon(capabilities, lifetime.add(new TestConfigurationService()), lifetime.add(new TestThemeService(lightColorTheme)), lifetime.add(new BrowserClipboardService(undefined)), menus));
+		capabilities.add(
+			TerminalCapability.BufferMarkDetection,
+			lifetime.add(new BufferMarkCapability(boundary.terminal)),
+		);
+		const addon = lifetime.add(
+			new DecorationAddon(
+				capabilities,
+				lifetime.add(new TestConfigurationService()),
+				lifetime.add(new TestThemeService(lightColorTheme)),
+				lifetime.add(new BrowserClipboardService(undefined)),
+				menus,
+			),
+		);
 		addon.activate(boundary.terminal);
 		const first = boundary.terminal.registerMarker(0)!;
 		lifetime.add(toDisposable(() => first.dispose()));
@@ -211,8 +322,19 @@ suite('Terminal command decoration lifecycle', () => {
 		using lifetime = new DisposableStore();
 		const boundary = rendererBoundary(lifetime);
 		const capabilities = lifetime.add(new TerminalCapabilityStore());
-		capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(boundary.terminal)));
-		const addon = lifetime.add(new DecorationAddon(capabilities, lifetime.add(new TestConfigurationService()), lifetime.add(new TestThemeService(lightColorTheme)), lifetime.add(new BrowserClipboardService(undefined)), menus));
+		capabilities.add(
+			TerminalCapability.BufferMarkDetection,
+			lifetime.add(new BufferMarkCapability(boundary.terminal)),
+		);
+		const addon = lifetime.add(
+			new DecorationAddon(
+				capabilities,
+				lifetime.add(new TestConfigurationService()),
+				lifetime.add(new TestThemeService(lightColorTheme)),
+				lifetime.add(new BrowserClipboardService(undefined)),
+				menus,
+			),
+		);
 		addon.activate(boundary.terminal);
 		const first = boundary.terminal.registerMarker(0)!;
 		lifetime.add(toDisposable(() => first.dispose()));

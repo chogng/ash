@@ -39,9 +39,7 @@ interface NavigatorKeyboardLike {
 	removeEventListener?(type: 'layoutchange', listener: () => void): void;
 }
 
-type NavigatorWithKeyboard = Navigator & {
-	readonly keyboard?: NavigatorKeyboardLike;
-};
+type NavigatorWithKeyboard = Navigator & { readonly keyboard?: NavigatorKeyboardLike };
 
 export interface BrowserKeyboardLayoutServiceOptions {
 	readonly navigator: Navigator;
@@ -91,17 +89,25 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 		this.dispatchOverride = options.dispatch;
 		this.mapAltGrOverride = options.mapAltGrToCtrlAlt;
 		this.configuration = Object.freeze({
-			dispatch: options.dispatch ?? options.configurationService?.getValue<KeyboardDispatchMode>(KeyboardConfiguration.dispatch) ?? KeyboardDispatchMode.Code,
-			mapAltGrToCtrlAlt: options.mapAltGrToCtrlAlt ?? options.configurationService?.getValue<boolean>(KeyboardConfiguration.mapAltGrToCtrlAlt) ?? false,
+			dispatch:
+				options.dispatch ??
+				options.configurationService?.getValue<KeyboardDispatchMode>(KeyboardConfiguration.dispatch) ??
+				KeyboardDispatchMode.Code,
+			mapAltGrToCtrlAlt:
+				options.mapAltGrToCtrlAlt ??
+				options.configurationService?.getValue<boolean>(KeyboardConfiguration.mapAltGrToCtrlAlt) ??
+				false,
 		});
 		this.configuredLayout = options.layout;
 		this.additionalLayouts = options.additionalLayouts ?? [];
 		this.mapping = options.layout?.mapping;
 		this.layout = options.layout?.layout ?? this.fallbackLayout();
 		this.mapper = this.createMapper();
-		this._register(toDisposable(() => {
-			this.mapping = undefined;
-		}));
+		this._register(
+			toDisposable(() => {
+				this.mapping = undefined;
+			}),
+		);
 		this.listenForLayoutChanges();
 		this.listenForProvidedLayoutChanges();
 		this.listenForConfigurationChanges();
@@ -122,8 +128,8 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 			...(this.configuredLayout ? [this.configuredLayout.layout] : []),
 			...(this.nativeLayout ? [this.nativeLayout.layout] : []),
 			...(this.userLayout ? [this.userLayout.layout] : []),
-			...this.builtinLayouts.map((definition) => definition.layout),
-			...this.additionalLayouts.map((definition) => definition.layout),
+			...this.builtinLayouts.map(definition => definition.layout),
+			...this.additionalLayouts.map(definition => definition.layout),
 		];
 		const unique = new Map<string, IKeyboardLayoutInfo>();
 		for (const layout of layouts) {
@@ -143,7 +149,15 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 	}
 
 	public validateCurrentKeyboardMapping(event: KeybindingEvent): void {
-		if (this.hasExplicitLayoutSelection() || this.layout.source === 'native' || this.layout.source === 'user' || !this.navigator.keyboard || !this.mapping || !event.code || event.isComposing) {
+		if (
+			this.hasExplicitLayoutSelection() ||
+			this.layout.source === 'native' ||
+			this.layout.source === 'user' ||
+			!this.navigator.keyboard ||
+			!this.mapping ||
+			!event.code ||
+			event.isComposing
+		) {
 			return;
 		}
 		// Shortcut keys do not produce text. Learning their key value can map an
@@ -261,9 +275,11 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 			if (!provider) {
 				continue;
 			}
-			this._register(provider.onDidChangeKeyboardLayout(() => {
-				void this.refreshKeyboardLayout();
-			}));
+			this._register(
+				provider.onDidChangeKeyboardLayout(() => {
+					void this.refreshKeyboardLayout();
+				}),
+			);
 		}
 	}
 
@@ -271,25 +287,31 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 		if (!this.configurationService) {
 			return;
 		}
-		this._register(this.configurationService.onDidChangeConfiguration((event) => {
-			const mapperChanged = event.affectsConfiguration(KeyboardConfiguration.dispatch) ||
-				event.affectsConfiguration(KeyboardConfiguration.mapAltGrToCtrlAlt);
-			if (mapperChanged) {
-				this.configuration = Object.freeze({
-					dispatch: this.dispatchOverride ?? this.configurationService!.getValue<KeyboardDispatchMode>(KeyboardConfiguration.dispatch),
-					mapAltGrToCtrlAlt: this.mapAltGrOverride ??
-						this.configurationService!.getValue<boolean>(KeyboardConfiguration.mapAltGrToCtrlAlt),
-				});
-				this.mapper = this.createMapper();
-				this._onDidChangeKeyboardLayout.fire();
-			}
-			if (event.affectsConfiguration(KeyboardConfiguration.layout)) {
-				if (!this.selectConfiguredLayout()) {
-					this.installFallback();
-					void this.refreshKeyboardLayout();
+		this._register(
+			this.configurationService.onDidChangeConfiguration(event => {
+				const mapperChanged =
+					event.affectsConfiguration(KeyboardConfiguration.dispatch) ||
+					event.affectsConfiguration(KeyboardConfiguration.mapAltGrToCtrlAlt);
+				if (mapperChanged) {
+					this.configuration = Object.freeze({
+						dispatch:
+							this.dispatchOverride ??
+							this.configurationService!.getValue<KeyboardDispatchMode>(KeyboardConfiguration.dispatch),
+						mapAltGrToCtrlAlt:
+							this.mapAltGrOverride ??
+							this.configurationService!.getValue<boolean>(KeyboardConfiguration.mapAltGrToCtrlAlt),
+					});
+					this.mapper = this.createMapper();
+					this._onDidChangeKeyboardLayout.fire();
 				}
-			}
-		}));
+				if (event.affectsConfiguration(KeyboardConfiguration.layout)) {
+					if (!this.selectConfiguredLayout()) {
+						this.installFallback();
+						void this.refreshKeyboardLayout();
+					}
+				}
+			}),
+		);
 	}
 
 	private async readKeyboardLayout(): Promise<void> {
@@ -377,7 +399,7 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 			...this.builtinLayouts,
 			...this.additionalLayouts,
 		];
-		const selected = definitions.find((definition) => definition.layout.id === requested);
+		const selected = definitions.find(definition => definition.layout.id === requested);
 		if (!selected) {
 			return false;
 		}
@@ -394,9 +416,10 @@ export class BrowserKeyboardLayoutService extends Disposable implements IKeyboar
 		if (!this.mapping || Object.keys(this.mapping).length === 0) {
 			return new CachedKeyboardMapper(new FallbackKeyboardMapper(this.configuration, this.operatingSystem));
 		}
-		const mapper = this.operatingSystem === OperatingSystem.Windows
-			? new WindowsKeyboardMapper(this.mapping, this.configuration)
-			: new MacLinuxKeyboardMapper(this.mapping, this.configuration, this.operatingSystem);
+		const mapper =
+			this.operatingSystem === OperatingSystem.Windows
+				? new WindowsKeyboardMapper(this.mapping, this.configuration)
+				: new MacLinuxKeyboardMapper(this.mapping, this.configuration, this.operatingSystem);
 		return new CachedKeyboardMapper(mapper);
 	}
 

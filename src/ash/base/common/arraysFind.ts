@@ -1,27 +1,59 @@
 import type { Comparator } from './arrays.js';
 
-export function findLast<T, R extends T>(array: readonly T[], predicate: (item: T, index: number) => item is R, fromIndex?: number): R | undefined;
-export function findLast<T>(array: readonly T[], predicate: (item: T, index: number) => unknown, fromIndex?: number): T | undefined;
-export function findLast<T>(array: readonly T[], predicate: (item: T, index: number) => unknown, fromIndex = array.length - 1): T | undefined {
+export function findLast<T, R extends T>(
+	array: readonly T[],
+	predicate: (item: T, index: number) => item is R,
+	fromIndex?: number,
+): R | undefined;
+export function findLast<T>(
+	array: readonly T[],
+	predicate: (item: T, index: number) => unknown,
+	fromIndex?: number,
+): T | undefined;
+export function findLast<T>(
+	array: readonly T[],
+	predicate: (item: T, index: number) => unknown,
+	fromIndex = array.length - 1,
+): T | undefined {
 	const index = findLastIdx(array, predicate, fromIndex);
 	return index === -1 ? undefined : array[index];
 }
 
-export function findLastIdx<T>(array: readonly T[], predicate: (item: T, index: number) => unknown, fromIndex = array.length - 1): number {
+export function findLastIdx<T>(
+	array: readonly T[],
+	predicate: (item: T, index: number) => unknown,
+	fromIndex = array.length - 1,
+): number {
 	for (let index = Math.min(fromIndex, array.length - 1); index >= 0; index -= 1) {
 		if (predicate(array[index]!, index)) return index;
 	}
 	return -1;
 }
 
-export function findFirst<T, R extends T>(array: readonly T[], predicate: (item: T, index: number) => item is R, fromIndex?: number): R | undefined;
-export function findFirst<T>(array: readonly T[], predicate: (item: T, index: number) => unknown, fromIndex?: number): T | undefined;
-export function findFirst<T>(array: readonly T[], predicate: (item: T, index: number) => unknown, fromIndex = 0): T | undefined {
+export function findFirst<T, R extends T>(
+	array: readonly T[],
+	predicate: (item: T, index: number) => item is R,
+	fromIndex?: number,
+): R | undefined;
+export function findFirst<T>(
+	array: readonly T[],
+	predicate: (item: T, index: number) => unknown,
+	fromIndex?: number,
+): T | undefined;
+export function findFirst<T>(
+	array: readonly T[],
+	predicate: (item: T, index: number) => unknown,
+	fromIndex = 0,
+): T | undefined {
 	const index = findFirstIdx(array, predicate, fromIndex);
 	return index === -1 ? undefined : array[index];
 }
 
-export function findFirstIdx<T>(array: readonly T[], predicate: (item: T, index: number) => unknown, fromIndex = 0): number {
+export function findFirstIdx<T>(
+	array: readonly T[],
+	predicate: (item: T, index: number) => unknown,
+	fromIndex = 0,
+): number {
 	for (let index = Math.max(0, fromIndex); index < array.length; index += 1) {
 		if (predicate(array[index]!, index)) return index;
 	}
@@ -33,7 +65,12 @@ export function findLastMonotonous<T>(array: readonly T[], predicate: (item: T) 
 	return index === -1 ? undefined : array[index];
 }
 
-export function findLastIdxMonotonous<T>(array: readonly T[], predicate: (item: T) => boolean, startIndex = 0, endIndexExclusive = array.length): number {
+export function findLastIdxMonotonous<T>(
+	array: readonly T[],
+	predicate: (item: T) => boolean,
+	startIndex = 0,
+	endIndexExclusive = array.length,
+): number {
 	validateSearchBounds(array.length, startIndex, endIndexExclusive);
 	let low = startIndex;
 	let high = endIndexExclusive;
@@ -50,7 +87,12 @@ export function findFirstMonotonous<T>(array: readonly T[], predicate: (item: T)
 	return index === array.length ? undefined : array[index];
 }
 
-export function findFirstIdxMonotonousOrArrLen<T>(array: readonly T[], predicate: (item: T) => boolean, startIndex = 0, endIndexExclusive = array.length): number {
+export function findFirstIdxMonotonousOrArrLen<T>(
+	array: readonly T[],
+	predicate: (item: T) => boolean,
+	startIndex = 0,
+	endIndexExclusive = array.length,
+): number {
 	validateSearchBounds(array.length, startIndex, endIndexExclusive);
 	let low = startIndex;
 	let high = endIndexExclusive;
@@ -62,7 +104,12 @@ export function findFirstIdxMonotonousOrArrLen<T>(array: readonly T[], predicate
 	return low;
 }
 
-export function findFirstIdxMonotonous<T>(array: readonly T[], predicate: (item: T) => boolean, startIndex = 0, endIndexExclusive = array.length): number {
+export function findFirstIdxMonotonous<T>(
+	array: readonly T[],
+	predicate: (item: T) => boolean,
+	startIndex = 0,
+	endIndexExclusive = array.length,
+): number {
 	const index = findFirstIdxMonotonousOrArrLen(array, predicate, startIndex, endIndexExclusive);
 	return index === endIndexExclusive ? -1 : index;
 }
@@ -72,12 +119,13 @@ export class MonotonousArray<T> {
 	private lastIndex = 0;
 	private previousPredicate: ((item: T) => boolean) | undefined;
 
-	constructor(private readonly array: readonly T[]) { }
+	constructor(private readonly array: readonly T[]) {}
 
 	public findLastMonotonous(predicate: (item: T) => boolean): T | undefined {
 		if (MonotonousArray.assertInvariants && this.previousPredicate) {
 			for (const item of this.array) {
-				if (this.previousPredicate(item) && !predicate(item)) throw new Error('The current predicate must not be stronger than the previous predicate');
+				if (this.previousPredicate(item) && !predicate(item))
+					throw new Error('The current predicate must not be stronger than the previous predicate');
 			}
 		}
 		this.previousPredicate = predicate;
@@ -127,7 +175,13 @@ export function mapFindFirst<T, R>(items: Iterable<T>, map: (value: T) => R | un
 }
 
 function validateSearchBounds(length: number, startIndex: number, endIndexExclusive: number): void {
-	if (!Number.isSafeInteger(startIndex) || !Number.isSafeInteger(endIndexExclusive) || startIndex < 0 || endIndexExclusive < startIndex || endIndexExclusive > length) {
+	if (
+		!Number.isSafeInteger(startIndex) ||
+		!Number.isSafeInteger(endIndexExclusive) ||
+		startIndex < 0 ||
+		endIndexExclusive < startIndex ||
+		endIndexExclusive > length
+	) {
 		throw new RangeError('Array search bounds must be ordered indexes inside the array');
 	}
 }

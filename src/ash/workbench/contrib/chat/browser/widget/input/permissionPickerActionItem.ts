@@ -16,7 +16,11 @@ export class PermissionPickerActionItem extends ChatInputPickerActionViewItem {
 		actionProvider: IActionWidgetDropdownActionProvider,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
-		super(action, { actionProvider, listOptions: { ariaLabel: localize('chat.input.permissions', 'Permissions') } }, instantiationService);
+		super(
+			action,
+			{ actionProvider, listOptions: { ariaLabel: localize('chat.input.permissions', 'Permissions') } },
+			instantiationService,
+		);
 	}
 
 	public override render(container: HTMLElement): void {

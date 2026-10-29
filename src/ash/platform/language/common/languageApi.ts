@@ -1,5 +1,58 @@
-import type { LanguageSaveParams, LanguageServersParams, LanguageServersResult, LanguageCloseParams, LanguageCodeActionDto, LanguageCodeActionsParams, LanguageCodeActionsResult, LanguageCodeLensesResult, LanguageColorPresentationsParams, LanguageColorPresentationsResult, LanguageCompletionDetailsResult, LanguageCompletionsParams, LanguageCompletionsResult, LanguageDirectoryDiagnosticsParams, LanguageDirectoryDiagnosticsResult, LanguageDirectoryEditDto, LanguageDirectorySymbolsParams, LanguageDirectorySymbolsResult, LanguageDocumentColorsResult, LanguageDocumentDiagnosticsParams, LanguageDocumentDiagnosticsResult, LanguageDocumentFeaturesParams, LanguageDocumentFormattingParams, LanguageDocumentLinksResult, LanguageDocumentSymbolsResult, LanguageExecuteCommandParams, LanguageFoldingRangesResult, LanguageFormattingResult, LanguageHierarchyParams, LanguageHierarchyResultDto, LanguageHoverParams, LanguageHoverResult, LanguageInlayHintsParams, LanguageInlayHintsResult, LanguageLinkedEditingRangesParams, LanguageLinkedEditingRangesResult, LanguageLocationsParams, LanguageLocationsResult, LanguagePrepareRenameParams, LanguagePrepareRenameResult, LanguageRangeFormattingParams, LanguageOnTypeFormattingParams, LanguageRenameParams, LanguageResolveCodeActionParams, LanguageResolveCodeLensParams, LanguageResolveCompletionParams, LanguageResolveDocumentLinkParams, LanguageSemanticTokensParams, LanguageSemanticTokensResult, LanguageSignatureHelpParams, LanguageSignatureHelpResult, LanguageSynchronizeParams } from "../../../../../.build/protocol/typescript/index.js";
-import { CancellationError } from "../../../base/common/errors.js";
+import type {
+	LanguageSaveParams,
+	LanguageServersParams,
+	LanguageServersResult,
+	LanguageCloseParams,
+	LanguageCodeActionDto,
+	LanguageCodeActionsParams,
+	LanguageCodeActionsResult,
+	LanguageCodeLensesResult,
+	LanguageColorPresentationsParams,
+	LanguageColorPresentationsResult,
+	LanguageCompletionDetailsResult,
+	LanguageCompletionsParams,
+	LanguageCompletionsResult,
+	LanguageDirectoryDiagnosticsParams,
+	LanguageDirectoryDiagnosticsResult,
+	LanguageDirectoryEditDto,
+	LanguageDirectorySymbolsParams,
+	LanguageDirectorySymbolsResult,
+	LanguageDocumentColorsResult,
+	LanguageDocumentDiagnosticsParams,
+	LanguageDocumentDiagnosticsResult,
+	LanguageDocumentFeaturesParams,
+	LanguageDocumentFormattingParams,
+	LanguageDocumentLinksResult,
+	LanguageDocumentSymbolsResult,
+	LanguageExecuteCommandParams,
+	LanguageFoldingRangesResult,
+	LanguageFormattingResult,
+	LanguageHierarchyParams,
+	LanguageHierarchyResultDto,
+	LanguageHoverParams,
+	LanguageHoverResult,
+	LanguageInlayHintsParams,
+	LanguageInlayHintsResult,
+	LanguageLinkedEditingRangesParams,
+	LanguageLinkedEditingRangesResult,
+	LanguageLocationsParams,
+	LanguageLocationsResult,
+	LanguagePrepareRenameParams,
+	LanguagePrepareRenameResult,
+	LanguageRangeFormattingParams,
+	LanguageOnTypeFormattingParams,
+	LanguageRenameParams,
+	LanguageResolveCodeActionParams,
+	LanguageResolveCodeLensParams,
+	LanguageResolveCompletionParams,
+	LanguageResolveDocumentLinkParams,
+	LanguageSemanticTokensParams,
+	LanguageSemanticTokensResult,
+	LanguageSignatureHelpParams,
+	LanguageSignatureHelpResult,
+	LanguageSynchronizeParams,
+} from '../../../../../.build/protocol/typescript/index.js';
+import { CancellationError } from '../../../base/common/errors.js';
 
 /** Transport-neutral entry point for workspace language-server locations. */
 export interface LanguageRequestOptions {
@@ -7,7 +60,7 @@ export interface LanguageRequestOptions {
 }
 
 export interface LanguageCancelOutcome {
-	readonly status: "requested" | "alreadyRequested" | "completed";
+	readonly status: 'requested' | 'alreadyRequested' | 'completed';
 }
 
 /** Runs one language operation and resolves cancellation against its terminal result. */
@@ -17,7 +70,7 @@ export function runCancellableLanguageRequest<TResult>(
 	cancel: (operationId: string) => Promise<LanguageCancelOutcome>,
 ): Promise<TResult> {
 	const signal = options?.signal;
-	if (signal?.aborted) return Promise.reject(new CancellationError("Language request cancelled", signal.reason));
+	if (signal?.aborted) return Promise.reject(new CancellationError('Language request cancelled', signal.reason));
 	const operationId = globalThis.crypto.randomUUID();
 	const pending = start(operationId);
 	if (!signal) return pending;
@@ -26,14 +79,14 @@ export function runCancellableLanguageRequest<TResult>(
 		let cancelling = false;
 		let pendingRejected = false;
 		let pendingError: unknown;
-		const cleanup = (): void => signal.removeEventListener("abort", abort);
+		const cleanup = (): void => signal.removeEventListener('abort', abort);
 		const abort = (): void => {
 			if (settled || cancelling) return;
 			cancelling = true;
 			void cancel(operationId).then(
 				result => {
 					if (settled) return;
-					if (result.status === "completed") {
+					if (result.status === 'completed') {
 						cancelling = false;
 						if (pendingRejected) {
 							settled = true;
@@ -44,7 +97,7 @@ export function runCancellableLanguageRequest<TResult>(
 					}
 					settled = true;
 					cleanup();
-					reject(new CancellationError("Language request cancelled", signal.reason));
+					reject(new CancellationError('Language request cancelled', signal.reason));
 				},
 				error => {
 					if (settled) return;
@@ -54,7 +107,7 @@ export function runCancellableLanguageRequest<TResult>(
 				},
 			);
 		};
-		signal.addEventListener("abort", abort, { once: true });
+		signal.addEventListener('abort', abort, { once: true });
 		if (signal.aborted) abort();
 		pending.then(
 			value => {
@@ -84,31 +137,97 @@ export interface ILanguageApi {
 	save(params: LanguageSaveParams): Promise<void>;
 	close(params: LanguageCloseParams): Promise<void>;
 	hover(params: LanguageHoverParams, options?: LanguageRequestOptions): Promise<LanguageHoverResult>;
-	completions(params: LanguageCompletionsParams, options?: LanguageRequestOptions): Promise<LanguageCompletionsResult>;
-	resolveCompletion(params: LanguageResolveCompletionParams, options?: LanguageRequestOptions): Promise<LanguageCompletionDetailsResult>;
+	completions(
+		params: LanguageCompletionsParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageCompletionsResult>;
+	resolveCompletion(
+		params: LanguageResolveCompletionParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageCompletionDetailsResult>;
 	executeCommand(params: LanguageExecuteCommandParams): Promise<void>;
-	documentDiagnostics(params: LanguageDocumentDiagnosticsParams, options?: LanguageRequestOptions): Promise<LanguageDocumentDiagnosticsResult>;
-	directoryDiagnostics(params: LanguageDirectoryDiagnosticsParams, options?: LanguageRequestOptions): Promise<LanguageDirectoryDiagnosticsResult>;
-	formatDocument(params: LanguageDocumentFormattingParams, options?: LanguageRequestOptions): Promise<LanguageFormattingResult>;
-	formatOnType(params: LanguageOnTypeFormattingParams, options?: LanguageRequestOptions): Promise<LanguageFormattingResult>;
-	formatRange(params: LanguageRangeFormattingParams, options?: LanguageRequestOptions): Promise<LanguageFormattingResult>;
-	signatureHelp(params: LanguageSignatureHelpParams, options?: LanguageRequestOptions): Promise<LanguageSignatureHelpResult>;
+	documentDiagnostics(
+		params: LanguageDocumentDiagnosticsParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageDocumentDiagnosticsResult>;
+	directoryDiagnostics(
+		params: LanguageDirectoryDiagnosticsParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageDirectoryDiagnosticsResult>;
+	formatDocument(
+		params: LanguageDocumentFormattingParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageFormattingResult>;
+	formatOnType(
+		params: LanguageOnTypeFormattingParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageFormattingResult>;
+	formatRange(
+		params: LanguageRangeFormattingParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageFormattingResult>;
+	signatureHelp(
+		params: LanguageSignatureHelpParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageSignatureHelpResult>;
 	inlayHints(params: LanguageInlayHintsParams, options?: LanguageRequestOptions): Promise<LanguageInlayHintsResult>;
-	linkedEditingRanges(params: LanguageLinkedEditingRangesParams, options?: LanguageRequestOptions): Promise<LanguageLinkedEditingRangesResult>;
-	semanticTokens(params: LanguageSemanticTokensParams, options?: LanguageRequestOptions): Promise<LanguageSemanticTokensResult>;
-	documentSymbols(params: LanguageDocumentFeaturesParams, options?: LanguageRequestOptions): Promise<LanguageDocumentSymbolsResult>;
-	codeLenses(params: LanguageDocumentFeaturesParams, options?: LanguageRequestOptions): Promise<LanguageCodeLensesResult>;
-	resolveCodeLens(params: LanguageResolveCodeLensParams, options?: LanguageRequestOptions): Promise<LanguageCodeLensesResult>;
-	documentLinks(params: LanguageDocumentFeaturesParams, options?: LanguageRequestOptions): Promise<LanguageDocumentLinksResult>;
-	resolveDocumentLink(params: LanguageResolveDocumentLinkParams, options?: LanguageRequestOptions): Promise<LanguageDocumentLinksResult>;
-	documentColors(params: LanguageDocumentFeaturesParams, options?: LanguageRequestOptions): Promise<LanguageDocumentColorsResult>;
-	colorPresentations(params: LanguageColorPresentationsParams, options?: LanguageRequestOptions): Promise<LanguageColorPresentationsResult>;
-	foldingRanges(params: LanguageDocumentFeaturesParams, options?: LanguageRequestOptions): Promise<LanguageFoldingRangesResult>;
+	linkedEditingRanges(
+		params: LanguageLinkedEditingRangesParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageLinkedEditingRangesResult>;
+	semanticTokens(
+		params: LanguageSemanticTokensParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageSemanticTokensResult>;
+	documentSymbols(
+		params: LanguageDocumentFeaturesParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageDocumentSymbolsResult>;
+	codeLenses(
+		params: LanguageDocumentFeaturesParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageCodeLensesResult>;
+	resolveCodeLens(
+		params: LanguageResolveCodeLensParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageCodeLensesResult>;
+	documentLinks(
+		params: LanguageDocumentFeaturesParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageDocumentLinksResult>;
+	resolveDocumentLink(
+		params: LanguageResolveDocumentLinkParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageDocumentLinksResult>;
+	documentColors(
+		params: LanguageDocumentFeaturesParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageDocumentColorsResult>;
+	colorPresentations(
+		params: LanguageColorPresentationsParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageColorPresentationsResult>;
+	foldingRanges(
+		params: LanguageDocumentFeaturesParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageFoldingRangesResult>;
 	locations(params: LanguageLocationsParams, options?: LanguageRequestOptions): Promise<LanguageLocationsResult>;
 	hierarchy(params: LanguageHierarchyParams, options?: LanguageRequestOptions): Promise<LanguageHierarchyResultDto>;
-	directorySymbols(params: LanguageDirectorySymbolsParams, options?: LanguageRequestOptions): Promise<LanguageDirectorySymbolsResult>;
-	prepareRename(params: LanguagePrepareRenameParams, options?: LanguageRequestOptions): Promise<LanguagePrepareRenameResult>;
+	directorySymbols(
+		params: LanguageDirectorySymbolsParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageDirectorySymbolsResult>;
+	prepareRename(
+		params: LanguagePrepareRenameParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguagePrepareRenameResult>;
 	rename(params: LanguageRenameParams, options?: LanguageRequestOptions): Promise<LanguageDirectoryEditDto>;
-	codeActions(params: LanguageCodeActionsParams, options?: LanguageRequestOptions): Promise<LanguageCodeActionsResult>;
-	resolveCodeAction(params: LanguageResolveCodeActionParams, options?: LanguageRequestOptions): Promise<LanguageCodeActionDto>;
+	codeActions(
+		params: LanguageCodeActionsParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageCodeActionsResult>;
+	resolveCodeAction(
+		params: LanguageResolveCodeActionParams,
+		options?: LanguageRequestOptions,
+	): Promise<LanguageCodeActionDto>;
 }

@@ -1,25 +1,30 @@
-import { stopEvent } from "../../../../base/browser/dom.js";
+import { stopEvent } from '../../../../base/browser/dom.js';
 import { type FastDomNode } from '../../../../base/browser/fastDomNode.js';
-import { type IKeyboardEvent } from "../../../../base/browser/keyboardEvent.js";
-import { Emitter, Event, type Event as EditorEvent } from "../../../../base/common/event.js";
-import { IME } from "../../../../base/common/ime.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { type Position } from "../../../common/core/position.js";
+import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
+import { Emitter, Event, type Event as EditorEvent } from '../../../../base/common/event.js';
+import { IME } from '../../../../base/common/ime.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { type Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { type Selection } from '../../../common/core/selection.js';
 import { TextDecorationCollection, type TextDecorationId } from '../../../common/model/decorationCollection.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
-import { normalizeTextLineEndings } from "../../../common/core/textChange.js";
+import { normalizeTextLineEndings } from '../../../common/core/textChange.js';
 import { type IEditorAriaOptions } from '../../editorBrowser.js';
-import { type View } from "../../view.js";
+import { type View } from '../../view.js';
 import { ViewPart } from '../../view/viewPart.js';
-import { type EditorViewTextUpdateEvent } from "../../view/viewController.js";
+import { type EditorViewTextUpdateEvent } from '../../view/viewController.js';
 import { type SemanticTokenSource } from '../../viewParts/viewLines/viewLine.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import { type IViewModel } from '../../../common/viewModel.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { isFirefox } from '../../../../base/browser/browser.js';
-import { createClipboardCopyEvent, createClipboardPasteEvent, type IClipboardCopyEvent, type IClipboardPasteEvent } from "./clipboardUtils.js";
+import {
+	createClipboardCopyEvent,
+	createClipboardPasteEvent,
+	type IClipboardCopyEvent,
+	type IClipboardPasteEvent,
+} from './clipboardUtils.js';
 
 /** The state that the browser editing surface mirrors from the common editor. */
 export interface EditContextState {
@@ -83,9 +88,7 @@ export interface EditContextOptions {
 	/** Stable editor-view identity used by host integrations. */
 	readonly ownerId: string;
 	/** Resolves character geometry in the scrolling body for browser IME requests. */
-	readonly characterBoundsProvider: (
-		modelOffset: number,
-	) => EditContextCharacterBounds | undefined;
+	readonly characterBoundsProvider: (modelOffset: number) => EditContextCharacterBounds | undefined;
 	readonly viewController: EditContextViewController;
 	readonly viewport: View;
 	readonly semanticTokenSource?: SemanticTokenSource;
@@ -201,20 +204,28 @@ export abstract class AbstractEditContext extends ViewPart {
 		if (this.compositionControllerValue) throw new ReferenceError('Edit context controller is already initialized');
 		this.viewport = options.viewport;
 		this.viewControllerValue = options.viewController;
-		const compositionController = this._register(new CompositionController(
-			this,
-			options.viewport,
-			this._context.viewModel,
-			options.viewController,
-			this.typeEmitter.event,
-		));
+		const compositionController = this._register(
+			new CompositionController(
+				this,
+				options.viewport,
+				this._context.viewModel,
+				options.viewController,
+				this.typeEmitter.event,
+			),
+		);
 		this.compositionControllerValue = compositionController;
 		const viewController = options.viewController;
-		this._register(this.onDidBeforeInput(event => this.routeBeforeInput(event, viewController, compositionController)));
-		this._register(this.onDidInput(event => {
-			if (!event.isComposing || !compositionController.composing) this.clear();
-		}));
-		this._register(this.onDidTextUpdate(update => this.routeTextUpdate(update, viewController, compositionController)));
+		this._register(
+			this.onDidBeforeInput(event => this.routeBeforeInput(event, viewController, compositionController)),
+		);
+		this._register(
+			this.onDidInput(event => {
+				if (!event.isComposing || !compositionController.composing) this.clear();
+			}),
+		);
+		this._register(
+			this.onDidTextUpdate(update => this.routeTextUpdate(update, viewController, compositionController)),
+		);
 		this._register(this.onKeyDown(event => this.routeKeydown(event, viewController)));
 		this._register(this.onKeyUp(event => viewController.emitKeyUp(event)));
 		return compositionController;
@@ -249,7 +260,11 @@ export abstract class AbstractEditContext extends ViewPart {
 		return event;
 	}
 
-	private routeBeforeInput(event: InputEvent, viewController: EditContextViewController, compositionController: CompositionController): void {
+	private routeBeforeInput(
+		event: InputEvent,
+		viewController: EditContextViewController,
+		compositionController: CompositionController,
+	): void {
 		if (event.defaultPrevented || (event.isComposing && compositionController.composing)) return;
 		if (!this.isFocused()) {
 			event.preventDefault();
@@ -259,51 +274,51 @@ export abstract class AbstractEditContext extends ViewPart {
 		if (event.defaultPrevented) return;
 
 		switch (event.inputType) {
-			case "insertText":
-			case "insertReplacementText":
+			case 'insertText':
+			case 'insertReplacementText':
 				return;
-			case "insertLineBreak":
-			case "insertParagraph":
+			case 'insertLineBreak':
+			case 'insertParagraph':
 				stopEvent(event);
 				this.clear();
 				viewController.enter(event.inputType);
 				return;
-			case "deleteContentBackward":
+			case 'deleteContentBackward':
 				stopEvent(event);
 				this.clear();
 				viewController.deleteBackward(event.inputType);
 				return;
-			case "deleteContentForward":
+			case 'deleteContentForward':
 				stopEvent(event);
 				this.clear();
 				viewController.deleteForward(event.inputType);
 				return;
-			case "deleteWordBackward":
+			case 'deleteWordBackward':
 				stopEvent(event);
 				this.clear();
 				viewController.deleteWordBackward(event.inputType);
 				return;
-			case "deleteWordForward":
+			case 'deleteWordForward':
 				stopEvent(event);
 				this.clear();
 				viewController.deleteWordForward(event.inputType);
 				return;
-			case "deleteSoftLineBackward":
+			case 'deleteSoftLineBackward':
 				stopEvent(event);
 				this.clear();
 				viewController.deleteSoftLineBackward(event.inputType);
 				return;
-			case "deleteSoftLineForward":
+			case 'deleteSoftLineForward':
 				stopEvent(event);
 				this.clear();
 				viewController.deleteSoftLineForward(event.inputType);
 				return;
-			case "historyUndo":
+			case 'historyUndo':
 				stopEvent(event);
 				this.clear();
 				viewController.undo();
 				return;
-			case "historyRedo":
+			case 'historyRedo':
 				stopEvent(event);
 				this.clear();
 				viewController.redo();
@@ -313,7 +328,11 @@ export abstract class AbstractEditContext extends ViewPart {
 		}
 	}
 
-	private routeTextUpdate(update: EditContextTextUpdate, viewController: EditContextViewController, compositionController: CompositionController): void {
+	private routeTextUpdate(
+		update: EditContextTextUpdate,
+		viewController: EditContextViewController,
+		compositionController: CompositionController,
+	): void {
 		if (compositionController.composing) return;
 		if (update.updateRangeStart === update.updateRangeEnd && update.text.length === 0) return;
 		const event = makeTextUpdateEvent(update);
@@ -342,19 +361,27 @@ export abstract class AbstractEditContext extends ViewPart {
 				return;
 			}
 		}
-		if (!event.isComposing && event.key === "Insert" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey) {
+		if (
+			!event.isComposing &&
+			event.key === 'Insert' &&
+			!event.shiftKey &&
+			!event.ctrlKey &&
+			!event.altKey &&
+			!event.metaKey
+		) {
 			event.stop();
 			viewController.toggleOvertype();
 			return;
 		}
 		if (
 			event.isComposing ||
-			event.key !== "Tab" ||
+			event.key !== 'Tab' ||
 			event.shiftKey ||
 			event.ctrlKey ||
 			event.altKey ||
 			event.metaKey
-		) return;
+		)
+			return;
 		if (this._context.configuration.options.get(EditorOption.tabFocusMode)) {
 			return;
 		}
@@ -381,7 +408,6 @@ export abstract class AbstractEditContext extends ViewPart {
 		if (!this.viewport) throw new ReferenceError('Edit context is not initialized');
 		return this.viewport;
 	}
-
 }
 
 function makeTextUpdateEvent(update: EditContextTextUpdate): EditorViewTextUpdateEvent {
@@ -397,17 +423,17 @@ function makeTextUpdateEvent(update: EditContextTextUpdate): EditorViewTextUpdat
 	};
 }
 
-function isUndoKeybinding(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">): boolean {
-	return hasPrimaryModifier(event) && !event.shiftKey && event.key.toLowerCase() === "z";
+function isUndoKeybinding(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>): boolean {
+	return hasPrimaryModifier(event) && !event.shiftKey && event.key.toLowerCase() === 'z';
 }
 
-function isRedoKeybinding(event: Pick<KeyboardEvent, "key" | "ctrlKey" | "shiftKey" | "altKey" | "metaKey">): boolean {
+function isRedoKeybinding(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'shiftKey' | 'altKey' | 'metaKey'>): boolean {
 	if (!hasPrimaryModifier(event)) return false;
 	const key = event.key.toLowerCase();
-	return (key === "z" && event.shiftKey) || (key === "y" && !event.shiftKey);
+	return (key === 'z' && event.shiftKey) || (key === 'y' && !event.shiftKey);
 }
 
-function hasPrimaryModifier(event: Pick<KeyboardEvent, "ctrlKey" | "altKey" | "metaKey">): boolean {
+function hasPrimaryModifier(event: Pick<KeyboardEvent, 'ctrlKey' | 'altKey' | 'metaKey'>): boolean {
 	return !event.altKey && event.ctrlKey !== event.metaKey;
 }
 
@@ -440,34 +466,40 @@ export class CompositionController extends Disposable {
 		super();
 		if (viewport.textModel !== viewModel.model) {
 			this.dispose();
-			throw new TypeError(
-				"Stanza composition and view model must share one text model",
-			);
+			throw new TypeError('Stanza composition and view model must share one text model');
 		}
 		this.input = input;
 		this.initialReadOnly = input.readOnly;
 		this.compositionDecorations = this._register(new TextDecorationCollection(viewport.textModel));
-		this._register(toDisposable(() => {
-			this.cancelComposition();
-			this.input.setReadOnly(this.initialReadOnly);
-			this.clearPresentation();
-		}));
+		this._register(
+			toDisposable(() => {
+				this.cancelComposition();
+				this.input.setReadOnly(this.initialReadOnly);
+				this.clearPresentation();
+			}),
+		);
 		this._register(input.onDidCompositionStart(() => this.handleCompositionStart()));
 		this._register(input.onDidCompositionEnd(event => this.handleCompositionEnd(event)));
 		this._register(onType(event => this.handleType(event)));
-		this._register(input.onKeyDown(event => {
-			if (event.key === "Escape" && this.activeComposition) {
-				this.activeComposition.cancelRequested = true;
-			}
-		}));
+		this._register(
+			input.onKeyDown(event => {
+				if (event.key === 'Escape' && this.activeComposition) {
+					this.activeComposition.cancelRequested = true;
+				}
+			}),
+		);
 		this._register(input.onDidBlur(() => this.cancelComposition()));
-		this._register(IME.onDidChange(enabled => {
-			if (!enabled) this.cancelComposition();
-			this.synchronizeReadOnly();
-		}));
-		this._register(viewport.onDidChangeLayout(() => {
-			if (this.activeComposition) this.positionInputAtPrimary();
-		}));
+		this._register(
+			IME.onDidChange(enabled => {
+				if (!enabled) this.cancelComposition();
+				this.synchronizeReadOnly();
+			}),
+		);
+		this._register(
+			viewport.onDidChangeLayout(() => {
+				if (this.activeComposition) this.positionInputAtPrimary();
+			}),
+		);
 		this.synchronizeReadOnly();
 	}
 
@@ -482,7 +514,8 @@ export class CompositionController extends Disposable {
 			!IME.enabled ||
 			this.viewport.cursorConfig.readOnly ||
 			this.viewModel.getSelections().length !== 1
-		) return;
+		)
+			return;
 		this.input.prepareComposition();
 		const startPosition = this.viewModel.getSelections()[0]!.getStartPosition();
 		this.viewController.compositionStart();
@@ -491,7 +524,7 @@ export class CompositionController extends Disposable {
 			length: 0,
 			cancelRequested: false,
 		};
-		this.viewport.domNode.domNode.classList.add("composing");
+		this.viewport.domNode.domNode.classList.add('composing');
 		this._onDidChange.fire(true);
 		this.viewport.revealPosition(startPosition);
 		this.positionInput(startPosition);
@@ -537,13 +570,13 @@ export class CompositionController extends Disposable {
 			0,
 			active.length - event.replacePrevCharCnt - event.replaceNextCharCnt + event.text.length,
 		);
-		this.setCompositionRange(Range.fromPositions(
-			this.viewport.textModel.positionAt(active.startOffset),
-			this.viewport.textModel.positionAt(active.startOffset + active.length),
-		));
-		this.viewport.revealPosition(
-			this.viewModel.getSelections()[0]!.getPosition(),
+		this.setCompositionRange(
+			Range.fromPositions(
+				this.viewport.textModel.positionAt(active.startOffset),
+				this.viewport.textModel.positionAt(active.startOffset + active.length),
+			),
 		);
+		this.viewport.revealPosition(this.viewModel.getSelections()[0]!.getPosition());
 		this.positionInputAtPrimary();
 	}
 
@@ -561,7 +594,10 @@ export class CompositionController extends Disposable {
 
 	private positionInput(position: Position): void {
 		const coordinates = this.viewport.getPositionContentCoordinates(position);
-		this.input.positionComposition({ ...coordinates, left: coordinates.left - this.viewport.getLayoutInfo().contentLeft });
+		this.input.positionComposition({
+			...coordinates,
+			left: coordinates.left - this.viewport.getLayoutInfo().contentLeft,
+		});
 	}
 
 	private finishPresentation(): void {
@@ -570,9 +606,10 @@ export class CompositionController extends Disposable {
 	}
 
 	private clearPresentation(): boolean {
-		const changed = this.viewport.domNode.domNode.classList.contains("composing") ||
-			this.input.domNode.domNode.classList.contains("ime-input");
-		this.viewport.domNode.domNode.classList.remove("composing");
+		const changed =
+			this.viewport.domNode.domNode.classList.contains('composing') ||
+			this.input.domNode.domNode.classList.contains('ime-input');
+		this.viewport.domNode.domNode.classList.remove('composing');
 		this.input.clearComposition();
 		this.setCompositionRange(undefined);
 		return changed;
@@ -581,15 +618,19 @@ export class CompositionController extends Disposable {
 	private setCompositionRange(range: Range | undefined): void {
 		this.compositionDecorationIds = this.compositionDecorations.deltaDecorations(
 			this.compositionDecorationIds,
-			range ? [{
-				range,
-				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-				options: {
-					description: 'composition-decoration',
-					inlineClassName: 'edit-context-composition-primary',
-				},
-				metadata: undefined,
-			}] : [],
+			range
+				? [
+						{
+							range,
+							stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+							options: {
+								description: 'composition-decoration',
+								inlineClassName: 'edit-context-composition-primary',
+							},
+							metadata: undefined,
+						},
+					]
+				: [],
 		);
 	}
 

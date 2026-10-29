@@ -3,7 +3,10 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { WorkbenchConfiguration, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
-import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import {
+	IAuxiliaryWindowService,
+	type IAuxiliaryWindow,
+} from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
 import './media/editorBorder.css';
 import './media/padding.css';
@@ -27,16 +30,20 @@ export class ModernUIContribution extends Disposable {
 		super();
 		this.applyTo(layoutService.mainContainer, this.getStyle());
 		this._register(auxiliaryWindowService.onDidOpenWindow(window => this.addAuxiliaryWindow(window)));
-		this._register(configurationService.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) this.update();
-		}));
-		this._register(toDisposable(() => {
-			this.clear(layoutService.mainContainer);
-			for (const window of this.auxiliaryWindows) {
-				this.clear(window.container);
-			}
-			this.auxiliaryWindows.clear();
-		}));
+		this._register(
+			configurationService.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(WorkbenchConfiguration.layoutStyle)) this.update();
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				this.clear(layoutService.mainContainer);
+				for (const window of this.auxiliaryWindows) {
+					this.clear(window.container);
+				}
+				this.auxiliaryWindows.clear();
+			}),
+		);
 		this.update();
 	}
 
@@ -51,10 +58,13 @@ export class ModernUIContribution extends Disposable {
 		if (this.auxiliaryWindows.has(window)) return;
 		this.auxiliaryWindows.add(window);
 		this.applyTo(window.container, this.getStyle());
-		this.auxiliaryWindowListeners.set(window.id, window.onDidClose(() => {
-			this.auxiliaryWindowListeners.deleteAndDispose(window.id);
-			this.auxiliaryWindows.delete(window);
-		}));
+		this.auxiliaryWindowListeners.set(
+			window.id,
+			window.onDidClose(() => {
+				this.auxiliaryWindowListeners.deleteAndDispose(window.id);
+				this.auxiliaryWindows.delete(window);
+			}),
+		);
 	}
 
 	private applyTo(container: HTMLElement, style: WorkbenchLayoutStyle): void {
@@ -72,4 +82,6 @@ export class ModernUIContribution extends Disposable {
 	}
 }
 
-registerWorkbenchContribution(ModernUIContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(ModernUIContribution));
+registerWorkbenchContribution(ModernUIContribution.ID, WorkbenchPhase.BlockRestore, accessor =>
+	accessor.get(IInstantiationService).createInstance(ModernUIContribution),
+);

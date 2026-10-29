@@ -28,7 +28,10 @@ import type { browserEnvironment } from '../../../../test/browser/testEditorDom.
 
 const previousClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
 Object.defineProperty(navigator, 'clipboard', { configurable: true, value: {} });
-suiteTeardown(() => { if (previousClipboard) Object.defineProperty(navigator, 'clipboard', previousClipboard); else Reflect.deleteProperty(navigator, 'clipboard'); });
+suiteTeardown(() => {
+	if (previousClipboard) Object.defineProperty(navigator, 'clipboard', previousClipboard);
+	else Reflect.deleteProperty(navigator, 'clipboard');
+});
 await import('../../../clipboard/browser/clipboard.js');
 await import('../../browser/copyPasteContribution.js');
 const { CopyPasteController } = await import('../../browser/copyPasteController.js');
@@ -51,10 +54,10 @@ test('URI-list paste inserts paths before duplicate plain text', async () => {
 	input.dispatchEvent(paste);
 	await waitFor(() => model.getText() === `${URI.parse('file:///workspace/one.rs').fsPath} https://example.test/two`);
 
-	assert.deepEqual({ value: model.getText(), handled: paste.defaultPrevented }, {
-		value: `${URI.parse('file:///workspace/one.rs').fsPath} https://example.test/two`,
-		handled: true,
-	});
+	assert.deepEqual(
+		{ value: model.getText(), handled: paste.defaultPrevented },
+		{ value: `${URI.parse('file:///workspace/one.rs').fsPath} https://example.test/two`, handled: true },
+	);
 });
 
 test('Plain text and file-name paste use the default input path', async () => {
@@ -137,7 +140,9 @@ test('A language paste provider can replace text and the selector switches to pl
 		async provideDocumentPasteEdits() {
 			return {
 				edits: [{ title: 'Insert Custom Text', kind, insertText: 'pending' }],
-				dispose() { disposedSessions += 1; },
+				dispose() {
+					disposedSessions += 1;
+				},
 			};
 		},
 		async resolveDocumentPasteEdit(edit) {
@@ -145,8 +150,15 @@ test('A language paste provider can replace text and the selector switches to pl
 			return { ...edit, insertText: 'CUSTOM' };
 		},
 	};
-	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageFeaturesService: features });
+	using registration = features.documentPasteEditProvider.register(
+		{ language: 'plaintext', hasAccessToAllModels: true },
+		provider,
+	);
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		languageFeaturesService: features,
+	});
 	editor.setSelection(new Selection(1, 1, 1, 4));
 	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
@@ -163,7 +175,9 @@ test('A language paste provider can replace text and the selector switches to pl
 	selector.querySelector<HTMLButtonElement>('button')!.click();
 	assert.equal(dom.window.document.querySelectorAll('[role=menuitem]').length, 2);
 	assert.equal(selector.querySelector('button')!.getAttribute('aria-label'), 'Paste options');
-	const plainOption = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(option => option.textContent === 'Insert Plain Text');
+	const plainOption = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(
+		option => option.textContent === 'Insert Plain Text',
+	);
 	assert.ok(plainOption);
 	plainOption.click();
 	await waitFor(() => model.getText() === 'raw');
@@ -180,19 +194,34 @@ test('A provider paste switches its insertion and additional text edit together'
 	using features = new LanguageFeaturesService();
 	const kind = new HierarchicalKind('text.withAdditionalEdit');
 	const provider: DocumentPasteEditProvider = {
-		copyMimeTypes: [], pasteMimeTypes: ['text/plain'], providedPasteEditKinds: [kind],
+		copyMimeTypes: [],
+		pasteMimeTypes: ['text/plain'],
+		providedPasteEditKinds: [kind],
 		async provideDocumentPasteEdits() {
 			return {
-				edits: [{
-					title: 'Insert with another edit', kind, insertText: 'MAIN',
-					additionalEdit: { edits: [{ resource: model.uri, textEdit: { range: new Range(2, 1, 2, 6), text: 'EXTRA' } }] },
-				}],
-				dispose() { },
+				edits: [
+					{
+						title: 'Insert with another edit',
+						kind,
+						insertText: 'MAIN',
+						additionalEdit: {
+							edits: [{ resource: model.uri, textEdit: { range: new Range(2, 1, 2, 6), text: 'EXTRA' } }],
+						},
+					},
+				],
+				dispose() {},
 			};
 		},
 	};
-	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageFeaturesService: features });
+	using registration = features.documentPasteEditProvider.register(
+		{ language: 'plaintext', hasAccessToAllModels: true },
+		provider,
+	);
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		languageFeaturesService: features,
+	});
 	editor.setSelection(new Selection(1, 1, 1, 4));
 	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
@@ -203,7 +232,9 @@ test('A provider paste switches its insertion and additional text edit together'
 	const selector = dom.window.document.querySelector<HTMLElement>('.stanza-editor-post-edit-selector');
 	assert.ok(selector);
 	selector.querySelector<HTMLButtonElement>('button')!.click();
-	const plainOption = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(option => option.textContent === 'Insert Plain Text');
+	const plainOption = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(
+		option => option.textContent === 'Insert Plain Text',
+	);
 	assert.ok(plainOption);
 	plainOption.click();
 	await waitFor(() => model.getText() === 'raw\ntrail');
@@ -218,20 +249,36 @@ test('A pasted snippet keeps its tabstops after the workspace edit applies', asy
 	using features = new LanguageFeaturesService();
 	const kind = new HierarchicalKind('text.snippet');
 	const provider: DocumentPasteEditProvider = {
-		copyMimeTypes: [], pasteMimeTypes: ['text/plain'], providedPasteEditKinds: [kind],
+		copyMimeTypes: [],
+		pasteMimeTypes: ['text/plain'],
+		providedPasteEditKinds: [kind],
 		async provideDocumentPasteEdits() {
 			return {
-				edits: [{
-					title: 'Insert Snippet', kind,
-					insertText: { snippet: '${TM_FILENAME_BASE}: function ${1:name}(${2:value}) {$0}' },
-					additionalEdit: { edits: [{ resource: model.uri, textEdit: { range: new Range(1, 1, 1, 7), text: 'LONGPREFIX' } }] },
-				}],
-				dispose() { },
+				edits: [
+					{
+						title: 'Insert Snippet',
+						kind,
+						insertText: { snippet: '${TM_FILENAME_BASE}: function ${1:name}(${2:value}) {$0}' },
+						additionalEdit: {
+							edits: [
+								{ resource: model.uri, textEdit: { range: new Range(1, 1, 1, 7), text: 'LONGPREFIX' } },
+							],
+						},
+					},
+				],
+				dispose() {},
 			};
 		},
 	};
-	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageFeaturesService: features });
+	using registration = features.documentPasteEditProvider.register(
+		{ language: 'plaintext', hasAccessToAllModels: true },
+		provider,
+	);
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		languageFeaturesService: features,
+	});
 	editor.setSelection(new Selection(2, 1, 2, 4));
 	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
@@ -243,10 +290,21 @@ test('A pasted snippet keeps its tabstops after the workspace edit applies', asy
 
 	const tab = new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
 	input.dispatchEvent(tab);
-	assert.deepEqual({ handled: tab.defaultPrevented, selected: model.getValueInRange(editor.getSelection()!) }, { handled: true, selected: 'value' });
-	const back = new dom.window.KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+	assert.deepEqual(
+		{ handled: tab.defaultPrevented, selected: model.getValueInRange(editor.getSelection()!) },
+		{ handled: true, selected: 'value' },
+	);
+	const back = new dom.window.KeyboardEvent('keydown', {
+		key: 'Tab',
+		shiftKey: true,
+		bubbles: true,
+		cancelable: true,
+	});
 	input.dispatchEvent(back);
-	assert.deepEqual({ handled: back.defaultPrevented, selected: model.getValueInRange(editor.getSelection()!) }, { handled: true, selected: 'name' });
+	assert.deepEqual(
+		{ handled: back.defaultPrevented, selected: model.getValueInRange(editor.getSelection()!) },
+		{ handled: true, selected: 'name' },
+	);
 	const snippets = SnippetController2.get(editor)!;
 	snippets.next();
 	snippets.next();
@@ -265,25 +323,42 @@ test('Switching a paste choice reverts additional edits in another open resource
 	using features = new LanguageFeaturesService();
 	const kind = new HierarchicalKind('text.multiResource');
 	const provider: DocumentPasteEditProvider = {
-		copyMimeTypes: [], pasteMimeTypes: ['text/plain'], providedPasteEditKinds: [kind],
+		copyMimeTypes: [],
+		pasteMimeTypes: ['text/plain'],
+		providedPasteEditKinds: [kind],
 		async provideDocumentPasteEdits() {
 			return {
-				edits: [{
-					title: 'Insert Both', kind, insertText: 'MAIN',
-					additionalEdit: { edits: [{ resource: otherModel.uri, textEdit: { range: new Range(1, 1, 1, 6), text: 'EXTRA' } }] },
-				}],
-				dispose() { },
+				edits: [
+					{
+						title: 'Insert Both',
+						kind,
+						insertText: 'MAIN',
+						additionalEdit: {
+							edits: [
+								{ resource: otherModel.uri, textEdit: { range: new Range(1, 1, 1, 6), text: 'EXTRA' } },
+							],
+						},
+					},
+				],
+				dispose() {},
 			};
 		},
 	};
-	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
+	using registration = features.documentPasteEditProvider.register(
+		{ language: 'plaintext', hasAccessToAllModels: true },
+		provider,
+	);
 	using otherEditor = createTestCodeEditor({
-		container: dom.window.document.querySelector<HTMLElement>('aside')!, model: otherModel,
-		instantiationService: services, languageFeaturesService: features,
+		container: dom.window.document.querySelector<HTMLElement>('aside')!,
+		model: otherModel,
+		instantiationService: services,
+		languageFeaturesService: features,
 	});
 	using editor = createTestCodeEditor({
-		container: dom.window.document.querySelector<HTMLElement>('main')!, model,
-		instantiationService: services, languageFeaturesService: features,
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		instantiationService: services,
+		languageFeaturesService: features,
 	});
 	editor.setSelection(new Selection(1, 1, 1, 4));
 	const input = editor.controller.editContext.domNode.domNode;
@@ -295,7 +370,9 @@ test('Switching a paste choice reverts additional edits in another open resource
 	const selector = dom.window.document.querySelector<HTMLElement>('.stanza-editor-post-edit-selector');
 	assert.ok(selector);
 	selector.querySelector<HTMLButtonElement>('button')!.click();
-	const plainOption = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(option => option.textContent === 'Insert Plain Text');
+	const plainOption = [...dom.window.document.querySelectorAll<HTMLButtonElement>('[role=menuitem]')].find(
+		option => option.textContent === 'Insert Plain Text',
+	);
 	assert.ok(plainOption);
 	plainOption.click();
 	await waitFor(() => model.getText() === 'raw' && otherModel.getText() === 'trail');
@@ -310,13 +387,22 @@ test('A snippet paste tracks placeholders at every cursor', async () => {
 	using features = new LanguageFeaturesService();
 	const kind = new HierarchicalKind('text.snippet');
 	const provider: DocumentPasteEditProvider = {
-		copyMimeTypes: [], pasteMimeTypes: ['text/plain'], providedPasteEditKinds: [kind],
+		copyMimeTypes: [],
+		pasteMimeTypes: ['text/plain'],
+		providedPasteEditKinds: [kind],
 		async provideDocumentPasteEdits() {
-			return { edits: [{ title: 'Insert Snippet', kind, insertText: { snippet: '${1:x}$0' } }], dispose() { } };
+			return { edits: [{ title: 'Insert Snippet', kind, insertText: { snippet: '${1:x}$0' } }], dispose() {} };
 		},
 	};
-	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageFeaturesService: features });
+	using registration = features.documentPasteEditProvider.register(
+		{ language: 'plaintext', hasAccessToAllModels: true },
+		provider,
+	);
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		languageFeaturesService: features,
+	});
 	editor.setSelections([new Selection(1, 1, 1, 1), new Selection(2, 1, 2, 1)]);
 	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
@@ -324,10 +410,16 @@ test('A snippet paste tracks placeholders at every cursor', async () => {
 	data.setData('text/plain', 'raw');
 	input.dispatchEvent(clipboardEvent(dom.window, data));
 	await waitFor(() => model.getText() === 'xa\nxb');
-	assert.deepEqual(editor.getSelections()!.map(selection => model.getValueInRange(selection)), ['x', 'x']);
+	assert.deepEqual(
+		editor.getSelections()!.map(selection => model.getValueInRange(selection)),
+		['x', 'x'],
+	);
 	const tab = new dom.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
 	input.dispatchEvent(tab);
-	assert.deepEqual(editor.getSelections()!.map(selection => selection.getPosition()), [new Position(1, 2), new Position(2, 2)]);
+	assert.deepEqual(
+		editor.getSelections()!.map(selection => selection.getPosition()),
+		[new Position(1, 2), new Position(2, 2)],
+	);
 });
 
 test('A delayed paste provider cannot apply after the document changes', async () => {
@@ -338,16 +430,27 @@ test('A delayed paste provider cannot apply after the document changes', async (
 	using features = new LanguageFeaturesService();
 	const kind = new HierarchicalKind('text.delayed');
 	let release!: () => void;
-	const gate = new Promise<void>(resolve => { release = resolve; });
+	const gate = new Promise<void>(resolve => {
+		release = resolve;
+	});
 	const provider: DocumentPasteEditProvider = {
-		copyMimeTypes: [], pasteMimeTypes: ['text/plain'], providedPasteEditKinds: [kind],
+		copyMimeTypes: [],
+		pasteMimeTypes: ['text/plain'],
+		providedPasteEditKinds: [kind],
 		async provideDocumentPasteEdits() {
 			await gate;
-			return { edits: [{ title: 'Delayed', kind, insertText: 'late' }], dispose() { } };
+			return { edits: [{ title: 'Delayed', kind, insertText: 'late' }], dispose() {} };
 		},
 	};
-	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, languageFeaturesService: features });
+	using registration = features.documentPasteEditProvider.register(
+		{ language: 'plaintext', hasAccessToAllModels: true },
+		provider,
+	);
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		languageFeaturesService: features,
+	});
 	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
 	const data = new TestClipboardData();
@@ -372,7 +475,11 @@ test('Paste As requests the selected HTML kind from the rich clipboard', async (
 	registerCodeEditorServices(services);
 
 	using model = new TextModel('old');
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		instantiationService: services,
+		model,
+	});
 	editor.setSelection(new Selection(1, 1, 1, 4));
 
 	clipboard.data.setData('text/html', '<b>markup</b>');
@@ -394,7 +501,11 @@ test('Paste As asks which provider edit to apply when no kind is specified', asy
 	registerCodeEditorServices(services);
 
 	using model = new TextModel('old');
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		instantiationService: services,
+		model,
+	});
 	editor.setSelection(new Selection(1, 1, 1, 4));
 
 	clipboard.data.setData('text/plain', 'plain');
@@ -441,11 +552,19 @@ test('Copy preparation data reaches the matching paste provider', async () => {
 		async provideDocumentPasteEdits(_model, _ranges, transfer) {
 			provided += 1;
 			const value = await transfer.get('application/x-ash-prepared')!.asString();
-			return { edits: [{ title: 'Insert Prepared', kind, insertText: value }], dispose() { } };
+			return { edits: [{ title: 'Insert Prepared', kind, insertText: value }], dispose() {} };
 		},
 	};
-	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, provider);
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model, languageFeaturesService: features });
+	using registration = features.documentPasteEditProvider.register(
+		{ language: 'plaintext', hasAccessToAllModels: true },
+		provider,
+	);
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		instantiationService: services,
+		model,
+		languageFeaturesService: features,
+	});
 	editor.setSelection(new Selection(1, 1, 1, 7));
 	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
@@ -464,7 +583,6 @@ test('Copy preparation data reaches the matching paste provider', async () => {
 	input.dispatchEvent(clipboardEvent(dom.window, external));
 	await CopyPasteController.get(editor)!.finishedPaste();
 	assert.deepEqual({ text: model.getText(), provided }, { text: 'source', provided: 1 });
-
 
 	editor.setSelection(new Selection(1, 1, 1, 7));
 	clipboard.data = data;
@@ -485,16 +603,24 @@ test('Paste as Text ignores URI metadata added during copy preparation', async (
 	registerCodeEditorServices(services);
 	using model = new TextModel('source');
 	using features = new LanguageFeaturesService();
-	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, {
-		copyMimeTypes: ['text/uri-list'], pasteMimeTypes: [], providedPasteEditKinds: [],
-		async prepareDocumentPaste() {
-			const transfer = new VSDataTransfer();
-			transfer.append('text/uri-list', createStringDataTransferItem('file:///workspace/source.txt'));
-			return transfer;
+	using registration = features.documentPasteEditProvider.register(
+		{ language: 'plaintext', hasAccessToAllModels: true },
+		{
+			copyMimeTypes: ['text/uri-list'],
+			pasteMimeTypes: [],
+			providedPasteEditKinds: [],
+			async prepareDocumentPaste() {
+				const transfer = new VSDataTransfer();
+				transfer.append('text/uri-list', createStringDataTransferItem('file:///workspace/source.txt'));
+				return transfer;
+			},
 		},
-	});
+	);
 	using editor = createTestCodeEditor({
-		container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model, languageFeaturesService: features,
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		instantiationService: services,
+		model,
+		languageFeaturesService: features,
 	});
 	editor.setSelection(new Selection(1, 1, 1, 7));
 	const input = editor.controller.editContext.domNode.domNode;
@@ -513,8 +639,10 @@ test('Paste as Text ignores URI metadata added during copy preparation', async (
 
 class TestClipboardData {
 	private readonly values = new Map<string, string>();
-	constructor(readonly files: readonly File[] = []) { }
-	get types(): string[] { return [...this.values.keys(), ...(this.files.length ? ['Files'] : [])]; }
+	constructor(readonly files: readonly File[] = []) {}
+	get types(): string[] {
+		return [...this.values.keys(), ...(this.files.length ? ['Files'] : [])];
+	}
 	get items(): readonly {
 		readonly kind: string;
 		readonly type: string;
@@ -531,13 +659,17 @@ class TestClipboardData {
 			...this.files.map(file => ({
 				kind: 'file',
 				type: file.type,
-				getAsString: (_callback: (value: string) => void) => { },
+				getAsString: (_callback: (value: string) => void) => {},
 				getAsFile: () => file,
 			})),
 		];
 	}
-	getData(type: string): string { return this.values.get(type) ?? ''; }
-	setData(type: string, value: string): void { this.values.set(type, value); }
+	getData(type: string): string {
+		return this.values.get(type) ?? '';
+	}
+	setData(type: string, value: string): void {
+		this.values.set(type, value);
+	}
 }
 
 async function waitFor(condition: () => boolean): Promise<void> {
@@ -548,7 +680,10 @@ async function waitFor(condition: () => boolean): Promise<void> {
 	}
 }
 
-function clipboardEvent(targetWindow: typeof browserEnvironment.window, clipboardData: TestClipboardData): ClipboardEvent {
+function clipboardEvent(
+	targetWindow: typeof browserEnvironment.window,
+	clipboardData: TestClipboardData,
+): ClipboardEvent {
 	const event = new targetWindow.Event('paste', { bubbles: true, cancelable: true });
 	Object.defineProperty(event, 'clipboardData', { configurable: true, value: clipboardData });
 	return event as unknown as ClipboardEvent;
@@ -557,14 +692,18 @@ function clipboardEvent(targetWindow: typeof browserEnvironment.window, clipboar
 class EventClipboard extends BrowserClipboardService {
 	public data = new TestClipboardData();
 	public resources: readonly URI[] = [];
-	constructor(private readonly dom: JSDOM) { super(undefined); }
+	constructor(private readonly dom: JSDOM) {
+		super(undefined);
+	}
 	override async triggerPaste(): Promise<void> {
 		this.dom.window.document.activeElement!.dispatchEvent(clipboardEvent(this.dom.window, this.data));
 	}
-	override async readResources(): Promise<{ resources: readonly URI[]; operation: 'copy'; }> {
+	override async readResources(): Promise<{ resources: readonly URI[]; operation: 'copy' }> {
 		return { resources: this.resources, operation: 'copy' };
 	}
-	override async readText(): Promise<string> { throw new Error('The command must preserve the paste event formats'); }
+	override async readText(): Promise<string> {
+		throw new Error('The command must preserve the paste event formats');
+	}
 }
 
 test('Paste As merges service resources without replacing event URI data', async () => {
@@ -579,7 +718,11 @@ test('Paste As merges service resources without replacing event URI data', async
 	services.registerInstance(IQuickInputService, quickInput);
 	registerCodeEditorServices(services);
 	using model = new TextModel('');
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, instantiationService: services });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		instantiationService: services,
+	});
 	clipboard.data.setData('text/plain', 'file path fallback');
 	clipboard.resources = [URI.file('/workspace/service.ts')];
 	await CopyPasteController.get(editor)!.pasteAs({ only: new HierarchicalKind('uri') });
@@ -604,21 +747,40 @@ test('Paste command resolves after delayed provider edits', async () => {
 	const release = new DeferredPromise<void>();
 	const kind = new HierarchicalKind('text.waiting');
 	let disposed = 0;
-	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, {
-		copyMimeTypes: [], pasteMimeTypes: ['text/plain'], providedPasteEditKinds: [kind],
-		async provideDocumentPasteEdits() {
-			await started.complete();
-			await release.p;
-			return { edits: [{ title: 'Delayed edit', kind, insertText: 'provided' }], dispose() { disposed++; } };
+	using registration = features.documentPasteEditProvider.register(
+		{ language: 'plaintext', hasAccessToAllModels: true },
+		{
+			copyMimeTypes: [],
+			pasteMimeTypes: ['text/plain'],
+			providedPasteEditKinds: [kind],
+			async provideDocumentPasteEdits() {
+				await started.complete();
+				await release.p;
+				return {
+					edits: [{ title: 'Delayed edit', kind, insertText: 'provided' }],
+					dispose() {
+						disposed++;
+					},
+				};
+			},
 		},
-	});
+	);
 	using model = new TextModel('');
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, instantiationService: services, languageFeaturesService: features });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		instantiationService: services,
+		languageFeaturesService: features,
+	});
 	editor.focus();
 	clipboard.data.setData('text/plain', 'raw');
 	let complete = false;
-	const commands = services.get((await import('../../../../../platform/commands/common/commands.js')).ICommandService);
-	const paste = commands.executeCommand('editor.action.clipboardPasteAction').then(() => { complete = true; });
+	const commands = services.get(
+		(await import('../../../../../platform/commands/common/commands.js')).ICommandService,
+	);
+	const paste = commands.executeCommand('editor.action.clipboardPasteAction').then(() => {
+		complete = true;
+	});
 	await started.p;
 	assert.deepEqual({ text: model.getText(), complete }, { text: '', complete: false });
 	await release.complete();
@@ -642,19 +804,36 @@ test('Cancelling a paste ends the command before an uncooperative provider retur
 	const release = new DeferredPromise<void>();
 	const disposed = new DeferredPromise<void>();
 	const kind = new HierarchicalKind('text.delayed');
-	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, {
-		copyMimeTypes: [], pasteMimeTypes: ['text/plain'], providedPasteEditKinds: [kind],
-		async provideDocumentPasteEdits() {
-			await started.complete();
-			await release.p;
-			return { edits: [{ title: 'Delayed edit', kind, insertText: 'stale' }], dispose() { void disposed.complete(); } };
+	using registration = features.documentPasteEditProvider.register(
+		{ language: 'plaintext', hasAccessToAllModels: true },
+		{
+			copyMimeTypes: [],
+			pasteMimeTypes: ['text/plain'],
+			providedPasteEditKinds: [kind],
+			async provideDocumentPasteEdits() {
+				await started.complete();
+				await release.p;
+				return {
+					edits: [{ title: 'Delayed edit', kind, insertText: 'stale' }],
+					dispose() {
+						void disposed.complete();
+					},
+				};
+			},
 		},
-	});
+	);
 	using model = new TextModel('');
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model, instantiationService: services, languageFeaturesService: features });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		model,
+		instantiationService: services,
+		languageFeaturesService: features,
+	});
 	editor.focus();
 	clipboard.data.setData('text/plain', 'raw');
-	const commands = services.get((await import('../../../../../platform/commands/common/commands.js')).ICommandService);
+	const commands = services.get(
+		(await import('../../../../../platform/commands/common/commands.js')).ICommandService,
+	);
 	const paste = commands.executeCommand('editor.action.clipboardPasteAction');
 	await started.p;
 	model.setValue('changed');
@@ -665,7 +844,6 @@ test('Cancelling a paste ends the command before an uncooperative provider retur
 	assert.equal(model.getText(), 'changed');
 });
 
-
 for (const preference of ['html', 'text', 'picker']) {
 	test(`command Paste As uses rich service data for ${preference} when a paste event cannot be triggered`, async () => {
 		const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -674,17 +852,30 @@ for (const preference of ['html', 'text', 'picker']) {
 		using registeredWindow = registerWindow(dom.window as unknown as Window);
 		using services = new InstantiationService();
 		using clipboard = new BrowserClipboardService({
-			read: async () => [{ types: ['text/plain', 'text/html'], getType: async (type: string) => new Blob([type === 'text/html' ? '<b>rich</b>' : 'plain']) }],
-			readText: async () => { throw new Error('Paste As must use all MIME types'); },
+			read: async () => [
+				{
+					types: ['text/plain', 'text/html'],
+					getType: async (type: string) => new Blob([type === 'text/html' ? '<b>rich</b>' : 'plain']),
+				},
+			],
+			readText: async () => {
+				throw new Error('Paste As must use all MIME types');
+			},
 		} as unknown as Clipboard);
 		services.registerInstance(IClipboardService, clipboard);
 		using quickInput = new TestQuickInputService({ container: dom.window.document.body });
 		services.registerInstance(IQuickInputService, quickInput);
 		registerCodeEditorServices(services);
 		using model = new TextModel('old');
-		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model });
+		using editor = createTestCodeEditor({
+			container: dom.window.document.querySelector<HTMLElement>('main')!,
+			instantiationService: services,
+			model,
+		});
 		editor.setSelection(new Selection(1, 1, 1, 4));
-		const paste = editor.getAction(preference === 'text' ? 'editor.action.pasteAsText' : 'editor.action.pasteAs')!.run(preference === 'html' ? { kind: 'html' } : undefined);
+		const paste = editor
+			.getAction(preference === 'text' ? 'editor.action.pasteAsText' : 'editor.action.pasteAs')!
+			.run(preference === 'html' ? { kind: 'html' } : undefined);
 		if (preference === 'picker') {
 			await waitFor(() => dom.window.document.querySelector('.ash-quick-pick') !== null);
 			assert.equal(model.getText(), 'old');
@@ -708,11 +899,20 @@ for (const change of ['selection', 'content', 'focus', 'readOnly', 'dispose']) {
 		using services = new InstantiationService();
 		const started = new DeferredPromise<void>();
 		const release = new DeferredPromise<ClipboardItem[]>();
-		using clipboard = new BrowserClipboardService({ read: () => { void started.complete(); return release.p; } } as Clipboard);
+		using clipboard = new BrowserClipboardService({
+			read: () => {
+				void started.complete();
+				return release.p;
+			},
+		} as Clipboard);
 		services.registerInstance(IClipboardService, clipboard);
 		registerCodeEditorServices(services);
 		using model = new TextModel('old');
-		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model });
+		using editor = createTestCodeEditor({
+			container: dom.window.document.querySelector<HTMLElement>('main')!,
+			instantiationService: services,
+			model,
+		});
 		const paste = editor.getAction('editor.action.pasteAs')!.run({ kind: 'html' });
 		await started.p;
 		if (change === 'selection') editor.setPosition({ lineNumber: 1, column: 2 });
@@ -721,12 +921,13 @@ for (const change of ['selection', 'content', 'focus', 'readOnly', 'dispose']) {
 		if (change === 'readOnly') editor.updateOptions({ readOnly: true });
 		if (change === 'dispose') editor.dispose();
 		await paste;
-		await release.complete([{ types: ['text/html'], getType: async () => new Blob(['<b>late</b>']) } as unknown as ClipboardItem]);
+		await release.complete([
+			{ types: ['text/html'], getType: async () => new Blob(['<b>late</b>']) } as unknown as ClipboardItem,
+		]);
 		await Promise.resolve();
 		assert.equal(model.getText(), change === 'content' ? 'changed' : 'old');
 	});
 }
-
 
 test('command Paste As matches copied preparation metadata read from a byte snapshot', async () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
@@ -742,20 +943,39 @@ test('command Paste As matches copied preparation metadata read from a byte snap
 	using features = new LanguageFeaturesService();
 	const kind = new HierarchicalKind('prepared');
 	let metadataRemoved = false;
-	using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, {
-		copyMimeTypes: ['application/x-test-prepared'], pasteMimeTypes: ['application/x-test-prepared'], providedPasteEditKinds: [kind],
-		async prepareDocumentPaste() {
-			const transfer = new VSDataTransfer();
-			transfer.append('application/x-test-prepared', createStringDataTransferItem('prepared text'));
-			return transfer;
+	using registration = features.documentPasteEditProvider.register(
+		{ language: 'plaintext', hasAccessToAllModels: true },
+		{
+			copyMimeTypes: ['application/x-test-prepared'],
+			pasteMimeTypes: ['application/x-test-prepared'],
+			providedPasteEditKinds: [kind],
+			async prepareDocumentPaste() {
+				const transfer = new VSDataTransfer();
+				transfer.append('application/x-test-prepared', createStringDataTransferItem('prepared text'));
+				return transfer;
+			},
+			async provideDocumentPasteEdits(_model, _ranges, transfer) {
+				metadataRemoved = !transfer.has('application/x-ash-paste-provider-id') && !transfer.matches('files');
+				return {
+					edits: [
+						{
+							title: 'Insert prepared text',
+							kind,
+							insertText: await transfer.get('application/x-test-prepared')!.asString(),
+						},
+					],
+					dispose() {},
+				};
+			},
 		},
-		async provideDocumentPasteEdits(_model, _ranges, transfer) {
-			metadataRemoved = !transfer.has('application/x-ash-paste-provider-id') && !transfer.matches('files');
-			return { edits: [{ title: 'Insert prepared text', kind, insertText: await transfer.get('application/x-test-prepared')!.asString() }], dispose() { } };
-		},
-	});
+	);
 	using model = new TextModel('source');
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model, languageFeaturesService: features });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		instantiationService: services,
+		model,
+		languageFeaturesService: features,
+	});
 	editor.setSelection(new Selection(1, 1, 1, 7));
 	const input = editor.controller.editContext.domNode.domNode;
 	input.focus();
@@ -768,14 +988,25 @@ test('command Paste As matches copied preparation metadata read from a byte snap
 	assert.equal(model.getText(), 'source');
 });
 
-for (const mime of ['image/png', 'application/pdf', 'application/x-test-binary', 'application/x-test-paste', 'application/json', 'application/vnd.test+xml']) {
+for (const mime of [
+	'image/png',
+	'application/pdf',
+	'application/x-test-binary',
+	'application/x-test-paste',
+	'application/json',
+	'application/vnd.test+xml',
+]) {
 	test(`command Paste As supplies ${mime} to its registered provider`, async () => {
 		const dom = new JSDOM('<!doctype html><body><main></main></body>');
 		using closeWindow = toDisposable(() => dom.window.close());
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		using services = new InstantiationService();
-		const isCustomText = ['application/x-test-paste', 'application/json', 'application/vnd.test+xml'].includes(mime);
-		const bytes = isCustomText ? new TextEncoder().encode('custom metadata') : Uint8Array.of(255, 128, 0, 80, 68, 70);
+		const isCustomText = ['application/x-test-paste', 'application/json', 'application/vnd.test+xml'].includes(
+			mime,
+		);
+		const bytes = isCustomText
+			? new TextEncoder().encode('custom metadata')
+			: Uint8Array.of(255, 128, 0, 80, 68, 70);
 		using clipboard = new BrowserClipboardService({
 			read: async () => [{ types: [mime], getType: async () => new Blob([bytes]) }],
 		} as unknown as Clipboard);
@@ -784,27 +1015,47 @@ for (const mime of ['image/png', 'application/pdf', 'application/x-test-binary',
 		using features = new LanguageFeaturesService();
 		const kind = new HierarchicalKind('custom');
 		let received: unknown;
-		using registration = features.documentPasteEditProvider.register({ language: 'plaintext', hasAccessToAllModels: true }, {
-			copyMimeTypes: [], pasteMimeTypes: [isCustomText ? mime : 'files'], providedPasteEditKinds: [kind],
-			async provideDocumentPasteEdits(_model, _ranges, transfer) {
-				const item = transfer.get(mime)!;
-				if (isCustomText) {
-					received = await item.asString();
-				} else {
-					const file = item.asFile()!;
-					received = { bytes: await file.data(), name: file.name, value: item.value, text: await item.asString() };
-				}
-				return { edits: [{ title: 'Insert custom data', kind, insertText: 'provided' }], dispose() { } };
+		using registration = features.documentPasteEditProvider.register(
+			{ language: 'plaintext', hasAccessToAllModels: true },
+			{
+				copyMimeTypes: [],
+				pasteMimeTypes: [isCustomText ? mime : 'files'],
+				providedPasteEditKinds: [kind],
+				async provideDocumentPasteEdits(_model, _ranges, transfer) {
+					const item = transfer.get(mime)!;
+					if (isCustomText) {
+						received = await item.asString();
+					} else {
+						const file = item.asFile()!;
+						received = {
+							bytes: await file.data(),
+							name: file.name,
+							value: item.value,
+							text: await item.asString(),
+						};
+					}
+					return { edits: [{ title: 'Insert custom data', kind, insertText: 'provided' }], dispose() {} };
+				},
 			},
-		});
+		);
 		using model = new TextModel('');
-		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model, languageFeaturesService: features });
+		using editor = createTestCodeEditor({
+			container: dom.window.document.querySelector<HTMLElement>('main')!,
+			instantiationService: services,
+			model,
+			languageFeaturesService: features,
+		});
 		await editor.getAction('editor.action.pasteAs')!.run({ kind: 'custom' });
 		const expectedExtension = mime === 'image/png' ? '.png' : mime === 'application/pdf' ? '.pdf' : '.bin';
-		assert.deepEqual({ received, text: model.getText() }, {
-			received: isCustomText ? 'custom metadata' : { bytes, name: `clipboard${expectedExtension}`, value: undefined, text: '' },
-			text: 'provided',
-		});
+		assert.deepEqual(
+			{ received, text: model.getText() },
+			{
+				received: isCustomText
+					? 'custom metadata'
+					: { bytes, name: `clipboard${expectedExtension}`, value: undefined, text: '' },
+				text: 'provided',
+			},
+		);
 	});
 }
 
@@ -817,15 +1068,32 @@ test('command Paste As ends quietly when its clipboard read returns empty', asyn
 	services.registerInstance(IClipboardService, clipboard);
 	const unexpectedNotification = (): never => assert.fail('An empty clipboard must not produce a notification');
 	services.registerInstance(INotificationService, {
-		onDidChangeFilter: Event.None, setFilter: unexpectedNotification, getFilter: () => NotificationsFilter.OFF, getFilters: () => [], removeFilter: () => { }, status: () => ({ close() { } }),
-		notify: unexpectedNotification, info: unexpectedNotification, warn: unexpectedNotification, error: unexpectedNotification,
+		onDidChangeFilter: Event.None,
+		setFilter: unexpectedNotification,
+		getFilter: () => NotificationsFilter.OFF,
+		getFilters: () => [],
+		removeFilter: () => {},
+		status: () => ({ close() {} }),
+		notify: unexpectedNotification,
+		info: unexpectedNotification,
+		warn: unexpectedNotification,
+		error: unexpectedNotification,
 	});
 	registerCodeEditorServices(services);
 	using model = new TextModel('old');
-	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, instantiationService: services, model });
+	using editor = createTestCodeEditor({
+		container: dom.window.document.querySelector<HTMLElement>('main')!,
+		instantiationService: services,
+		model,
+	});
 	await editor.getAction('editor.action.pasteAs')!.run();
 	assert.equal(model.getText(), 'old');
 });
 
-const codeFeatures = registerTestCodeEditorFeatures(['editor.contrib.codeServices', 'editor.contrib.clipboard', 'editor.contrib.copyPasteActionController', 'snippetController2']);
+const codeFeatures = registerTestCodeEditorFeatures([
+	'editor.contrib.codeServices',
+	'editor.contrib.clipboard',
+	'editor.contrib.copyPasteActionController',
+	'snippetController2',
+]);
 afterCodeFeatures(() => codeFeatures.dispose());

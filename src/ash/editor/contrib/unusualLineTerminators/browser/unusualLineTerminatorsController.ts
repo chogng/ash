@@ -1,9 +1,9 @@
-import "./media/unusualLineTerminators.css";
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { type TextDecorationCollection } from "../../../common/model/decorationCollection.js";
+import './media/unusualLineTerminators.css';
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { type TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 
-import { type TextModel } from "../../../common/model/textModel.js";
-import { findUnusualLineTerminators } from "../common/unusualLineTerminatorRanges.js";
+import { type TextModel } from '../../../common/model/textModel.js';
+import { findUnusualLineTerminators } from '../common/unusualLineTerminatorRanges.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 import type { TextModelChange } from '../../../common/core/textChange.js';
 import { Range } from '../../../common/core/range.js';
@@ -12,9 +12,13 @@ import { Range } from '../../../common/core/range.js';
 export class UnusualLineTerminatorsController extends Disposable {
 	private lastVersion = -1;
 
-	constructor(private readonly model: TextModel, readonly decorations: TextDecorationCollection<void>) {
+	constructor(
+		private readonly model: TextModel,
+		readonly decorations: TextDecorationCollection<void>,
+	) {
 		super();
-		if (decorations.textModel !== model) throw new TypeError("Stanza unusual line terminator dependencies must share a text model");
+		if (decorations.textModel !== model)
+			throw new TypeError('Stanza unusual line terminator dependencies must share a text model');
 		this._register(model.onDidChangeContent(change => this.update(change)));
 		this.update();
 	}
@@ -24,7 +28,11 @@ export class UnusualLineTerminatorsController extends Disposable {
 		this.lastVersion = this.model.version;
 		// The model already moved the old marks. Check those characters and the
 		// inserted text only; ordinary input never needs another document scan.
-		const ranges = change ? this.decorations.decorations.map(value => value.range).filter(range => /^[\u0085\u2028\u2029]$/u.test(this.model.getValueInRange(range))) : [...findUnusualLineTerminators(this.model)];
+		const ranges = change
+			? this.decorations.decorations
+					.map(value => value.range)
+					.filter(range => /^[\u0085\u2028\u2029]$/u.test(this.model.getValueInRange(range)))
+			: [...findUnusualLineTerminators(this.model)];
 		if (change) {
 			let delta = 0;
 			for (const edit of [...change.changes].sort((a, b) => a.rangeOffset - b.rangeOffset)) {
@@ -36,15 +44,17 @@ export class UnusualLineTerminatorsController extends Disposable {
 			}
 		}
 		const unique = new Map(ranges.map(range => [`${range.startLineNumber}:${range.startColumn}`, range]));
-		this.decorations.replaceAll([...unique.values()].map(range => ({
-			range,
-			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			options: {
-				description: 'unusual-line-terminator',
-				className: 'unusual-line-terminator',
-				hoverMessage: { value: 'Unusual line terminator' },
-			},
-			metadata: undefined,
-		})));
+		this.decorations.replaceAll(
+			[...unique.values()].map(range => ({
+				range,
+				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+				options: {
+					description: 'unusual-line-terminator',
+					className: 'unusual-line-terminator',
+					hoverMessage: { value: 'Unusual line terminator' },
+				},
+				metadata: undefined,
+			})),
+		);
 	}
 }

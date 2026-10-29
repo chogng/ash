@@ -16,7 +16,7 @@ export class BulkFileEdits {
 		private readonly operation: FileOperation,
 		private readonly files: IFileService,
 		private readonly inverses: (() => Promise<void>)[],
-	) { }
+	) {}
 
 	public async apply(): Promise<readonly URI[]> {
 		const operation = this.operation;
@@ -38,7 +38,11 @@ export class BulkFileEdits {
 				});
 				if (entry.contents !== undefined) {
 					const empty = await this.files.readFile(entry.resource);
-					await this.files.writeFile({ resource: entry.resource, content: entry.contents, expectedRevision: empty.revision });
+					await this.files.writeFile({
+						resource: entry.resource,
+						content: entry.contents,
+						expectedRevision: empty.revision,
+					});
 					written = entry.contents;
 				}
 				return [entry.resource];
@@ -70,7 +74,9 @@ export class BulkFileEdits {
 		let actual: string | undefined;
 		try {
 			if ((await this.files.stat(resource)).kind !== FileKind.File) {
-				throw new WorkspaceEditConflictError(`Workspace edit target '${resource.toString()}' is no longer a regular file`);
+				throw new WorkspaceEditConflictError(
+					`Workspace edit target '${resource.toString()}' is no longer a regular file`,
+				);
 			}
 			actual = (await this.files.readFile(resource)).content;
 		} catch (error) {
@@ -79,7 +85,9 @@ export class BulkFileEdits {
 			}
 		}
 		if (actual !== expected) {
-			throw new WorkspaceEditConflictError(`Workspace edit target '${resource.toString()}' changed before replacement`);
+			throw new WorkspaceEditConflictError(
+				`Workspace edit target '${resource.toString()}' changed before replacement`,
+			);
 		}
 	}
 }

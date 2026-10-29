@@ -1,10 +1,23 @@
 import { TaskQueue } from '../../../../../base/common/async.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
-import { IMessageHistoryService, type MessageHistoryEntry, type MessageHistoryKind, type MessageHistoryPage } from '../../../../../platform/messageHistory/common/messageHistory.js';
+import {
+	IMessageHistoryService,
+	type MessageHistoryEntry,
+	type MessageHistoryKind,
+	type MessageHistoryPage,
+} from '../../../../../platform/messageHistory/common/messageHistory.js';
 
-export type ChatHistoryNavigationResult<TDraft> = { readonly kind: 'history'; readonly entry: MessageHistoryEntry; } | { readonly kind: 'draft'; readonly draft: TDraft; };
+export type ChatHistoryNavigationResult<TDraft> =
+	| { readonly kind: 'history'; readonly entry: MessageHistoryEntry }
+	| { readonly kind: 'draft'; readonly draft: TDraft };
 
-type Navigation<TDraft> = { readonly draft: TDraft; readonly entries: MessageHistoryEntry[]; index: number; before: string | undefined; loaded: boolean; };
+type Navigation<TDraft> = {
+	readonly draft: TDraft;
+	readonly entries: MessageHistoryEntry[];
+	index: number;
+	before: string | undefined;
+	loaded: boolean;
+};
 
 /** Owns one composer's temporary navigation, while the backend remains the only input store. */
 export class ChatHistoryNavigator<TDraft> extends Disposable {
@@ -14,13 +27,24 @@ export class ChatHistoryNavigator<TDraft> extends Disposable {
 
 	constructor(@IMessageHistoryService private readonly history: IMessageHistoryService | undefined) {
 		super();
-		this._register(toDisposable(() => { this.reset(); this.operations.clearPending(); }));
+		this._register(
+			toDisposable(() => {
+				this.reset();
+				this.operations.clearPending();
+			}),
+		);
 	}
 
-	get available(): boolean { return this.history !== undefined; }
-	get active(): boolean { return this.navigation !== undefined; }
+	get available(): boolean {
+		return this.history !== undefined;
+	}
+	get active(): boolean {
+		return this.navigation !== undefined;
+	}
 
-	invalidatePending(): void { this.generation++; }
+	invalidatePending(): void {
+		this.generation++;
+	}
 
 	reset(): void {
 		this.generation++;
@@ -43,10 +67,20 @@ export class ChatHistoryNavigator<TDraft> extends Disposable {
 		const generation = this.generation;
 		return this.operations.scheduleSkipIfCleared(async () => {
 			if (this.isDisposed || generation !== this.generation) return undefined;
-			const navigation = this.navigation ??= { draft, entries: [], index: -1, before: undefined, loaded: false };
-			if (navigation.index + 1 >= navigation.entries.length && (!navigation.loaded || navigation.before !== undefined)) {
+			const navigation = (this.navigation ??= {
+				draft,
+				entries: [],
+				index: -1,
+				before: undefined,
+				loaded: false,
+			});
+			if (
+				navigation.index + 1 >= navigation.entries.length &&
+				(!navigation.loaded || navigation.before !== undefined)
+			) {
 				const page = await this.history!.read({ before: navigation.before, text: '', limit: 40 });
-				if (this.isDisposed || generation !== this.generation || this.navigation !== navigation) return undefined;
+				if (this.isDisposed || generation !== this.generation || this.navigation !== navigation)
+					return undefined;
 				navigation.entries.push(...page.entries);
 				navigation.before = page.nextBefore;
 				navigation.loaded = true;

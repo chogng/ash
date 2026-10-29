@@ -3,7 +3,10 @@ import { WINDOW_SPLASH_READ_CHANNEL, validatePartsSplash } from '../../../platfo
 import { AshWorkbenchName } from '../../common/application.js';
 import { showStartupError } from '../../../workbench/browser/startupError.js';
 import { invoke } from '../../../platform/ipc/electron-browser/rendererIpc.js';
-import { NLS_CONFIGURATION_CHANNEL, NLS_ACTIVATE_CHANNEL } from '../../../platform/languagePacks/common/languagePackStore.js';
+import {
+	NLS_CONFIGURATION_CHANNEL,
+	NLS_ACTIVATE_CHANNEL,
+} from '../../../platform/languagePacks/common/languagePackStore.js';
 import { resolveLanguagePackCatalog } from '../../../platform/languagePacks/common/languagePackCatalog.js';
 import { setNlsMessages } from '../../../nls.js';
 import { BrowserLanguagePackStore } from '../../../platform/languagePacks/browser/languagePackStore.js';
@@ -13,7 +16,11 @@ import { createAppServerDebugAdapterCapability } from '../../../platform/debug/b
 try {
 	showPartsSplash(document, validatePartsSplash(await invoke<unknown>(WINDOW_SPLASH_READ_CHANNEL)));
 	const preference = await invoke<unknown>(NLS_CONFIGURATION_CHANNEL);
-	const catalog = await resolveLanguagePackCatalog(typeof preference === 'string' ? preference : 'en', productLanguagePackCatalogs, new BrowserLanguagePackStore());
+	const catalog = await resolveLanguagePackCatalog(
+		typeof preference === 'string' ? preference : 'en',
+		productLanguagePackCatalogs,
+		new BrowserLanguagePackStore(),
+	);
 	setNlsMessages(catalog.locale, catalog.bundles);
 	await invoke<void>(NLS_ACTIVATE_CHANNEL, catalog);
 	performance.mark('ash.desktop.contributions-start');

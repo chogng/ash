@@ -1,15 +1,15 @@
 import type { IButtonStyles } from '../button/button.js';
 import './toolbar.css';
-import { localize } from "../../../../nls.js";
-import type { IContextMenuProvider } from "../../contextmenu.js";
-import type { IAction } from "../../../common/actions.js";
-import { Separator } from "../../../common/actions.js";
-import { Disposable } from "../../../common/lifecycle.js";
-import { Lxicon } from "../../../common/lxicons.js";
-import { ActionBar, type ActionBarOrientation, type ActionViewItemProvider } from "../actionbar/actionbar.js";
-import type { ActionViewItemOptions } from "../actionbar/actionViewItems.js";
-import type { AnchorPosition } from "../contextview/contextview.js";
-import { DropdownMenuActionViewItem } from "../dropdown/dropdownMenuActionViewItem.js";
+import { localize } from '../../../../nls.js';
+import type { IContextMenuProvider } from '../../contextmenu.js';
+import type { IAction } from '../../../common/actions.js';
+import { Separator } from '../../../common/actions.js';
+import { Disposable } from '../../../common/lifecycle.js';
+import { Lxicon } from '../../../common/lxicons.js';
+import { ActionBar, type ActionBarOrientation, type ActionViewItemProvider } from '../actionbar/actionbar.js';
+import type { ActionViewItemOptions } from '../actionbar/actionViewItems.js';
+import type { AnchorPosition } from '../contextview/contextview.js';
+import { DropdownMenuActionViewItem } from '../dropdown/dropdownMenuActionViewItem.js';
 
 export interface ToolBarOptions {
 	readonly buttonStyles?: IButtonStyles;
@@ -29,7 +29,7 @@ export interface MoreActionsPlacement {
 }
 
 /** Component-owned visual adaptation selected by a toolbar host. */
-export type ToolBarPresentation = "default" | "inherit-foreground";
+export type ToolBarPresentation = 'default' | 'inherit-foreground';
 
 /**
  * Presents primary actions inline, secondary actions in a menu, and pinned
@@ -49,26 +49,31 @@ export class ToolBar extends Disposable {
 	constructor(container: HTMLElement, options: ToolBarOptions) {
 		super();
 		this.moreActionsPlacement = options.moreActionsPlacement;
-		const actionViewItemOptions: ActionViewItemOptions = { buttonStyles: options.buttonStyles, hoverAnchorPosition: options.hoverAnchorPosition };
-		this.actionBar = this._register(new ActionBar(container, {
-			ariaLabel: options.ariaLabel,
-			orientation: options.orientation,
-			highlightToggledItems: options.highlightToggledItems,
-			actionViewItemOptions,
-			actionViewItemProvider: (action, actionOptions) => {
-				if (action === this.moreActions) {
-					return new MoreActionsViewItem(
-						action,
-						() => this.secondaryActions,
-						options.contextMenuProvider,
-						actionOptions,
-					);
-				}
-				return options.actionViewItemProvider?.(action, actionOptions);
-			},
-		}));
+		const actionViewItemOptions: ActionViewItemOptions = {
+			buttonStyles: options.buttonStyles,
+			hoverAnchorPosition: options.hoverAnchorPosition,
+		};
+		this.actionBar = this._register(
+			new ActionBar(container, {
+				ariaLabel: options.ariaLabel,
+				orientation: options.orientation,
+				highlightToggledItems: options.highlightToggledItems,
+				actionViewItemOptions,
+				actionViewItemProvider: (action, actionOptions) => {
+					if (action === this.moreActions) {
+						return new MoreActionsViewItem(
+							action,
+							() => this.secondaryActions,
+							options.contextMenuProvider,
+							actionOptions,
+						);
+					}
+					return options.actionViewItemProvider?.(action, actionOptions);
+				},
+			}),
+		);
 		this.element = this.actionBar.element;
-		this.element.classList.add("ash-toolbar", `ash-toolbar-${options.presentation ?? "default"}`);
+		this.element.classList.add('ash-toolbar', `ash-toolbar-${options.presentation ?? 'default'}`);
 	}
 
 	setActions(
@@ -101,44 +106,34 @@ export class ToolBar extends Disposable {
 	private withMoreActions(primary: readonly IAction[]): readonly IAction[] {
 		if (this.secondaryActions.length === 0) return [...primary, ...this.trailingActions];
 		const beforeActionId = this.moreActionsPlacement?.beforeActionId;
-		const index = beforeActionId === undefined
-			? -1
-			: primary.findIndex((action) => action.id === beforeActionId);
+		const index = beforeActionId === undefined ? -1 : primary.findIndex(action => action.id === beforeActionId);
 		if (index < 0) return [...primary, this.moreActions, ...this.trailingActions];
-		return [
-			...primary.slice(0, index),
-			this.moreActions,
-			...primary.slice(index),
-			...this.trailingActions,
-		];
+		return [...primary.slice(0, index), this.moreActions, ...primary.slice(index), ...this.trailingActions];
 	}
 }
 
 class MoreActionsAction implements IAction {
-	readonly id = "ash.toolbar.moreActions";
-	readonly label = localize("toolbar.moreActions", "More Actions");
+	readonly id = 'ash.toolbar.moreActions';
+	readonly label = localize('toolbar.moreActions', 'More Actions');
 	readonly tooltip = this.label;
 	readonly icon = Lxicon.ellipsis;
 	readonly enabled = true;
 	readonly checked = undefined;
 
-	run(): void { }
+	run(): void {}
 }
 
 class MoreActionsViewItem extends DropdownMenuActionViewItem {
 	override render(container: HTMLElement): void {
 		super.render(container);
-		container.classList.add("ash-toolbar-more-actions");
+		container.classList.add('ash-toolbar-more-actions');
 	}
 }
 
 function cleanSeparators(actions: readonly IAction[]): IAction[] {
 	const result: IAction[] = [];
 	for (const action of actions) {
-		if (
-			action instanceof Separator &&
-			(result.length === 0 || result[result.length - 1] instanceof Separator)
-		) {
+		if (action instanceof Separator && (result.length === 0 || result[result.length - 1] instanceof Separator)) {
 			continue;
 		}
 		result.push(action);

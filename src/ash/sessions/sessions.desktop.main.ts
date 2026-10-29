@@ -21,7 +21,9 @@ import { AgentsWindowInvitationContribution } from '../workbench/contrib/chat/el
 import { ChatScreenshotContribution } from '../workbench/contrib/chat/electron-browser/chatScreenshot.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../workbench/common/contributions.js';
 import { IInstantiationService } from '../platform/instantiation/common/instantiation.js';
-registerWorkbenchContribution('workbench.contrib.chatScreenshot', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(ChatScreenshotContribution));
+registerWorkbenchContribution('workbench.contrib.chatScreenshot', WorkbenchPhase.AfterRestored, accessor =>
+	accessor.get(IInstantiationService).createInstance(ChatScreenshotContribution),
+);
 import '../workbench/contrib/terminal/electron-browser/terminal.contribution.js';
 import '../workbench/services/clipboard/electron-browser/clipboardService.js';
 import '../workbench/services/menubar/electron-browser/menubarService.js';
@@ -48,10 +50,15 @@ registerSingleton(IRemoteAuthorityResolverService, RemoteAuthorityResolverServic
 registerOpenAgentsWindowCommand();
 registerAction2(OpenAshWindowAction);
 registerAction2(ReloadWindowAction);
-registerWorkbenchContribution(AgentsWindowInvitationContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(AgentsWindowInvitationContribution));
+registerWorkbenchContribution(AgentsWindowInvitationContribution.ID, WorkbenchPhase.BlockStartup, accessor =>
+	accessor.get(IInstantiationService).createInstance(AgentsWindowInvitationContribution),
+);
 
 MenusRegistry.appendMenuItem(Menus.MenubarFileMenu, {
-	command: { id: 'workbench.action.closeWindow', title: localize2({ bundle: 'ash', key: 'workbench.closeWindow' }, 'Close Window') },
+	command: {
+		id: 'workbench.action.closeWindow',
+		title: localize2({ bundle: 'ash', key: 'workbench.closeWindow' }, 'Close Window'),
+	},
 	group: '6_close',
 	order: 5,
 });

@@ -12,20 +12,47 @@ import { generateDesignCode } from './contrib/code/browser/designCodeGenerator.j
 import type { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
 
 /** Product assembly selects concrete features; the browser editor consumes only their contracts. */
-export function createDesignEditorContributions(context: DesignEditorContributionContext, instantiationService: IInstantiationService): IDesignEditorContributions {
+export function createDesignEditorContributions(
+	context: DesignEditorContributionContext,
+	instantiationService: IInstantiationService,
+): IDesignEditorContributions {
 	const resources = new DisposableStore();
 	const { ownerDocument, documentController, commands, selection } = context;
-	const exportDesign = (format: 'svg' | 'html'): Promise<void> => context.runFileOperation(() => format === 'svg' ? documentController.exportDocument() : documentController.exportDocument({
-		title: localize('sessions.design.exportCode', 'Export code'),
-		filename: 'design.html',
-		extension: 'html',
-		content: generateDesignCode(documentController.model.value, documentController.getEmbeddedImageSources()),
-	}));
+	const exportDesign = (format: 'svg' | 'html'): Promise<void> =>
+		context.runFileOperation(() =>
+			format === 'svg'
+				? documentController.exportDocument()
+				: documentController.exportDocument({
+						title: localize('sessions.design.exportCode', 'Export code'),
+						filename: 'design.html',
+						extension: 'html',
+						content: generateDesignCode(
+							documentController.model.value,
+							documentController.getEmbeddedImageSources(),
+						),
+					}),
+		);
 	const text = resources.add(instantiationService.createInstance(DesignTextEditor, context));
 	const drawing = resources.add(new DesignDrawingController({ ...context, editText: id => text.edit(id) }, commands));
-	const properties = resources.add(instantiationService.createInstance(DesignPropertiesWidget, ownerDocument, documentController, commands, selection, () => context.renderCanvas(), exportDesign, text, () => context.focusCanvas()));
+	const properties = resources.add(
+		instantiationService.createInstance(
+			DesignPropertiesWidget,
+			ownerDocument,
+			documentController,
+			commands,
+			selection,
+			() => context.renderCanvas(),
+			exportDesign,
+			text,
+			() => context.focusCanvas(),
+		),
+	);
 	const prototype = resources.add(instantiationService.createInstance(DesignPrototypeWidget, context));
-	if (documentController.mode === CreatorMode.Prototype) { properties.domNode.insertBefore(prototype.domNode, properties.domNode.children[1]); } else { properties.domNode.append(prototype.domNode); }
+	if (documentController.mode === CreatorMode.Prototype) {
+		properties.domNode.insertBefore(prototype.domNode, properties.domNode.children[1]);
+	} else {
+		properties.domNode.append(prototype.domNode);
+	}
 	const motion = resources.add(new DesignMotionWidget(ownerDocument, documentController.model, commands));
 	const code = resources.add(new DesignCodeWidget(ownerDocument, documentController, () => exportDesign('html')));
 	return Object.assign(resources, { drawing, properties, motion, code, prototype, text });

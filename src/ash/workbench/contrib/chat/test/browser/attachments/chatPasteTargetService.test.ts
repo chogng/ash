@@ -5,7 +5,13 @@ import type { IChatPasteTarget } from '../../../browser/chat.js';
 import { ChatPasteTargetService } from '../../../browser/attachments/chatPasteTargetService.js';
 
 function target(): IChatPasteTarget {
-	return { attachments: [], inlineReferences: [], addAttachments: () => [], removeAttachments() { }, addInlineReference() { } };
+	return {
+		attachments: [],
+		inlineReferences: [],
+		addAttachments: () => [],
+		removeAttachments() {},
+		addInlineReference() {},
+	};
 }
 
 test('Paste routing keeps distinct inputs and a replaced registration survives its predecessor disposal', () => {

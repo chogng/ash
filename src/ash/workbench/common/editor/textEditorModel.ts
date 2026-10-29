@@ -4,7 +4,10 @@ import { EditorModel } from './editorModel.js';
 
 /** Borrows text from its existing owner; disposing this view never destroys that text. */
 export class BaseTextEditorModel<T extends ITextModel = ITextModel> extends EditorModel implements ITextEditorModel {
-	constructor(private readonly model: T, private readonly readOnly = true) {
+	constructor(
+		private readonly model: T,
+		private readonly readOnly = true,
+	) {
 		super();
 		this._register(model.onWillDispose(() => this.dispose()));
 	}

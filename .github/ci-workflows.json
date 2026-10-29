@@ -54,7 +54,6 @@
     "pnpm-lock.yaml",
     "pnpm-workspace.yaml",
     "tsconfig.base.json",
-    "tsfmt.json",
     ".prettierrc.toml",
     ".prettierignore",
     ".editorconfig",

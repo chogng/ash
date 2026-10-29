@@ -1,14 +1,21 @@
-import { addDisposableListener } from "../../../../../base/browser/dom.js";
+import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { isFirefox } from '../../../../../base/browser/browser.js';
 import { StandardKeyboardEvent, type IKeyboardEvent } from '../../../../../base/browser/keyboardEvent.js';
-import { Emitter, type Event } from "../../../../../base/common/event.js";
-import { Disposable, MutableDisposable } from "../../../../../base/common/lifecycle.js";
-import { Position } from "../../../../common/core/position.js";
-import { Selection } from "../../../../common/core/selection.js";
-import { normalizeTextLineEndings } from "../../../../common/core/textChange.js";
-import { type ViewContext } from "../../../../common/viewModel/viewContext.js";
-import { CopyOptions, createClipboardCopyEvent, createClipboardPasteEvent, type ClipboardStoredMetadata, type IClipboardCopyEvent, type IClipboardPasteEvent } from '../clipboardUtils.js';
-import { type ITextAreaWrapper, type ITypeData, TextAreaState } from "./textAreaEditContextState.js";
+import { Emitter, type Event } from '../../../../../base/common/event.js';
+import { Disposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
+import { Position } from '../../../../common/core/position.js';
+import { Selection } from '../../../../common/core/selection.js';
+import { normalizeTextLineEndings } from '../../../../common/core/textChange.js';
+import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
+import {
+	CopyOptions,
+	createClipboardCopyEvent,
+	createClipboardPasteEvent,
+	type ClipboardStoredMetadata,
+	type IClipboardCopyEvent,
+	type IClipboardPasteEvent,
+} from '../clipboardUtils.js';
+import { type ITextAreaWrapper, type ITypeData, TextAreaState } from './textAreaEditContextState.js';
 
 export interface ICompositionData {
 	readonly data: string;
@@ -94,53 +101,49 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	}
 
 	private connect(): void {
-		this._register(addDisposableListener(this.element, "focus", () => this.setFocused(true)));
-		this._register(addDisposableListener(this.element, "blur", () => this.setFocused(false)));
-		this._register(addDisposableListener<CompositionEvent>(
-			this.element,
-			"compositionstart",
-			event => this.handleCompositionStart(event),
-		));
-		this._register(addDisposableListener<CompositionEvent>(
-			this.element,
-			"compositionupdate",
-			event => this.handleCompositionUpdate(event),
-		));
-		this._register(addDisposableListener<CompositionEvent>(
-			this.element,
-			"compositionend",
-			event => this.handleCompositionEnd(event),
-		));
-		this._register(addDisposableListener<InputEvent>(
-			this.element,
-			"beforeinput",
-			event => this.handleBeforeInput(event),
-		));
-		this._register(addDisposableListener<InputEvent>(
-			this.element,
-			"input",
-			event => {
+		this._register(addDisposableListener(this.element, 'focus', () => this.setFocused(true)));
+		this._register(addDisposableListener(this.element, 'blur', () => this.setFocused(false)));
+		this._register(
+			addDisposableListener<CompositionEvent>(this.element, 'compositionstart', event =>
+				this.handleCompositionStart(event),
+			),
+		);
+		this._register(
+			addDisposableListener<CompositionEvent>(this.element, 'compositionupdate', event =>
+				this.handleCompositionUpdate(event),
+			),
+		);
+		this._register(
+			addDisposableListener<CompositionEvent>(this.element, 'compositionend', event =>
+				this.handleCompositionEnd(event),
+			),
+		);
+		this._register(
+			addDisposableListener<InputEvent>(this.element, 'beforeinput', event => this.handleBeforeInput(event)),
+		);
+		this._register(
+			addDisposableListener<InputEvent>(this.element, 'input', event => {
 				this.setIgnoreSelectionChangeTime('received input event');
 				this._textAreaState = TextAreaState.readFromTextArea(this, this._textAreaState);
 				// Chromium dispatches compositionupdate before updating the textarea.
 				// Read again on input, after its value and system caret have changed.
 				if (this.composing) this.emitCompositionType();
 				this.inputEmitter.fire(event);
-			},
-		));
+			}),
+		);
 		this._register(addDisposableListener<ClipboardEvent>(this.element, 'copy', event => this.handleCopy(event)));
 		this._register(addDisposableListener<ClipboardEvent>(this.element, 'cut', event => this.handleCut(event)));
 		this._register(addDisposableListener<ClipboardEvent>(this.element, 'paste', event => this.handlePaste(event)));
-		this._register(addDisposableListener<KeyboardEvent>(
-			this.element,
-			"keydown",
-			event => this.keydownEmitter.fire(new StandardKeyboardEvent(event)),
-		));
-		this._register(addDisposableListener<KeyboardEvent>(
-			this.element,
-			'keyup',
-			event => this.keyupEmitter.fire(new StandardKeyboardEvent(event)),
-		));
+		this._register(
+			addDisposableListener<KeyboardEvent>(this.element, 'keydown', event =>
+				this.keydownEmitter.fire(new StandardKeyboardEvent(event)),
+			),
+		);
+		this._register(
+			addDisposableListener<KeyboardEvent>(this.element, 'keyup', event =>
+				this.keyupEmitter.fire(new StandardKeyboardEvent(event)),
+			),
+		);
 	}
 
 	public focusTextArea(): void {
@@ -157,7 +160,7 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	}
 
 	clear(): void {
-		this.setValue("clear", "");
+		this.setValue('clear', '');
 	}
 
 	getValue(): string {
@@ -173,23 +176,16 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	}
 
 	getSelectionStart(): number {
-		return this.element.selectionDirection === "backward"
-			? this.element.selectionEnd
-			: this.element.selectionStart;
+		return this.element.selectionDirection === 'backward' ? this.element.selectionEnd : this.element.selectionStart;
 	}
 
 	getSelectionEnd(): number {
-		return this.element.selectionDirection === "backward"
-			? this.element.selectionStart
-			: this.element.selectionEnd;
+		return this.element.selectionDirection === 'backward' ? this.element.selectionStart : this.element.selectionEnd;
 	}
 
 	setSelectionRange(reason: string, selectionStart: number, selectionEnd: number): void {
-		const direction = selectionStart > selectionEnd ? "backward" : "forward";
-		if (
-			this.getSelectionStart() === selectionStart
-			&& this.getSelectionEnd() === selectionEnd
-		) return;
+		const direction = selectionStart > selectionEnd ? 'backward' : 'forward';
+		if (this.getSelectionStart() === selectionStart && this.getSelectionEnd() === selectionEnd) return;
 		this.setIgnoreSelectionChangeTime(reason);
 		this.element.setSelectionRange(
 			Math.min(selectionStart, selectionEnd),
@@ -268,10 +264,7 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 		}
 		this.beforeInputEmitter.fire(event);
 		if (event.defaultPrevented || event.isComposing) return;
-		if (
-			(event.inputType !== 'insertText' && event.inputType !== 'insertReplacementText') ||
-			!event.data
-		) return;
+		if ((event.inputType !== 'insertText' && event.inputType !== 'insertReplacementText') || !event.data) return;
 		event.preventDefault();
 		this.typeEmitter.fire({
 			text: normalizeTextLineEndings(event.data),
@@ -287,10 +280,7 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 			event.preventDefault();
 			return;
 		}
-		if (
-			this.element.readOnly ||
-			this.host.context.viewModel.getSelections().length !== 1
-		) {
+		if (this.element.readOnly || this.host.context.viewModel.getSelections().length !== 1) {
 			event.preventDefault();
 			return;
 		}
@@ -303,18 +293,15 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 		this.compositionText = '';
 		this.compositionActiveOffset = 0;
 		this.compositionStartOffset = Math.min(this.element.selectionStart, this.element.selectionEnd);
-		this.compositionSuffixLength = this.element.value.length - Math.max(this.element.selectionStart, this.element.selectionEnd);
-		this.compositionStartEmitter.fire({
-			data: normalizeTextLineEndings(event.data ?? ''),
-		});
+		this.compositionSuffixLength =
+			this.element.value.length - Math.max(this.element.selectionStart, this.element.selectionEnd);
+		this.compositionStartEmitter.fire({ data: normalizeTextLineEndings(event.data ?? '') });
 	}
 
 	private handleCompositionUpdate(event: CompositionEvent): void {
 		if (!this.composing || event.defaultPrevented) return;
 		this.emitCompositionType();
-		this.compositionUpdateEmitter.fire({
-			data: normalizeTextLineEndings(event.data ?? ''),
-		});
+		this.compositionUpdateEmitter.fire({ data: normalizeTextLineEndings(event.data ?? '') });
 	}
 
 	private handleCompositionEnd(event: CompositionEvent): void {
@@ -331,11 +318,11 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 		const rawText = rawValue.slice(start, end);
 		const text = normalizeTextLineEndings(rawText);
 		const selection = readCompositionSelection(this.element, rawValue, normalizeTextLineEndings(rawValue));
-		const activeOffset = Math.max(0, Math.min(text.length, selection.activeOffset - normalizedOffset(rawValue, start)));
-		if (
-			text === this.compositionText &&
-			activeOffset === this.compositionActiveOffset
-		) return;
+		const activeOffset = Math.max(
+			0,
+			Math.min(text.length, selection.activeOffset - normalizedOffset(rawValue, start)),
+		);
+		if (text === this.compositionText && activeOffset === this.compositionActiveOffset) return;
 		const caretOnly = text === this.compositionText;
 		this.typeEmitter.fire({
 			text: caretOnly ? '' : text,
@@ -403,16 +390,17 @@ export class TextAreaInput extends Disposable implements ITextAreaWrapper {
 	}
 }
 
-function readCompositionSelection(element: HTMLTextAreaElement, rawText: string, normalizedText: string): { readonly anchorOffset: number; readonly activeOffset: number; } {
+function readCompositionSelection(
+	element: HTMLTextAreaElement,
+	rawText: string,
+	normalizedText: string,
+): { readonly anchorOffset: number; readonly activeOffset: number } {
 	if (element.value !== rawText) {
-		return {
-			anchorOffset: normalizedText.length,
-			activeOffset: normalizedText.length,
-		};
+		return { anchorOffset: normalizedText.length, activeOffset: normalizedText.length };
 	}
 	const start = normalizedOffset(rawText, element.selectionStart);
 	const end = normalizedOffset(rawText, element.selectionEnd);
-	return element.selectionDirection === "backward"
+	return element.selectionDirection === 'backward'
 		? { anchorOffset: end, activeOffset: start }
 		: { anchorOffset: start, activeOffset: end };
 }

@@ -1,83 +1,140 @@
-import { documentCodec, bindDocumentCodec } from '../../../../../../../extensions/academy/common/model/documentCodec.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import type { DocumentCollaborationOpenParams } from "../../../../../../../.build/protocol/typescript/index.js";
-import type { DocumentCollaborationOpenResult } from "../../../../../../../.build/protocol/typescript/index.js";
-import type { DocumentCollaborationPresenceParams } from "../../../../../../../.build/protocol/typescript/index.js";
-import type { DocumentCollaborationPresenceReadParams } from "../../../../../../../.build/protocol/typescript/index.js";
-import type { DocumentCollaborationPresenceSnapshot } from "../../../../../../../.build/protocol/typescript/index.js";
-import type { DocumentCollaborationSubmitParams } from "../../../../../../../.build/protocol/typescript/index.js";
-import type { DocumentCollaborationSubmitResult } from "../../../../../../../.build/protocol/typescript/index.js";
-import type { DocumentCollaborationUpdate } from "../../../../../../../.build/protocol/typescript/index.js";
-import type { ServerNotification } from "../../../../../../../.build/protocol/typescript/index.js";
-import { textSelection } from "../../../../../../../extensions/academy/common/core/documentSelection.js";
-import type { DocumentNode } from "../../../../../../../extensions/academy/common/model/document.js";
-import { createDefaultDocumentSchema, type DocumentSchema } from "../../../../../../../extensions/academy/common/model/documentSchema.js";
-import { applyDocumentTransaction, DocumentTransaction } from "../../../../../../../extensions/academy/common/model/documentTransaction.js";
-import { serializeDocumentTransaction } from "../../../../../../../extensions/academy/common/model/documentTransactionSerialization.js";
+import {
+	documentCodec,
+	bindDocumentCodec,
+} from '../../../../../../../extensions/academy/common/model/documentCodec.js';
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import type { DocumentCollaborationOpenParams } from '../../../../../../../.build/protocol/typescript/index.js';
+import type { DocumentCollaborationOpenResult } from '../../../../../../../.build/protocol/typescript/index.js';
+import type { DocumentCollaborationPresenceParams } from '../../../../../../../.build/protocol/typescript/index.js';
+import type { DocumentCollaborationPresenceReadParams } from '../../../../../../../.build/protocol/typescript/index.js';
+import type { DocumentCollaborationPresenceSnapshot } from '../../../../../../../.build/protocol/typescript/index.js';
+import type { DocumentCollaborationSubmitParams } from '../../../../../../../.build/protocol/typescript/index.js';
+import type { DocumentCollaborationSubmitResult } from '../../../../../../../.build/protocol/typescript/index.js';
+import type { DocumentCollaborationUpdate } from '../../../../../../../.build/protocol/typescript/index.js';
+import type { ServerNotification } from '../../../../../../../.build/protocol/typescript/index.js';
+import { textSelection } from '../../../../../../../extensions/academy/common/core/documentSelection.js';
+import type { DocumentNode } from '../../../../../../../extensions/academy/common/model/document.js';
+import {
+	createDefaultDocumentSchema,
+	type DocumentSchema,
+} from '../../../../../../../extensions/academy/common/model/documentSchema.js';
+import {
+	applyDocumentTransaction,
+	DocumentTransaction,
+} from '../../../../../../../extensions/academy/common/model/documentTransaction.js';
+import { serializeDocumentTransaction } from '../../../../../../../extensions/academy/common/model/documentTransactionSerialization.js';
 import type { DocumentCollaborationRemoteEnvelope } from '../../common/documentCollaborationService.js';
-import type { IServerEventApi } from "../../../../../platform/agentHost/common/appServerApi.js";
-import type { IDocumentCollaborationApi } from "../../../../../platform/collab/common/documentCollaborationApi.js";
-import { AppServerDocumentCollaborationService } from "../../browser/appServerDocumentCollaborationService.js";
+import type { IServerEventApi } from '../../../../../platform/agentHost/common/appServerApi.js';
+import type { IDocumentCollaborationApi } from '../../../../../platform/collab/common/documentCollaborationApi.js';
+import { AppServerDocumentCollaborationService } from '../../browser/appServerDocumentCollaborationService.js';
 
-test("Stanza App Server collaboration adapter uses JSON-safe ordered versions and delivers room updates", async () => {
+test('Stanza App Server collaboration adapter uses JSON-safe ordered versions and delivers room updates', async () => {
 	const schema = createDefaultDocumentSchema();
 	const document = createDocument(schema);
 	const events = new FakeServerEvents();
 	const api = new FakeDocumentCollaborationApi();
 	using service = new AppServerDocumentCollaborationService(api, events);
-	using connection = await service.open({ codec: bindDocumentCodec(schema), clientId: "client-a", schemaId: "stanza-document-v1", document }, new AbortController().signal);
+	using connection = await service.open(
+		{ codec: bindDocumentCodec(schema), clientId: 'client-a', schemaId: 'stanza-document-v1', document },
+		new AbortController().signal,
+	);
 
-	assert.equal(connection.roomId, "room-a");
+	assert.equal(connection.roomId, 'room-a');
 	assert.equal(connection.canEdit, true);
 	assert.equal(connection.canManageMembers, false);
 	assert.equal(connection.principalId, undefined);
-	await assert.rejects(connection.createInvite("Writer", "editor", new AbortController().signal), /does not manage remote room members/);
+	await assert.rejects(
+		connection.createInvite('Writer', 'editor', new AbortController().signal),
+		/does not manage remote room members/,
+	);
 	await assert.rejects(connection.listMembers(new AbortController().signal), /does not manage remote room members/);
 	assert.equal(connection.initialSnapshot.version, 0);
-	assert.equal(connection.currentPresence[0]?.clientId, "client-c");
+	assert.equal(connection.currentPresence[0]?.clientId, 'client-c');
 	const received: DocumentCollaborationRemoteEnvelope[] = [];
 	connection.onDidReceiveUpdate(update => received.push(update));
-	const remote = new DocumentTransaction().replaceText("text-1", 0, 0, "R");
-	events.fire({ roomId: "room-a", clientId: "client-b", sequence: 1, baseVersion: 0, version: 1, transaction: serializeDocumentTransaction(remote, schema) });
+	const remote = new DocumentTransaction().replaceText('text-1', 0, 0, 'R');
+	events.fire({
+		roomId: 'room-a',
+		clientId: 'client-b',
+		sequence: 1,
+		baseVersion: 0,
+		version: 1,
+		transaction: serializeDocumentTransaction(remote, schema),
+	});
 	assert.equal(received.length, 1);
 	assert.equal(received[0]?.version, 1);
 	assert.ok(received[0]?.transaction instanceof DocumentTransaction);
 	assert.deepEqual(received[0].transaction.steps, remote.steps);
 
-	const local = new DocumentTransaction().replaceText("text-1", 0, 0, "A");
+	const local = new DocumentTransaction().replaceText('text-1', 0, 0, 'A');
 	const localDocument = applyDocumentTransaction(document, schema, local).document;
-	const outcome = await connection.submit({ clientId: "client-a", sequence: 1, baseVersion: 0, transaction: local }, localDocument, new AbortController().signal);
+	const outcome = await connection.submit(
+		{ clientId: 'client-a', sequence: 1, baseVersion: 0, transaction: local },
+		localDocument,
+		new AbortController().signal,
+	);
 	assert.equal(api.submissions[0]?.sequence, 1);
 	assert.equal(api.submissions[0]?.baseVersion, 0);
-	assert.equal(outcome.kind, "accepted");
-	assert.equal(outcome.kind === "accepted" ? outcome.update.version : -1, 1);
+	assert.equal(outcome.kind, 'accepted');
+	assert.equal(outcome.kind === 'accepted' ? outcome.update.version : -1, 1);
 
 	const receivedPresence: string[] = [];
-	connection.onDidReceivePresence(presences => receivedPresence.push(...presences.map(presence => presence.clientId)));
-	await connection.updatePresence(textSelection({ nodeId: "text-1", offset: 1 }), new AbortController().signal);
-	assert.equal(api.presenceUpdates[0]?.clientId, "client-a");
-	events.firePresence({ roomId: "room-a", generation: 1, presences: [{ clientId: "client-b", selection: JSON.stringify(textSelection({ nodeId: "text-1", offset: 0 }, { nodeId: "text-1", offset: 1 })) }] });
-	assert.deepEqual(receivedPresence, ["client-b"]);
+	connection.onDidReceivePresence(presences =>
+		receivedPresence.push(...presences.map(presence => presence.clientId)),
+	);
+	await connection.updatePresence(textSelection({ nodeId: 'text-1', offset: 1 }), new AbortController().signal);
+	assert.equal(api.presenceUpdates[0]?.clientId, 'client-a');
+	events.firePresence({
+		roomId: 'room-a',
+		generation: 1,
+		presences: [
+			{
+				clientId: 'client-b',
+				selection: JSON.stringify(
+					textSelection({ nodeId: 'text-1', offset: 0 }, { nodeId: 'text-1', offset: 1 }),
+				),
+			},
+		],
+	});
+	assert.deepEqual(receivedPresence, ['client-b']);
 });
 
 function createDocument(schema: DocumentSchema): DocumentNode {
-	return schema.createDocument([schema.createNode("paragraph", { id: "paragraph-1", content: [schema.createText("Hello", { id: "text-1" })] })], "document-1");
+	return schema.createDocument(
+		[
+			schema.createNode('paragraph', {
+				id: 'paragraph-1',
+				content: [schema.createText('Hello', { id: 'text-1' })],
+			}),
+		],
+		'document-1',
+	);
 }
 
 class FakeDocumentCollaborationApi implements IDocumentCollaborationApi {
 	readonly submissions: DocumentCollaborationSubmitParams[] = [];
 	readonly presenceUpdates: DocumentCollaborationPresenceParams[] = [];
-	readonly initialPresence: DocumentCollaborationPresenceSnapshot = { roomId: "room-a", generation: 0, presences: [{ clientId: "client-c", selection: JSON.stringify(textSelection({ nodeId: "text-1", offset: 0 })) }] };
+	readonly initialPresence: DocumentCollaborationPresenceSnapshot = {
+		roomId: 'room-a',
+		generation: 0,
+		presences: [
+			{ clientId: 'client-c', selection: JSON.stringify(textSelection({ nodeId: 'text-1', offset: 0 })) },
+		],
+	};
 
 	async open(params: DocumentCollaborationOpenParams): Promise<DocumentCollaborationOpenResult> {
-		return { clientId: params.clientId, schemaId: params.schemaId, snapshot: { roomId: "room-a", version: 0, document: params.document } };
+		return {
+			clientId: params.clientId,
+			schemaId: params.schemaId,
+			snapshot: { roomId: 'room-a', version: 0, document: params.document },
+		};
 	}
 
 	async submit(params: DocumentCollaborationSubmitParams): Promise<DocumentCollaborationSubmitResult> {
 		this.submissions.push(params);
 		return {
-			status: "accepted",
+			status: 'accepted',
 			update: {
 				roomId: params.roomId,
 				clientId: params.clientId,
@@ -94,7 +151,9 @@ class FakeDocumentCollaborationApi implements IDocumentCollaborationApi {
 		return { roomId: params.roomId, generation: this.presenceUpdates.length, presences: [] };
 	}
 
-	async readPresence(params: DocumentCollaborationPresenceReadParams): Promise<DocumentCollaborationPresenceSnapshot> {
+	async readPresence(
+		params: DocumentCollaborationPresenceReadParams,
+	): Promise<DocumentCollaborationPresenceSnapshot> {
 		assert.equal(params.roomId, this.initialPresence.roomId);
 		return this.initialPresence;
 	}
@@ -103,18 +162,18 @@ class FakeDocumentCollaborationApi implements IDocumentCollaborationApi {
 class FakeServerEvents implements IServerEventApi {
 	private readonly listeners = new Set<(event: ServerNotification) => void>();
 
-	subscribe(listener: (event: ServerNotification) => void): { dispose(): void; } {
+	subscribe(listener: (event: ServerNotification) => void): { dispose(): void } {
 		this.listeners.add(listener);
 		return { dispose: () => this.listeners.delete(listener) };
 	}
 
 	fire(update: DocumentCollaborationUpdate): void {
-		const event: ServerNotification = { method: "document/collaboration/update", params: update };
+		const event: ServerNotification = { method: 'document/collaboration/update', params: update };
 		for (const listener of this.listeners) listener(event);
 	}
 
 	firePresence(presence: DocumentCollaborationPresenceSnapshot): void {
-		const event: ServerNotification = { method: "document/collaboration/presence", params: presence };
+		const event: ServerNotification = { method: 'document/collaboration/presence', params: presence };
 		for (const listener of this.listeners) listener(event);
 	}
 }

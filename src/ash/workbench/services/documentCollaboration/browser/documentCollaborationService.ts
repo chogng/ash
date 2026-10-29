@@ -1,58 +1,76 @@
 import { IChannelService } from '../../../../platform/collab/common/channelService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { CancellationError } from "../../../../base/common/errors.js";
-import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { assertDefined } from "../../../../base/common/types.js";
-import { localize } from "../../../../nls.js";
-import { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { CancellationError } from '../../../../base/common/errors.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import { assertDefined } from '../../../../base/common/types.js';
+import { localize } from '../../../../nls.js';
+import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
 import type { DocumentCollaborationRoom } from '../common/documentCollaborationService.js';
 import type { DocumentCollaborationOpenInput } from '../common/documentCollaborationService.js';
 import type { IDocumentCollaborationService } from '../common/documentCollaborationService.js';
-import { RemoteDocumentCollaborationService } from "./remoteDocumentCollaborationService.js";
+import { RemoteDocumentCollaborationService } from './remoteDocumentCollaborationService.js';
 
 /** Workbench-owned selection and routing for document collaboration transports. */
 export class DocumentCollaborationService extends Disposable implements IDocumentCollaborationService {
 	private readonly remote = this._register(new RemoteDocumentCollaborationService());
 
-	constructor(private readonly appServer: IDocumentCollaborationService | undefined, @IDialogService private readonly dialogs: IDialogService, @IInstantiationService private readonly instantiation: IInstantiationService) {
+	constructor(
+		private readonly appServer: IDocumentCollaborationService | undefined,
+		@IDialogService private readonly dialogs: IDialogService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+	) {
 		super();
 		if (appServer) this._register(appServer);
 	}
 
 	async open(input: DocumentCollaborationOpenInput, signal: AbortSignal): Promise<DocumentCollaborationRoom> {
-		throwIfCancelled(signal, "Opening a document collaboration room was cancelled");
+		throwIfCancelled(signal, 'Opening a document collaboration room was cancelled');
 		if (input.channel) {
 			const channels = this.instantiation.invokeFunction(accessor => accessor.getOptional(IChannelService));
-			if (!channels) throw new Error(localize('collaboration.unavailable', 'Channels require a connected Ash backend.'));
+			if (!channels)
+				throw new Error(localize('collaboration.unavailable', 'Channels require a connected Ash backend.'));
 			const access = await channels.notes(input.channel);
 			throwIfCancelled(signal);
-			return this.remote.open({ ...input, roomId: access.resourceId }, { endpoint: access.serverUrl, bearerToken: access.credential }, signal);
+			return this.remote.open(
+				{ ...input, roomId: access.resourceId },
+				{ endpoint: access.serverUrl, bearerToken: access.credential },
+				signal,
+			);
 		}
 		let endpoint = input.serverUrl;
 		if (endpoint === undefined) {
 			const endpointDialog = await this.dialogs.input({
 				title: localize('collaboration.dialog.endpointTitle', 'Collaboration server'),
-				message: localize('collaboration.dialog.endpointMessage', "Enter a remote collaboration server URL, or leave it blank to use this Workbench's App Server."),
+				message: localize(
+					'collaboration.dialog.endpointMessage',
+					"Enter a remote collaboration server URL, or leave it blank to use this Workbench's App Server.",
+				),
 				inputs: [{ value: '' }],
 			});
-			if (!endpointDialog.confirmed) throw new CancellationError("Choosing a document collaboration service was cancelled");
+			if (!endpointDialog.confirmed)
+				throw new CancellationError('Choosing a document collaboration service was cancelled');
 			endpoint = endpointDialog.values?.[0];
 			assertDefined(endpoint, new Error('The collaboration endpoint dialog returned no value'));
 		}
 		if (!endpoint.trim()) {
-			if (!this.appServer) throw new Error("This Workbench has no App Server collaboration service");
+			if (!this.appServer) throw new Error('This Workbench has no App Server collaboration service');
 			return this.appServer.open(input, signal);
 		}
 		const tokenDialog = await this.dialogs.input({
 			title: localize('collaboration.dialog.tokenTitle', 'Collaboration token'),
-			message: localize('collaboration.dialog.tokenForServer', 'Enter a document invitation token for {0}. Joining a call does not grant access to this document.', endpoint),
+			message: localize(
+				'collaboration.dialog.tokenForServer',
+				'Enter a document invitation token for {0}. Joining a call does not grant access to this document.',
+				endpoint,
+			),
 			inputs: [{ type: 'password', value: '' }],
 		});
-		if (!tokenDialog.confirmed) throw new CancellationError("Choosing a document collaboration service was cancelled");
+		if (!tokenDialog.confirmed)
+			throw new CancellationError('Choosing a document collaboration service was cancelled');
 		const bearerToken = tokenDialog.values?.[0];
 		assertDefined(bearerToken, new Error('The collaboration token dialog returned no value'));
-		throwIfCancelled(signal, "Opening a document collaboration room was cancelled");
+		throwIfCancelled(signal, 'Opening a document collaboration room was cancelled');
 		return this.remote.open(input, { endpoint: endpoint.trim(), bearerToken: bearerToken.trim() }, signal);
 	}
 }

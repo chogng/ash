@@ -139,24 +139,25 @@ export class FontInfo extends BareFontInfo {
 	public readonly wsmiddotWidth: number;
 	public readonly maxDigitWidth: number;
 
-	public constructor(options: {
-		pixelRatio: number;
-		fontFamily: string;
-		fontWeight: string;
-		fontSize: number;
-		fontFeatureSettings: string;
-		fontVariationSettings: string;
-		lineHeight: number;
-		letterSpacing: number;
-		isMonospace: boolean;
-		typicalHalfwidthCharacterWidth: number;
-		typicalFullwidthCharacterWidth: number;
-		canUseHalfwidthRightwardsArrow: boolean;
-		spaceWidth: number;
-		middotWidth: number;
-		wsmiddotWidth: number;
-		maxDigitWidth: number;
-	},
+	public constructor(
+		options: {
+			pixelRatio: number;
+			fontFamily: string;
+			fontWeight: string;
+			fontSize: number;
+			fontFeatureSettings: string;
+			fontVariationSettings: string;
+			lineHeight: number;
+			letterSpacing: number;
+			isMonospace: boolean;
+			typicalHalfwidthCharacterWidth: number;
+			typicalFullwidthCharacterWidth: number;
+			canUseHalfwidthRightwardsArrow: boolean;
+			spaceWidth: number;
+			middotWidth: number;
+			wsmiddotWidth: number;
+			maxDigitWidth: number;
+		},
 		isTrusted: boolean,
 	) {
 		super(options);
@@ -173,7 +174,8 @@ export class FontInfo extends BareFontInfo {
 
 	/** Compares the font environment and measured representative widths. */
 	public equals(other: FontInfo): boolean {
-		return this.fontFamily === other.fontFamily &&
+		return (
+			this.fontFamily === other.fontFamily &&
 			this.fontWeight === other.fontWeight &&
 			this.fontSize === other.fontSize &&
 			this.fontFeatureSettings === other.fontFeatureSettings &&
@@ -186,7 +188,8 @@ export class FontInfo extends BareFontInfo {
 			this.spaceWidth === other.spaceWidth &&
 			this.middotWidth === other.middotWidth &&
 			this.wsmiddotWidth === other.wsmiddotWidth &&
-			this.maxDigitWidth === other.maxDigitWidth;
+			this.maxDigitWidth === other.maxDigitWidth
+		);
 	}
 }
 
@@ -197,17 +200,21 @@ export const FONT_VARIATION_OFF = 'normal';
 export const FONT_VARIATION_TRANSLATE = 'translate';
 
 /** Windows editor fallback family used by the VS Code-compatible defaults. */
-export const DEFAULT_WINDOWS_FONT_FAMILY = 'Consolas, \'Courier New\', monospace';
+export const DEFAULT_WINDOWS_FONT_FAMILY = "Consolas, 'Courier New', monospace";
 
 /** macOS editor fallback family used by the VS Code-compatible defaults. */
-export const DEFAULT_MAC_FONT_FAMILY = 'Menlo, Monaco, \'Courier New\', monospace';
+export const DEFAULT_MAC_FONT_FAMILY = "Menlo, Monaco, 'Courier New', monospace";
 
 /** Linux editor fallback family used by the VS Code-compatible defaults. */
-export const DEFAULT_LINUX_FONT_FAMILY = '\'Droid Sans Mono\', monospace';
+export const DEFAULT_LINUX_FONT_FAMILY = "'Droid Sans Mono', monospace";
 
 /** Platform-aware defaults used when a host does not provide font settings. */
 export const EDITOR_FONT_DEFAULTS = Object.freeze({
-	fontFamily: isMacintosh ? DEFAULT_MAC_FONT_FAMILY : isWindows ? DEFAULT_WINDOWS_FONT_FAMILY : DEFAULT_LINUX_FONT_FAMILY,
+	fontFamily: isMacintosh
+		? DEFAULT_MAC_FONT_FAMILY
+		: isWindows
+			? DEFAULT_WINDOWS_FONT_FAMILY
+			: DEFAULT_LINUX_FONT_FAMILY,
 	fontWeight: 'normal',
 	fontSize: isMacintosh ? 12 : 14,
 	lineHeight: 0,

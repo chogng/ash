@@ -6,16 +6,15 @@ import { EditorMinimapConfiguration } from '../../../../editor/common/config/edi
 
 class ToggleMinimapAction extends Action2 {
 	constructor() {
-		super({
-			id: 'editor.action.toggleMinimap',
-			title: localize2('toggleMinimap', 'Toggle Minimap'),
-			f1: true,
-		});
+		super({ id: 'editor.action.toggleMinimap', title: localize2('toggleMinimap', 'Toggle Minimap'), f1: true });
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const configuration = accessor.get(IConfigurationService);
-		await configuration.updateValue(EditorMinimapConfiguration.enabled, !configuration.getValue(EditorMinimapConfiguration.enabled));
+		await configuration.updateValue(
+			EditorMinimapConfiguration.enabled,
+			!configuration.getValue(EditorMinimapConfiguration.enabled),
+		);
 	}
 }
 

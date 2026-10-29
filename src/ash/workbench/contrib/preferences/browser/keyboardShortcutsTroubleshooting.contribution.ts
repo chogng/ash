@@ -9,44 +9,52 @@ import { ToggleKeyboardShortcutsTroubleshootingCommandId } from '../common/prefe
 
 const KeyboardShortcutsOutputChannelId = 'keyboard-shortcuts';
 
-registerAction2(class ToggleKeyboardShortcutsTroubleshootingAction extends Action2 {
-	constructor() {
-		super({
-			id: ToggleKeyboardShortcutsTroubleshootingCommandId,
-			title: localize2({ bundle: 'ash.workbench', key: 'command.ToggleKeyboardShortcutsTroubleshootingAction' }, 'Developer: Toggle Keyboard Shortcuts Troubleshooting'),
-			f1: true,
-		});
-	}
-
-	override run(accessor: ServicesAccessor): void {
-		const enabled = accessor.get(IKeyboardShortcutTroubleshootingService).toggle();
-		if (enabled) {
-			accessor.get(IOutputService).showChannel(KeyboardShortcutsOutputChannelId, {
-				focus: 'preserve',
+registerAction2(
+	class ToggleKeyboardShortcutsTroubleshootingAction extends Action2 {
+		constructor() {
+			super({
+				id: ToggleKeyboardShortcutsTroubleshootingCommandId,
+				title: localize2(
+					{ bundle: 'ash.workbench', key: 'command.ToggleKeyboardShortcutsTroubleshootingAction' },
+					'Developer: Toggle Keyboard Shortcuts Troubleshooting',
+				),
+				f1: true,
 			});
 		}
-	}
-});
+
+		override run(accessor: ServicesAccessor): void {
+			const enabled = accessor.get(IKeyboardShortcutTroubleshootingService).toggle();
+			if (enabled) {
+				accessor.get(IOutputService).showChannel(KeyboardShortcutsOutputChannelId, { focus: 'preserve' });
+			}
+		}
+	},
+);
 
 registerWorkbenchContribution(
 	'workbench.contrib.keyboardShortcutTroubleshooting',
 	WorkbenchPhase.BlockRestore,
-	(accessor) => {
+	accessor => {
 		const disposables = new DisposableStore();
 		const troubleshooting = accessor.get(IKeyboardShortcutTroubleshootingService);
-		const channel = disposables.add(accessor.get(IOutputService).createChannel({
-			id: KeyboardShortcutsOutputChannelId,
-			label: localize({ bundle: 'ash.workbench', key: 'keyboardLayout.shortcutsChannel' }, 'Keyboard Shortcuts'),
-			kind: 'log',
-			source: 'core',
-		}));
-		disposables.add(troubleshooting.onDidLog((message) => {
-			channel.appendLine({
-				severity: 'debug',
-				category: 'keybinding',
-				text: message,
-			});
-		}));
+		const channel = disposables.add(
+			accessor
+				.get(IOutputService)
+				.createChannel({
+					id: KeyboardShortcutsOutputChannelId,
+					label: localize(
+						{ bundle: 'ash.workbench', key: 'keyboardLayout.shortcutsChannel' },
+						'Keyboard Shortcuts',
+					),
+					kind: 'log',
+					source: 'core',
+				}),
+		);
+		disposables.add(
+			troubleshooting.onDidLog(message => {
+				channel.appendLine({ severity: 'debug', category: 'keybinding', text: message });
+			}),
+		);
 		return disposables;
 	},
 );

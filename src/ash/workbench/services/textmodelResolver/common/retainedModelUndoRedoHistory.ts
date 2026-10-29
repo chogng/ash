@@ -23,7 +23,11 @@ export class RetainedModelUndoRedoHistory extends AbstractDisposable {
 	private readonly maxTextUnits: number;
 	private retainedTextUnits = 0;
 
-	constructor(options: RetainedModelUndoRedoHistoryOptions = {}, private readonly resourceKey: (resource: URI) => string = resource => resource.toString(), private readonly retainResource: (resource: URI) => IDisposable = () => Disposable.None) {
+	constructor(
+		options: RetainedModelUndoRedoHistoryOptions = {},
+		private readonly resourceKey: (resource: URI) => string = resource => resource.toString(),
+		private readonly retainResource: (resource: URI) => IDisposable = () => Disposable.None,
+	) {
 		super();
 		this.maxEntries = readLimit(options.maxEntries, DEFAULT_MAX_ENTRIES, 'maxEntries');
 		this.maxTextUnits = readLimit(options.maxTextUnits, DEFAULT_MAX_TEXT_UNITS, 'maxTextUnits');
@@ -81,6 +85,7 @@ export class RetainedModelUndoRedoHistory extends AbstractDisposable {
 
 function readLimit(value: number | undefined, defaultValue: number, name: string): number {
 	const result = value ?? defaultValue;
-	if (!Number.isSafeInteger(result) || result < 0) throw new RangeError(`Model undo and redo ${name} must be a non-negative safe integer`);
+	if (!Number.isSafeInteger(result) || result < 0)
+		throw new RangeError(`Model undo and redo ${name} must be a non-negative safe integer`);
 	return result;
 }

@@ -35,8 +35,8 @@ export interface LanguageWorkerModelSynchronizer {
 }
 
 export enum LanguageWorkerResultDisposition {
-	Applied = "applied",
-	Discarded = "discarded",
+	Applied = 'applied',
+	Discarded = 'discarded',
 }
 
 /** Optional result-lifecycle hook invoked after the renderer application gate. */
@@ -56,17 +56,17 @@ export interface VersionedLanguageResult<TResult> {
 }
 
 export enum LanguageRequestStatus {
-	Applied = "applied",
-	Cancelled = "cancelled",
+	Applied = 'applied',
+	Cancelled = 'cancelled',
 }
 
 export enum LanguageRequestCancellationReason {
-	Caller = "caller",
-	Superseded = "superseded",
-	ModelChanged = "modelChanged",
-	ModelUnavailable = "modelUnavailable",
-	WorkerRestarted = "workerRestarted",
-	CoordinatorDisposed = "coordinatorDisposed",
+	Caller = 'caller',
+	Superseded = 'superseded',
+	ModelChanged = 'modelChanged',
+	ModelUnavailable = 'modelUnavailable',
+	WorkerRestarted = 'workerRestarted',
+	CoordinatorDisposed = 'coordinatorDisposed',
 }
 
 export interface LanguageRequestApplied {
@@ -118,21 +118,27 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		private readonly createWorker: () => LanguageWorker<TLane, TPayload, TResult>,
 	) {
 		super();
-		if (typeof createWorker !== "function") {
+		if (typeof createWorker !== 'function') {
 			this.dispose();
-			throw new TypeError("Language worker factory must be a function");
+			throw new TypeError('Language worker factory must be a function');
 		}
-		this._register(model.onDidChangeContent(change => {
-			this.cancelAll(LanguageRequestCancellationReason.ModelChanged);
-			this.synchronizeWorker(change);
-		}));
-		this._register(model.onWillDispose(() => {
-			this.cancelAll(LanguageRequestCancellationReason.ModelUnavailable);
-			this.workerSlot.clear();
-		}));
-		this._register(toDisposable(() => {
-			this.cancelAll(LanguageRequestCancellationReason.CoordinatorDisposed);
-		}));
+		this._register(
+			model.onDidChangeContent(change => {
+				this.cancelAll(LanguageRequestCancellationReason.ModelChanged);
+				this.synchronizeWorker(change);
+			}),
+		);
+		this._register(
+			model.onWillDispose(() => {
+				this.cancelAll(LanguageRequestCancellationReason.ModelUnavailable);
+				this.workerSlot.clear();
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				this.cancelAll(LanguageRequestCancellationReason.CoordinatorDisposed);
+			}),
+		);
 	}
 
 	startWorker(): void {
@@ -147,11 +153,16 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		this.workerSlot.clear();
 	}
 
-	async runLatest(lane: TLane, payload: TPayload, apply: LanguageResultApplier<TResult>, options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {
+	async runLatest(
+		lane: TLane,
+		payload: TPayload,
+		apply: LanguageResultApplier<TResult>,
+		options: LanguageRequestOptions = {},
+	): Promise<LanguageRequestOutcome> {
 		this.assertNotDisposed();
 		assertLane(lane);
-		if (typeof apply !== "function") {
-			throw new TypeError("Language result applier must be a function");
+		if (typeof apply !== 'function') {
+			throw new TypeError('Language result applier must be a function');
 		}
 		this.cancelLane(lane, LanguageRequestCancellationReason.Superseded);
 
@@ -192,14 +203,9 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		const cancelFromCaller = (): void => {
 			this.cancelRequest(active, LanguageRequestCancellationReason.Caller, options.signal?.reason);
 		};
-		options.signal?.addEventListener("abort", cancelFromCaller, { once: true });
+		options.signal?.addEventListener('abort', cancelFromCaller, { once: true });
 		if (options.signal?.aborted) cancelFromCaller();
-		const request = Object.freeze<LanguageWorkerRequest<TLane, TPayload>>({
-			requestId,
-			lane,
-			snapshot,
-			payload,
-		});
+		const request = Object.freeze<LanguageWorkerRequest<TLane, TPayload>>({ requestId, lane, snapshot, payload });
 
 		try {
 			let value: TResult;
@@ -209,14 +215,19 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 				value = await raceCancellationError(computation, active.controller.signal);
 			} catch (error) {
 				if (active.cancellation) {
-					void computation?.then(() => settleWorkerResult(worker, requestId, LanguageWorkerResultDisposition.Discarded), () => undefined).catch(onUnexpectedError);
+					void computation
+						?.then(
+							() => settleWorkerResult(worker, requestId, LanguageWorkerResultDisposition.Discarded),
+							() => undefined,
+						)
+						.catch(onUnexpectedError);
 					return cancelledOutcome(requestId, snapshot.version, active.cancellation);
 				}
 				const disposalError = this.invalidateWorker(worker, active);
 				if (disposalError !== undefined) {
 					throw new AggregateError(
 						[error, disposalError],
-						"Language worker request and disposal both failed",
+						'Language worker request and disposal both failed',
 					);
 				}
 				throw error;
@@ -245,24 +256,15 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 
 			this.activeRequests.delete(lane);
 			try {
-				apply(Object.freeze({
-					requestId,
-					textModel: this.model,
-					modelVersion: snapshot.version,
-					value,
-				}));
+				apply(Object.freeze({ requestId, textModel: this.model, modelVersion: snapshot.version, value }));
 			} catch (error) {
 				settleWorkerResult(worker, requestId, LanguageWorkerResultDisposition.Discarded);
 				throw error;
 			}
 			settleWorkerResult(worker, requestId, LanguageWorkerResultDisposition.Applied);
-			return Object.freeze({
-				status: LanguageRequestStatus.Applied,
-				requestId,
-				modelVersion: snapshot.version,
-			});
+			return Object.freeze({ status: LanguageRequestStatus.Applied, requestId, modelVersion: snapshot.version });
 		} finally {
-			options.signal?.removeEventListener("abort", cancelFromCaller);
+			options.signal?.removeEventListener('abort', cancelFromCaller);
 			if (this.activeRequests.get(lane) === active) {
 				this.activeRequests.delete(lane);
 			}
@@ -271,18 +273,18 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 
 	private getWorker(): LanguageWorker<TLane, TPayload, TResult> {
 		if (this.model.isDisposed()) {
-			throw new ReferenceError("Language worker model is disposed");
+			throw new ReferenceError('Language worker model is disposed');
 		}
 		const current = this.workerSlot.value;
 		if (current) return current;
 		const worker = this.createWorker();
 		if (
 			!worker ||
-			typeof worker.run !== "function" ||
-			typeof worker.dispose !== "function" ||
-			typeof worker[Symbol.dispose] !== "function"
+			typeof worker.run !== 'function' ||
+			typeof worker.dispose !== 'function' ||
+			typeof worker[Symbol.dispose] !== 'function'
 		) {
-			throw new TypeError("Language worker factory returned an invalid worker");
+			throw new TypeError('Language worker factory returned an invalid worker');
 		}
 		this.workerSlot.value = worker;
 		if (this.model.isDisposed()) {
@@ -291,7 +293,10 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		return worker;
 	}
 
-	private invalidateWorker(worker: LanguageWorker<TLane, TPayload, TResult>, failedRequest: ActiveLanguageRequest<TLane>): unknown | undefined {
+	private invalidateWorker(
+		worker: LanguageWorker<TLane, TPayload, TResult>,
+		failedRequest: ActiveLanguageRequest<TLane>,
+	): unknown | undefined {
 		if (this.workerSlot.value !== worker) return undefined;
 		for (const active of this.activeRequests.values()) {
 			if (active !== failedRequest) {
@@ -317,7 +322,11 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 		}
 	}
 
-	private cancelRequest(active: ActiveLanguageRequest<TLane>, reason: LanguageRequestCancellationReason, cause?: unknown): void {
+	private cancelRequest(
+		active: ActiveLanguageRequest<TLane>,
+		reason: LanguageRequestCancellationReason,
+		cause?: unknown,
+	): void {
 		if (active.cancellation) return;
 		active.cancellation = cause === undefined ? { reason } : { reason, cause };
 		active.controller.abort(cause ?? reason);
@@ -341,35 +350,37 @@ export class LanguageRequestCoordinator<TLane extends string, TPayload, TResult>
 			if (this.workerSlot.value === worker) this.workerSlot.clear();
 		}
 	}
-
 }
 
 function supportsModelSynchronization(value: IDisposable): value is IDisposable & LanguageWorkerModelSynchronizer {
-	return typeof (value as Partial<LanguageWorkerModelSynchronizer>).synchronizeModel === "function";
+	return typeof (value as Partial<LanguageWorkerModelSynchronizer>).synchronizeModel === 'function';
 }
 
 function settleWorkerResult(value: IDisposable, requestId: number, disposition: LanguageWorkerResultDisposition): void {
 	const settler = value as Partial<LanguageWorkerResultSettler>;
-	if (typeof settler.settleResult === "function") settler.settleResult(requestId, disposition);
+	if (typeof settler.settleResult === 'function') settler.settleResult(requestId, disposition);
 }
 
-function cancelledOutcome(requestId: number, modelVersion: number, cancellation: RequestCancellation): LanguageRequestCancelled {
-	return Object.freeze(cancellation.cause === undefined ? {
-		status: LanguageRequestStatus.Cancelled,
-		requestId,
-		modelVersion,
-		reason: cancellation.reason,
-	} : {
-		status: LanguageRequestStatus.Cancelled,
-		requestId,
-		modelVersion,
-		reason: cancellation.reason,
-		cause: cancellation.cause,
-	});
+function cancelledOutcome(
+	requestId: number,
+	modelVersion: number,
+	cancellation: RequestCancellation,
+): LanguageRequestCancelled {
+	return Object.freeze(
+		cancellation.cause === undefined
+			? { status: LanguageRequestStatus.Cancelled, requestId, modelVersion, reason: cancellation.reason }
+			: {
+					status: LanguageRequestStatus.Cancelled,
+					requestId,
+					modelVersion,
+					reason: cancellation.reason,
+					cause: cancellation.cause,
+				},
+	);
 }
 
 function assertLane(lane: string): void {
-	if (typeof lane !== "string" || lane.length === 0) {
-		throw new TypeError("Language request lane must be a non-empty string");
+	if (typeof lane !== 'string' || lane.length === 0) {
+		throw new TypeError('Language request lane must be a non-empty string');
 	}
 }

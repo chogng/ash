@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { resetNlsResolver, setNlsResolver } from '../../../nls.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
+import {
+	Extensions as ConfigurationExtensions,
+	type IConfigurationRegistry,
+} from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { SessionsConfiguration } from '../../common/configuration.js';
 import { ActivityBarPosition, WorkbenchConfiguration } from '../../../workbench/common/configuration.js';
@@ -19,7 +22,10 @@ test('Sessions settings keep their values while their labels belong to the Sessi
 		assert.equal(layoutSetting.included, false);
 		assert.equal(layoutSetting.title, '布局样式');
 		assert.equal(layoutSetting.valueType, 'select');
-		assert.deepEqual(layoutSetting.options, [{ value: 'modern', label: 'Modern' }, { value: 'flat', label: 'Flat' }]);
+		assert.deepEqual(layoutSetting.options, [
+			{ value: 'modern', label: 'Modern' },
+			{ value: 'flat', label: 'Flat' },
+		]);
 		assert.equal(chinese.bundles.ash?.['sessions.settings.title'], '会话设置');
 		for (const [key, label] of Object.entries({
 			'sessions.settings.section.basics': '基础',
@@ -55,10 +61,13 @@ test('Activity Bar position enum keeps Workbench and Sessions settings as string
 			[WorkbenchConfiguration.activityBarLocation]: 'top',
 			[SessionsConfiguration.activityBarLocation]: 'bottom',
 		});
-		await configuration.write(JSON.stringify({
-			[WorkbenchConfiguration.activityBarLocation]: 'hidden',
-			[SessionsConfiguration.activityBarLocation]: 'top',
-		}), saved.revision);
+		await configuration.write(
+			JSON.stringify({
+				[WorkbenchConfiguration.activityBarLocation]: 'hidden',
+				[SessionsConfiguration.activityBarLocation]: 'top',
+			}),
+			saved.revision,
+		);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarLocation), ActivityBarPosition.HIDDEN);
 		assert.equal(configuration.getValue(SessionsConfiguration.activityBarLocation), ActivityBarPosition.TOP);
 	} finally {

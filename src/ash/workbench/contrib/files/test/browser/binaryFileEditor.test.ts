@@ -1,4 +1,4 @@
-import { registerCodeEditorServices } from "../../../../../editor/test/browser/testCodeEditor.js";
+import { registerCodeEditorServices } from '../../../../../editor/test/browser/testCodeEditor.js';
 import { TestQuickInputService } from '../../../../../platform/quickinput/test/browser/testQuickInputService.js';
 import '../../../../../editor/test/browser/testEditorDom.js';
 import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
@@ -27,24 +27,37 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 	const dialogs: IDialogService = {
 		onWillShowDialog: Event.None,
 		onDidShowDialog: Event.None,
-		about: async () => { throw new Error('Unexpected about dialog'); },
-		showMessage: async () => { },
-		info: async () => { },
-		warn: async () => { },
-		error: async () => { },
-		confirm: async () => { throw new Error('Unexpected confirm'); },
-		prompt: async () => { throw new Error('Unexpected prompt'); },
-		input: async () => { throw new Error('Unexpected input'); },
+		about: async () => {
+			throw new Error('Unexpected about dialog');
+		},
+		showMessage: async () => {},
+		info: async () => {},
+		warn: async () => {},
+		error: async () => {},
+		confirm: async () => {
+			throw new Error('Unexpected confirm');
+		},
+		prompt: async () => {
+			throw new Error('Unexpected prompt');
+		},
+		input: async () => {
+			throw new Error('Unexpected input');
+		},
 	};
 	using services = new InstantiationService();
-	services.registerSingleton(IFileService, () => createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array([0x48, 0x69, 0x00, 0xff]))));
+	services.registerSingleton(IFileService, () =>
+		createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array([0x48, 0x69, 0x00, 0xff]))),
+	);
 	registerTestComponentServices(services, dom.window.document);
 	using quickInput = new TestQuickInputService({ container: dom.window.document.body });
 	services.registerInstance(IQuickInputService, quickInput);
 	services.registerInstance(IEditorService, {
 		...emptyEditorServiceState,
-		openEditor: async (input, options) => { opened = input; openOptions = options; },
-		focusActiveEditor: () => { },
+		openEditor: async (input, options) => {
+			opened = input;
+			openOptions = options;
+		},
+		focusActiveEditor: () => {},
 	});
 	services.registerInstance(IDialogService, dialogs);
 	registerCodeEditorServices(services);
@@ -68,7 +81,10 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 	assert.equal(openOptions?.preferredEditorId, CODE_EDITOR_ID);
 	opened = undefined;
 	const historical = URI.parse('git-commit:/repo/revision/image.bin');
-	await pane.setInput({ resource: historical, initialBytes: new Uint8Array([0x48, 0x00, 0xff]) }, new AbortController().signal);
+	await pane.setInput(
+		{ resource: historical, initialBytes: new Uint8Array([0x48, 0x00, 0xff]) },
+		new AbortController().signal,
+	);
 	assert.match(pane.getControl()!.getModel()!.getValue(), /48 00 ff/);
 	assert.equal(dom.window.document.querySelector<HTMLButtonElement>('.ash-binary-open-with-encoding')!.hidden, true);
 	dom.window.document.querySelector<HTMLButtonElement>('.ash-binary-open-as-text')!.click();
@@ -82,7 +98,9 @@ test('Binary file editor opens a bounded read-only text preview', async () => {
 
 async function waitFor(predicate: () => boolean): Promise<void> {
 	for (let attempt = 0; attempt < 20; attempt += 1) {
-		if (predicate()) { return; }
+		if (predicate()) {
+			return;
+		}
 		await new Promise(resolve => setTimeout(resolve, 0));
 	}
 	assert.fail('Timed out waiting for binary text preview');

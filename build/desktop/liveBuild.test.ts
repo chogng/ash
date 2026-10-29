@@ -7,12 +7,12 @@ import test, { type TestContext } from 'node:test';
 import { LiveBuilder } from './liveBuild.ts';
 
 function worker(t: TestContext) {
-	const children: { child: ChildProcess; input: PassThrough; output: PassThrough; requests: { id: number; }[]; }[] = [];
+	const children: { child: ChildProcess; input: PassThrough; output: PassThrough; requests: { id: number }[] }[] = [];
 	t.mock.method(childProcess, 'spawn', () => {
 		const child = new ChildProcess();
 		const input = new PassThrough();
 		const output = new PassThrough();
-		const requests: { id: number; }[] = [];
+		const requests: { id: number }[] = [];
 		Object.assign(child, { stdin: input, stdout: output });
 		input.on('data', (chunk: Buffer) => requests.push(JSON.parse(chunk.toString())));
 		input.on('finish', () => setImmediate(() => child.emit('close', 0, null)));
@@ -21,13 +21,16 @@ function worker(t: TestContext) {
 		return child;
 	});
 	syncBuiltinESMExports();
-	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+	t.after(() => {
+		t.mock.restoreAll();
+		syncBuiltinESMExports();
+	});
 	const builder = new LiveBuilder(process.cwd(), {});
 	t.after(async () => builder.stop());
 	return { builder, children };
 }
 
-async function requested(requests: { id: number; }[], count: number): Promise<void> {
+async function requested(requests: { id: number }[], count: number): Promise<void> {
 	while (requests.length < count) await new Promise(resolve => setImmediate(resolve));
 }
 

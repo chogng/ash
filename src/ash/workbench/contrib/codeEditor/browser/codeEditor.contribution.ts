@@ -5,17 +5,21 @@ import './toggleMinimap.js';
 import './toggleRenderWhitespace.js';
 import './toggleRenderControlCharacter.js';
 import './toggleWordWrap.js';
-import { getBrowserTextModelService } from "../../../services/textmodelResolver/browser/browserTextModelService.js";
-import { registerEditorPane } from "../../../browser/editor.js";
-import { getBrowserTextResourceStore } from "./browserTextResourceStore.js";
-import { createBrowserEditorPart } from "./browserEditorPart.js";
-import { matchCodeEditor, matchDiffEditor } from "./codeEditorInput.js";
-import { CODE_EDITOR_ID, TextResourceEditor, type EditorPaneOptions } from "../../../browser/parts/editor/textResourceEditor.js";
-import { DIFF_EDITOR_ID } from "../../../common/editor/diffEditorInput.js";
-import { TextDiffEditor } from "../../../browser/parts/editor/textDiffEditor.js";
-import { registerWorkbenchContribution, WorkbenchPhase } from "../../../common/contributions.js";
+import { getBrowserTextModelService } from '../../../services/textmodelResolver/browser/browserTextModelService.js';
+import { registerEditorPane } from '../../../browser/editor.js';
+import { getBrowserTextResourceStore } from './browserTextResourceStore.js';
+import { createBrowserEditorPart } from './browserEditorPart.js';
+import { matchCodeEditor, matchDiffEditor } from './codeEditorInput.js';
+import {
+	CODE_EDITOR_ID,
+	TextResourceEditor,
+	type EditorPaneOptions,
+} from '../../../browser/parts/editor/textResourceEditor.js';
+import { DIFF_EDITOR_ID } from '../../../common/editor/diffEditorInput.js';
+import { TextDiffEditor } from '../../../browser/parts/editor/textDiffEditor.js';
+import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import './dictation/editorDictation.js';
-import { CodeEditorConfiguration, type WrappingIndentSetting } from "../common/editorConfiguration.js";
+import { CodeEditorConfiguration, type WrappingIndentSetting } from '../common/editorConfiguration.js';
 import { TextFileEditor } from '../../files/browser/editors/textFileEditor.js';
 import { TextFileSaveErrorHandler } from '../../files/browser/editors/textFileSaveErrorHandler.js';
 import { isRemoteResource } from '../../../../platform/remote/common/remote.js';
@@ -24,23 +28,27 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { SaveParticipantsContribution } from './saveParticipants.js';
 import { DocumentSymbolsOutlineCreator } from './outline/documentSymbolsOutline.js';
 
-registerWorkbenchContribution('workbench.contrib.documentSymbolsOutline', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(DocumentSymbolsOutlineCreator));
+registerWorkbenchContribution('workbench.contrib.documentSymbolsOutline', WorkbenchPhase.BlockRestore, accessor =>
+	accessor.get(IInstantiationService).createInstance(DocumentSymbolsOutlineCreator),
+);
 
 // Cleanup uses CodeEditorService, whose EditorParts dependency is registered after BlockStartup.
-registerWorkbenchContribution(SaveParticipantsContribution.ID, WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SaveParticipantsContribution));
-
+registerWorkbenchContribution(SaveParticipantsContribution.ID, WorkbenchPhase.BlockRestore, accessor =>
+	accessor.get(IInstantiationService).createInstance(SaveParticipantsContribution),
+);
 
 registerEditorPane({
 	id: CODE_EDITOR_ID,
 	name: localize('workbench.textEditor', 'Text Editor'),
 	canOpen: matchCodeEditor,
 	create: options => {
-		if (!options.textFileService) throw new Error("Stanza Code requires the Workbench text file service");
+		if (!options.textFileService) throw new Error('Stanza Code requires the Workbench text file service');
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
 		const instantiationService = options.instantiationService;
 		if (!instantiationService) throw new Error('Stanza Code requires the Workbench instantiation service');
-		const isFile = options.input?.resource.scheme === 'file' || (options.input && isRemoteResource(options.input.resource));
+		const isFile =
+			options.input?.resource.scheme === 'file' || (options.input && isRemoteResource(options.input.resource));
 		const saveErrorHandler = isFile ? undefined : instantiationService.createInstance(TextFileSaveErrorHandler);
 		return instantiationService.createInstance(isFile ? TextFileEditor : TextResourceEditor, resourceStore, {
 			createPart: partOptions => createBrowserEditorPart(instantiationService, partOptions),
@@ -50,7 +58,9 @@ registerEditorPane({
 			experimentalGpuAcceleration: configuration?.getValue(CodeEditorConfiguration.experimentalGpuAcceleration),
 			wrappingIndent: configuration?.getValue(CodeEditorConfiguration.wrappingIndent),
 			renderLineHighlight: configuration?.getValue(CodeEditorConfiguration.renderLineHighlight),
-			renderLineHighlightOnlyWhenFocus: configuration?.getValue(CodeEditorConfiguration.renderLineHighlightOnlyWhenFocus),
+			renderLineHighlightOnlyWhenFocus: configuration?.getValue(
+				CodeEditorConfiguration.renderLineHighlightOnlyWhenFocus,
+			),
 			cursorStyle: configuration?.getValue(CodeEditorConfiguration.cursorStyle),
 			cursorBlinking: configuration?.getValue(CodeEditorConfiguration.cursorBlinking),
 			cursorSmoothCaretAnimation: configuration?.getValue(CodeEditorConfiguration.cursorSmoothCaretAnimation),
@@ -59,11 +69,20 @@ registerEditorPane({
 			guides: {
 				indentation: configuration?.getValue(CodeEditorConfiguration.indentationGuides),
 				bracketPairs: configuration?.getValue(CodeEditorConfiguration.bracketPairGuides),
-				bracketPairsHorizontal: configuration?.getValue(CodeEditorConfiguration.bracketPairHorizontalGuides) === false ? false : 'active',
-				highlightActiveBracketPair: configuration?.getValue(CodeEditorConfiguration.highlightActiveBracketPairGuide),
-				highlightActiveIndentation: configuration?.getValue(CodeEditorConfiguration.highlightActiveIndentationGuide),
+				bracketPairsHorizontal:
+					configuration?.getValue(CodeEditorConfiguration.bracketPairHorizontalGuides) === false
+						? false
+						: 'active',
+				highlightActiveBracketPair: configuration?.getValue(
+					CodeEditorConfiguration.highlightActiveBracketPairGuide,
+				),
+				highlightActiveIndentation: configuration?.getValue(
+					CodeEditorConfiguration.highlightActiveIndentationGuide,
+				),
 			},
-			bracketPairColorization: { enabled: configuration?.getValue(CodeEditorConfiguration.bracketPairColorization) !== false },
+			bracketPairColorization: {
+				enabled: configuration?.getValue(CodeEditorConfiguration.bracketPairColorization) !== false,
+			},
 			matchBrackets: configuration?.getValue(CodeEditorConfiguration.matchBrackets),
 			stickyScroll: { enabled: configuration?.getValue(CodeEditorConfiguration.stickyScroll) !== false },
 			indentation: {
@@ -74,7 +93,9 @@ registerEditorPane({
 			suggestions: configuration?.getValue(CodeEditorConfiguration.suggestions),
 			inlineCompletions: configuration?.getValue(CodeEditorConfiguration.inlineCompletions),
 			parameterHints: configuration?.getValue(CodeEditorConfiguration.parameterHints),
-			inlayHints: { enabled: configuration?.getValue(CodeEditorConfiguration.inlayHints) === false ? 'off' : 'on' },
+			inlayHints: {
+				enabled: configuration?.getValue(CodeEditorConfiguration.inlayHints) === false ? 'off' : 'on',
+			},
 			codeLens: configuration?.getValue(CodeEditorConfiguration.codeLens),
 			colorDecorators: configuration?.getValue(CodeEditorConfiguration.colorDecorators),
 			colorDecoratorsActivatedOn: configuration?.getValue(CodeEditorConfiguration.colorDecoratorsActivatedOn),
@@ -82,7 +103,11 @@ registerEditorPane({
 			defaultColorDecorators: configuration?.getValue(CodeEditorConfiguration.defaultColorDecorators),
 			formatOnSave: configuration?.getValue(CodeEditorConfiguration.formatOnSave),
 			onSave: options.onSave,
-			onSaveError: saveErrorHandler ? async (error, resource) => { await saveErrorHandler.onSaveError(error, resource); } : undefined,
+			onSaveError: saveErrorHandler
+				? async (error, resource) => {
+						await saveErrorHandler.onSaveError(error, resource);
+					}
+				: undefined,
 			onOpenLocation: options.onOpenLocation,
 			onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
 		} satisfies EditorPaneOptions);
@@ -91,14 +116,14 @@ registerEditorPane({
 
 registerEditorPane({
 	id: DIFF_EDITOR_ID,
-	name: "Stanza Diff",
+	name: 'Stanza Diff',
 	canOpen: matchDiffEditor,
 	create: options => {
-		if (!options.textFileService) throw new Error("Stanza Diff requires the Workbench text file service");
+		if (!options.textFileService) throw new Error('Stanza Diff requires the Workbench text file service');
 		const instantiationService = options.instantiationService;
 		if (!instantiationService) throw new Error('Stanza Diff requires the Workbench instantiation service');
 		const diffService = options.diffService;
-		if (!diffService) throw new Error("Stanza Diff requires the Workbench diff service");
+		if (!diffService) throw new Error('Stanza Diff requires the Workbench diff service');
 		const resourceStore = getBrowserTextResourceStore(options.textFileService);
 		const configuration = options.configurationService;
 		return instantiationService.createInstance(TextDiffEditor, resourceStore, {
@@ -112,5 +137,5 @@ registerEditorPane({
 		});
 	},
 });
-import "./media/editorPane.css";
-import "./media/diffEditorPane.css";
+import './media/editorPane.css';
+import './media/diffEditorPane.css';

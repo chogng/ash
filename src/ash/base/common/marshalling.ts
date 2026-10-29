@@ -8,9 +8,11 @@ export function parse(text: string): unknown {
 			return value;
 		}
 		// Components must not inject URL delimiters when URI.from interpolates them.
-		if (!isUriComponents(value)
-			|| !/^[A-Za-z][A-Za-z\d+.-]*:$/u.test(`${value.scheme}:`)
-			|| /[\x00-\x20\x7f/\\?#@]/u.test(value.authority ?? '')) {
+		if (
+			!isUriComponents(value) ||
+			!/^[A-Za-z][A-Za-z\d+.-]*:$/u.test(`${value.scheme}:`) ||
+			/[\x00-\x20\x7f/\\?#@]/u.test(value.authority ?? '')
+		) {
 			throw new TypeError('Invalid marshalled URI');
 		}
 
@@ -22,11 +24,13 @@ export function parse(text: string): unknown {
 		if (!('external' in value)) return components;
 		if (typeof value.external !== 'string') throw new TypeError('Invalid marshalled URI');
 		const resource = URI.parse(value.external, true);
-		if (resource.scheme !== components.scheme
-			|| resource.authority !== components.authority
-			|| resource.path !== components.path
-			|| resource.query !== components.query
-			|| resource.fragment !== components.fragment) {
+		if (
+			resource.scheme !== components.scheme ||
+			resource.authority !== components.authority ||
+			resource.path !== components.path ||
+			resource.query !== components.query ||
+			resource.fragment !== components.fragment
+		) {
 			throw new TypeError('Inconsistent marshalled URI');
 		}
 		return resource;

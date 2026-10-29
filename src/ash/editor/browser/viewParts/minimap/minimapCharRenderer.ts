@@ -7,7 +7,10 @@ export class MinimapCharRenderer {
 	private readonly normal: Uint8ClampedArray;
 	private readonly light: Uint8ClampedArray;
 
-	constructor(charData: Uint8ClampedArray, public readonly scale: number) {
+	constructor(
+		charData: Uint8ClampedArray,
+		public readonly scale: number,
+	) {
 		this.normal = scaleCoverage(charData, 0.8);
 		this.light = scaleCoverage(charData, 5 / 6);
 	}
@@ -31,7 +34,18 @@ export class MinimapCharRenderer {
 		const glyphHeight = Constants.BASE_CHAR_HEIGHT * this.scale;
 		const glyph = useLighterFont ? this.light : this.normal;
 		const start = getCharIndex(charCode, fontScale) * width * glyphHeight;
-		paint(target, x, y, width, height, foreground, foregroundAlpha, background, backgroundAlpha, offset => glyph[start + offset] / 255);
+		paint(
+			target,
+			x,
+			y,
+			width,
+			height,
+			foreground,
+			foregroundAlpha,
+			background,
+			backgroundAlpha,
+			offset => glyph[start + offset] / 255,
+		);
 	}
 
 	blockRenderChar(
@@ -80,7 +94,7 @@ function paint(
 	for (let row = 0; row < height; row++) {
 		let targetOffset = ((y + row) * target.width + x) * Constants.RGBA_CHANNELS_CNT;
 		for (let column = 0; column < width; column++) {
-			const blend = coverageAt(sourceOffset++) * foregroundAlpha / 255;
+			const blend = (coverageAt(sourceOffset++) * foregroundAlpha) / 255;
 			target.data[targetOffset++] = mix(background.r, foreground.r, blend);
 			target.data[targetOffset++] = mix(background.g, foreground.g, blend);
 			target.data[targetOffset++] = mix(background.b, foreground.b, blend);

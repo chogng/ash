@@ -1,16 +1,33 @@
-import { type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
-import type { IAppServerApi } from "../../agentHost/common/appServerApi.js";
-import type { UnavailableOperation } from "../../renderer/browser/disconnectedHost.js";
-import type { ITerminalResolvedProfile, ITerminalProcessInfo, TerminalProcessProfileSelection, ITerminalProcessCloseOptions, ITerminalProcessCreateOptions, ITerminalProcessCreation, ITerminalProcessProfile, ITerminalProcessReadOptions, ITerminalProcessReadResult, ITerminalProcessResizeOptions, ITerminalProcessService, ITerminalProcessWriteOptions, TerminalProcessConnectionState } from "../common/terminal.js";
+import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import type { IAppServerApi } from '../../agentHost/common/appServerApi.js';
+import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
+import type {
+	ITerminalResolvedProfile,
+	ITerminalProcessInfo,
+	TerminalProcessProfileSelection,
+	ITerminalProcessCloseOptions,
+	ITerminalProcessCreateOptions,
+	ITerminalProcessCreation,
+	ITerminalProcessProfile,
+	ITerminalProcessReadOptions,
+	ITerminalProcessReadResult,
+	ITerminalProcessResizeOptions,
+	ITerminalProcessService,
+	ITerminalProcessWriteOptions,
+	TerminalProcessConnectionState,
+} from '../common/terminal.js';
 
 /** Terminal process service used when no browser App Server host is available. */
 export class DisconnectedTerminalProcessService implements ITerminalProcessService {
-	constructor(private readonly unavailable: UnavailableOperation, private readonly appServerApi: IAppServerApi) { }
+	constructor(
+		private readonly unavailable: UnavailableOperation,
+		private readonly appServerApi: IAppServerApi,
+	) {}
 
 	readonly operatingSystem = undefined;
 
 	listProfiles(): Promise<readonly ITerminalProcessProfile[]> {
-		return this.unavailable("terminal.listProfiles");
+		return this.unavailable('terminal.listProfiles');
 	}
 
 	resolveProfile(_profile: TerminalProcessProfileSelection, _dirId?: string): Promise<ITerminalResolvedProfile> {
@@ -18,11 +35,11 @@ export class DisconnectedTerminalProcessService implements ITerminalProcessServi
 	}
 
 	getEnvironment(_names?: readonly string[], _dirId?: string): Promise<Readonly<Record<string, string>>> {
-		return this.unavailable("terminal.getEnvironment");
+		return this.unavailable('terminal.getEnvironment');
 	}
 
 	create(_options: ITerminalProcessCreateOptions): Promise<ITerminalProcessCreation> {
-		return this.unavailable("terminal.create");
+		return this.unavailable('terminal.create');
 	}
 
 	getProcessInfo(_options: ITerminalProcessCloseOptions): Promise<ITerminalProcessInfo> {
@@ -30,11 +47,11 @@ export class DisconnectedTerminalProcessService implements ITerminalProcessServi
 	}
 
 	write(_options: ITerminalProcessWriteOptions): Promise<void> {
-		return this.unavailable("terminal.write");
+		return this.unavailable('terminal.write');
 	}
 
 	resize(_options: ITerminalProcessResizeOptions): Promise<void> {
-		return this.unavailable("terminal.resize");
+		return this.unavailable('terminal.resize');
 	}
 
 	sendSignal(): Promise<void> {
@@ -46,11 +63,11 @@ export class DisconnectedTerminalProcessService implements ITerminalProcessServi
 	}
 
 	read(_options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult> {
-		return this.unavailable("terminal.read");
+		return this.unavailable('terminal.read');
 	}
 
 	close(_options: ITerminalProcessCloseOptions): Promise<void> {
-		return this.unavailable("terminal.close");
+		return this.unavailable('terminal.close');
 	}
 
 	getConnectionState(): Promise<TerminalProcessConnectionState> {

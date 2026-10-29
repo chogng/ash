@@ -6,7 +6,15 @@ import { getBrowserTextResourceStore } from '../../codeEditor/browser/browserTex
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { matchMultiDiffEditor, MULTI_DIFF_EDITOR_ID } from './multiDiffEditorInput.js';
-import { MultiDiffCollapseAllAction, MultiDiffExpandAllAction, MultiDiffGoToFileAction, MultiDiffGoToNextChangeAction, MultiDiffGoToPreviousChangeAction, MultiDiffToggleCollapseAllAction, MultiDiffToggleCollapseUnchangedRegionsAction } from './multiDiffEditorActions.js';
+import {
+	MultiDiffCollapseAllAction,
+	MultiDiffExpandAllAction,
+	MultiDiffGoToFileAction,
+	MultiDiffGoToNextChangeAction,
+	MultiDiffGoToPreviousChangeAction,
+	MultiDiffToggleCollapseAllAction,
+	MultiDiffToggleCollapseUnchangedRegionsAction,
+} from './multiDiffEditorActions.js';
 import { MultiDiffEditor } from './multiDiffEditor.js';
 import { IMultiDiffSourceResolverService, MultiDiffSourceResolverService } from './multiDiffSourceResolverService.js';
 

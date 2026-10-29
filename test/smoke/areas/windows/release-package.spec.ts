@@ -9,15 +9,20 @@ import { exercisePackagedWorkbench } from '../../../automation/packagedWorkbench
 
 const run = promisify(execFile);
 
-test('release installation runs its bundled backend, upgrades with retained data and uninstalls', async ({ }, testInfo) => {
+test('release installation runs its bundled backend, upgrades with retained data and uninstalls', async ({}, testInfo) => {
 	assert(['win32', 'darwin'].includes(process.platform), 'Desktop release requires Windows or macOS');
 	const archive = resolve(required('ASH_RELEASE_ARCHIVE'));
 	const version = required('ASH_RELEASE_VERSION');
 	const previousArchive = process.env.ASH_RELEASE_PREVIOUS_ARCHIVE;
 	const previousVersion = process.env.ASH_RELEASE_PREVIOUS_VERSION;
-	assert.equal(Boolean(previousArchive), Boolean(previousVersion), 'Upgrade requires both previous archive and version');
+	assert.equal(
+		Boolean(previousArchive),
+		Boolean(previousVersion),
+		'Upgrade requires both previous archive and version',
+	);
 	// Installers write the per-user application registration. Run only on disposable CI hosts.
-	if (process.platform === 'win32') assert.equal(process.env.CI, 'true', 'Windows installer sanity requires a disposable CI host');
+	if (process.platform === 'win32')
+		assert.equal(process.env.CI, 'true', 'Windows installer sanity requires a disposable CI host');
 	const directory = await mkdtemp(join(tmpdir(), 'ash-release-'));
 	const installation = join(directory, 'installed');
 	const userData = await mkdtemp(join(tmpdir(), 'ash-'));
@@ -33,7 +38,15 @@ test('release installation runs its bundled backend, upgrades with retained data
 		if (previousArchive) {
 			await install(resolve(previousArchive), installation);
 			installed = true;
-			await exercisePackagedWorkbench(installation, previousVersion!, userData, workspace, 'const release = 2;', testInfo, 'previous');
+			await exercisePackagedWorkbench(
+				installation,
+				previousVersion!,
+				userData,
+				workspace,
+				'const release = 2;',
+				testInfo,
+				'previous',
+			);
 			await expect.poll(async () => JSON.parse(await readFile(settingsPath, 'utf8'))['editor.fontSize']).toBe(17);
 			assert.equal(await readFile(file, 'utf8'), 'const release = 2;');
 		}
@@ -41,9 +54,25 @@ test('release installation runs its bundled backend, upgrades with retained data
 		installed = true;
 		assert.equal(await readFile(file, 'utf8'), previousArchive ? 'const release = 2;' : 'const release = 1;\n');
 		assert.equal(JSON.parse(await readFile(settingsPath, 'utf8'))['editor.fontSize'], 17);
-		await exercisePackagedWorkbench(installation, version, userData, workspace, 'const release = 3;', testInfo, 'candidate');
+		await exercisePackagedWorkbench(
+			installation,
+			version,
+			userData,
+			workspace,
+			'const release = 3;',
+			testInfo,
+			'candidate',
+		);
 		// Reopen the delivered executable with the same state after the upgrade.
-		await exercisePackagedWorkbench(installation, version, userData, workspace, 'const release = 4;', testInfo, 'restart');
+		await exercisePackagedWorkbench(
+			installation,
+			version,
+			userData,
+			workspace,
+			'const release = 4;',
+			testInfo,
+			'restart',
+		);
 		assert.equal(JSON.parse(await readFile(settingsPath, 'utf8'))['editor.fontSize'], 17);
 		await uninstall(installation, directory);
 		installed = false;
@@ -66,16 +95,35 @@ function required(name: string): string {
 	return value;
 }
 async function exists(path: string): Promise<boolean> {
-	try { await realpath(path); return true; }
-	catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false; throw error; }
+	try {
+		await realpath(path);
+		return true;
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false;
+		throw error;
+	}
 }
 
 async function install(archive: string, installation: string): Promise<void> {
 	if (process.platform === 'win32') {
-		await run(archive, ['/SP-', '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CLOSEAPPLICATIONS', '/NORESTARTAPPLICATIONS', `/DIR=${installation}`, '/TASKS='], { windowsHide: true, timeout: 300_000 });
+		await run(
+			archive,
+			[
+				'/SP-',
+				'/VERYSILENT',
+				'/SUPPRESSMSGBOXES',
+				'/NORESTART',
+				'/CLOSEAPPLICATIONS',
+				'/NORESTARTAPPLICATIONS',
+				`/DIR=${installation}`,
+				'/TASKS=',
+			],
+			{ windowsHide: true, timeout: 300_000 },
+		);
 	} else {
 		// A macOS ZIP is installed by extracting Ash.app; remove old bundle files so deleted files cannot survive an upgrade.
-		if (await exists(installation)) await removeInstallation(installation, await realpath(dirname(installation)), 'installed');
+		if (await exists(installation))
+			await removeInstallation(installation, await realpath(dirname(installation)), 'installed');
 		await mkdir(installation);
 		await run('ditto', ['-x', '-k', archive, installation], { timeout: 300_000 });
 		const bundle = join(installation, 'Ash.app');
@@ -86,12 +134,16 @@ async function install(archive: string, installation: string): Promise<void> {
 }
 
 async function uninstall(installation: string, directory: string): Promise<void> {
-	if (process.platform === 'win32') await run(join(installation, 'unins000.exe'), ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], { windowsHide: true, timeout: 120_000 });
+	if (process.platform === 'win32')
+		await run(join(installation, 'unins000.exe'), ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART'], {
+			windowsHide: true,
+			timeout: 120_000,
+		});
 	else await removeInstallation(installation, await realpath(directory), 'installed');
 }
 
 async function removeInstallation(path: string, parent: string, prefix: string): Promise<void> {
-	if (!await exists(path)) return;
+	if (!(await exists(path))) return;
 	const absolute = await realpath(path);
 	assert.equal(dirname(absolute), parent, 'Installation cleanup must stay in the test directory');
 	assert(basename(absolute).startsWith(prefix));

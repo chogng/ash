@@ -13,14 +13,37 @@ import { TimelineService } from '../../common/timelineService.js';
 
 const views: IViewsService = {
 	getViewProgressIndicator: () => undefined,
-	onDidChangeViewContainerVisibility: Event.None, onDidChangeViewVisibility: Event.None, onDidChangeFocusedView: Event.None,
-	isViewContainerVisible: () => false, isViewContainerActive: () => false, openViewContainer: async () => null, closeViewContainer: () => { },
-	getVisibleViewContainer: () => null, getActiveViewPaneContainerWithId: () => null, getFocusedView: () => null, getFocusedViewName: () => '',
-	isViewVisible: () => false, openView: async () => null, closeView: () => { }, getActiveViewWithId: () => null, getViewWithId: () => null, focusView: async () => false,
+	onDidChangeViewContainerVisibility: Event.None,
+	onDidChangeViewVisibility: Event.None,
+	onDidChangeFocusedView: Event.None,
+	isViewContainerVisible: () => false,
+	isViewContainerActive: () => false,
+	openViewContainer: async () => null,
+	closeViewContainer: () => {},
+	getVisibleViewContainer: () => null,
+	getActiveViewPaneContainerWithId: () => null,
+	getFocusedView: () => null,
+	getFocusedViewName: () => '',
+	isViewVisible: () => false,
+	openView: async () => null,
+	closeView: () => {},
+	getActiveViewWithId: () => null,
+	getViewWithId: () => null,
+	focusView: async () => false,
 };
 const uri = URI.file('/test.ts');
-const result: Timeline = { source: 'ignored', items: [{ source: 'ignored', handle: 'save', label: 'Saved', timestamp: 100 }] };
-const provider: TimelineProvider = { id: 'history', label: 'History', scheme: 'file', provideTimeline: async () => result, dispose: () => { }, [Symbol.dispose]: () => { } };
+const result: Timeline = {
+	source: 'ignored',
+	items: [{ source: 'ignored', handle: 'save', label: 'Saved', timestamp: 100 }],
+};
+const provider: TimelineProvider = {
+	id: 'history',
+	label: 'History',
+	scheme: 'file',
+	provideTimeline: async () => result,
+	dispose: () => {},
+	[Symbol.dispose]: () => {},
+};
 
 suite('TimelineService', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -39,7 +62,10 @@ suite('TimelineService', () => {
 		using token = new CancellationTokenSource();
 		assert.equal(service.getTimeline('history', URI.parse('untitled:test'), {}, token), undefined);
 		assert.throws(() => service.getTimeline('history', uri, { limit: 0 }, token), /positive integer/);
-		assert.deepEqual(await service.getTimeline('history', uri, { limit: 1 }, token)?.result, { source: 'history', items: [{ ...result.items[0], source: 'history' }] });
+		assert.deepEqual(await service.getTimeline('history', uri, { limit: 1 }, token)?.result, {
+			source: 'history',
+			items: [{ ...result.items[0], source: 'history' }],
+		});
 		registration.dispose();
 		changes.fire({ id: 'history', uri, reset: true });
 		assert.deepEqual(events, [{ id: 'history', uri, reset: true }]);
@@ -69,7 +95,13 @@ suite('TimelineService', () => {
 		using context = new ContextKeyService();
 		using service = new TimelineService(context, views, new NullLoggerService());
 		let calls = 0;
-		using registration = service.registerTimelineProvider({ ...provider, provideTimeline: async () => { calls++; return { ...result, items: [...result.items, ...result.items] }; } });
+		using registration = service.registerTimelineProvider({
+			...provider,
+			provideTimeline: async () => {
+				calls++;
+				return { ...result, items: [...result.items, ...result.items] };
+			},
+		});
 		using token = new CancellationTokenSource();
 		const canceled = service.getTimeline('history', uri, {}, token)!;
 		token.cancel();

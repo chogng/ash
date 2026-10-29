@@ -4,10 +4,7 @@
  * New code should name `ScrollableElement` directly. A scrollbar is one axis
  * owned by that container rather than the container itself.
  */
-export {
-	ScrollableElement,
-	ScrollableElement as Scrollbar,
-} from "./scrollableElement.js";
+export { ScrollableElement, ScrollableElement as Scrollbar } from './scrollableElement.js';
 export type {
 	ScrollableElementOptions,
 	ScrollableElementOptions as ScrollbarOptions,
@@ -20,5 +17,5 @@ export type {
 	ScrollPosition as ScrollbarPosition,
 	ScrollbarVisibility,
 	ScrollbarWheelOptions,
-} from "./scrollableElement.js";
-export type { ScrollbarAxis } from "./abstractScrollbar.js";
+} from './scrollableElement.js';
+export type { ScrollbarAxis } from './abstractScrollbar.js';

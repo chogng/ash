@@ -15,13 +15,17 @@ suite('User settings editor restoration', () => {
 		const saved = JSON.parse(JSON.stringify(EditorInputSerializers.serialize(input)));
 		initializeTestLocalization('zh-CN');
 		const restored = EditorInputSerializers.deserialize(saved);
-		assert.deepEqual({ resource: restored.resource.toString(), languageId: restored.languageId, label: restored.label }, {
-			resource: UserSettingsResource.toString(), languageId: 'jsonc', label: '用户设置（JSON）',
-		});
+		assert.deepEqual(
+			{ resource: restored.resource.toString(), languageId: restored.languageId, label: restored.label },
+			{ resource: UserSettingsResource.toString(), languageId: 'jsonc', label: '用户设置（JSON）' },
+		);
 	});
 
 	test('rejects a different resource under the user settings editor identity', () => {
 		const saved = EditorInputSerializers.serialize(createUserSettingsEditorInput());
-		assert.throws(() => EditorInputSerializers.deserialize({ ...saved, value: 'file:///settings.json' }), TypeError);
+		assert.throws(
+			() => EditorInputSerializers.deserialize({ ...saved, value: 'file:///settings.json' }),
+			TypeError,
+		);
 	});
 });

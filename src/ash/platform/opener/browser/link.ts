@@ -40,26 +40,31 @@ export class Link extends Disposable {
 		this.anchorDomNode = container.ownerDocument.createElement('a');
 		this.anchorDomNode.className = 'ash-link';
 		this.anchorDomNode.setAttribute('role', 'button');
-		if (options.textLinkForeground) this.anchorDomNode.style.setProperty('--ash-link-foreground', options.textLinkForeground);
+		if (options.textLinkForeground)
+			this.anchorDomNode.style.setProperty('--ash-link-foreground', options.textLinkForeground);
 		container.append(this.anchorDomNode);
 		this._register(toDisposable(() => this.anchorDomNode.remove()));
 		this._register(addDisposableListener(this.anchorDomNode, 'click', event => this.activate(event)));
-		this._register(addDisposableListener(this.anchorDomNode, 'keydown', event => {
-			if (event.key !== 'Enter' && event.key !== ' ') return;
-			stopEvent(event);
-			if (!event.repeat) this.activate(event);
-		}));
+		this._register(
+			addDisposableListener(this.anchorDomNode, 'keydown', event => {
+				if (event.key !== 'Enter' && event.key !== ' ') return;
+				stopEvent(event);
+				if (!event.repeat) this.activate(event);
+			}),
+		);
 		this.link = descriptor;
 	}
 
-	get enabled(): boolean { return this.isEnabled; }
+	get enabled(): boolean {
+		return this.isEnabled;
+	}
 
 	set enabled(value: boolean) {
 		this.assertNotDisposed();
 		this.isEnabled = value;
 		this.anchorDomNode.classList.toggle('disabled', !value);
 		this.anchorDomNode.setAttribute('aria-disabled', String(!value));
-		this.anchorDomNode.tabIndex = value ? this.descriptor.tabIndex ?? 0 : -1;
+		this.anchorDomNode.tabIndex = value ? (this.descriptor.tabIndex ?? 0) : -1;
 		this.updateTooltip();
 	}
 
@@ -77,7 +82,10 @@ export class Link extends Disposable {
 		} else if (this.tooltip.value) {
 			this.tooltip.value.update(this.descriptor.title);
 		} else {
-			this.tooltip.value = this.hoverDelegate.setupHover({ target: this.anchorDomNode, content: this.descriptor.title });
+			this.tooltip.value = this.hoverDelegate.setupHover({
+				target: this.anchorDomNode,
+				content: this.descriptor.title,
+			});
 		}
 	}
 
@@ -86,6 +94,9 @@ export class Link extends Disposable {
 		stopEvent(event);
 		if (!this.isEnabled) return;
 		if (this.options.opener) this.options.opener(this.descriptor.href);
-		else void this.openerService.open(this.descriptor.href, { fromUserGesture: true, allowContributedOpeners: true }).catch(onUnexpectedError);
+		else
+			void this.openerService
+				.open(this.descriptor.href, { fromUserGesture: true, allowContributedOpeners: true })
+				.catch(onUnexpectedError);
 	}
 }

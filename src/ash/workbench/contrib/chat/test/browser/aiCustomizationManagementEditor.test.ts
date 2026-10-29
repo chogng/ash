@@ -17,7 +17,11 @@ import { WorkbenchLocalizationService } from '../../../../services/localization/
 import { initializeTestLocalization } from '../../../../services/localization/test/common/localizationTestUtils.js';
 import { BrowserContextViewService } from '../../../../../platform/contextview/browser/contextViewService.js';
 import { IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
-import { IAppServerHookApi, IAppServerSkillApi, type HookSource } from '../../../../../platform/agentHost/common/appServerApi.js';
+import {
+	IAppServerHookApi,
+	IAppServerSkillApi,
+	type HookSource,
+} from '../../../../../platform/agentHost/common/appServerApi.js';
 import { createDisconnectedRendererApi } from '../../../../browser/rendererApi.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
@@ -35,32 +39,81 @@ import { PromptsService } from '../../common/promptSyntax/service/promptsService
 import { AICustomizationManagementEditor } from '../../browser/aiCustomization/aiCustomizationManagementEditor.js';
 
 const document = browserEnvironment.window.document;
-const source: HookSource = { namespace: 'directory:fixture', configPath: '/fixture/.ash/config.toml', hooks: [{ id: 'directory:fixture:hook:test', event: 'preToolUse', enabled: false, program: '/synthetic/check', args: ['two words'], toolNames: [] }] };
+const source: HookSource = {
+	namespace: 'directory:fixture',
+	configPath: '/fixture/.ash/config.toml',
+	hooks: [
+		{
+			id: 'directory:fixture:hook:test',
+			event: 'preToolUse',
+			enabled: false,
+			program: '/synthetic/check',
+			args: ['two words'],
+			toolNames: [],
+		},
+	],
+};
 
-function setup(resources: DisposableStore, read: () => Promise<readonly HookSource[]>, localization: ILocalizationService = { whenReady: Promise.resolve(), translate: (_bundle, _key, fallback, parameters) => formatNlsMessage(fallback, parameters) }) {
+function setup(
+	resources: DisposableStore,
+	read: () => Promise<readonly HookSource[]>,
+	localization: ILocalizationService = {
+		whenReady: Promise.resolve(),
+		translate: (_bundle, _key, fallback, parameters) => formatNlsMessage(fallback, parameters),
+	},
+) {
 	const services = resources.add(new InstantiationService());
 	const keys = resources.add(new ContextKeyService());
 	const views = resources.add(new BrowserContextViewService(document.body));
 	const theme = resources.add(new TestThemeService(darkColorTheme));
-	const workspace = resources.add(new TestWorkspaceService({ id: 'fixture', folders: [{ id: 'folder', name: 'fixture', index: 0, uri: URI.file('/fixture') }] }));
+	const workspace = resources.add(
+		new TestWorkspaceService({
+			id: 'fixture',
+			folders: [{ id: 'folder', name: 'fixture', index: 0, uri: URI.file('/fixture') }],
+		}),
+	);
 	const saved = resources.add(new Emitter<ITextFileSaveEvent>());
 	const hooks = { onDidChangeHooks: Event.None, list: read };
-	const remote = { connection: { kind: 'local' as const, generation: 1 }, connectionState: 'connected' as const, onDidChangeConnection: Event.None, onDidChangeConnectionState: Event.None, reconnect: async () => ({ kind: 'alreadyConnected' as const }), rollbackRuntime: async () => ({ kind: 'cancelled' as const }) };
+	const remote = {
+		connection: { kind: 'local' as const, generation: 1 },
+		connectionState: 'connected' as const,
+		onDidChangeConnection: Event.None,
+		onDidChangeConnectionState: Event.None,
+		reconnect: async () => ({ kind: 'alreadyConnected' as const }),
+		rollbackRuntime: async () => ({ kind: 'cancelled' as const }),
+	};
 	services.registerInstance(IAppServerHookApi, hooks);
 	services.registerInstance(IAppServerSkillApi, createDisconnectedRendererApi().skills);
-	services.registerInstance(IWorkbenchHostService, { downloadText: () => { throw new Error('Unexpected download'); } });
+	services.registerInstance(IWorkbenchHostService, {
+		downloadText: () => {
+			throw new Error('Unexpected download');
+		},
+	});
 	services.registerSingleton(IPromptsService, () => services.createInstance(PromptsService));
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IAppServerRemoteAgentService, remote);
-	services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined } as IChatSessionNavigationService);
+	services.registerInstance(IChatSessionNavigationService, {
+		getActiveConversation: () => undefined,
+	} as IChatSessionNavigationService);
 	services.registerInstance(ILocalizationService, localization);
 	services.registerInstance(IContextViewService, views);
 	services.registerInstance(IContextKeyService, keys);
-	services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), getOpenAriaHint: () => undefined, show: () => false, disableHint: async () => { }, showAccessibleViewHelp: () => { } });
+	services.registerInstance(IAccessibleViewService, {
+		...toDisposable(() => {}),
+		getOpenAriaHint: () => undefined,
+		show: () => false,
+		disableHint: async () => {},
+		showAccessibleViewHelp: () => {},
+	});
 	services.registerInstance(IThemeService, theme);
 	services.registerInstance(IStorageService, { onWillSaveState: Event.None } as IStorageService);
 	assert.throws(() => services.createInstance(AICustomizationManagementEditor), /textFileService/u);
-	services.registerInstance(ITextFileService, { onDidSave: saved.event, onDidChangeFiles: Event.None, resolve: async () => assert.fail('Management must not resolve text files itself'), save: async () => assert.fail('Management must not persist text files itself') });
+	services.registerInstance(ITextFileService, {
+		onDidSave: saved.event,
+		onDidChangeFiles: Event.None,
+		resolve: async () => assert.fail('Management must not resolve text files itself'),
+		save: async () => assert.fail('Management must not persist text files itself'),
+	});
 	const pane = resources.add(services.createInstance(AICustomizationManagementEditor));
 	const container = document.createElement('main');
 	document.body.append(container);
@@ -92,13 +145,18 @@ test('Hook management renders source-owned event descriptions and status through
 		await waitForRefresh(container);
 		assert.match(container.querySelector('[role="status"]')?.textContent ?? '', /^\d+ 种事件 · 已配置 1 个 Hook$/u);
 		assert.ok(container.querySelector('[data-hook-event="preToolUse"]')?.textContent?.includes('工具执行前。'));
-	} finally { resetNlsResolver(); }
+	} finally {
+		resetNlsResolver();
+	}
 });
 
 test('Hook management refreshes a saved configuration through the owning text-file event, preserving disclosure and search', async () => {
 	using resources = new DisposableStore();
 	let reads = 0;
-	const { pane, container, saved } = setup(resources, async () => { reads++; return [source]; });
+	const { pane, container, saved } = setup(resources, async () => {
+		reads++;
+		return [source];
+	});
 	pane.setVisible(true);
 	await waitForRefresh(container);
 	const row = container.querySelector<HTMLDetailsElement>(`[data-hook-id="${source.hooks[0].id}"]`)!;
@@ -124,14 +182,18 @@ test('Hook management refreshes a saved configuration through the owning text-fi
 		saved.fire({ resource: URI.file(source.configPath), content: '', revision: '3' });
 		mock.timers.tick(100);
 		assert.equal(reads, 2);
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('Hook management rejects a late response after its workspace changes and reports the current failure', async () => {
 	using resources = new DisposableStore();
 	const pending = new DeferredPromise<readonly HookSource[]>();
 	let reads = 0;
-	const { pane, container, workspace } = setup(resources, () => ++reads === 1 ? pending.p : Promise.reject(new Error('current read failed')));
+	const { pane, container, workspace } = setup(resources, () =>
+		++reads === 1 ? pending.p : Promise.reject(new Error('current read failed')),
+	);
 	pane.setVisible(true);
 	workspace.updateWorkspace({ id: 'next', folders: [] });
 	await waitForRefresh(container);

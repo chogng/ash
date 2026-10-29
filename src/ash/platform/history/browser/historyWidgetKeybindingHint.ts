@@ -3,8 +3,10 @@ import type { Context } from '../../contextkey/common/contextkey.js';
 import type { IKeybindingService } from '../../keybinding/common/keybinding.js';
 
 export function showHistoryKeybindingHint(keybindingService: IKeybindingService, context?: Context): boolean {
-	return hasPlainArrow(keybindingService.lookupKeybindings('history.showPrevious', context), 'arrowup')
-		&& hasPlainArrow(keybindingService.lookupKeybindings('history.showNext', context), 'arrowdown');
+	return (
+		hasPlainArrow(keybindingService.lookupKeybindings('history.showPrevious', context), 'arrowup') &&
+		hasPlainArrow(keybindingService.lookupKeybindings('history.showNext', context), 'arrowdown')
+	);
 }
 
 function hasPlainArrow(keybindings: readonly ResolvedKeybinding[], key: string): boolean {

@@ -25,7 +25,10 @@ import { TestNotificationService } from '../../../../services/notification/test/
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { IStatusbarService } from '../../../../services/statusbar/browser/statusbar.js';
 import { ProgressService } from '../../../../services/progress/browser/progressService.js';
-import { ChatContextPickService, IChatContextPickService } from '../../../../contrib/chat/browser/attachments/chatContextPickService.js';
+import {
+	ChatContextPickService,
+	IChatContextPickService,
+} from '../../../../contrib/chat/browser/attachments/chatContextPickService.js';
 import { TestExtensionService } from '../../../../test/common/testExtensionServices.js';
 import { parseExtensionManifest } from '../../../../services/extensions/common/extensionManifest.js';
 import { canSetBreakpointsIn } from '../../common/breakpoints.js';
@@ -87,10 +90,12 @@ test('Debug memory editor codec preserves raw bytes and rejects stale or conflic
 		/Memory changed/,
 	);
 	await assert.rejects(files.writeFile({ resource, content: 'oops', encoding: 'utf8' }), /hexadecimal/);
-	using invalidations = new Emitter<{ memoryReference: string; offset: number; count: number; }>();
+	using invalidations = new Emitter<{ memoryReference: string; offset: number; count: number }>();
 	Object.defineProperty(session, 'onDidInvalidateMemory', { value: invalidations.event });
 	let changes = 0;
-	using changed = files.onDidChangeFiles(() => { changes++; });
+	using changed = files.onDidChangeFiles(() => {
+		changes++;
+	});
 	const watch = files.watch(resource);
 	invalidations.fire({ memoryReference: 'other', offset: 0, count: 2 });
 	assert.equal(changes, 0);
@@ -110,7 +115,7 @@ test('Debug adapter progress owns real notification lifetime and cancellation re
 	const session = debug.sessions[0] as MockDebugSession;
 	using starts = new Emitter<IDebugProgressStart>();
 	using updates = new Emitter<IDebugProgressUpdate>();
-	using ends = new Emitter<{ progressId: string; }>();
+	using ends = new Emitter<{ progressId: string }>();
 	Object.defineProperties(session, {
 		onDidProgressStart: { value: starts.event },
 		onDidProgressUpdate: { value: updates.event },
@@ -118,7 +123,7 @@ test('Debug adapter progress owns real notification lifetime and cancellation re
 		capabilities: { value: { ...session.capabilities, supportsCancelRequest: true } },
 	});
 	const cancelled: string[] = [];
-	session.cancelProgress = async (id) => {
+	session.cancelProgress = async id => {
 		cancelled.push(id);
 	};
 	using services = new InstantiationService();
@@ -130,9 +135,31 @@ test('Debug adapter progress owns real notification lifetime and cancellation re
 	let paneStarted = 0;
 	let paneFinished = 0;
 	const views = { isViewContainerVisible: () => true } as unknown as IViewsService;
-	const descriptors = { getViewContainerById: (id: string) => ({ id, location: ViewContainerLocation.Sidebar }) } as IViewDescriptorService;
-	const panes = { getProgressIndicator: () => ({ show: () => { paneStarted++; return { done: () => { paneFinished++; }, total() { }, worked() { } }; } }) } as unknown as IPaneCompositePartService;
-	using progress = new ProgressService(statusbar, notifications, services.get(ICommandService), views, descriptors, panes);
+	const descriptors = {
+		getViewContainerById: (id: string) => ({ id, location: ViewContainerLocation.Sidebar }),
+	} as IViewDescriptorService;
+	const panes = {
+		getProgressIndicator: () => ({
+			show: () => {
+				paneStarted++;
+				return {
+					done: () => {
+						paneFinished++;
+					},
+					total() {},
+					worked() {},
+				};
+			},
+		}),
+	} as unknown as IPaneCompositePartService;
+	using progress = new ProgressService(
+		statusbar,
+		notifications,
+		services.get(ICommandService),
+		views,
+		descriptors,
+		panes,
+	);
 	using contribution = new DebugProgressContribution(debug, progress, notifications, views);
 	starts.fire({ progressId: 'symbols', title: 'Loading symbols', cancellable: true });
 	updates.fire({ progressId: 'symbols', message: 'Half loaded', percentage: 50 });
@@ -203,7 +230,7 @@ test('Debug visualizers traverse real variable ports and validate extension comm
 	assert.equal(choices.length, 2);
 	assert.match((await choices[0].visualize(new AbortController().signal)).content, /child/);
 	assert.equal((await choices[1].visualize(new AbortController().signal)).content, 'ff');
-	assert.equal((args[0] as { sessionId: string; }).sessionId, session.id);
+	assert.equal((args[0] as { sessionId: string }).sessionId, session.id);
 	invalidResult = true;
 	await assert.rejects(choices[1].visualize(new AbortController().signal), /must return text content/);
 	const cancelled = new AbortController();
@@ -258,8 +285,10 @@ test('Debug status color lease ends when the last live session ends', () => {
 	assert.equal(statusbar.style, undefined);
 });
 
-
-async function readContextPicks(source: IChatContextPickerItem | IChatContextValueItem, query: string): Promise<IChatContextPickerPickItem[]> {
+async function readContextPicks(
+	source: IChatContextPickerItem | IChatContextValueItem,
+	query: string,
+): Promise<IChatContextPickerPickItem[]> {
 	if (source.type !== 'pickerPick') throw new Error('Expected the registered picker contract');
 	const picker = source.asPicker();
 	const cancellation = new CancellationTokenSource();
@@ -278,7 +307,10 @@ async function readContextPicks(source: IChatContextPickerItem | IChatContextVal
 				else resolve(value.picks.filter(isChatContextPickerPickItem));
 			});
 		});
-	} finally { cancellation.dispose(true); picker.dispose?.(); }
+	} finally {
+		cancellation.dispose(true);
+		picker.dispose?.();
+	}
 }
 
 async function selectedAttachment(item: IChatContextPickerPickItem): Promise<ChatContextAttachment> {

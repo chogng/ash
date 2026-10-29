@@ -1,6 +1,5 @@
 import { KeyboardLayoutContribution } from './_.contribution.js';
 
-
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 	layout: { id: 'com.apple.keylayout.German', lang: 'de', localizedName: 'German' },
 	secondaryLayouts: [],
@@ -47,10 +46,10 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		Tab: [],
 		Space: [' ', ' ', ' ', ' ', 0],
 		Minus: ['ß', '?', '¿', '˙', 0],
-		Equal: ['´', '`', '\'', '˚', 3],
+		Equal: ['´', '`', "'", '˚', 3],
 		BracketLeft: ['ü', 'Ü', '•', '°', 0],
 		BracketRight: ['+', '*', '±', '', 0],
-		Backslash: ['#', '\'', '‘', '’', 0],
+		Backslash: ['#', "'", '‘', '’', 0],
 		Semicolon: ['ö', 'Ö', 'œ', 'Œ', 0],
 		Quote: ['ä', 'Ä', 'æ', 'Æ', 0],
 		Backquote: ['<', '>', '≤', '≥', 0],
@@ -122,7 +121,6 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		ControlRight: [],
 		ShiftRight: [],
 		AltRight: [],
-		MetaRight: []
-	}
+		MetaRight: [],
+	},
 });
-

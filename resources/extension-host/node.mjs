@@ -22,42 +22,71 @@ let bridge;
 let extension;
 let stopping;
 const args = process.argv.slice(2);
-if (args.length !== 12 || args[0] !== '--extension-id' || args[2] !== '--package'
-	|| args[4] !== '--entry' || args[6] !== '--api' || args[7] !== 'ash'
-	|| args[8] !== '--protocol-address' || args[10] !== '--protocol-token') {
+if (
+	args.length !== 12 ||
+	args[0] !== '--extension-id' ||
+	args[2] !== '--package' ||
+	args[4] !== '--entry' ||
+	args[6] !== '--api' ||
+	args[7] !== 'ash' ||
+	args[8] !== '--protocol-address' ||
+	args[10] !== '--protocol-token'
+) {
 	throw new Error('Invalid Node extension host binding');
 }
 const address = /^127\.0\.0\.1:([1-9]\d{0,4})$/.exec(args[9]);
-if (!address || Number(address[1]) > 65535 || !/^[a-f0-9]{64}$/.test(args[11])) throw new Error('Invalid Node control binding');
+if (!address || Number(address[1]) > 65535 || !/^[a-f0-9]{64}$/.test(args[11]))
+	throw new Error('Invalid Node control binding');
 const control = createConnection({ host: '127.0.0.1', port: Number(address[1]) });
-control.on('error', error => { process.stderr.write(String(error) + '\n'); process.exit(1); });
+control.on('error', error => {
+	process.stderr.write(String(error) + '\n');
+	process.exit(1);
+});
 await new Promise(resolveConnected => control.once('connect', resolveConnected));
 control.setNoDelay(true);
-await new Promise((resolveWrite, reject) => control.write(args[11] + '\n', error => error ? reject(error) : resolveWrite()));
+await new Promise((resolveWrite, reject) =>
+	control.write(args[11] + '\n', error => (error ? reject(error) : resolveWrite())),
+);
 const protocolWrite = control.write.bind(control);
 const extensionId = args[1];
 const root = realpathSync(args[3]);
 const entry = realpathSync(resolve(root, args[5]));
 const entryRelative = relative(root, entry);
-if (!isAbsolute(args[3]) || isAbsolute(args[5]) || entryRelative.startsWith(`..${sep}`)
-	|| entryRelative === '..' || isAbsolute(entryRelative) || !statSync(entry).isFile()) {
+if (
+	!isAbsolute(args[3]) ||
+	isAbsolute(args[5]) ||
+	entryRelative.startsWith(`..${sep}`) ||
+	entryRelative === '..' ||
+	isAbsolute(entryRelative) ||
+	!statSync(entry).isFile()
+) {
 	throw new Error('Extension entry escapes its admitted package');
 }
 const manifestBytes = readFileSync(resolve(root, 'package.json'));
 if (manifestBytes.length > 4 * 1024 * 1024) throw new Error('Extension manifest quota exceeded');
 const manifest = JSON.parse(manifestBytes.toString('utf8'));
-if (typeof manifest.publisher !== 'string' || typeof manifest.name !== 'string') throw new Error('Invalid extension manifest');
+if (typeof manifest.publisher !== 'string' || typeof manifest.name !== 'string')
+	throw new Error('Invalid extension manifest');
 
 function loadLocalization(language) {
 	if (language === 'en' || typeof manifest.l10n !== 'string' || !manifest.l10n) return undefined;
-	if (typeof language !== 'string' || !/^[a-z0-9-]{1,64}$/i.test(language)) throw new Error('Invalid window language');
+	if (typeof language !== 'string' || !/^[a-z0-9-]{1,64}$/i.test(language))
+		throw new Error('Invalid window language');
 	try {
 		const path = realpathSync(resolve(root, manifest.l10n, `bundle.l10n.${language.toLowerCase()}.json`));
 		const packagePath = relative(root, path);
-		if (packagePath === '..' || packagePath.startsWith(`..${sep}`) || isAbsolute(packagePath)) throw new Error('Localization bundle escapes its admitted package');
-		if (!statSync(path).isFile() || statSync(path).size > maximumPayload) throw new Error('Localization bundle quota exceeded');
+		if (packagePath === '..' || packagePath.startsWith(`..${sep}`) || isAbsolute(packagePath))
+			throw new Error('Localization bundle escapes its admitted package');
+		if (!statSync(path).isFile() || statSync(path).size > maximumPayload)
+			throw new Error('Localization bundle quota exceeded');
 		const bundle = JSON.parse(readFileSync(path, 'utf8'));
-		if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle) || Object.values(bundle).some(value => typeof value !== 'string')) throw new Error('Invalid localization bundle');
+		if (
+			!bundle ||
+			typeof bundle !== 'object' ||
+			Array.isArray(bundle) ||
+			Object.values(bundle).some(value => typeof value !== 'string')
+		)
+			throw new Error('Invalid localization bundle');
 		return { bundle: Object.freeze(bundle), uri: pathToFileURL(path).href };
 	} catch (error) {
 		if (error.code !== 'ENOENT') process.stderr.write(`Extension localization: ${error.message}\n`);
@@ -66,17 +95,29 @@ function loadLocalization(language) {
 }
 
 function loadPackageMessages(language) {
-	if (typeof language !== 'string' || !/^[a-z0-9-]{1,64}$/i.test(language)) throw new Error('Invalid window language');
+	if (typeof language !== 'string' || !/^[a-z0-9-]{1,64}$/i.test(language))
+		throw new Error('Invalid window language');
 	const messages = Object.create(null);
-	const files = ['package.nls.json', ...new Set([language.split('-')[0], language].map(locale => `package.nls.${locale}.json`))];
+	const files = [
+		'package.nls.json',
+		...new Set([language.split('-')[0], language].map(locale => `package.nls.${locale}.json`)),
+	];
 	for (const name of files) {
 		try {
 			const path = realpathSync(resolve(root, name));
 			const packagePath = relative(root, path);
-			if (packagePath === '..' || packagePath.startsWith(`..${sep}`) || isAbsolute(packagePath)) throw new Error('Package messages escape the extension');
-			if (!statSync(path).isFile() || statSync(path).size > maximumPayload) throw new Error('Package messages quota exceeded');
+			if (packagePath === '..' || packagePath.startsWith(`..${sep}`) || isAbsolute(packagePath))
+				throw new Error('Package messages escape the extension');
+			if (!statSync(path).isFile() || statSync(path).size > maximumPayload)
+				throw new Error('Package messages quota exceeded');
 			const values = JSON.parse(readFileSync(path, 'utf8'));
-			if (!values || typeof values !== 'object' || Array.isArray(values) || Object.values(values).some(value => typeof value !== 'string')) throw new Error('Invalid package messages');
+			if (
+				!values ||
+				typeof values !== 'object' ||
+				Array.isArray(values) ||
+				Object.values(values).some(value => typeof value !== 'string')
+			)
+				throw new Error('Invalid package messages');
 			Object.assign(messages, values);
 		} catch (error) {
 			if (error.code !== 'ENOENT') process.stderr.write(`Extension package messages: ${error.message}\n`);
@@ -89,8 +130,15 @@ function applyEnvironment(environment) {
 	if (environment === undefined || environment === null) return;
 	if (typeof environment !== 'object' || Array.isArray(environment)) throw new Error('Invalid extension environment');
 	const entries = Object.entries(environment);
-	if (entries.length > 128 || entries.some(([key, value]) => key.length > 128 || !/^[a-z_][a-z0-9_]*$/i.test(key)
-		|| value !== null && (typeof value !== 'string' || value.length > 8192 || value.includes('\0')))) {
+	if (
+		entries.length > 128 ||
+		entries.some(
+			([key, value]) =>
+				key.length > 128 ||
+				!/^[a-z_][a-z0-9_]*$/i.test(key) ||
+				(value !== null && (typeof value !== 'string' || value.length > 8192 || value.includes('\0'))),
+		)
+	) {
 		throw new Error('Invalid extension environment');
 	}
 	// Validate the whole handshake before changing this incarnation's process state.
@@ -114,7 +162,9 @@ process.on('uncaughtException', reportExtensionError);
 function send(frame) {
 	const bytes = JSON.stringify(frame);
 	if (Buffer.byteLength(bytes) > maximumFrame) throw new Error('Host frame quota exceeded');
-	return new Promise((resolveWrite, reject) => protocolWrite(bytes + '\n', error => error ? reject(error) : resolveWrite()));
+	return new Promise((resolveWrite, reject) =>
+		protocolWrite(bytes + '\n', error => (error ? reject(error) : resolveWrite())),
+	);
 }
 
 runtime.onRegistrationsChanged(encoded => {
@@ -123,8 +173,10 @@ runtime.onRegistrationsChanged(encoded => {
 });
 function context(frame) {
 	return {
-		protocolVersion: frame.protocolVersion, requestId: frame.requestId,
-		incarnation: frame.incarnation, activationGeneration: frame.activationGeneration
+		protocolVersion: frame.protocolVersion,
+		requestId: frame.requestId,
+		incarnation: frame.incarnation,
+		activationGeneration: frame.activationGeneration,
 	};
 }
 function same(left, right) {
@@ -147,17 +199,19 @@ Object.defineProperty(globalThis, '__ashInvocation', {
 		if (current && active.get(current.requestId)?.context === current) return current.requestId;
 		if (required) throw new Error('No active extension invocation');
 		return undefined;
-	}
+	},
 });
 Object.defineProperty(globalThis, '__ashRequest', {
 	value(requestId, encoded) {
 		const current = invocation.getStore();
 		const owned = active.get(requestId);
 		if (!current || current.requestId !== requestId || owned?.context !== current || owned.cancelled) {
-			throw Object.assign(new Error('Extension service call belongs to an expired invocation'), { code: 'cancelled' });
+			throw Object.assign(new Error('Extension service call belongs to an expired invocation'), {
+				code: 'cancelled',
+			});
 		}
 		return clientRequest(current, encoded);
-	}
+	},
 });
 
 function clientRequest(callContext, encoded) {
@@ -191,9 +245,10 @@ function pumpClientCalls() {
 }
 Object.defineProperty(globalThis, '__ashBackgroundRequest', {
 	value(encoded) {
-		if (!['activating', 'active'].includes(phase) || !identity) throw new Error('Extension activation is no longer active');
+		if (!['activating', 'active'].includes(phase) || !identity)
+			throw new Error('Extension activation is no longer active');
 		return clientRequest({ protocolVersion: 1, ...identity }, encoded);
-	}
+	},
 });
 
 // Synchronous public hooks preserve Node's CJS/ESM resolution and cache. Only the
@@ -204,7 +259,8 @@ const apiURL = 'ash:sdk';
 let apiSource;
 const hooks = registerHooks({
 	resolve(specifier, ctx, next) {
-		if (specifier === '@ash/extension' || specifier === '@ash/extension/browser') throw new Error('Use the public @ash/sdk extension API');
+		if (specifier === '@ash/extension' || specifier === '@ash/extension/browser')
+			throw new Error('Use the public @ash/sdk extension API');
 		if (specifier === '@ash/sdk' || specifier === 'vscode') {
 			if (specifier !== apiModule) throw new Error(`The ${specifier} API is unavailable in an Ash extension`);
 			if (!apiSource) throw new Error('Extension API is not initialized');
@@ -224,46 +280,84 @@ async function dispatch(frame) {
 	try {
 		switch (frame.method) {
 			case 'initialize':
-				if (phase !== 'new' || frame.params?.extensionId !== extensionId || frame.params?.runtimeApiVersion !== 1) throw new Error('Invalid initialization');
+				if (
+					phase !== 'new' ||
+					frame.params?.extensionId !== extensionId ||
+					frame.params?.runtimeApiVersion !== 1
+				)
+					throw new Error('Invalid initialization');
 				applyEnvironment(frame.params.environment);
 				identity = { incarnation: ctx.incarnation, activationGeneration: ctx.activationGeneration };
 				phase = 'initialized';
 				success = { result: 'initialized', body: { protocolVersion: 1, runtimeApiVersion: 1 } };
 				break;
 			case 'activate': {
-				if (phase !== 'initialized' || frame.params?.extensionId !== extensionId || !frame.params.initialization) throw new Error('Invalid activation');
+				if (
+					phase !== 'initialized' ||
+					frame.params?.extensionId !== extensionId ||
+					!frame.params.initialization
+				)
+					throw new Error('Invalid activation');
 				phase = 'activating';
 				const publicContext = runtime.beginActivation(extensionId);
-				bridge = createApi({
-					commands: manifest.contributes?.commands ?? [], debuggers: manifest.contributes?.debuggers ?? [],
-					extensionId: `${manifest.publisher}.${manifest.name}`, extensionPath: root, pathSeparator: sep, manifest,
-					localization: {
-						...loadLocalization(frame.params.initialization.language ?? 'en'),
-						package: loadPackageMessages(frame.params.initialization.language ?? 'en'),
+				bridge = createApi(
+					{
+						commands: manifest.contributes?.commands ?? [],
+						debuggers: manifest.contributes?.debuggers ?? [],
+						extensionId: `${manifest.publisher}.${manifest.name}`,
+						extensionPath: root,
+						pathSeparator: sep,
+						manifest,
+						localization: {
+							...loadLocalization(frame.params.initialization.language ?? 'en'),
+							package: loadPackageMessages(frame.params.initialization.language ?? 'en'),
+						},
 					},
-				}, frame.params.initialization);
+					frame.params.initialization,
+				);
 				Object.defineProperty(globalThis, '__ashExtensionApi', { value: bridge.api });
-				apiSource = `const api = globalThis.__ashExtensionApi; export default api; export {api as 'module.exports'};\n`
-					+ Object.keys(bridge.api).map(key => `export const ${key} = api[${JSON.stringify(key)}];`).join('\n');
+				apiSource =
+					`const api = globalThis.__ashExtensionApi; export default api; export {api as 'module.exports'};\n` +
+					Object.keys(bridge.api)
+						.map(key => `export const ${key} = api[${JSON.stringify(key)}];`)
+						.join('\n');
 				extension = await import(pathToFileURL(entry).href);
 				const implementation = extension.default ?? extension;
-				if (typeof implementation.activate !== 'function') throw new Error('Extension has no activate function');
-				await bridge.activate(publicContext, implementation.activate, implementation, frame.params.capabilities);
+				if (typeof implementation.activate !== 'function')
+					throw new Error('Extension has no activate function');
+				await bridge.activate(
+					publicContext,
+					implementation.activate,
+					implementation,
+					frame.params.capabilities,
+				);
 				const registrations = JSON.parse(runtime.sealActivation());
 				phase = 'active';
 				success = { result: 'activated', body: { registrations } };
 				break;
 			}
 			case 'invoke': {
-				if (phase !== 'active' || frame.params?.extensionId !== extensionId) throw new Error('Extension is not active');
-				if (!Number.isSafeInteger(frame.params.deadlineUnixMillis) || frame.params.deadlineUnixMillis <= Date.now()) {
+				if (phase !== 'active' || frame.params?.extensionId !== extensionId)
+					throw new Error('Extension is not active');
+				if (
+					!Number.isSafeInteger(frame.params.deadlineUnixMillis) ||
+					frame.params.deadlineUnixMillis <= Date.now()
+				) {
 					throw Object.assign(new Error('Invocation deadline expired'), { code: 'deadlineExceeded' });
 				}
 				const owned = { context: ctx, cancelled: false };
 				active.set(ctx.requestId, owned);
 				try {
-					const payload = await invocation.run(ctx, () => runtime.invoke(frame.params.registrationId,
-						JSON.stringify(frame.params.payload), ctx.requestId, frame.params.operation, frame.params.registrationGeneration, frame.params.deadlineUnixMillis));
+					const payload = await invocation.run(ctx, () =>
+						runtime.invoke(
+							frame.params.registrationId,
+							JSON.stringify(frame.params.payload),
+							ctx.requestId,
+							frame.params.operation,
+							frame.params.registrationGeneration,
+							frame.params.deadlineUnixMillis,
+						),
+					);
 					success = { result: 'invoked', body: { payload: JSON.parse(payload) } };
 				} finally {
 					active.delete(ctx.requestId);
@@ -273,32 +367,49 @@ async function dispatch(frame) {
 			}
 			case 'cancel': {
 				const id = frame.params?.targetRequestId;
-				if (!Number.isSafeInteger(id) || id < 1 || !['caller', 'deadline', 'authorityRevoked', 'shutdown'].includes(frame.params?.reason)
-					|| Object.keys(frame.params).some(key => !['targetRequestId', 'reason'].includes(key))) throw new Error('Invalid cancellation target');
+				if (
+					!Number.isSafeInteger(id) ||
+					id < 1 ||
+					!['caller', 'deadline', 'authorityRevoked', 'shutdown'].includes(frame.params?.reason) ||
+					Object.keys(frame.params).some(key => !['targetRequestId', 'reason'].includes(key))
+				)
+					throw new Error('Invalid cancellation target');
 				const owned = active.get(id);
 				if (owned) owned.cancelled = true;
-				failCalls(id, 'Invocation was cancelled', frame.params.reason === 'deadline' ? 'deadlineExceeded' : 'cancelled');
+				failCalls(
+					id,
+					'Invocation was cancelled',
+					frame.params.reason === 'deadline' ? 'deadlineExceeded' : 'cancelled',
+				);
 				runtime.cancel(id);
 				success = { result: 'cancelled' };
 				break;
 			}
-			case 'ping': success = { result: 'pong' }; break;
+			case 'ping':
+				success = { result: 'pong' };
+				break;
 			case 'deactivate':
 			case 'shutdown':
-				if (!stopping) stopping = (async () => {
-					phase = 'stopping';
-					failCalls(undefined, 'Extension is stopping');
-					for (const [id, owned] of active) { owned.cancelled = true; runtime.cancel(id); failCalls(id, 'Extension is stopping'); }
-					bridge?.deactivate();
-					const implementation = extension?.default ?? extension;
-					await runtime.deactivate(() => implementation?.deactivate?.());
-					hooks.deregister();
-					phase = 'disposed';
-				})();
+				if (!stopping)
+					stopping = (async () => {
+						phase = 'stopping';
+						failCalls(undefined, 'Extension is stopping');
+						for (const [id, owned] of active) {
+							owned.cancelled = true;
+							runtime.cancel(id);
+							failCalls(id, 'Extension is stopping');
+						}
+						bridge?.deactivate();
+						const implementation = extension?.default ?? extension;
+						await runtime.deactivate(() => implementation?.deactivate?.());
+						hooks.deregister();
+						phase = 'disposed';
+					})();
 				await stopping;
 				success = { result: frame.method === 'shutdown' ? 'shutdown' : 'deactivated' };
 				break;
-			default: throw new Error('Unsupported host method');
+			default:
+				throw new Error('Unsupported host method');
 		}
 		await send({ ...ctx, status: 'success', body: success });
 		if (frame.method === 'shutdown') process.exit(0);
@@ -306,7 +417,14 @@ async function dispatch(frame) {
 		// Details stay on captured stderr; only a bounded failure crosses the public protocol.
 		const cancellation = error?.code === 'cancelled' || error?.code === 'deadlineExceeded';
 		if (!cancellation) process.stderr.write(String(error?.stack ?? error) + '\n');
-		await send({ ...ctx, status: 'failure', body: { code: frame.method === 'activate' ? 'activationFailed' : cancellation ? error.code : 'internal', message: 'Extension host operation failed' } });
+		await send({
+			...ctx,
+			status: 'failure',
+			body: {
+				code: frame.method === 'activate' ? 'activationFailed' : cancellation ? error.code : 'internal',
+				message: 'Extension host operation failed',
+			},
+		});
 	}
 }
 function receive(frame) {
@@ -322,13 +440,22 @@ function receive(frame) {
 		sentCalls--;
 		pumpClientCalls();
 		if (frame.outcome?.Ok) call.resolve(JSON.stringify(frame.outcome.Ok));
-		else if (frame.outcome?.Err) call.reject(Object.assign(new Error(frame.outcome.Err.message), { code: frame.outcome.Err.code }));
+		else if (frame.outcome?.Err)
+			call.reject(Object.assign(new Error(frame.outcome.Err.message), { code: frame.outcome.Err.code }));
 		else throw new Error('Invalid extension client response');
 		return;
 	}
 	const ctx = context(frame);
-	if (ctx.protocolVersion !== 1 || ![ctx.requestId, ctx.incarnation, ctx.activationGeneration].every(value => Number.isSafeInteger(value) && value > 0)
-		|| seen.has(ctx.requestId) || seen.size >= 1000000 || (identity && (ctx.incarnation !== identity.incarnation || ctx.activationGeneration !== identity.activationGeneration))) {
+	if (
+		ctx.protocolVersion !== 1 ||
+		![ctx.requestId, ctx.incarnation, ctx.activationGeneration].every(
+			value => Number.isSafeInteger(value) && value > 0,
+		) ||
+		seen.has(ctx.requestId) ||
+		seen.size >= 1000000 ||
+		(identity &&
+			(ctx.incarnation !== identity.incarnation || ctx.activationGeneration !== identity.activationGeneration))
+	) {
 		throw new Error('Invalid extension request identity');
 	}
 	seen.add(ctx.requestId);

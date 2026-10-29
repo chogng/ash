@@ -13,7 +13,9 @@ export function installChatGPTVerification(): void {
 		}
 		return originalFetch(input, init);
 	};
-	const target = globalThis as typeof globalThis & { __ashPrepareChatGPTHeaders?: () => Promise<Record<string, string>>; };
+	const target = globalThis as typeof globalThis & {
+		__ashPrepareChatGPTHeaders?: () => Promise<Record<string, string>>;
+	};
 	target.__ashPrepareChatGPTHeaders = async () => {
 		const signal = AbortSignal.timeout(25_000);
 		let moduleUrl: string | undefined;
@@ -30,10 +32,16 @@ export function installChatGPTVerification(): void {
 			// Its loaded entry still declares the current module URL; read that declaration
 			// without depending on composer visibility, a user gesture, or a fixed build hash.
 			if (!moduleUrl) {
-				const entry = resources.find(name => new URL(name).origin === location.origin && /\/native-initial-sentinel-prewarm-[\w-]+\.js$/u.test(new URL(name).pathname));
+				const entry = resources.find(
+					name =>
+						new URL(name).origin === location.origin &&
+						/\/native-initial-sentinel-prewarm-[\w-]+\.js$/u.test(new URL(name).pathname),
+				);
 				if (entry) {
 					const response = await originalFetch(entry, { credentials: 'omit', signal });
-					if (!response.ok || !response.body) { throw new Error('Verification entry is unavailable'); }
+					if (!response.ok || !response.body) {
+						throw new Error('Verification entry is unavailable');
+					}
 					const reader = response.body.getReader();
 					const decoder = new TextDecoder();
 					let source = '';
@@ -41,27 +49,53 @@ export function installChatGPTVerification(): void {
 					try {
 						while (true) {
 							const next = await reader.read();
-							if (next.done) { break; }
+							if (next.done) {
+								break;
+							}
 							length += next.value.byteLength;
-							if (length > 256 * 1024) { await reader.cancel(); throw new Error('Verification entry exceeds the limit'); }
+							if (length > 256 * 1024) {
+								await reader.cancel();
+								throw new Error('Verification entry exceeds the limit');
+							}
 							source += decoder.decode(next.value, { stream: true });
 						}
 						source += decoder.decode();
-					} finally { reader.releaseLock(); }
+					} finally {
+						reader.releaseLock();
+					}
 					const reference = source.match(/\.\/sentinel-[\w-]+\.js/u)?.[0];
-					if (reference) { moduleUrl = new URL(reference, entry).href; }
+					if (reference) {
+						moduleUrl = new URL(reference, entry).href;
+					}
 				}
 			}
-			if (moduleUrl) { break; }
+			if (moduleUrl) {
+				break;
+			}
 			await new Promise<void>(resolve => setTimeout(resolve, 200));
 		}
-		if (!moduleUrl) { throw new Error('Verification runtime is unavailable'); }
+		if (!moduleUrl) {
+			throw new Error('Verification runtime is unavailable');
+		}
 		const module: unknown = await import(/* @vite-ignore */ moduleUrl);
-		if (!module || typeof module !== 'object') { throw new Error('Invalid verification module'); }
-		const api: unknown = Object.values(module).find(value => value && typeof value === 'object' && typeof value.finalizeChatRequirements === 'function');
-		if (!api || typeof api !== 'object' || !('finalizeChatRequirements' in api) || typeof api.finalizeChatRequirements !== 'function') { throw new Error('Verification API is unavailable'); }
+		if (!module || typeof module !== 'object') {
+			throw new Error('Invalid verification module');
+		}
+		const api: unknown = Object.values(module).find(
+			value => value && typeof value === 'object' && typeof value.finalizeChatRequirements === 'function',
+		);
+		if (
+			!api ||
+			typeof api !== 'object' ||
+			!('finalizeChatRequirements' in api) ||
+			typeof api.finalizeChatRequirements !== 'function'
+		) {
+			throw new Error('Verification API is unavailable');
+		}
 		const value: unknown = await api.finalizeChatRequirements({ requestSignal: signal });
-		if (!value || typeof value !== 'object') { throw new Error('Invalid verification result'); }
+		if (!value || typeof value !== 'object') {
+			throw new Error('Invalid verification result');
+		}
 		const headers: Record<string, string> = {};
 		for (const [field, header] of [
 			['chatRequirementsToken', 'OpenAI-Sentinel-Chat-Requirements-Token'],
@@ -70,11 +104,15 @@ export function installChatGPTVerification(): void {
 		] as const) {
 			const token: unknown = Reflect.get(value, field);
 			if (token !== undefined && token !== null) {
-				if (typeof token !== 'string' || !token || token.length > 65536 || /[\r\n\0]/u.test(token)) { throw new Error('Invalid verification token'); }
+				if (typeof token !== 'string' || !token || token.length > 65536 || /[\r\n\0]/u.test(token)) {
+					throw new Error('Invalid verification token');
+				}
 				headers[header] = token;
 			}
 		}
-		if (!headers['OpenAI-Sentinel-Chat-Requirements-Token']) { throw new Error('Verification did not finish'); }
+		if (!headers['OpenAI-Sentinel-Chat-Requirements-Token']) {
+			throw new Error('Verification did not finish');
+		}
 		return headers;
 	};
 }

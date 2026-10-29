@@ -1,6 +1,6 @@
 import { IActivityService } from '../../../workbench/services/activity/common/activity.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
-import "./media/auxiliaryBarPart.css";
+import './media/auxiliaryBarPart.css';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IStorageService } from '../../../platform/storage/common/storage.js';
 import { PaneCompositePart } from '../../../workbench/browser/parts/paneCompositePart.js';
@@ -11,9 +11,12 @@ import { IViewsService } from '../../../workbench/services/views/common/viewsSer
 
 /** Hosts Code details and Design properties; editor tabs own their navigation. */
 export class AuxiliaryBarPart extends PaneCompositePart {
-
-	override get minimumWidth(): number { return 270; }
-	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
+	override get minimumWidth(): number {
+		return 270;
+	}
+	override get maximumWidth(): number {
+		return Number.POSITIVE_INFINITY;
+	}
 	override get preferredWidth(): number {
 		const width = this.activeCompositeId ? this.getComposite(this.activeCompositeId)!.getOptimalWidth() : 0;
 		return Math.max(300, width);
@@ -28,17 +31,27 @@ export class AuxiliaryBarPart extends PaneCompositePart {
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 	) {
-		super(container, {
-			id: 'auxiliarybar',
-			location: ViewContainerLocation.AuxiliaryBar,
-			ariaLabel: 'Auxiliary sidebar',
-			ariaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebar' },
-			viewsAriaLabel: 'Auxiliary sidebar views',
-			viewsAriaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebarViews' },
-			compositeBarVisible: false,
-			viewDescriptorService: descriptors, contextKeyService: contextKeys,
-			openComposite: (id, preserveFocus) => instantiationService.invokeFunction(accessor => accessor.get(IViewsService).openViewContainer(id, !preserveFocus)),
-		}, themeService, storage, activityService);
+		super(
+			container,
+			{
+				id: 'auxiliarybar',
+				location: ViewContainerLocation.AuxiliaryBar,
+				ariaLabel: 'Auxiliary sidebar',
+				ariaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebar' },
+				viewsAriaLabel: 'Auxiliary sidebar views',
+				viewsAriaLabelKey: { bundle: 'ash.regions', key: 'auxiliarySidebarViews' },
+				compositeBarVisible: false,
+				viewDescriptorService: descriptors,
+				contextKeyService: contextKeys,
+				openComposite: (id, preserveFocus) =>
+					instantiationService.invokeFunction(accessor =>
+						accessor.get(IViewsService).openViewContainer(id, !preserveFocus),
+					),
+			},
+			themeService,
+			storage,
+			activityService,
+		);
 		this.domNode.classList.add('ash-sessions-auxiliarybar');
 		this.contentDomNode.classList.add('ash-auxiliarybar-content');
 	}

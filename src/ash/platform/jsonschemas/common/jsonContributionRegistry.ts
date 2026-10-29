@@ -6,7 +6,7 @@ import { Registry } from '../../registry/common/platform.js';
 export const Extensions = { JSONContribution: 'base.contributions.json' };
 
 export interface ISchemaContributions {
-	readonly schemas: { [id: string]: JsonSchema; };
+	readonly schemas: { [id: string]: JsonSchema };
 }
 
 export interface IJSONContributionRegistry {
@@ -16,12 +16,12 @@ export interface IJSONContributionRegistry {
 	registerSchemaAssociation(uri: string, glob: string): IDisposable;
 	notifySchemaChanged(uri: string): void;
 	getSchemaContributions(): ISchemaContributions;
-	getSchemaAssociations(): { [uri: string]: string[]; };
+	getSchemaAssociations(): { [uri: string]: string[] };
 }
 
 /** Stores contributions; JSON language features own resource matching and schema evaluation. */
 class JSONContributionRegistry extends Disposable implements IJSONContributionRegistry {
-	private readonly schemas = new Map<string, { schema: JsonSchema; }>();
+	private readonly schemas = new Map<string, { schema: JsonSchema }>();
 	private readonly associations = new Map<string, Map<string, number>>();
 	private readonly schemaChanged = this._register(new Emitter<string>());
 	private readonly associationsChanged = this._register(new Emitter<void>());
@@ -33,13 +33,15 @@ class JSONContributionRegistry extends Disposable implements IJSONContributionRe
 		const id = normalizeSchemaId(uri);
 		const registration = { schema: unresolvedSchemaContent };
 		this.schemas.set(id, registration);
-		store?.add(toDisposable(() => {
-			// A retired contribution must not unregister a later replacement of the same schema ID.
-			if (this.schemas.get(id) === registration) {
-				this.schemas.delete(id);
-				this.schemaChanged.fire(id);
-			}
-		}));
+		store?.add(
+			toDisposable(() => {
+				// A retired contribution must not unregister a later replacement of the same schema ID.
+				if (this.schemas.get(id) === registration) {
+					this.schemas.delete(id);
+					this.schemaChanged.fire(id);
+				}
+			}),
+		);
 		this.schemaChanged.fire(id);
 	}
 
@@ -53,13 +55,18 @@ class JSONContributionRegistry extends Disposable implements IJSONContributionRe
 		}
 		const references = patterns.get(glob) ?? 0;
 		patterns.set(glob, references + 1);
-		if (references === 0) { this.associationsChanged.fire(); }
+		if (references === 0) {
+			this.associationsChanged.fire();
+		}
 		return toDisposable(() => {
 			const remaining = patterns.get(glob)! - 1;
-			if (remaining > 0) { patterns.set(glob, remaining); }
-			else {
+			if (remaining > 0) {
+				patterns.set(glob, remaining);
+			} else {
 				patterns.delete(glob);
-				if (patterns.size === 0) { this.associations.delete(id); }
+				if (patterns.size === 0) {
+					this.associations.delete(id);
+				}
 				this.associationsChanged.fire();
 			}
 		});
@@ -73,7 +80,7 @@ class JSONContributionRegistry extends Disposable implements IJSONContributionRe
 		return { schemas: Object.fromEntries([...this.schemas].map(([id, entry]) => [id, entry.schema])) };
 	}
 
-	public getSchemaAssociations(): { [uri: string]: string[]; } {
+	public getSchemaAssociations(): { [uri: string]: string[] } {
 		return Object.fromEntries([...this.associations].map(([id, patterns]) => [id, [...patterns.keys()]]));
 	}
 }

@@ -22,9 +22,11 @@ export class RulersGpu extends ViewPart {
 	) {
 		super(context);
 		this._register(autorun(reader => this.updateEntries(reader)));
-		this._register(toDisposable(() => {
-			while (this.shapes.length > 0) this.shapes.pop()!.dispose();
-		}));
+		this._register(
+			toDisposable(() => {
+				while (this.shapes.length > 0) this.shapes.pop()!.dispose();
+			}),
+		);
 	}
 
 	public override onConfigurationChanged(event: viewEvents.ViewConfigurationChangedEvent): boolean {
@@ -38,10 +40,9 @@ export class RulersGpu extends ViewPart {
 		return true;
 	}
 
-	public override prepareRender(_context: RenderingContext): void {
-	}
+	public override prepareRender(_context: RenderingContext): void {}
 
-	public render(_context: RestrictedRenderingContext): void { }
+	public render(_context: RestrictedRenderingContext): void {}
 
 	private updateEntries(reader: IReader | undefined, theme: IColorTheme = this._context.theme.value): void {
 		const devicePixelRatio = this.gpuContext.devicePixelRatio.read(reader);
@@ -50,9 +51,7 @@ export class RulersGpu extends ViewPart {
 		const typicalHalfwidthCharacterWidth = editorOptions.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth;
 		for (let index = 0; index < rulers.length; index += 1) {
 			const ruler = rulers[index]!;
-			const color = ruler.color
-				? Color.fromHex(ruler.color)
-				: theme.getColor(editorRuler) ?? Color.white;
+			const color = ruler.color ? Color.fromHex(ruler.color) : (theme.getColor(editorRuler) ?? Color.white);
 			const entry: Parameters<RectangleRenderer['register']> = [
 				ruler.column * typicalHalfwidthCharacterWidth * devicePixelRatio,
 				0,

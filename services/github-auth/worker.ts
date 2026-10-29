@@ -20,7 +20,11 @@ interface SignedState {
 export default {
 	async fetch(request: Request, environment: Environment): Promise<Response> {
 		const url = new URL(request.url);
-		if (environment.GITHUB_HOST !== undefined && (!/^[a-zA-Z0-9][a-zA-Z0-9.-]*$/.test(environment.GITHUB_HOST) || environment.GITHUB_HOST.length > 255)) return response(503, 'Invalid GitHub host configuration');
+		if (
+			environment.GITHUB_HOST !== undefined &&
+			(!/^[a-zA-Z0-9][a-zA-Z0-9.-]*$/.test(environment.GITHUB_HOST) || environment.GITHUB_HOST.length > 255)
+		)
+			return response(503, 'Invalid GitHub host configuration');
 		if (!environment.GITHUB_CLIENT_ID || !environment.GITHUB_CLIENT_SECRET || !environment.STATE_SIGNING_SECRET) {
 			return response(503, 'GitHub authorization is not configured');
 		}
@@ -36,10 +40,25 @@ async function authorize(url: URL, environment: Environment): Promise<Response> 
 	const redirectUri = single(url.searchParams, 'redirect_uri');
 	const clientState = single(url.searchParams, 'state');
 	const challenge = single(url.searchParams, 'code_challenge');
-	if (clientId !== environment.GITHUB_CLIENT_ID || !redirectUri || !validLoopback(redirectUri) || !base64url43(clientState) || !base64url43(challenge) || single(url.searchParams, 'code_challenge_method') !== 'S256') {
+	if (
+		clientId !== environment.GITHUB_CLIENT_ID ||
+		!redirectUri ||
+		!validLoopback(redirectUri) ||
+		!base64url43(clientState) ||
+		!base64url43(challenge) ||
+		single(url.searchParams, 'code_challenge_method') !== 'S256'
+	) {
 		return response(400, 'Invalid authorization request');
 	}
-	const state = await sign({ redirectUri, clientState, issuedAt: Math.floor(Date.now() / 1000), host: environment.GITHUB_HOST ?? 'github.com' }, environment.STATE_SIGNING_SECRET);
+	const state = await sign(
+		{
+			redirectUri,
+			clientState,
+			issuedAt: Math.floor(Date.now() / 1000),
+			host: environment.GITHUB_HOST ?? 'github.com',
+		},
+		environment.STATE_SIGNING_SECRET,
+	);
 	const github = new URL(`https://${environment.GITHUB_HOST ?? 'github.com'}/login/oauth/authorize`);
 	github.searchParams.set('client_id', clientId);
 	if (!clientId.startsWith('Iv')) github.searchParams.set('scope', 'read:user repo notifications');
@@ -52,7 +71,13 @@ async function authorize(url: URL, environment: Environment): Promise<Response> 
 
 async function callback(url: URL, environment: Environment): Promise<Response> {
 	const state = await verify(single(url.searchParams, 'state'), environment.STATE_SIGNING_SECRET);
-	if (!state || state.host !== (environment.GITHUB_HOST ?? 'github.com') || !validLoopback(state.redirectUri) || !base64url43(state.clientState)) return response(400, 'Invalid authorization response');
+	if (
+		!state ||
+		state.host !== (environment.GITHUB_HOST ?? 'github.com') ||
+		!validLoopback(state.redirectUri) ||
+		!base64url43(state.clientState)
+	)
+		return response(400, 'Invalid authorization response');
 	const code = single(url.searchParams, 'code');
 	const error = single(url.searchParams, 'error');
 	if ((!code && !error) || (code && error)) return response(400, 'Invalid authorization response');
@@ -64,7 +89,8 @@ async function callback(url: URL, environment: Environment): Promise<Response> {
 }
 
 async function exchange(request: Request, url: URL, environment: Environment): Promise<Response> {
-	if (request.headers.get('content-type')?.split(';', 1)[0] !== 'application/x-www-form-urlencoded') return response(415, 'Expected form data');
+	if (request.headers.get('content-type')?.split(';', 1)[0] !== 'application/x-www-form-urlencoded')
+		return response(415, 'Expected form data');
 	const reader = request.body?.getReader();
 	const chunks: Uint8Array[] = [];
 	let length = 0;
@@ -98,7 +124,13 @@ async function exchange(request: Request, url: URL, environment: Environment): P
 	const verifier = single(form, 'code_verifier');
 	const redirectUri = single(form, 'redirect_uri');
 	const refreshToken = single(form, 'refresh_token');
-	if (clientId !== environment.GITHUB_CLIENT_ID || (grantType === 'authorization_code' && (!code || !base64url43(verifier) || !redirectUri || !validLoopback(redirectUri))) || (grantType === 'refresh_token' && !refreshToken) || !['authorization_code', 'refresh_token'].includes(grantType ?? '')) {
+	if (
+		clientId !== environment.GITHUB_CLIENT_ID ||
+		(grantType === 'authorization_code' &&
+			(!code || !base64url43(verifier) || !redirectUri || !validLoopback(redirectUri))) ||
+		(grantType === 'refresh_token' && !refreshToken) ||
+		!['authorization_code', 'refresh_token'].includes(grantType ?? '')
+	) {
 		return response(400, 'Invalid token request');
 	}
 	const githubForm = new URLSearchParams({ client_id: clientId, client_secret: environment.GITHUB_CLIENT_SECRET });
@@ -118,18 +150,30 @@ async function exchange(request: Request, url: URL, environment: Environment): P
 		body: githubForm,
 	});
 	if (!upstream.ok) return response(502, 'GitHub token exchange failed');
-	const token = await upstream.json() as Record<string, unknown>;
+	const token = (await upstream.json()) as Record<string, unknown>;
 	if (typeof token.error === 'string') {
-		return new Response(JSON.stringify({ error: token.error }), { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+		return new Response(JSON.stringify({ error: token.error }), {
+			status: 200,
+			headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+		});
 	}
-	if (typeof token.access_token !== 'string' || !token.access_token || typeof token.token_type !== 'string' || token.token_type.toLowerCase() !== 'bearer') return response(502, 'GitHub token exchange failed');
-	return new Response(JSON.stringify({
-		access_token: token.access_token,
-		refresh_token: token.refresh_token,
-		expires_in: token.expires_in,
-		refresh_token_expires_in: token.refresh_token_expires_in,
-		token_type: token.token_type,
-	}), { status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
+	if (
+		typeof token.access_token !== 'string' ||
+		!token.access_token ||
+		typeof token.token_type !== 'string' ||
+		token.token_type.toLowerCase() !== 'bearer'
+	)
+		return response(502, 'GitHub token exchange failed');
+	return new Response(
+		JSON.stringify({
+			access_token: token.access_token,
+			refresh_token: token.refresh_token,
+			expires_in: token.expires_in,
+			refresh_token_expires_in: token.refresh_token_expires_in,
+			token_type: token.token_type,
+		}),
+		{ status: 200, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } },
+	);
 }
 
 function single(params: URLSearchParams, key: string): string | undefined {
@@ -144,14 +188,26 @@ function base64url43(value: string | undefined): value is string {
 function validLoopback(value: string): boolean {
 	try {
 		const url = new URL(value);
-		return url.protocol === 'http:' && url.hostname === '127.0.0.1' && url.port !== '' && /^\/github-oauth\/[A-Za-z0-9_-]{43}$/.test(url.pathname) && !url.search && !url.hash && !url.username && !url.password;
+		return (
+			url.protocol === 'http:' &&
+			url.hostname === '127.0.0.1' &&
+			url.port !== '' &&
+			/^\/github-oauth\/[A-Za-z0-9_-]{43}$/.test(url.pathname) &&
+			!url.search &&
+			!url.hash &&
+			!url.username &&
+			!url.password
+		);
 	} catch {
 		return false;
 	}
 }
 
 async function key(secret: string): Promise<CryptoKey> {
-	return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
+	return crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, [
+		'sign',
+		'verify',
+	]);
 }
 
 async function sign(state: SignedState, secret: string): Promise<string> {
@@ -165,7 +221,12 @@ async function verify(value: string | undefined, secret: string): Promise<Signed
 	const [data, signature, extra] = value.split('.');
 	if (!data || !signature || extra || data.length > 2048) return undefined;
 	try {
-		const valid = await crypto.subtle.verify('HMAC', await key(secret), fromBase64url(signature), new TextEncoder().encode(data));
+		const valid = await crypto.subtle.verify(
+			'HMAC',
+			await key(secret),
+			fromBase64url(signature),
+			new TextEncoder().encode(data),
+		);
 		if (!valid) return undefined;
 		const state = JSON.parse(new TextDecoder().decode(fromBase64url(data))) as SignedState;
 		const age = Math.floor(Date.now() / 1000) - state.issuedAt;
@@ -176,7 +237,10 @@ async function verify(value: string | undefined, secret: string): Promise<Signed
 }
 
 function base64url(bytes: Uint8Array): string {
-	return btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+	return btoa(String.fromCharCode(...bytes))
+		.replace(/\+/g, '-')
+		.replace(/\//g, '_')
+		.replace(/=+$/, '');
 }
 
 function fromBase64url(value: string): Uint8Array {
@@ -184,9 +248,15 @@ function fromBase64url(value: string): Uint8Array {
 }
 
 function redirect(location: string): Response {
-	return new Response(null, { status: 302, headers: { Location: location, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' } });
+	return new Response(null, {
+		status: 302,
+		headers: { Location: location, 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' },
+	});
 }
 
 function response(status: number, message: string): Response {
-	return new Response(message, { status, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' } });
+	return new Response(message, {
+		status,
+		headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
+	});
 }

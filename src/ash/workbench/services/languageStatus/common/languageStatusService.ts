@@ -14,7 +14,7 @@ export interface ILanguageStatus {
 	readonly name: string;
 	readonly selector: LanguageSelector;
 	readonly severity: Severity;
-	readonly label: string | { value: string; shortValue: string; };
+	readonly label: string | { value: string; shortValue: string };
 	readonly detail: string;
 	readonly busy: boolean;
 	readonly source: string;
@@ -42,8 +42,9 @@ class LanguageStatusService extends Disposable implements ILanguageStatusService
 	}
 
 	getLanguageStatus(model: ITextModel): ILanguageStatus[] {
-		return this.statuses.ordered(model).sort((a, b) => b.severity - a.severity
-			|| a.source.localeCompare(b.source) || a.id.localeCompare(b.id));
+		return this.statuses
+			.ordered(model)
+			.sort((a, b) => b.severity - a.severity || a.source.localeCompare(b.source) || a.id.localeCompare(b.id));
 	}
 }
 

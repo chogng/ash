@@ -1,44 +1,44 @@
 import type { WorkspaceTrustGrant } from '../../workspace/common/workspaceTrust.js';
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
-import type { IAnyWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier } from "../../workspace/common/workspace.js";
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import type { IAnyWorkspaceIdentifier, ISingleFolderWorkspaceIdentifier } from '../../workspace/common/workspace.js';
 
 import type { WorkspaceContextMainService } from '../../window/electron-main/window.js';
 import type { WorkspacesManagementMainService } from './workspacesManagementMainService.js';
 
 export enum WorkspaceTransitionPhase {
-	Idle = "idle",
-	Resolving = "resolving",
-	SwitchingRuntime = "switchingRuntime",
-	Committing = "committing",
-	Recovering = "recovering",
+	Idle = 'idle',
+	Resolving = 'resolving',
+	SwitchingRuntime = 'switchingRuntime',
+	Committing = 'committing',
+	Recovering = 'recovering',
 }
 
 export enum WorkspaceTransitionStatus {
-	Unchanged = "unchanged",
-	Applied = "applied",
-	Recovered = "recovered",
-	Blocked = "blocked",
-	Failed = "failed",
+	Unchanged = 'unchanged',
+	Applied = 'applied',
+	Recovered = 'recovered',
+	Blocked = 'blocked',
+	Failed = 'failed',
 }
 
 export enum WorkspaceTransitionFailureKind {
-	InvalidTarget = "invalidTarget",
-	RuntimeBusy = "runtimeBusy",
-	RuntimeUnavailable = "runtimeUnavailable",
-	RuntimeUnsupported = "runtimeUnsupported",
-	RuntimeRejected = "runtimeRejected",
+	InvalidTarget = 'invalidTarget',
+	RuntimeBusy = 'runtimeBusy',
+	RuntimeUnavailable = 'runtimeUnavailable',
+	RuntimeUnsupported = 'runtimeUnsupported',
+	RuntimeRejected = 'runtimeRejected',
 }
 
 export enum WorkspaceTransitionFailureStage {
-	Resolve = "resolve",
-	Runtime = "runtime",
+	Resolve = 'resolve',
+	Runtime = 'runtime',
 }
 
 export enum WorkspaceTransitionRecovery {
-	KeepCurrent = "keepCurrent",
-	Retry = "retry",
-	Reconciled = "reconciled",
+	KeepCurrent = 'keepCurrent',
+	Retry = 'retry',
+	Reconciled = 'reconciled',
 }
 
 export interface IWorkspaceTransitionContext {
@@ -73,20 +73,23 @@ export interface IWorkspaceTransitionRecoveryRouter {
 }
 
 export type WorkspaceTransitionState =
-	| { readonly phase: WorkspaceTransitionPhase.Idle; }
+	| { readonly phase: WorkspaceTransitionPhase.Idle }
 	| {
-		readonly phase: WorkspaceTransitionPhase.Resolving;
-		readonly transitionId: number;
-		readonly requestedPath: string;
-		readonly previous: IAnyWorkspaceIdentifier;
-	}
+			readonly phase: WorkspaceTransitionPhase.Resolving;
+			readonly transitionId: number;
+			readonly requestedPath: string;
+			readonly previous: IAnyWorkspaceIdentifier;
+	  }
 	| {
-		readonly phase: WorkspaceTransitionPhase.SwitchingRuntime | WorkspaceTransitionPhase.Committing | WorkspaceTransitionPhase.Recovering;
-		readonly transitionId: number;
-		readonly requestedPath: string;
-		readonly previous: IAnyWorkspaceIdentifier;
-		readonly workspace: ISingleFolderWorkspaceIdentifier;
-	};
+			readonly phase:
+				| WorkspaceTransitionPhase.SwitchingRuntime
+				| WorkspaceTransitionPhase.Committing
+				| WorkspaceTransitionPhase.Recovering;
+			readonly transitionId: number;
+			readonly requestedPath: string;
+			readonly previous: IAnyWorkspaceIdentifier;
+			readonly workspace: ISingleFolderWorkspaceIdentifier;
+	  };
 
 export interface IWorkspaceTransitionResult {
 	readonly status: WorkspaceTransitionStatus;
@@ -141,20 +144,37 @@ export class WorkspaceTransitionMainService extends Disposable {
 		return this._state;
 	}
 
-	transitionToFolder(path: string, grant: WorkspaceTrustGrant = { type: "config" }): Promise<IWorkspaceTransitionResult> {
+	transitionToFolder(
+		path: string,
+		grant: WorkspaceTrustGrant = { type: 'config' },
+	): Promise<IWorkspaceTransitionResult> {
 		const transition = this.transitionQueue.then(() => this.doTransitionToFolder(path, grant));
-		this.transitionQueue = transition.then(() => undefined, () => undefined);
+		this.transitionQueue = transition.then(
+			() => undefined,
+			() => undefined,
+		);
 		return transition;
 	}
 
 	/** Transitions to an already validated local or Remote single-folder Workspace identity. */
-	transitionToWorkspace(target: IResolvedWorkspaceTransitionTarget, grant: WorkspaceTrustGrant = { type: "config" }): Promise<IWorkspaceTransitionResult> {
-		const transition = this.transitionQueue.then(() => this.doTransitionToWorkspace(target.root, target.workspace, grant));
-		this.transitionQueue = transition.then(() => undefined, () => undefined);
+	transitionToWorkspace(
+		target: IResolvedWorkspaceTransitionTarget,
+		grant: WorkspaceTrustGrant = { type: 'config' },
+	): Promise<IWorkspaceTransitionResult> {
+		const transition = this.transitionQueue.then(() =>
+			this.doTransitionToWorkspace(target.root, target.workspace, grant),
+		);
+		this.transitionQueue = transition.then(
+			() => undefined,
+			() => undefined,
+		);
 		return transition;
 	}
 
-	private async doTransitionToFolder(requestedPath: string, grant: WorkspaceTrustGrant): Promise<IWorkspaceTransitionResult> {
+	private async doTransitionToFolder(
+		requestedPath: string,
+		grant: WorkspaceTrustGrant,
+	): Promise<IWorkspaceTransitionResult> {
 		const transitionId = this.nextTransitionId++;
 		const previous = this.context.getWorkspace();
 		this.setState({ phase: WorkspaceTransitionPhase.Resolving, transitionId, requestedPath, previous });
@@ -201,7 +221,10 @@ export class WorkspaceTransitionMainService extends Disposable {
 		};
 	}
 
-	private async switchRuntime(requestedPath: string, context: IWorkspaceTransitionContext): Promise<IRuntimeSwitchResult> {
+	private async switchRuntime(
+		requestedPath: string,
+		context: IWorkspaceTransitionContext,
+	): Promise<IRuntimeSwitchResult> {
 		let recovered = false;
 		for (let attempt = 0; attempt < 2; attempt += 1) {
 			this.setActiveState(WorkspaceTransitionPhase.SwitchingRuntime, requestedPath, context);
@@ -226,7 +249,7 @@ export class WorkspaceTransitionMainService extends Disposable {
 					return {
 						failure: {
 							...failure,
-							error: new Error("Workspace runtime recovery failed", { cause: recoveryError }),
+							error: new Error('Workspace runtime recovery failed', { cause: recoveryError }),
 						},
 						recovered,
 					};
@@ -236,15 +259,16 @@ export class WorkspaceTransitionMainService extends Disposable {
 				recovered = true;
 			}
 		}
-		throw new Error("Workspace transition retry bound was exceeded");
+		throw new Error('Workspace transition retry bound was exceeded');
 	}
 
 	private finishBeforeCommit(failure: IWorkspaceTransitionFailure): IWorkspaceTransitionResult {
 		this.setState({ phase: WorkspaceTransitionPhase.Idle });
 		return {
-			status: failure.kind === WorkspaceTransitionFailureKind.RuntimeBusy
-				? WorkspaceTransitionStatus.Blocked
-				: WorkspaceTransitionStatus.Failed,
+			status:
+				failure.kind === WorkspaceTransitionFailureKind.RuntimeBusy
+					? WorkspaceTransitionStatus.Blocked
+					: WorkspaceTransitionStatus.Failed,
 			previous: failure.previous,
 			workspace: failure.workspace,
 			failure,
@@ -252,11 +276,20 @@ export class WorkspaceTransitionMainService extends Disposable {
 	}
 
 	private setActiveState(
-		phase: WorkspaceTransitionPhase.SwitchingRuntime | WorkspaceTransitionPhase.Committing | WorkspaceTransitionPhase.Recovering,
+		phase:
+			| WorkspaceTransitionPhase.SwitchingRuntime
+			| WorkspaceTransitionPhase.Committing
+			| WorkspaceTransitionPhase.Recovering,
 		requestedPath: string,
 		context: IWorkspaceTransitionContext,
 	): void {
-		this.setState({ phase, transitionId: context.transitionId, requestedPath, previous: context.previous, workspace: context.workspace });
+		this.setState({
+			phase,
+			transitionId: context.transitionId,
+			requestedPath,
+			previous: context.previous,
+			workspace: context.workspace,
+		});
 	}
 
 	private setState(state: WorkspaceTransitionState): void {

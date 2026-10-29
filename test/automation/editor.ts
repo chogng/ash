@@ -21,7 +21,9 @@ export class Editor {
 
 	async waitForTypeInEditor(text: string): Promise<void> {
 		if (text.includes('\n') || text.includes('\r')) {
-			throw new Error('waitForTypeInEditor accepts one line; press Enter between lines so editor indentation is applied explicitly');
+			throw new Error(
+				'waitForTypeInEditor accepts one line; press Enter between lines so editor indentation is applied explicitly',
+			);
 		}
 		await expect(this.input).toBeFocused();
 		await this.input.page().keyboard.insertText(text);
@@ -31,10 +33,15 @@ export class Editor {
 	/** Checks rendered viewport text; folded and offscreen model lines are absent. */
 	async waitForEditorContents(accept: (contents: string) => boolean): Promise<void> {
 		await expect(this.element).toBeVisible();
-		await expect.poll(async () => {
-			const lines = await this.lines.allTextContents();
-			return accept(lines.join('\n').replace(/\u00a0/g, ' '));
-		}, { message: 'editor viewport contents match' }).toBe(true);
+		await expect
+			.poll(
+				async () => {
+					const lines = await this.lines.allTextContents();
+					return accept(lines.join('\n').replace(/\u00a0/g, ' '));
+				},
+				{ message: 'editor viewport contents match' },
+			)
+			.toBe(true);
 	}
 
 	async foldAtLine(line: number): Promise<void> {
@@ -51,8 +58,8 @@ export class Editor {
 
 	private gutterAtLine(line: number): Locator {
 		// Model line numbers remain stable when folding changes the visible row order.
-		return this.element.locator('.margin-view-overlays > .view-overlay-line').filter({
-			has: this.element.page().locator('.line-numbers', { hasText: new RegExp(`^${line}$`) }),
-		});
+		return this.element
+			.locator('.margin-view-overlays > .view-overlay-line')
+			.filter({ has: this.element.page().locator('.line-numbers', { hasText: new RegExp(`^${line}$`) }) });
 	}
 }

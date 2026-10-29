@@ -16,13 +16,19 @@ export class LinesDiff {
 		public readonly changes: readonly DetailedLineRangeMapping[],
 		public readonly moves: readonly MovedText[],
 		public readonly hitTimeout: boolean,
-	) { }
+	) {}
 }
 
 export class MovedText {
-	constructor(public readonly lineRangeMapping: LineRangeMapping, public readonly changes: readonly DetailedLineRangeMapping[]) { }
+	constructor(
+		public readonly lineRangeMapping: LineRangeMapping,
+		public readonly changes: readonly DetailedLineRangeMapping[],
+	) {}
 
 	public flip(): MovedText {
-		return new MovedText(this.lineRangeMapping.flip(), this.changes.map(change => change.flip()));
+		return new MovedText(
+			this.lineRangeMapping.flip(),
+			this.changes.map(change => change.flip()),
+		);
 	}
 }

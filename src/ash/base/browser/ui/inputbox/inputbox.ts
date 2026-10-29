@@ -1,20 +1,14 @@
 import './inputbox.css';
-import { addDisposableListener, h, scheduleAtNextAnimationFrame } from "../../dom.js";
+import { addDisposableListener, h, scheduleAtNextAnimationFrame } from '../../dom.js';
 import { SmoothScrollableElement } from '../scrollbar/scrollableElement.js';
 import { Scrollable, ScrollbarVisibility } from '../../../common/scrollable.js';
 import type { IHistoryNavigationWidget } from '../../history.js';
-import { DomEmitter, type DOMEventMap } from "../../event.js";
-import {
-	type AriaAutoComplete,
-	type AriaRole,
-	getAriaAttribute,
-	setAriaAttribute,
-	setRole,
-} from "../aria/aria.js";
-import { Emitter, type Event } from "../../../common/event.js";
+import { DomEmitter, type DOMEventMap } from '../../event.js';
+import { type AriaAutoComplete, type AriaRole, getAriaAttribute, setAriaAttribute, setRole } from '../aria/aria.js';
+import { Emitter, type Event } from '../../../common/event.js';
 import { HistoryNavigator, type IHistory } from '../../../common/history.js';
-import { IME } from "../../../common/ime.js";
-import { Disposable, MutableDisposable, toDisposable } from "../../../common/lifecycle.js";
+import { IME } from '../../../common/ime.js';
+import { Disposable, MutableDisposable, toDisposable } from '../../../common/lifecycle.js';
 
 /** Host-provided CSS colors, resolved through the containing theme root. */
 export interface IInputBoxStyles {
@@ -28,8 +22,8 @@ export interface InputBoxOptions<Flexible extends boolean = false> {
 	readonly flexibleHeight?: Flexible;
 	readonly flexibleMaxHeight?: number;
 	readonly placeholder?: string;
-	readonly type?: "text" | "number" | "password" | "search";
-	readonly presentation?: "default" | "field" | "compact";
+	readonly type?: 'text' | 'number' | 'password' | 'search';
+	readonly presentation?: 'default' | 'field' | 'compact';
 	readonly readOnly?: boolean;
 	readonly enabled?: boolean;
 	readonly ariaLabel?: string;
@@ -63,13 +57,13 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 	readonly onDidChange: Event<string> = this._onDidChange.event;
 	readonly onDidFocus: Event<void> = this._onDidFocus.event;
 	readonly onDidBlur: Event<void> = this._onDidBlur.event;
-	readonly onKeyDown: Event<DOMEventMap["keydown"]>;
+	readonly onKeyDown: Event<DOMEventMap['keydown']>;
 
 	constructor(container: HTMLElement, options: InputBoxOptions<Flexible> = {}) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		this.element = h(ownerDocument, "div");
-		this.element.className = "ash-input-box";
+		this.element = h(ownerDocument, 'div');
+		this.element.className = 'ash-input-box';
 		if (options.inputBoxStyles) {
 			const colors = {
 				'--ash-input-style-input-background': options.inputBoxStyles.inputBackground,
@@ -80,51 +74,44 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 				if (value !== undefined) this.element.style.setProperty(property, value);
 			}
 		}
-		if (options.presentation === "field" || options.presentation === "compact") this.element.classList.add("ash-input-box-field");
-		if (options.presentation === "compact") this.element.classList.add("ash-input-box-compact");
+		if (options.presentation === 'field' || options.presentation === 'compact')
+			this.element.classList.add('ash-input-box-field');
+		if (options.presentation === 'compact') this.element.classList.add('ash-input-box-compact');
 		this._register(toDisposable(() => this.element.remove()));
 
 		this.maxHeight = Math.max(24, options.flexibleMaxHeight ?? 134);
 		// The element type follows the same generic option used to choose its DOM tag; default consumers remain inputs.
-		this.inputElement = (options.flexibleHeight ? h(ownerDocument, "textarea") : h(ownerDocument, "input")) as InputElement<Flexible>;
-		if ("step" in this.inputElement) { this.inputElement.type = options.type ?? "text"; }
-		this.inputElement.placeholder = options.placeholder ?? "";
+		this.inputElement = (
+			options.flexibleHeight ? h(ownerDocument, 'textarea') : h(ownerDocument, 'input')
+		) as InputElement<Flexible>;
+		if ('step' in this.inputElement) {
+			this.inputElement.type = options.type ?? 'text';
+		}
+		this.inputElement.placeholder = options.placeholder ?? '';
 		this.inputElement.disabled = options.enabled === false;
-		this.element.classList.toggle("is-disabled", this.inputElement.disabled);
-		this.inputElement.autocomplete = "off";
-		this.inputElement.autocapitalize = "off";
+		this.element.classList.toggle('is-disabled', this.inputElement.disabled);
+		this.inputElement.autocomplete = 'off';
+		this.inputElement.autocapitalize = 'off';
 		this.inputElement.spellcheck = false;
 		if (options.ariaLabel) {
-			setAriaAttribute(this.inputElement, "label", options.ariaLabel);
+			setAriaAttribute(this.inputElement, 'label', options.ariaLabel);
 		}
 		setRole(this.inputElement, options.role);
 		if (options.ariaAutoComplete) {
-			setAriaAttribute(
-				this.inputElement,
-				"autocomplete",
-				options.ariaAutoComplete,
-			);
+			setAriaAttribute(this.inputElement, 'autocomplete', options.ariaAutoComplete);
 		}
 		if (options.ariaControls) {
-			setAriaAttribute(
-				this.inputElement,
-				"controls",
-				options.ariaControls,
-			);
+			setAriaAttribute(this.inputElement, 'controls', options.ariaControls);
 		}
 		if (options.ariaExpanded !== undefined) {
-			setAriaAttribute(
-				this.inputElement,
-				"expanded",
-				options.ariaExpanded,
-			);
+			setAriaAttribute(this.inputElement, 'expanded', options.ariaExpanded);
 		}
 
 		this._readOnly = options.readOnly ?? false;
-		this.message = h(ownerDocument, "div");
+		this.message = h(ownerDocument, 'div');
 		this.message.id = `ash-input-message-${inputBoxSequence++}`;
-		this.message.className = "ash-input-box-message";
-		setRole(this.message, "alert");
+		this.message.className = 'ash-input-box-message';
+		setRole(this.message, 'alert');
 		this.message.hidden = true;
 		if (options.flexibleHeight) {
 			this.element.classList.add('ash-input-box-flexible');
@@ -134,24 +121,46 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 			measure.setAttribute('aria-hidden', 'true');
 			this.measureInput = measure;
 			const targetWindow = ownerDocument.defaultView!;
-			const scrollable = this.scrollable = this._register(new Scrollable({
-				forceIntegerValues: false, smoothScrollDuration: 0,
-				scheduleAtNextAnimationFrame: callback => scheduleAtNextAnimationFrame(targetWindow, callback),
-			}));
-			const scrollbar = this._register(new SmoothScrollableElement(this.inputElement, {
-				vertical: ScrollbarVisibility.Auto, horizontal: ScrollbarVisibility.Hidden,
-				verticalScrollbarSize: 8, className: "ash-input-box-scrollable",
-			}, scrollable));
+			const scrollable = (this.scrollable = this._register(
+				new Scrollable({
+					forceIntegerValues: false,
+					smoothScrollDuration: 0,
+					scheduleAtNextAnimationFrame: callback => scheduleAtNextAnimationFrame(targetWindow, callback),
+				}),
+			));
+			const scrollbar = this._register(
+				new SmoothScrollableElement(
+					this.inputElement,
+					{
+						vertical: ScrollbarVisibility.Auto,
+						horizontal: ScrollbarVisibility.Hidden,
+						verticalScrollbarSize: 8,
+						className: 'ash-input-box-scrollable',
+					},
+					scrollable,
+				),
+			);
 			this.element.append(scrollbar.getDomNode(), measure, this.message);
-			this._register(scrollable.onScroll(event => { this.inputElement.scrollTop = event.scrollTop; }));
+			this._register(
+				scrollable.onScroll(event => {
+					this.inputElement.scrollTop = event.scrollTop;
+				}),
+			);
 			// Browser selection and caret reveal remain authoritative and are mirrored by the managed scrollbar.
-			this._register(addDisposableListener(this.inputElement, 'scroll', () => scrollable.setScrollPositionNow({ scrollTop: this.inputElement.scrollTop })));
+			this._register(
+				addDisposableListener(this.inputElement, 'scroll', () =>
+					scrollable.setScrollPositionNow({ scrollTop: this.inputElement.scrollTop }),
+				),
+			);
 			if (targetWindow.ResizeObserver) {
 				const scheduled = this._register(new MutableDisposable());
 				// Height changes must leave the observer delivery cycle; disposal cancels pending layout.
 				const observer = new targetWindow.ResizeObserver(() => {
 					if (!scheduled.value) {
-						scheduled.value = scheduleAtNextAnimationFrame(targetWindow, () => { scheduled.clear(); this.layout(); });
+						scheduled.value = scheduleAtNextAnimationFrame(targetWindow, () => {
+							scheduled.clear();
+							this.layout();
+						});
 					}
 				});
 				observer.observe(this.element);
@@ -161,43 +170,50 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 			this.element.append(this.inputElement, this.message);
 		}
 		container.append(this.element);
-		this.onKeyDown = this._register(new DomEmitter(this.inputElement, "keydown")).event;
+		this.onKeyDown = this._register(new DomEmitter(this.inputElement, 'keydown')).event;
 		this.syncReadOnly();
 		this._register(IME.onDidChange(() => this.syncReadOnly()));
-		this._register(addDisposableListener(
-			this.inputElement,
-			"input",
-			() => { this.layout(); this._onDidChange.fire(this.value); },
-		));
-		this._register(addDisposableListener(
-			this.inputElement,
-			"focus",
-			() => {
-				this.element.classList.add("is-focused");
+		this._register(
+			addDisposableListener(this.inputElement, 'input', () => {
+				this.layout();
+				this._onDidChange.fire(this.value);
+			}),
+		);
+		this._register(
+			addDisposableListener(this.inputElement, 'focus', () => {
+				this.element.classList.add('is-focused');
 				this._onDidFocus.fire();
-			},
-		));
-		this._register(addDisposableListener(
-			this.inputElement,
-			"blur",
-			() => {
-				this.element.classList.remove("is-focused");
+			}),
+		);
+		this._register(
+			addDisposableListener(this.inputElement, 'blur', () => {
+				this.element.classList.remove('is-focused');
 				this._onDidBlur.fire();
-			},
-		));
+			}),
+		);
 		this.layout();
 	}
 
 	layout(): void {
-		if (!this.measureInput || !this.scrollable || this.isDisposed) { return; }
-		this.measureInput.value = this.value || " ";
+		if (!this.measureInput || !this.scrollable || this.isDisposed) {
+			return;
+		}
+		this.measureInput.value = this.value || ' ';
 		const contentHeight = Math.max(24, this.measureInput.scrollHeight);
 		const height = Math.min(this.maxHeight, contentHeight);
 		if (height !== this.height) {
 			this.height = height;
 			this.inputElement.style.height = `${height}px`;
 		}
-		this.scrollable.setScrollDimensions({ width: this.inputElement.clientWidth, scrollWidth: this.inputElement.clientWidth, height: this.inputElement.clientHeight, scrollHeight: this.inputElement.scrollHeight }, false);
+		this.scrollable.setScrollDimensions(
+			{
+				width: this.inputElement.clientWidth,
+				scrollWidth: this.inputElement.clientWidth,
+				height: this.inputElement.clientHeight,
+				scrollHeight: this.inputElement.scrollHeight,
+			},
+			false,
+		);
 	}
 
 	get value(): string {
@@ -220,11 +236,13 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 	}
 
 	get step(): string {
-		return "step" in this.inputElement ? this.inputElement.step : "";
+		return 'step' in this.inputElement ? this.inputElement.step : '';
 	}
 
 	set step(value: string) {
-		if ("step" in this.inputElement) { this.inputElement.step = value; }
+		if ('step' in this.inputElement) {
+			this.inputElement.step = value;
+		}
 	}
 
 	get readOnly(): boolean {
@@ -242,18 +260,18 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 
 	set enabled(value: boolean) {
 		this.inputElement.disabled = !value;
-		this.element.classList.toggle("is-disabled", !value);
+		this.element.classList.toggle('is-disabled', !value);
 	}
 
 	get ariaActiveDescendant(): string | undefined {
-		return getAriaAttribute(this.inputElement, "activedescendant");
+		return getAriaAttribute(this.inputElement, 'activedescendant');
 	}
 
 	set ariaActiveDescendant(value: string | undefined) {
 		if (value) {
-			setAriaAttribute(this.inputElement, "activedescendant", value);
+			setAriaAttribute(this.inputElement, 'activedescendant', value);
 		} else {
-			setAriaAttribute(this.inputElement, "activedescendant", undefined);
+			setAriaAttribute(this.inputElement, 'activedescendant', undefined);
 		}
 	}
 
@@ -280,17 +298,13 @@ export class InputBox<Flexible extends boolean = false> extends Disposable {
 	showValidation(message: string): void {
 		this.message.textContent = message;
 		this.message.hidden = !message;
-		this.element.classList.toggle("has-validation", Boolean(message));
+		this.element.classList.toggle('has-validation', Boolean(message));
 		if (message) {
-			setAriaAttribute(this.inputElement, "invalid", true);
-			setAriaAttribute(
-				this.inputElement,
-				"describedby",
-				this.message.id,
-			);
+			setAriaAttribute(this.inputElement, 'invalid', true);
+			setAriaAttribute(this.inputElement, 'describedby', this.message.id);
 		} else {
-			setAriaAttribute(this.inputElement, "invalid", undefined);
-			setAriaAttribute(this.inputElement, "describedby", undefined);
+			setAriaAttribute(this.inputElement, 'invalid', undefined);
+			setAriaAttribute(this.inputElement, 'describedby', undefined);
 		}
 	}
 
@@ -304,20 +318,28 @@ export interface IHistoryInputOptions<Flexible extends boolean = false> extends 
 	readonly showHistoryHint?: () => boolean;
 }
 
-export class HistoryInputBox<Flexible extends boolean = false> extends InputBox<Flexible> implements IHistoryNavigationWidget {
+export class HistoryInputBox<Flexible extends boolean = false>
+	extends InputBox<Flexible>
+	implements IHistoryNavigationWidget
+{
 	private readonly navigator: HistoryNavigator<string>;
 	private draft = '';
 	private navigating = false;
 	private applyingHistory = false;
 
-	constructor(container: HTMLElement, private readonly historyOptions: IHistoryInputOptions<Flexible> = {}) {
+	constructor(
+		container: HTMLElement,
+		private readonly historyOptions: IHistoryInputOptions<Flexible> = {},
+	) {
 		super(container, historyOptions);
 		this.navigator = this._register(new HistoryNavigator(historyOptions.history, 100));
-		this._register(this.onDidChange(() => {
-			if (!this.applyingHistory) {
-				this.resetNavigation();
-			}
-		}));
+		this._register(
+			this.onDidChange(() => {
+				if (!this.applyingHistory) {
+					this.resetNavigation();
+				}
+			}),
+		);
 		this._register(this.onDidFocus(() => this.updateHistoryHint()));
 		this._register(this.onDidBlur(() => this.inputElement.removeAttribute('aria-keyshortcuts')));
 		if (historyOptions.history?.onDidChange) {
@@ -344,10 +366,18 @@ export class HistoryInputBox<Flexible extends boolean = false> extends InputBox<
 		this.updateHistoryHint();
 	}
 
-	public getHistory(): string[] { return this.navigator.getHistory(); }
-	public isAtFirstInHistory(): boolean { return this.navigator.isFirst(); }
-	public isAtLastInHistory(): boolean { return this.navigator.isLast(); }
-	public isNowhereInHistory(): boolean { return this.navigator.isNowhere(); }
+	public getHistory(): string[] {
+		return this.navigator.getHistory();
+	}
+	public isAtFirstInHistory(): boolean {
+		return this.navigator.isFirst();
+	}
+	public isAtLastInHistory(): boolean {
+		return this.navigator.isLast();
+	}
+	public isNowhereInHistory(): boolean {
+		return this.navigator.isNowhere();
+	}
 
 	public showPreviousValue(): void {
 		if (!this.navigating) {

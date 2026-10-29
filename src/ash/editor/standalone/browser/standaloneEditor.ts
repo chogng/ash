@@ -1,17 +1,31 @@
 import { IWebWorkerService } from '../../../platform/webWorker/browser/webWorkerService.js';
 import './standalone-tokens.css';
-import { DisposableStore, type IDisposable } from "../../../base/common/lifecycle.js";
-import { URI } from "../../../base/common/uri.js";
-import { ContentWidgetPositionPreference, OverlayWidgetPositionPreference, type ICodeEditor } from "../../browser/editorBrowser.js";
+import { DisposableStore, type IDisposable } from '../../../base/common/lifecycle.js';
+import { URI } from '../../../base/common/uri.js';
+import {
+	ContentWidgetPositionPreference,
+	OverlayWidgetPositionPreference,
+	type ICodeEditor,
+} from '../../browser/editorBrowser.js';
 import { type CodeEditorWidgetOptions } from '../../browser/widget/codeEditor/codeEditorWidget.js';
-import { PositionAffinity, type ITextModel } from "../../common/model.js";
-import { TextModel } from "../../common/model/textModel.js";
-import { IStandaloneThemeService, type IStandaloneThemeData, type NamedEditorThemeData } from "../common/standaloneTheme.js";
+import { PositionAffinity, type ITextModel } from '../../common/model.js';
+import { TextModel } from '../../common/model/textModel.js';
+import {
+	IStandaloneThemeService,
+	type IStandaloneThemeData,
+	type NamedEditorThemeData,
+} from '../common/standaloneTheme.js';
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 import { IModelService } from '../../common/services/model.js';
 import { ILanguageService } from '../../common/languages/language.js';
-import { createTextModel, StandaloneEditor, type IActionDescriptor, type IStandaloneCodeEditor, type IStandaloneEditorConstructionOptions } from './standaloneCodeEditor.js';
-import { StandaloneServices, type StandaloneServiceOverrides } from "./standaloneServices.js";
+import {
+	createTextModel,
+	StandaloneEditor,
+	type IActionDescriptor,
+	type IStandaloneCodeEditor,
+	type IStandaloneEditorConstructionOptions,
+} from './standaloneCodeEditor.js';
+import { StandaloneServices, type StandaloneServiceOverrides } from './standaloneServices.js';
 import { Colorizer, type IColorizerElementOptions, type IColorizerOptions } from './colorizer.js';
 import {
 	IMarkerService,
@@ -23,7 +37,12 @@ import {
 } from '../../../platform/markers/common/markers.js';
 import { CommandsRegistry, type CommandHandler } from '../../../platform/commands/common/commands.js';
 import { KeybindingsRegistry } from '../../../platform/keybinding/common/keybindingsRegistry.js';
-import { EditorAction, EditorCommand, EditorExtensionsRegistry, type ServicesAccessor } from '../../browser/editorExtensions.js';
+import {
+	EditorAction,
+	EditorCommand,
+	EditorExtensionsRegistry,
+	type ServicesAccessor,
+} from '../../browser/editorExtensions.js';
 import { ContextKeyExpr } from '../../../platform/contextkey/common/contextkey.js';
 import { MenuId, MenusRegistry } from '../../../platform/actions/common/actions.js';
 import { createWebWorker as createStandaloneWebWorker, type MonacoWebWorker } from './standaloneWebWorker.js';
@@ -95,8 +114,12 @@ export function onWillDisposeModel(listener: (model: ITextModel) => void): IDisp
 	return StandaloneServices.get(IModelService).onModelRemoved(listener);
 }
 
-export function onDidChangeModelLanguage(listener: (event: { readonly model: ITextModel; readonly oldLanguage: string; }) => void): IDisposable {
-	return StandaloneServices.get(IModelService).onModelLanguageChanged(event => listener({ model: event.model, oldLanguage: event.oldLanguageId }));
+export function onDidChangeModelLanguage(
+	listener: (event: { readonly model: ITextModel; readonly oldLanguage: string }) => void,
+): IDisposable {
+	return StandaloneServices.get(IModelService).onModelLanguageChanged(event =>
+		listener({ model: event.model, oldLanguage: event.oldLanguageId }),
+	);
 }
 
 /** Creates one browser editor. A supplied model must come from createModel(). */
@@ -105,7 +128,8 @@ export function create(
 	options: IStandaloneEditorConstructionOptions = {},
 	overrides: StandaloneServiceOverrides = {},
 ): IStandaloneCodeEditor {
-	if (!domElement || domElement.nodeType !== 1 || !domElement.ownerDocument) throw new TypeError("Standalone editor requires an HTML element");
+	if (!domElement || domElement.nodeType !== 1 || !domElement.ownerDocument)
+		throw new TypeError('Standalone editor requires an HTML element');
 	const services = StandaloneServices.initialize(overrides);
 	const {
 		model: suppliedModel,
@@ -119,7 +143,7 @@ export function create(
 		...browserOptions
 	} = options;
 	if (suppliedModel && (value !== undefined || language !== undefined || resource !== undefined)) {
-		throw new TypeError("Standalone editor model cannot be combined with value, language, or resource");
+		throw new TypeError('Standalone editor model cannot be combined with value, language, or resource');
 	}
 	if (suppliedModel && !(suppliedModel instanceof TextModel)) {
 		throw new TypeError('Standalone editor requires a TextModel created by this editor API');
@@ -127,12 +151,14 @@ export function create(
 	if (theme !== undefined) services.themeService.setTheme(theme);
 	if (autoDetectHighContrast !== undefined) services.themeService.setAutoDetectHighContrast(autoDetectHighContrast);
 	const languageId = services.languageService.getLanguageIdByMimeType(language) ?? language;
-	const model = suppliedModel === undefined
-		? services.modelService.createModel(value ?? "", services.languageService.createById(languageId), resource)
-		: suppliedModel;
+	const model =
+		suppliedModel === undefined
+			? services.modelService.createModel(value ?? '', services.languageService.createById(languageId), resource)
+			: suppliedModel;
 	const ownsModel = suppliedModel === undefined;
 	try {
-		if (model && services.modelService.getModel(model.uri) !== model) throw new ReferenceError('Standalone editor model is not registered with the model service');
+		if (model && services.modelService.getModel(model.uri) !== model)
+			throw new ReferenceError('Standalone editor model is not registered with the model service');
 		const editorOptions: CodeEditorWidgetOptions = {
 			...browserOptions,
 			container: domElement,
@@ -156,7 +182,11 @@ export function createModel(value: string, language?: string, uri?: URI): ITextM
 }
 
 export function createWebWorker<T extends object>(options: StandaloneWorkerOptions): MonacoWebWorker<T> {
-	return createStandaloneWebWorker<T>(StandaloneServices.get(IModelService), StandaloneServices.get(IWebWorkerService), options);
+	return createStandaloneWebWorker<T>(
+		StandaloneServices.get(IModelService),
+		StandaloneServices.get(IWebWorkerService),
+		options,
+	);
 }
 
 export function getModel(uri: URI): ITextModel | null {
@@ -169,7 +199,8 @@ export function getModels(): ITextModel[] {
 
 export function setModelLanguage(model: ITextModel, mimeTypeOrLanguageId: string): void {
 	const languageService = StandaloneServices.get(ILanguageService);
-	const languageId = languageService.getLanguageIdByMimeType(mimeTypeOrLanguageId) ?? (mimeTypeOrLanguageId || 'plaintext');
+	const languageId =
+		languageService.getLanguageIdByMimeType(mimeTypeOrLanguageId) ?? (mimeTypeOrLanguageId || 'plaintext');
 	model.setLanguage(languageService.createById(languageId));
 }
 
@@ -191,11 +222,15 @@ export function removeAllMarkers(owner: string): void {
 export function getModelMarkers(filter: IMarkerReadOptions = {}): IMarker[] {
 	if (typeof filter !== 'object' || filter === null) throw new TypeError('Marker filter must be an object');
 	if (filter.owner !== undefined) validateMarkerOwner(filter.owner);
-	if (filter.resource !== undefined && !(filter.resource instanceof URI)) throw new TypeError('Marker resource must be a URI');
+	if (filter.resource !== undefined && !(filter.resource instanceof URI))
+		throw new TypeError('Marker resource must be a URI');
 	if (filter.take !== undefined && (!Number.isSafeInteger(filter.take) || filter.take < 0)) {
 		throw new RangeError('Marker take must be a non-negative integer');
 	}
-	if (filter.severities !== undefined && (!Number.isInteger(filter.severities) || filter.severities < 0 || filter.severities > 15)) {
+	if (
+		filter.severities !== undefined &&
+		(!Number.isInteger(filter.severities) || filter.severities < 0 || filter.severities > 15)
+	) {
 		throw new RangeError('Invalid marker severity filter');
 	}
 	return StandaloneServices.get(IMarkerService).read(filter);
@@ -211,38 +246,68 @@ function validateMarkerOwner(owner: string): void {
 
 function validateMarkerData(marker: IMarkerData): void {
 	if (typeof marker !== 'object' || marker === null) throw new TypeError('Marker must be an object');
-	if (![MarkerSeverity.Error, MarkerSeverity.Warning, MarkerSeverity.Info, MarkerSeverity.Hint].includes(marker.severity)) {
+	if (
+		![MarkerSeverity.Error, MarkerSeverity.Warning, MarkerSeverity.Info, MarkerSeverity.Hint].includes(
+			marker.severity,
+		)
+	) {
 		throw new TypeError('Unknown marker severity');
 	}
 	validateMarkerLocation(marker);
-	if (marker.source !== undefined && typeof marker.source !== 'string') throw new TypeError('Marker source must be a string');
-	if (marker.origin !== undefined && typeof marker.origin !== 'string') throw new TypeError('Marker origin must be a string');
-	if (marker.modelVersionId !== undefined && (!Number.isSafeInteger(marker.modelVersionId) || marker.modelVersionId < 1)) {
+	if (marker.source !== undefined && typeof marker.source !== 'string')
+		throw new TypeError('Marker source must be a string');
+	if (marker.origin !== undefined && typeof marker.origin !== 'string')
+		throw new TypeError('Marker origin must be a string');
+	if (
+		marker.modelVersionId !== undefined &&
+		(!Number.isSafeInteger(marker.modelVersionId) || marker.modelVersionId < 1)
+	) {
 		throw new RangeError('Invalid marker model version');
 	}
 	if (marker.code !== undefined && typeof marker.code !== 'string') {
-		if (typeof marker.code !== 'object' || marker.code === null || typeof marker.code.value !== 'string' || !(marker.code.target instanceof URI)) {
+		if (
+			typeof marker.code !== 'object' ||
+			marker.code === null ||
+			typeof marker.code.value !== 'string' ||
+			!(marker.code.target instanceof URI)
+		) {
 			throw new TypeError('Invalid marker code');
 		}
 	}
-	if (marker.tags !== undefined && (!Array.isArray(marker.tags) || marker.tags.some(tag => tag !== MarkerTag.Unnecessary && tag !== MarkerTag.Deprecated))) {
+	if (
+		marker.tags !== undefined &&
+		(!Array.isArray(marker.tags) ||
+			marker.tags.some(tag => tag !== MarkerTag.Unnecessary && tag !== MarkerTag.Deprecated))
+	) {
 		throw new TypeError('Invalid marker tags');
 	}
 	if (marker.relatedInformation !== undefined) {
-		if (!Array.isArray(marker.relatedInformation)) throw new TypeError('Marker related information must be an array');
+		if (!Array.isArray(marker.relatedInformation))
+			throw new TypeError('Marker related information must be an array');
 		for (const info of marker.relatedInformation) {
-			if (typeof info !== 'object' || info === null || !(info.resource instanceof URI)) throw new TypeError('Invalid marker related resource');
+			if (typeof info !== 'object' || info === null || !(info.resource instanceof URI))
+				throw new TypeError('Invalid marker related resource');
 			validateMarkerLocation(info);
 		}
 	}
 }
 
-function validateMarkerLocation(marker: Pick<IMarkerData, 'message' | 'startLineNumber' | 'startColumn' | 'endLineNumber' | 'endColumn'>): void {
-	if (typeof marker.message !== 'string' || !marker.message.trim()) throw new TypeError('Marker message must not be empty');
-	if ([marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn].some(value => !Number.isSafeInteger(value) || value < 1)) {
+function validateMarkerLocation(
+	marker: Pick<IMarkerData, 'message' | 'startLineNumber' | 'startColumn' | 'endLineNumber' | 'endColumn'>,
+): void {
+	if (typeof marker.message !== 'string' || !marker.message.trim())
+		throw new TypeError('Marker message must not be empty');
+	if (
+		[marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn].some(
+			value => !Number.isSafeInteger(value) || value < 1,
+		)
+	) {
 		throw new RangeError('Marker positions must be positive integers');
 	}
-	if (marker.endLineNumber < marker.startLineNumber || marker.endLineNumber === marker.startLineNumber && marker.endColumn < marker.startColumn) {
+	if (
+		marker.endLineNumber < marker.startLineNumber ||
+		(marker.endLineNumber === marker.startLineNumber && marker.endColumn < marker.startColumn)
+	) {
 		throw new RangeError('Marker range end must not precede its start');
 	}
 }
@@ -259,44 +324,72 @@ export function registerCommand(id: string, handler: CommandHandler): IDisposabl
 }
 
 export function addEditorAction(descriptor: IActionDescriptor): IDisposable {
-	if (!descriptor || typeof descriptor.id !== 'string' || !descriptor.id.trim()
-		|| typeof descriptor.label !== 'string' || !descriptor.label.trim() || typeof descriptor.run !== 'function') {
+	if (
+		!descriptor ||
+		typeof descriptor.id !== 'string' ||
+		!descriptor.id.trim() ||
+		typeof descriptor.label !== 'string' ||
+		!descriptor.label.trim() ||
+		typeof descriptor.run !== 'function'
+	) {
 		throw new TypeError('Standalone editor action requires an id, label and run handler');
 	}
-	const precondition = descriptor.precondition === undefined ? undefined : ContextKeyExpr.deserialize(descriptor.precondition);
-	const keybindingContext = descriptor.keybindingContext === undefined ? undefined : ContextKeyExpr.deserialize(descriptor.keybindingContext);
-	if (descriptor.keybindings !== undefined && (!Array.isArray(descriptor.keybindings)
-		|| descriptor.keybindings.some(keybinding => !Number.isSafeInteger(keybinding) || keybinding <= 0))) {
+	const precondition =
+		descriptor.precondition === undefined ? undefined : ContextKeyExpr.deserialize(descriptor.precondition);
+	const keybindingContext =
+		descriptor.keybindingContext === undefined
+			? undefined
+			: ContextKeyExpr.deserialize(descriptor.keybindingContext);
+	if (
+		descriptor.keybindings !== undefined &&
+		(!Array.isArray(descriptor.keybindings) ||
+			descriptor.keybindings.some(keybinding => !Number.isSafeInteger(keybinding) || keybinding <= 0))
+	) {
 		throw new TypeError('Editor action keybindings must be encoded keybindings');
 	}
-	const action = new class extends EditorAction {
-		constructor() { super({ id: descriptor.id, label: descriptor.label, alias: descriptor.label, precondition }); }
-		override runEditorCommand(accessor: ServicesAccessor, editor: ICodeEditor, args: unknown): void | Promise<void> {
+	const action = new (class extends EditorAction {
+		constructor() {
+			super({ id: descriptor.id, label: descriptor.label, alias: descriptor.label, precondition });
+		}
+		override runEditorCommand(
+			accessor: ServicesAccessor,
+			editor: ICodeEditor,
+			args: unknown,
+		): void | Promise<void> {
 			return this.run(accessor, editor, args);
 		}
 		run(_accessor: ServicesAccessor, editor: ICodeEditor, args: unknown): void | Promise<void> {
 			return descriptor.run(editor, ...(args === undefined ? [] : [args]));
 		}
-	}();
+	})();
 	const resources = new DisposableStore();
 	try {
-		resources.add(CommandsRegistry.register(descriptor.id, (accessor, ...args) =>
-			EditorCommand.runEditorCommand(accessor, args, precondition, (_editorAccessor, editor, commandArgs) => descriptor.run(editor, ...commandArgs))));
+		resources.add(
+			CommandsRegistry.register(descriptor.id, (accessor, ...args) =>
+				EditorCommand.runEditorCommand(accessor, args, precondition, (_editorAccessor, editor, commandArgs) =>
+					descriptor.run(editor, ...commandArgs),
+				),
+			),
+		);
 		resources.add(EditorExtensionsRegistry.registerDynamicEditorAction(action));
 		if (descriptor.contextMenuGroupId) {
-			resources.add(MenusRegistry.appendMenuItem(MenuId.EditorContext, {
-				command: { id: descriptor.id, title: descriptor.label },
-				when: precondition,
-				group: descriptor.contextMenuGroupId,
-				order: descriptor.contextMenuOrder ?? 0,
-			}));
+			resources.add(
+				MenusRegistry.appendMenuItem(MenuId.EditorContext, {
+					command: { id: descriptor.id, title: descriptor.label },
+					when: precondition,
+					group: descriptor.contextMenuGroupId,
+					order: descriptor.contextMenuOrder ?? 0,
+				}),
+			);
 		}
 		for (const keybinding of descriptor.keybindings ?? []) {
-			resources.add(KeybindingsRegistry.registerKeybindingRule({
-				command: descriptor.id,
-				keybinding,
-				when: ContextKeyExpr.and(precondition, keybindingContext) ?? undefined,
-			}));
+			resources.add(
+				KeybindingsRegistry.registerKeybindingRule({
+					command: descriptor.id,
+					keybinding,
+					when: ContextKeyExpr.and(precondition, keybindingContext) ?? undefined,
+				}),
+			);
 		}
 		return resources;
 	} catch (error) {
@@ -328,9 +421,16 @@ export function addKeybindingRules(rules: readonly IKeybindingRule[]): IDisposab
 	const resources = new DisposableStore();
 	try {
 		for (const rule of registrations) {
-			resources.add(rule.command == null
-				? KeybindingsRegistry.registerKeybindingBlocker({ keybinding: rule.keybinding, when: rule.when })
-				: KeybindingsRegistry.registerKeybindingRule({ command: rule.command, keybinding: rule.keybinding, args: rule.args, when: rule.when }));
+			resources.add(
+				rule.command == null
+					? KeybindingsRegistry.registerKeybindingBlocker({ keybinding: rule.keybinding, when: rule.when })
+					: KeybindingsRegistry.registerKeybindingRule({
+							command: rule.command,
+							keybinding: rule.keybinding,
+							args: rule.args,
+							when: rule.when,
+						}),
+			);
 		}
 		return resources;
 	} catch (error) {
@@ -360,7 +460,12 @@ export function colorize(text: string, languageId: string, options: IColorizerOp
 }
 
 export function colorizeElement(domNode: HTMLElement, options: IColorizerElementOptions = {}): Promise<void> {
-	return Colorizer.colorizeElement(StandaloneServices.get(IStandaloneThemeService), StandaloneServices.get(ILanguageService), domNode, options);
+	return Colorizer.colorizeElement(
+		StandaloneServices.get(IStandaloneThemeService),
+		StandaloneServices.get(ILanguageService),
+		domNode,
+		options,
+	);
 }
 
 export function createStandaloneEditorApi(): IStandaloneEditorApi {

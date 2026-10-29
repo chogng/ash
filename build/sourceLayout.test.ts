@@ -1,22 +1,35 @@
-import assert from "node:assert/strict";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { extname, join, resolve } from "node:path";
-import test from "node:test";
-import { spawnSync } from "node:child_process";
+import assert from 'node:assert/strict';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { extname, join, resolve } from 'node:path';
+import test from 'node:test';
+import { spawnSync } from 'node:child_process';
 import ts from 'typescript';
 
-const repositoryRoot = resolve(import.meta.dirname, "..");
+const repositoryRoot = resolve(import.meta.dirname, '..');
 
 test('production renderer projects exclude tests and host-only compilation roots', () => {
-	for (const project of ['tsconfig.renderer.json', 'tsconfig.extensions-check.json', 'tsconfig.memories-check.json']) {
-		const config = ts.getParsedCommandLineOfConfigFile(join(repositoryRoot, project), {}, {
-			...ts.sys,
-			onUnRecoverableConfigFileDiagnostic: diagnostic => assert.fail(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')),
-		});
+	for (const project of [
+		'tsconfig.renderer.json',
+		'tsconfig.extensions-check.json',
+		'tsconfig.memories-check.json',
+	]) {
+		const config = ts.getParsedCommandLineOfConfigFile(
+			join(repositoryRoot, project),
+			{},
+			{
+				...ts.sys,
+				onUnRecoverableConfigFileDiagnostic: diagnostic =>
+					assert.fail(ts.flattenDiagnosticMessageText(diagnostic.messageText, '\n')),
+			},
+		);
 		assert.ok(config, project);
 		assert.deepEqual(config.errors, [], project);
 		assert.equal(config.options.noEmit, true, project);
-		assert.deepEqual(config.fileNames.filter(path => /\/(?:test|node|electron-main)\//u.test(path)), [], project);
+		assert.deepEqual(
+			config.fileNames.filter(path => /\/(?:test|node|electron-main)\//u.test(path)),
+			[],
+			project,
+		);
 	}
 });
 
@@ -30,106 +43,199 @@ test('TypeScript project include patterns select existing sources', () => {
 	}
 });
 
-test("product build and launch tools have one owner while repository scripts remain shared", () => {
-	for (const directory of ["src/scripts", "scripts/desktop", "scripts/code", "build/remote", "build/runtime", "app-rs", "app-ts", "ash-rs", "ash-cli", "code"]) {
+test('product build and launch tools have one owner while repository scripts remain shared', () => {
+	for (const directory of [
+		'src/scripts',
+		'scripts/desktop',
+		'scripts/code',
+		'build/remote',
+		'build/runtime',
+		'app-rs',
+		'app-ts',
+		'ash-rs',
+		'ash-cli',
+		'code',
+	]) {
 		// Ignored leftovers from an older checkout do not own repository sources.
-		const inventory = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '--', directory], { cwd: repositoryRoot, encoding: 'utf8' });
+		const inventory = spawnSync(
+			'git',
+			['ls-files', '--cached', '--others', '--exclude-standard', '--', directory],
+			{ cwd: repositoryRoot, encoding: 'utf8' },
+		);
 		assert.equal(inventory.status, 0, inventory.stderr);
 		assert.equal(inventory.stdout, '', `${directory} must not own product tooling`);
 	}
-	assert.equal(existsSync(join(repositoryRoot, "cli/Cargo.toml")), true);
-	for (const category of ["desktop", "code", "download", "lib", "pnpm", "darwin", "win32", "linux", "resources"]) {
+	assert.equal(existsSync(join(repositoryRoot, 'cli/Cargo.toml')), true);
+	for (const category of ['desktop', 'code', 'download', 'lib', 'pnpm', 'darwin', 'win32', 'linux', 'resources']) {
 		assert.equal(existsSync(join(import.meta.dirname, category)), true, category);
 	}
-	assert.equal(existsSync(join(repositoryRoot, "crates/tui/Cargo.toml")), true);
-	for (const entry of ["cargo.py", "format.py", "test-python.py"]) {
-		assert.equal(existsSync(join(repositoryRoot, "scripts", entry)), true, entry);
+	assert.equal(existsSync(join(repositoryRoot, 'crates/tui/Cargo.toml')), true);
+	for (const entry of ['cargo.py', 'format.py', 'test-python.py']) {
+		assert.equal(existsSync(join(repositoryRoot, 'scripts', entry)), true, entry);
 	}
-	for (const entry of ["electron.ts", "web.ts", "electron.test.ts"]) {
-		assert.equal(existsSync(join(import.meta.dirname, "desktop/launch", entry)), true, entry);
-		assert.equal(existsSync(join(repositoryRoot, "scripts", entry)), false, entry);
+	for (const entry of ['electron.ts', 'web.ts', 'electron.test.ts']) {
+		assert.equal(existsSync(join(import.meta.dirname, 'desktop/launch', entry)), true, entry);
+		assert.equal(existsSync(join(repositoryRoot, 'scripts', entry)), false, entry);
 	}
-	assert.equal(existsSync(join(repositoryRoot, "test/unit/mocha.ts")), true);
-	for (const entry of ["code/build.py", "app_server.py", "remote.py", "prepare.py", "desktop/develop.py", "lib/package.py", "lib/package-layout.json", "protocol/generate.py"]) {
+	assert.equal(existsSync(join(repositoryRoot, 'test/unit/mocha.ts')), true);
+	for (const entry of [
+		'code/build.py',
+		'app_server.py',
+		'remote.py',
+		'prepare.py',
+		'desktop/develop.py',
+		'lib/package.py',
+		'lib/package-layout.json',
+		'protocol/generate.py',
+	]) {
 		assert.equal(existsSync(join(import.meta.dirname, entry)), true, entry);
 	}
-	for (const entry of ["run.py", "run_package.py", "install.sh", "install.ps1"]) {
-		assert.equal(existsSync(join(import.meta.dirname, "code", entry)), true, entry);
+	for (const entry of ['run.py', 'run_package.py', 'install.sh', 'install.ps1']) {
+		assert.equal(existsSync(join(import.meta.dirname, 'code', entry)), true, entry);
 	}
-	assert.equal(existsSync(join(import.meta.dirname, "code/package.py")), true);
-	assert.equal(existsSync(join(import.meta.dirname, "code/update-sign/Cargo.toml")), true);
-	assert.equal(existsSync(join(import.meta.dirname, "runtime/update-sign")), false);
-	for (const retiredEntry of ["cargo_with_v8.py", "lib/just_shell.py", "compile.ts", "watch.ts", "vite", "lib/compilation.ts", "lib/appServer.ts", "lib/web.ts"]) {
+	assert.equal(existsSync(join(import.meta.dirname, 'code/package.py')), true);
+	assert.equal(existsSync(join(import.meta.dirname, 'code/update-sign/Cargo.toml')), true);
+	assert.equal(existsSync(join(import.meta.dirname, 'runtime/update-sign')), false);
+	for (const retiredEntry of [
+		'cargo_with_v8.py',
+		'lib/just_shell.py',
+		'compile.ts',
+		'watch.ts',
+		'vite',
+		'lib/compilation.ts',
+		'lib/appServer.ts',
+		'lib/web.ts',
+	]) {
 		assert.equal(existsSync(join(import.meta.dirname, retiredEntry)), false, retiredEntry);
 	}
-	for (const entry of ["build.ts", "host.ts", "watch-app-server.ts", "appServer.ts", "web.ts", "vite/vite.config.ts"]) {
-		assert.equal(existsSync(join(import.meta.dirname, "desktop", entry)), true, entry);
+	for (const entry of [
+		'build.ts',
+		'host.ts',
+		'watch-app-server.ts',
+		'appServer.ts',
+		'web.ts',
+		'vite/vite.config.ts',
+	]) {
+		assert.equal(existsSync(join(import.meta.dirname, 'desktop', entry)), true, entry);
 	}
-	for (const entry of ["compile.ts", "compilation.ts", "watch.ts"]) {
-		assert.equal(existsSync(join(import.meta.dirname, "desktop", entry)), false, entry);
+	for (const entry of ['compile.ts', 'compilation.ts', 'watch.ts']) {
+		assert.equal(existsSync(join(import.meta.dirname, 'desktop', entry)), false, entry);
 	}
 });
 
-test("frontend Node tools and backend package builders have separate language owners", () => {
-	for (const directory of ["pnpm", "resources"]) {
-		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === ".py"), [], directory);
+test('frontend Node tools and backend package builders have separate language owners', () => {
+	for (const directory of ['pnpm', 'resources']) {
+		assert.deepEqual(
+			walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.py'),
+			[],
+			directory,
+		);
 	}
 	for (const [directory, entries] of [
-		['desktop', ['__init__.py', 'analyze.py', 'develop.py', 'live.py', 'package_runtime.py', 'runtime_acceptance.py', 'test_analyze.py', 'test_develop.py', 'test_live.py', 'test_package_runtime.py']],
+		[
+			'desktop',
+			[
+				'__init__.py',
+				'analyze.py',
+				'develop.py',
+				'live.py',
+				'package_runtime.py',
+				'runtime_acceptance.py',
+				'test_analyze.py',
+				'test_develop.py',
+				'test_live.py',
+				'test_package_runtime.py',
+			],
+		],
 		['protocol', ['__init__.py', 'artifacts.py', 'generate.py', 'test_generate.py']],
 	] as const) {
-		assert.deepEqual(walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.py').map(path => path.slice(join(import.meta.dirname, directory).length + 1)).sort(), [...entries].sort(), directory);
+		assert.deepEqual(
+			walk(join(import.meta.dirname, directory))
+				.filter(path => extname(path) === '.py')
+				.map(path => path.slice(join(import.meta.dirname, directory).length + 1))
+				.sort(),
+			[...entries].sort(),
+			directory,
+		);
 	}
-	for (const directory of ["code", "download", "lib", "darwin", "win32", "linux"]) {
-		const files = walk(join(import.meta.dirname, directory)).filter(path => extname(path) === ".ts");
+	for (const directory of ['code', 'download', 'lib', 'darwin', 'win32', 'linux']) {
+		const files = walk(join(import.meta.dirname, directory)).filter(path => extname(path) === '.ts');
 		const sharedTooling = new Set([
 			join(import.meta.dirname, 'lib/stylelint/validateVariableNames.ts'),
 			join(import.meta.dirname, 'lib/stylelint/validateHasSelectors.ts'),
 			join(import.meta.dirname, 'lib/stylelint/validateDesignTokens.ts'),
 			join(import.meta.dirname, 'lib/test/stylelint.test.ts'),
 			...['watchRebuild', 'preparedInputs', 'incrementalOutput', 'watchNativeFile'].flatMap(name => [
-				join(import.meta.dirname, `lib/${name}.ts`), join(import.meta.dirname, `lib/${name}.test.ts`),
+				join(import.meta.dirname, `lib/${name}.ts`),
+				join(import.meta.dirname, `lib/${name}.test.ts`),
 			]),
 			...['screenshotBlocksCi', 'screenshotDiffReport'].flatMap(name => [
-				join(import.meta.dirname, `lib/${name}.ts`), join(import.meta.dirname, `lib/test/${name}.test.ts`),
+				join(import.meta.dirname, `lib/${name}.ts`),
+				join(import.meta.dirname, `lib/test/${name}.test.ts`),
 			]),
 		]);
-		assert.deepEqual(files.filter(path => !sharedTooling.has(path)), [], directory);
+		assert.deepEqual(
+			files.filter(path => !sharedTooling.has(path)),
+			[],
+			directory,
+		);
 	}
-	const scripts = join(repositoryRoot, "scripts");
-	assert.deepEqual(readdirSync(scripts, { withFileTypes: true }).filter(entry => entry.isFile() && extname(entry.name) === ".ts").map(entry => entry.name), []);
+	const scripts = join(repositoryRoot, 'scripts');
+	assert.deepEqual(
+		readdirSync(scripts, { withFileTypes: true })
+			.filter(entry => entry.isFile() && extname(entry.name) === '.ts')
+			.map(entry => entry.name),
+		[],
+	);
 });
 
-test("Node build and repository command sources do not use runtime JavaScript", () => {
-	const javaScriptExtensions = new Set([".cjs", ".js", ".mjs", ".mts"]);
-	const files = [...walk(import.meta.dirname), ...walk(join(repositoryRoot, "scripts"))];
-	assert.deepEqual(files.filter((path) => javaScriptExtensions.has(extname(path))), []);
+test('Node build and repository command sources do not use runtime JavaScript', () => {
+	const javaScriptExtensions = new Set(['.cjs', '.js', '.mjs', '.mts']);
+	const files = [...walk(import.meta.dirname), ...walk(join(repositoryRoot, 'scripts'))];
+	assert.deepEqual(
+		files.filter(path => javaScriptExtensions.has(extname(path))),
+		[],
+	);
 });
 
-test("build tools do not import repository command implementations", () => {
-	for (const path of walk(import.meta.dirname).filter((path) => extname(path) === ".py")) {
-		assert.doesNotMatch(readFileSync(path, "utf8"), /^\s*(?:from scripts(?:\.|\s)|import scripts(?:\.|\s|$))/m, path);
+test('build tools do not import repository command implementations', () => {
+	for (const path of walk(import.meta.dirname).filter(path => extname(path) === '.py')) {
+		assert.doesNotMatch(
+			readFileSync(path, 'utf8'),
+			/^\s*(?:from scripts(?:\.|\s)|import scripts(?:\.|\s|$))/m,
+			path,
+		);
 	}
-	for (const path of walk(import.meta.dirname).filter(path => extname(path) === '.ts' && !path.endsWith('.test.ts'))) {
+	for (const path of walk(import.meta.dirname).filter(
+		path => extname(path) === '.ts' && !path.endsWith('.test.ts'),
+	)) {
 		assert.doesNotMatch(readFileSync(path, 'utf8'), /(?:from\s*|import\s*\()\s*["'][^"']*\/scripts\//u, path);
 	}
 	const runtime = join(repositoryRoot, 'src/ash/platform/agentHost/node');
 	for (const path of walk(runtime).filter(path => extname(path) === '.ts')) {
-		assert.doesNotMatch(readFileSync(path, 'utf8'), /(?:from\s*|import\s*\()\s*["'][^"']*\/(?:build|scripts)\//u, path);
+		assert.doesNotMatch(
+			readFileSync(path, 'utf8'),
+			/(?:from\s*|import\s*\()\s*["'][^"']*\/(?:build|scripts)\//u,
+			path,
+		);
 	}
 });
 
 function walk(directory: string): string[] {
-	return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-		if (entry.name === "node_modules" || entry.name === ".venv") return [];
+	return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+		if (entry.name === 'node_modules' || entry.name === '.venv') return [];
 		const path = join(directory, entry.name);
 		return entry.isDirectory() ? walk(path) : [path];
 	});
 }
 
-
 test('build product identity loads without frontend runtime or settings migration modules', () => {
-	const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+	const result = spawnSync(
+		process.execPath,
+		[
+			'--input-type=module',
+			'-e',
+			`
     import assert from 'node:assert/strict';
     import { registerHooks } from 'node:module';
     const loaded = [];
@@ -140,6 +246,9 @@ test('build product identity loads without frontend runtime or settings migratio
     const { AshRendererDirectory } = await import('./src/ash/code/common/application.ts');
     assert.equal(AshRendererDirectory, 'ash');
     assert.deepEqual(loaded.map(url => url.split('/').at(-1)), ['application.ts']);
-  `], { cwd: repositoryRoot, encoding: 'utf8' });
+  `,
+		],
+		{ cwd: repositoryRoot, encoding: 'utf8' },
+	);
 	assert.equal(result.status, 0, result.stderr);
 });

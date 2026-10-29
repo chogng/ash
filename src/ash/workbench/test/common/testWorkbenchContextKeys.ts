@@ -1,6 +1,6 @@
 import { Event } from '../../../base/common/event.js';
 import { noneDisposable } from '../../../base/common/lifecycle.js';
-import type { IContextKeyService } from "../../../platform/contextkey/browser/contextKeyService.js";
+import type { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { WorkbenchState, type IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { WorkbenchContextKeysHandler } from '../../browser/contextkeys.js';
 import type { IEditorGroup, IEditorGroupsService } from '../../services/editor/common/editorGroupsService.js';
@@ -21,7 +21,10 @@ export interface TestWorkbenchContextKeyServices {
 }
 
 /** Creates the production handler with explicit no-op services for unrelated test domains. */
-export function createTestWorkbenchContextKeysHandler(contextKeyService: IContextKeyService, services: TestWorkbenchContextKeyServices = {}): WorkbenchContextKeysHandler {
+export function createTestWorkbenchContextKeysHandler(
+	contextKeyService: IContextKeyService,
+	services: TestWorkbenchContextKeyServices = {},
+): WorkbenchContextKeysHandler {
 	return new WorkbenchContextKeysHandler(
 		contextKeyService,
 		services.workspaceContextService ?? emptyWorkspaceContextService,
@@ -34,7 +37,11 @@ export function createTestWorkbenchContextKeysHandler(contextKeyService: IContex
 	);
 }
 
-const emptyGroupState: EditorGroupState = Object.freeze({ id: 1, editors: Object.freeze([]), activeEditorInstanceId: undefined });
+const emptyGroupState: EditorGroupState = Object.freeze({
+	id: 1,
+	editors: Object.freeze([]),
+	activeEditorInstanceId: undefined,
+});
 const emptyGroup: IEditorGroup = Object.freeze({
 	createEditorActions: () => ({ actions: { primary: [], secondary: [] }, onDidChange: Event.None }),
 	...emptyGroupState,
@@ -43,15 +50,15 @@ const emptyGroup: IEditorGroup = Object.freeze({
 	selectedInputs: Object.freeze([]),
 	activeInput: undefined,
 	isLocked: false,
-	setLocked() { },
+	setLocked() {},
 	getEditorState: () => emptyGroupState,
 	isPreview: () => false,
 	isSticky: () => false,
-	pinEditor() { },
-	stickEditor() { },
-	unstickEditor() { },
+	pinEditor() {},
+	stickEditor() {},
+	unstickEditor() {},
 	closeEditor: async () => true,
-	focus() { },
+	focus() {},
 });
 
 const emptyWorkspaceContextService: IWorkspaceContextService = Object.freeze({
@@ -73,16 +80,20 @@ export const emptyEditorGroupsService: IEditorGroupsService = Object.freeze({
 	groups: Object.freeze([emptyGroup]),
 	activeGroup: emptyGroup,
 	count: 1,
-	getGroup: (id: number) => id === emptyGroup.id ? emptyGroup : undefined,
+	getGroup: (id: number) => (id === emptyGroup.id ? emptyGroup : undefined),
 	findGroup: () => undefined,
-	addGroup: () => { throw new Error('Unexpected editor group creation in context-key fixture'); },
-	removeGroup: async () => { throw new Error('Unexpected editor group removal in context-key fixture'); },
+	addGroup: () => {
+		throw new Error('Unexpected editor group creation in context-key fixture');
+	},
+	removeGroup: async () => {
+		throw new Error('Unexpected editor group removal in context-key fixture');
+	},
 });
 
 const emptyEditorService: IEditorService = Object.freeze({
 	...emptyEditorServiceState,
-	openEditor: async () => { },
-	focusActiveEditor: () => { },
+	openEditor: async () => {},
+	focusActiveEditor: () => {},
 });
 
 const emptyLayoutService: IWorkbenchLayoutService = Object.freeze({
@@ -92,36 +103,42 @@ const emptyLayoutService: IWorkbenchLayoutService = Object.freeze({
 	onDidChangeActiveContainer: Event.None,
 	mainContainerDimension: { width: 0, height: 0 },
 	activeContainerDimension: { width: 0, height: 0 },
-	get mainContainer(): HTMLElement { throw new Error('Context key tests do not host a layout container'); },
-	get activeContainer(): HTMLElement { throw new Error('Context key tests do not host a layout container'); },
+	get mainContainer(): HTMLElement {
+		throw new Error('Context key tests do not host a layout container');
+	},
+	get activeContainer(): HTMLElement {
+		throw new Error('Context key tests do not host a layout container');
+	},
 	containers: [],
-	getContainer(): HTMLElement { throw new Error('Context key tests do not host a layout container'); },
+	getContainer(): HTMLElement {
+		throw new Error('Context key tests do not host a layout container');
+	},
 	whenContainerStylesLoaded: () => undefined,
 	mainContainerOffset: { top: 0, quickInputTop: 0 },
 	activeContainerOffset: { top: 0, quickInputTop: 0 },
-	focus: () => { },
-	layout: () => { },
-	setLayoutStyle: () => { },
+	focus: () => {},
+	layout: () => {},
+	setLayoutStyle: () => {},
 	onDidChangePartVisibility: Event.None,
 	isPartVisible: () => false,
 	hasFocus: () => false,
 	getVisibleNeighborPart: () => undefined,
 	onDidChangeAuxiliaryBarMaximized: Event.None,
 	isAuxiliaryBarMaximized: () => false,
-	toggleMaximizedAuxiliaryBar: () => { },
+	toggleMaximizedAuxiliaryBar: () => {},
 	setAuxiliaryBarMaximized: () => false,
 	onDidChangePanelPosition: Event.None,
 	getPanelPosition: () => Position.BOTTOM,
 	getSideBarPosition: () => Position.LEFT,
-	setPanelPosition: () => { },
+	setPanelPosition: () => {},
 	isPanelMaximized: () => false,
-	toggleMaximizedPanel: () => { },
-	showPart: () => { },
-	showParts: () => { },
-	hidePart: () => { },
-	hideParts: () => { },
+	toggleMaximizedPanel: () => {},
+	showPart: () => {},
+	showParts: () => {},
+	hidePart: () => {},
+	hideParts: () => {},
 	getPartSize: () => ({ width: 0, height: 0 }),
-	resizePart: () => { },
+	resizePart: () => {},
 });
 
 const emptyWorkingCopyService: IWorkingCopyService = Object.freeze({
@@ -132,6 +149,6 @@ const emptyWorkingCopyService: IWorkingCopyService = Object.freeze({
 	register: () => noneDisposable,
 	get: () => Object.freeze([]),
 	getAll: () => Object.freeze([]),
-	dispose: () => { },
-	[Symbol.dispose]: () => { },
+	dispose: () => {},
+	[Symbol.dispose]: () => {},
 });

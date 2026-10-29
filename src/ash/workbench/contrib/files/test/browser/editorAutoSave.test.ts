@@ -7,7 +7,10 @@ import { URI } from '../../../../../base/common/uri.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import type { IEditorPart } from '../../../../browser/parts/editor/editorPart.js';
 import { EditorAutoSave } from '../../../../browser/parts/editor/editorAutoSave.js';
-import { EditorAutoSaveConfiguration, EditorAutoSaveDelayConfiguration } from '../../../../services/editor/common/editorConfiguration.js';
+import {
+	EditorAutoSaveConfiguration,
+	EditorAutoSaveDelayConfiguration,
+} from '../../../../services/editor/common/editorConfiguration.js';
 import { BrowserWorkingCopyService } from '../../../../services/workingCopy/browser/browserWorkingCopyService.js';
 import type { IWorkingCopy } from '../../../../services/workingCopy/common/workingCopyService.js';
 
@@ -25,22 +28,24 @@ test('File auto save writes a dirty working copy after the configured delay', as
 	const copy: IWorkingCopy = {
 		resource: URI.file('/project/main.ts'),
 		backupKind: 'text',
-		get isDirty() { return dirty; },
+		get isDirty() {
+			return dirty;
+		},
 		hasExternalChange: false,
 		onDidChangeDirty: dirtyChanges.event,
 		onDidChangeExternalChange: Event.None,
 		onDidChangeContent: contentChanges.event,
 		backup: () => 'edited',
-		restoreBackup() { },
+		restoreBackup() {},
 		async save() {
 			saves++;
 			dirty = false;
 			dirtyChanges.fire();
 		},
-		saveAs: async () => { },
-		revert: async () => { },
-		dispose() { },
-		[Symbol.dispose]() { },
+		saveAs: async () => {},
+		revert: async () => {},
+		dispose() {},
+		[Symbol.dispose]() {},
 	};
 	const editorPart = {
 		domNode: browser.window.document.body,

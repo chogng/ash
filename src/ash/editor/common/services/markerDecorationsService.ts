@@ -5,10 +5,21 @@ import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../
 import { type URI } from '../../../base/common/uri.js';
 import { IMarkerService, MarkerSeverity, type IMarker } from '../../../platform/markers/common/markers.js';
 import { Range } from '../core/range.js';
-import { type IModelDecoration, type IModelDeltaDecoration, type ITextModel, TrackedRangeStickiness, OverviewRulerLane, MinimapPosition } from '../model.js';
+import {
+	type IModelDecoration,
+	type IModelDeltaDecoration,
+	type ITextModel,
+	TrackedRangeStickiness,
+	OverviewRulerLane,
+	MinimapPosition,
+} from '../model.js';
 import { type IMarkerDecorationsService, type IMarkerLimit } from './markerDecorations.js';
 import { themeColorFromId } from '../../../base/common/themables.js';
-import { accentForeground, errorForeground, warningForeground } from '../../../platform/theme/common/colors/baseColors.js';
+import {
+	accentForeground,
+	errorForeground,
+	warningForeground,
+} from '../../../platform/theme/common/colors/baseColors.js';
 
 interface ModelMarkers {
 	readonly store: DisposableStore;
@@ -33,26 +44,42 @@ export class MarkerDecorationsService extends Disposable implements IMarkerDecor
 
 	constructor(@IMarkerService private readonly markerService: IMarkerService) {
 		super();
-		this._register(markerService.onMarkerChanged(event => {
-			for (const [model, state] of this.models) {
-				if (event.some(resource => resource.toString() === model.uri.toString())) this.synchronize(model, state, true);
-			}
-		}));
+		this._register(
+			markerService.onMarkerChanged(event => {
+				for (const [model, state] of this.models) {
+					if (event.some(resource => resource.toString() === model.uri.toString()))
+						this.synchronize(model, state, true);
+				}
+			}),
+		);
 	}
 
 	acquire(model: ITextModel, diagnostics?: LanguageDiagnosticsSource): IDisposable {
 		this.assertNotDisposed();
 		let state = this.models.get(model);
 		if (!state) {
-			state = { diagnostics, store: new DisposableStore(), suppressions: new Set(), references: 0, updating: false, owned: [], markers: new Map(), signature: '', limit: undefined };
+			state = {
+				diagnostics,
+				store: new DisposableStore(),
+				suppressions: new Set(),
+				references: 0,
+				updating: false,
+				owned: [],
+				markers: new Map(),
+				signature: '',
+				limit: undefined,
+			};
 			this.models.set(model, state);
 			const current = state;
 			if (model instanceof TextModel) {
 				state.store.add(model.diagnostics.results.onDidChange(() => this.synchronize(model, current, true)));
 			}
-			if (diagnostics) state.store.add(diagnostics.onDidChangeDiagnostics(uri => {
-				if (uri.toString() === model.uri.toString()) this.synchronize(model, current, true);
-			}));
+			if (diagnostics)
+				state.store.add(
+					diagnostics.onDidChangeDiagnostics(uri => {
+						if (uri.toString() === model.uri.toString()) this.synchronize(model, current, true);
+					}),
+				);
 			state.store.add(model.onWillDispose(() => this.remove(model, current)));
 			state.store.add(model.onDidChangeDecorations(() => this.synchronize(model, current, false)));
 			this.synchronize(model, state, true);
@@ -88,7 +115,11 @@ export class MarkerDecorationsService extends Disposable implements IMarkerDecor
 		const found = this.find(uri);
 		if (!found) return Disposable.None;
 		const [model, state] = found;
-		const id = model._setTrackedRange(null, model.validateRange(range), TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
+		const id = model._setTrackedRange(
+			null,
+			model.validateRange(range),
+			TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+		);
 		state.suppressions.add(id);
 		this.synchronize(model, state, false);
 		return toDisposable(() => {
@@ -117,33 +148,58 @@ export class MarkerDecorationsService extends Disposable implements IMarkerDecor
 			const decorations: IModelDeltaDecoration[] = [];
 			const markers: IMarker[] = [];
 			const values = [...this.markerService.read({ resource: model.uri })];
-			const local = model instanceof TextModel ? model.diagnostics.results.result?.value.diagnostics ?? [] : [];
+			const local = model instanceof TextModel ? (model.diagnostics.results.result?.value.diagnostics ?? []) : [];
 			const external = state.diagnostics?.getDiagnostics(model.uri);
-			const diagnostics = [...local, ...(external?.revision === model.getVersionId() ? external.diagnostics : [])];
+			const diagnostics = [
+				...local,
+				...(external?.revision === model.getVersionId() ? external.diagnostics : []),
+			];
 			values.push(...diagnostics.map(diagnostic => diagnosticMarker(model, diagnostic)));
 			const seen = new Set<string>();
 			let count = 0;
 			// Keep the most severe diagnostics visible within the editor budget.
 			values.sort((a, b) => b.severity - a.severity);
 			for (const marker of values) {
-				const key = JSON.stringify([marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn, marker.severity, marker.message, marker.source, marker.code]);
+				const key = JSON.stringify([
+					marker.startLineNumber,
+					marker.startColumn,
+					marker.endLineNumber,
+					marker.endColumn,
+					marker.severity,
+					marker.message,
+					marker.source,
+					marker.code,
+				]);
 				if (seen.has(key)) continue;
 				seen.add(key);
 				if (++count > 5000) continue;
-				const range = (!resetRanges && tracked.get(marker)) || model.validateRange(new Range(
-					marker.startLineNumber, marker.startColumn,
-					marker.endLineNumber, marker.endColumn,
-				));
+				const range =
+					(!resetRanges && tracked.get(marker)) ||
+					model.validateRange(
+						new Range(marker.startLineNumber, marker.startColumn, marker.endLineNumber, marker.endColumn),
+					);
 				const suppressed = this.isSuppressed(model, state, range);
-				decorations.push({ range, options: suppressed ? { description: 'suppressed-marker', stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges } : markerOptions(marker) });
+				decorations.push({
+					range,
+					options: suppressed
+						? {
+								description: 'suppressed-marker',
+								stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+							}
+						: markerOptions(marker),
+				});
 				markers.push(marker);
 			}
 			const sourceTruncated = this.markerService.isSourceTruncated(model.uri);
 			const decorationLimit = count > 5000 ? 5000 : undefined;
-			if (sourceTruncated !== (state.limit?.isMarkersSourceTruncated ?? false) || decorationLimit !== state.limit?.isMarkersTruncated) {
-				state.limit = sourceTruncated || decorationLimit !== undefined
-					? { isMarkersSourceTruncated: sourceTruncated, isMarkersTruncated: decorationLimit }
-					: undefined;
+			if (
+				sourceTruncated !== (state.limit?.isMarkersSourceTruncated ?? false) ||
+				decorationLimit !== state.limit?.isMarkersTruncated
+			) {
+				state.limit =
+					sourceTruncated || decorationLimit !== undefined
+						? { isMarkersSourceTruncated: sourceTruncated, isMarkersTruncated: decorationLimit }
+						: undefined;
 				this.limitChanged.fire(model);
 			}
 			const signature = JSON.stringify(decorations);
@@ -163,7 +219,8 @@ export class MarkerDecorationsService extends Disposable implements IMarkerDecor
 		state.store.dispose();
 		if (!model.isDisposed()) {
 			model.deltaDecorations(state.owned, []);
-			for (const id of state.suppressions) model._setTrackedRange(id, null, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
+			for (const id of state.suppressions)
+				model._setTrackedRange(id, null, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges);
 		}
 		state.suppressions.clear();
 		state.markers.clear();
@@ -177,8 +234,12 @@ export class MarkerDecorationsService extends Disposable implements IMarkerDecor
 }
 
 function markerOptions(marker: IMarker): IModelDeltaDecoration['options'] {
-	const colorId = marker.severity === MarkerSeverity.Error ? errorForeground
-		: marker.severity === MarkerSeverity.Warning ? warningForeground : accentForeground;
+	const colorId =
+		marker.severity === MarkerSeverity.Error
+			? errorForeground
+			: marker.severity === MarkerSeverity.Warning
+				? warningForeground
+				: accentForeground;
 	const color = themeColorFromId(colorId);
 	const severity = {
 		[MarkerSeverity.Error]: 'error',
@@ -201,18 +262,20 @@ function markerOptions(marker: IMarker): IModelDeltaDecoration['options'] {
 
 function diagnosticMarker(model: ITextModel, diagnostic: LanguageDiagnostic): IMarker {
 	return {
-		owner: 'editor-language', resource: model.uri,
+		owner: 'editor-language',
+		resource: model.uri,
 		startLineNumber: diagnostic.range.startLineNumber,
 		startColumn: diagnostic.range.startColumn,
 		endLineNumber: diagnostic.range.endLineNumber,
 		endColumn: diagnostic.range.endColumn,
-		severity: ({
+		severity: {
 			[LanguageDiagnosticSeverity.Error]: MarkerSeverity.Error,
 			[LanguageDiagnosticSeverity.Warning]: MarkerSeverity.Warning,
 			[LanguageDiagnosticSeverity.Information]: MarkerSeverity.Info,
 			[LanguageDiagnosticSeverity.Hint]: MarkerSeverity.Hint,
-		})[diagnostic.severity],
-		message: diagnostic.message, source: diagnostic.source,
+		}[diagnostic.severity],
+		message: diagnostic.message,
+		source: diagnostic.source,
 		...(diagnostic.code === undefined ? {} : { code: String(diagnostic.code) }),
 	};
 }

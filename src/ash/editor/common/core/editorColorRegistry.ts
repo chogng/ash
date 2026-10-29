@@ -2,49 +2,102 @@ import { opaque, registerColor, transparent } from '../../../platform/theme/comm
 import { editorBackground, editorForeground } from '../../../platform/theme/common/colors/editorColors.js';
 import { listInactiveSelectionBackground } from '../../../platform/theme/common/colors/listColors.js';
 
-import { descriptionForeground, mutedForeground, selectionForeground } from '../../../platform/theme/common/colors/baseColors.js';
+import {
+	descriptionForeground,
+	mutedForeground,
+	selectionForeground,
+} from '../../../platform/theme/common/colors/baseColors.js';
 
 const owner = 'editor.presentation';
-const alias = (id: string, value: string, description: string): string => registerColor(id, {
-	dark: value, light: value, hcDark: value, hcLight: value,
-}, { description, owner });
+const alias = (id: string, value: string, description: string): string =>
+	registerColor(id, { dark: value, light: value, hcDark: value, hcLight: value }, { description, owner });
 
 function editorColor(id: string, value: string, description: string): string {
 	return registerColor(id, { dark: value, light: value, hcDark: value, hcLight: value }, { description, owner });
 }
 
-export const editorSelectionBackground = registerColor('editor.selectionBackground', {
-	dark: '#264f78', light: '#add6ff', hcDark: '#ffffff', hcLight: '#0f4a85',
-}, { description: 'Background of editor text selections.', owner });
-export const editorSelectionForeground = registerColor('editor.selectionForeground', {
-	dark: null, light: null, hcDark: selectionForeground, hcLight: selectionForeground,
-}, { description: 'Foreground of selected editor text. Unset colors preserve syntax highlighting.', owner });
-export const editorInactiveSelection = registerColor('editor.inactiveSelectionBackground', {
-	dark: '#3a3d41', light: '#e5ebf1',
-	hcDark: opaque(transparent(editorSelectionBackground, 0.7), editorBackground), hcLight: opaque(transparent(editorSelectionBackground, 0.5), editorBackground),
-}, { description: 'Background of selections in an unfocused editor.', owner });
-export const editorGutter = editorColor('editorGutter.background', editorBackground, 'Background of the editor gutter.');
-registerColor('editorGutter.itemBackground', {
-	dark: opaque(listInactiveSelectionBackground, editorBackground),
-	light: opaque(listInactiveSelectionBackground, editorBackground),
-	hcDark: listInactiveSelectionBackground,
-	hcLight: listInactiveSelectionBackground,
-}, { description: 'Opaque background behind editor gutter actions.', owner });
+export const editorSelectionBackground = registerColor(
+	'editor.selectionBackground',
+	{ dark: '#264f78', light: '#add6ff', hcDark: '#ffffff', hcLight: '#0f4a85' },
+	{ description: 'Background of editor text selections.', owner },
+);
+export const editorSelectionForeground = registerColor(
+	'editor.selectionForeground',
+	{ dark: null, light: null, hcDark: selectionForeground, hcLight: selectionForeground },
+	{ description: 'Foreground of selected editor text. Unset colors preserve syntax highlighting.', owner },
+);
+export const editorInactiveSelection = registerColor(
+	'editor.inactiveSelectionBackground',
+	{
+		dark: '#3a3d41',
+		light: '#e5ebf1',
+		hcDark: opaque(transparent(editorSelectionBackground, 0.7), editorBackground),
+		hcLight: opaque(transparent(editorSelectionBackground, 0.5), editorBackground),
+	},
+	{ description: 'Background of selections in an unfocused editor.', owner },
+);
+export const editorGutter = editorColor(
+	'editorGutter.background',
+	editorBackground,
+	'Background of the editor gutter.',
+);
+registerColor(
+	'editorGutter.itemBackground',
+	{
+		dark: opaque(listInactiveSelectionBackground, editorBackground),
+		light: opaque(listInactiveSelectionBackground, editorBackground),
+		hcDark: listInactiveSelectionBackground,
+		hcLight: listInactiveSelectionBackground,
+	},
+	{ description: 'Opaque background behind editor gutter actions.', owner },
+);
 editorColor('editorGutter.itemGlyphForeground', editorForeground, 'Foreground of editor gutter actions.');
-export const editorWhitespace = editorColor('editorWhitespace.foreground', mutedForeground, 'Foreground of visible editor whitespace.');
-export const editorLineNumbers = editorColor('editorLineNumber.foreground', descriptionForeground, 'Foreground of editor line numbers.');
-export const editorActiveLineNumber = editorColor('editorLineNumber.activeForeground', editorForeground, 'Foreground of the current editor line number.');
+export const editorWhitespace = editorColor(
+	'editorWhitespace.foreground',
+	mutedForeground,
+	'Foreground of visible editor whitespace.',
+);
+export const editorLineNumbers = editorColor(
+	'editorLineNumber.foreground',
+	descriptionForeground,
+	'Foreground of editor line numbers.',
+);
+export const editorActiveLineNumber = editorColor(
+	'editorLineNumber.activeForeground',
+	editorForeground,
+	'Foreground of the current editor line number.',
+);
 
 export const editorCursorForeground = registerColor(
 	'editorCursor.foreground',
 	{ dark: '#aeafad', light: '#000000', hcDark: '#ffffff', hcLight: '#0f4a85' },
 	{ description: 'Foreground for the editor cursor.', owner },
 );
-export const editorCursorBackground = alias('editorCursor.background', editorBackground, 'Foreground for a character covered by a block editor cursor.');
-export const editorMultiCursorPrimaryForeground = alias('editorMultiCursor.primary.foreground', editorCursorForeground, 'Foreground for the primary cursor when multiple cursors are active.');
-export const editorMultiCursorPrimaryBackground = alias('editorMultiCursor.primary.background', editorCursorBackground, 'Foreground for a character covered by the primary cursor when multiple cursors are active.');
-export const editorMultiCursorSecondaryForeground = alias('editorMultiCursor.secondary.foreground', editorCursorForeground, 'Foreground for secondary cursors when multiple cursors are active.');
-export const editorMultiCursorSecondaryBackground = alias('editorMultiCursor.secondary.background', editorCursorBackground, 'Foreground for a character covered by a secondary cursor when multiple cursors are active.');
+export const editorCursorBackground = alias(
+	'editorCursor.background',
+	editorBackground,
+	'Foreground for a character covered by a block editor cursor.',
+);
+export const editorMultiCursorPrimaryForeground = alias(
+	'editorMultiCursor.primary.foreground',
+	editorCursorForeground,
+	'Foreground for the primary cursor when multiple cursors are active.',
+);
+export const editorMultiCursorPrimaryBackground = alias(
+	'editorMultiCursor.primary.background',
+	editorCursorBackground,
+	'Foreground for a character covered by the primary cursor when multiple cursors are active.',
+);
+export const editorMultiCursorSecondaryForeground = alias(
+	'editorMultiCursor.secondary.foreground',
+	editorCursorForeground,
+	'Foreground for secondary cursors when multiple cursors are active.',
+);
+export const editorMultiCursorSecondaryBackground = alias(
+	'editorMultiCursor.secondary.background',
+	editorCursorBackground,
+	'Foreground for a character covered by a secondary cursor when multiple cursors are active.',
+);
 export const editorOverviewRulerBorder = registerColor(
 	'editorOverviewRuler.border',
 	{ dark: '#7f7f7f4d', light: '#7f7f7f4d', hcDark: 'contrastBorder', hcLight: 'contrastBorder' },
@@ -52,12 +105,7 @@ export const editorOverviewRulerBorder = registerColor(
 );
 export const editorOverviewRulerBackground = registerColor(
 	'editorOverviewRuler.background',
-	{
-		dark: editorBackground,
-		light: editorBackground,
-		hcDark: editorBackground,
-		hcLight: editorBackground,
-	},
+	{ dark: editorBackground, light: editorBackground, hcDark: editorBackground, hcLight: editorBackground },
 	{ description: 'Background color of the editor overview ruler.', owner },
 );
 export const editorLineHighlight = registerColor(
@@ -67,7 +115,12 @@ export const editorLineHighlight = registerColor(
 );
 export const editorInactiveLineHighlight = registerColor(
 	'editor.inactiveLineHighlightBackground',
-	{ dark: editorLineHighlight, light: editorLineHighlight, hcDark: editorLineHighlight, hcLight: editorLineHighlight },
+	{
+		dark: editorLineHighlight,
+		light: editorLineHighlight,
+		hcDark: editorLineHighlight,
+		hcLight: editorLineHighlight,
+	},
 	{ description: 'Background for the line at the primary cursor position when the editor is not focused.', owner },
 );
 export const editorLineHighlightBorder = registerColor(
@@ -124,33 +177,109 @@ export const editorActiveIndentGuide1 = registerColor(
 );
 
 function bracketGuideColor(id: string, foreground: string): string {
-	return registerColor(id, {
-		dark: transparent(foreground, 0.4),
-		light: transparent(foreground, 0.4),
-		hcDark: foreground,
-		hcLight: foreground,
-	}, { description: 'Color of an inactive bracket pair guide.', owner });
+	return registerColor(
+		id,
+		{
+			dark: transparent(foreground, 0.4),
+			light: transparent(foreground, 0.4),
+			hcDark: foreground,
+			hcLight: foreground,
+		},
+		{ description: 'Color of an inactive bracket pair guide.', owner },
+	);
 }
 
-export const editorBracketPairGuideBackground1 = bracketGuideColor('editorBracketPairGuide.background1', editorBracketHighlightingForeground1);
-export const editorBracketPairGuideBackground2 = bracketGuideColor('editorBracketPairGuide.background2', editorBracketHighlightingForeground2);
-export const editorBracketPairGuideBackground3 = bracketGuideColor('editorBracketPairGuide.background3', editorBracketHighlightingForeground3);
-export const editorBracketPairGuideBackground4 = bracketGuideColor('editorBracketPairGuide.background4', editorBracketHighlightingForeground4);
-export const editorBracketPairGuideBackground5 = bracketGuideColor('editorBracketPairGuide.background5', editorBracketHighlightingForeground5);
-export const editorBracketPairGuideBackground6 = bracketGuideColor('editorBracketPairGuide.background6', editorBracketHighlightingForeground6);
+export const editorBracketPairGuideBackground1 = bracketGuideColor(
+	'editorBracketPairGuide.background1',
+	editorBracketHighlightingForeground1,
+);
+export const editorBracketPairGuideBackground2 = bracketGuideColor(
+	'editorBracketPairGuide.background2',
+	editorBracketHighlightingForeground2,
+);
+export const editorBracketPairGuideBackground3 = bracketGuideColor(
+	'editorBracketPairGuide.background3',
+	editorBracketHighlightingForeground3,
+);
+export const editorBracketPairGuideBackground4 = bracketGuideColor(
+	'editorBracketPairGuide.background4',
+	editorBracketHighlightingForeground4,
+);
+export const editorBracketPairGuideBackground5 = bracketGuideColor(
+	'editorBracketPairGuide.background5',
+	editorBracketHighlightingForeground5,
+);
+export const editorBracketPairGuideBackground6 = bracketGuideColor(
+	'editorBracketPairGuide.background6',
+	editorBracketHighlightingForeground6,
+);
 
-export const editorBracketPairGuideActiveBackground1 = alias('editorBracketPairGuide.activeBackground1', editorBracketHighlightingForeground1, 'Color of the first active bracket pair guide.');
-export const editorBracketPairGuideActiveBackground2 = alias('editorBracketPairGuide.activeBackground2', editorBracketHighlightingForeground2, 'Color of the second active bracket pair guide.');
-export const editorBracketPairGuideActiveBackground3 = alias('editorBracketPairGuide.activeBackground3', editorBracketHighlightingForeground3, 'Color of the third active bracket pair guide.');
-export const editorBracketPairGuideActiveBackground4 = alias('editorBracketPairGuide.activeBackground4', editorBracketHighlightingForeground4, 'Color of the fourth active bracket pair guide.');
-export const editorBracketPairGuideActiveBackground5 = alias('editorBracketPairGuide.activeBackground5', editorBracketHighlightingForeground5, 'Color of the fifth active bracket pair guide.');
-export const editorBracketPairGuideActiveBackground6 = alias('editorBracketPairGuide.activeBackground6', editorBracketHighlightingForeground6, 'Color of the sixth active bracket pair guide.');
+export const editorBracketPairGuideActiveBackground1 = alias(
+	'editorBracketPairGuide.activeBackground1',
+	editorBracketHighlightingForeground1,
+	'Color of the first active bracket pair guide.',
+);
+export const editorBracketPairGuideActiveBackground2 = alias(
+	'editorBracketPairGuide.activeBackground2',
+	editorBracketHighlightingForeground2,
+	'Color of the second active bracket pair guide.',
+);
+export const editorBracketPairGuideActiveBackground3 = alias(
+	'editorBracketPairGuide.activeBackground3',
+	editorBracketHighlightingForeground3,
+	'Color of the third active bracket pair guide.',
+);
+export const editorBracketPairGuideActiveBackground4 = alias(
+	'editorBracketPairGuide.activeBackground4',
+	editorBracketHighlightingForeground4,
+	'Color of the fourth active bracket pair guide.',
+);
+export const editorBracketPairGuideActiveBackground5 = alias(
+	'editorBracketPairGuide.activeBackground5',
+	editorBracketHighlightingForeground5,
+	'Color of the fifth active bracket pair guide.',
+);
+export const editorBracketPairGuideActiveBackground6 = alias(
+	'editorBracketPairGuide.activeBackground6',
+	editorBracketHighlightingForeground6,
+	'Color of the sixth active bracket pair guide.',
+);
 
 const collaborationOwner = 'collaboration.presentation';
-const collaborationSelection = (id: string, value: string, hcDark: string, hcLight: string, description: string): string =>
+const collaborationSelection = (
+	id: string,
+	value: string,
+	hcDark: string,
+	hcLight: string,
+	description: string,
+): string =>
 	registerColor(id, { dark: value, light: value, hcDark, hcLight }, { description, owner: collaborationOwner });
 
-export const collaborationSelection0Background = collaborationSelection('collaboration.selection0Background', '#3584e4', '#80bfff', '#0044aa', 'Background tint for the first concurrent collaborator selection.');
-export const collaborationSelection1Background = collaborationSelection('collaboration.selection1Background', '#9141ac', '#ff80ff', '#800080', 'Background tint for the second concurrent collaborator selection.');
-export const collaborationSelection2Background = collaborationSelection('collaboration.selection2Background', '#26a269', '#80ff80', '#006b00', 'Background tint for the third concurrent collaborator selection.');
-export const collaborationSelection3Background = collaborationSelection('collaboration.selection3Background', '#c64600', '#ffbd80', '#924000', 'Background tint for the fourth concurrent collaborator selection.');
+export const collaborationSelection0Background = collaborationSelection(
+	'collaboration.selection0Background',
+	'#3584e4',
+	'#80bfff',
+	'#0044aa',
+	'Background tint for the first concurrent collaborator selection.',
+);
+export const collaborationSelection1Background = collaborationSelection(
+	'collaboration.selection1Background',
+	'#9141ac',
+	'#ff80ff',
+	'#800080',
+	'Background tint for the second concurrent collaborator selection.',
+);
+export const collaborationSelection2Background = collaborationSelection(
+	'collaboration.selection2Background',
+	'#26a269',
+	'#80ff80',
+	'#006b00',
+	'Background tint for the third concurrent collaborator selection.',
+);
+export const collaborationSelection3Background = collaborationSelection(
+	'collaboration.selection3Background',
+	'#c64600',
+	'#ffbd80',
+	'#924000',
+	'Background tint for the fourth concurrent collaborator selection.',
+);

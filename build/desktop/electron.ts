@@ -1,6 +1,20 @@
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { constants, copyFileSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import {
+	constants,
+	copyFileSync,
+	cpSync,
+	existsSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	readdirSync,
+	realpathSync,
+	renameSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, resolve } from 'node:path';
 import { AshApplicationId, AshApplicationName } from '../../src/ash/code/common/application.ts';
@@ -37,13 +51,20 @@ export function prepareDevelopmentElectron(repositoryRoot: string): string {
 				if (!/^Electron (?:Helper|Login Helper).*\.app$/u.test(entry)) continue;
 				const original = basename(entry, '.app');
 				const name = original.replace(/^Electron/u, AshApplicationName);
-				const suffix = original.slice('Electron '.length).replace(/[^a-zA-Z0-9]+/gu, '').toLowerCase();
+				const suffix = original
+					.slice('Electron '.length)
+					.replace(/[^a-zA-Z0-9]+/gu, '')
+					.toLowerCase();
 				brandBundle(join(helpers, entry), original, name, `${AshApplicationId}.development.${suffix}`, icon);
 				renameSync(join(helpers, entry), join(helpers, `${name}.app`));
 			}
 		}
 		// Changed bundle metadata invalidates upstream signatures. Preserve execution entitlements.
-		execFileSync('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', '--preserve-metadata=entitlements,flags,runtime', bundle], { stdio: 'pipe' });
+		execFileSync(
+			'/usr/bin/codesign',
+			['--force', '--deep', '--sign', '-', '--preserve-metadata=entitlements,flags,runtime', bundle],
+			{ stdio: 'pipe' },
+		);
 		writeFileSync(join(staging, 'ready'), `${stamp}\n`);
 		try {
 			renameSync(staging, output);
@@ -59,7 +80,12 @@ export function prepareDevelopmentElectron(repositoryRoot: string): string {
 
 function developmentRuntime(repositoryRoot: string): {
 	readonly executable: string;
-	readonly bundle?: { readonly source: string; readonly icon: string; readonly stamp: string; readonly output: string; };
+	readonly bundle?: {
+		readonly source: string;
+		readonly icon: string;
+		readonly stamp: string;
+		readonly output: string;
+	};
 } {
 	const executable: string = createRequire(resolve(repositoryRoot, 'package.json'))('electron');
 	// Custom test executables and other platforms retain their existing launcher.
@@ -71,16 +97,35 @@ function developmentRuntime(repositoryRoot: string): {
 		.update(readFileSync(join(source, 'Contents/Info.plist')))
 		.update(readFileSync(icon))
 		.update(readFileSync(join(repositoryRoot, 'build/desktop/electron.ts')))
-		.digest('hex').slice(0, 16);
+		.digest('hex')
+		.slice(0, 16);
 	const output = desktopBuildPath(repositoryRoot, 'electron', stamp);
-	return { executable: join(output, `${AshApplicationName}.app`, 'Contents/MacOS', 'Electron'), bundle: { source, icon, stamp, output } };
+	return {
+		executable: join(output, `${AshApplicationName}.app`, 'Contents/MacOS', 'Electron'),
+		bundle: { source, icon, stamp, output },
+	};
 }
 
-function brandBundle(bundle: string, original: string, name: string, identifier: string, icon: string, executable = name): void {
+function brandBundle(
+	bundle: string,
+	original: string,
+	name: string,
+	identifier: string,
+	icon: string,
+	executable = name,
+): void {
 	const contents = join(bundle, 'Contents');
 	const plist = join(contents, 'Info.plist');
-	const metadata = JSON.parse(execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', plist], { encoding: 'utf8' }));
-	Object.assign(metadata, { CFBundleName: name, CFBundleDisplayName: name, CFBundleExecutable: executable, CFBundleIdentifier: identifier, CFBundleIconFile: 'ash.icns' });
+	const metadata = JSON.parse(
+		execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', plist], { encoding: 'utf8' }),
+	);
+	Object.assign(metadata, {
+		CFBundleName: name,
+		CFBundleDisplayName: name,
+		CFBundleExecutable: executable,
+		CFBundleIdentifier: identifier,
+		CFBundleIconFile: 'ash.icns',
+	});
 	writeFileSync(plist, JSON.stringify(metadata));
 	execFileSync('/usr/bin/plutil', ['-convert', 'xml1', plist]);
 	mkdirSync(join(contents, 'Resources'), { recursive: true });

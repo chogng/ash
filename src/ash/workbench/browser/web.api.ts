@@ -1,13 +1,11 @@
 import type { IConfigurationModel } from '../../platform/configuration/common/configuration.js';
 import type { IURLCallbackProvider } from '../services/url/browser/urlService.js';
 import type { IInstantiationService } from '../../platform/instantiation/common/instantiation.js';
-import type { IDisposable } from "../../base/common/lifecycle.js";
-import type { IRendererHost } from "../../platform/renderer/common/rendererHost.js";
-import type { ShutdownReason } from "../services/lifecycle/common/lifecycle.js";
-import type {
-	IAnyWorkspaceIdentifier,
-} from "../../platform/workspace/common/workspace.js";
-import type { WorkbenchDefaultLayout } from "./layout.js";
+import type { IDisposable } from '../../base/common/lifecycle.js';
+import type { IRendererHost } from '../../platform/renderer/common/rendererHost.js';
+import type { ShutdownReason } from '../services/lifecycle/common/lifecycle.js';
+import type { IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
+import type { WorkbenchDefaultLayout } from './layout.js';
 import type { HTMLFileSystemProvider } from '../../platform/files/browser/htmlFileSystemProvider.js';
 import type { IWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
 import type { IEmbedderTerminalOptions } from '../services/terminal/common/embedderTerminalService.js';
@@ -50,9 +48,7 @@ export interface IWebWorkbenchConstructionOptions {
 
 /** Lifecycle facade returned to a Web Workbench embedder. */
 export interface IWebWorkbench extends IDisposable {
-	readonly window: {
-		createTerminal(options: IEmbedderTerminalOptions): Promise<void>;
-	};
+	readonly window: { createTerminal(options: IEmbedderTerminalOptions): Promise<void> };
 	/** Saved editors and dirty working copies are restored before startup completes. */
 	readonly whenRestored: Promise<void>;
 	shutdown(reason: ShutdownReason): Promise<void>;

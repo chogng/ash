@@ -6,7 +6,10 @@ import { RGBA8 } from '../../common/core/misc/rgba.js';
 
 test('Minimap character renderer downsamples one glyph sheet into deterministic pixels', () => {
 	const source = new Uint8ClampedArray(
-		Constants.SAMPLED_CHAR_HEIGHT * Constants.SAMPLED_CHAR_WIDTH * Constants.RGBA_CHANNELS_CNT * Constants.CHAR_COUNT,
+		Constants.SAMPLED_CHAR_HEIGHT *
+			Constants.SAMPLED_CHAR_WIDTH *
+			Constants.RGBA_CHANNELS_CNT *
+			Constants.CHAR_COUNT,
 	);
 	source.fill(255);
 	const renderer = MinimapCharRendererFactory.createFromSampleData(source, 1);
@@ -30,9 +33,15 @@ test('Minimap character renderer downsamples one glyph sheet into deterministic 
 });
 
 test('Minimap character renderer validates sheet dimensions and paints block mode', () => {
-	assert.throws(() => MinimapCharRendererFactory.createFromSampleData(new Uint8ClampedArray(1), 1), /Unexpected source/);
+	assert.throws(
+		() => MinimapCharRendererFactory.createFromSampleData(new Uint8ClampedArray(1), 1),
+		/Unexpected source/,
+	);
 	const source = new Uint8ClampedArray(
-		Constants.SAMPLED_CHAR_HEIGHT * Constants.SAMPLED_CHAR_WIDTH * Constants.RGBA_CHANNELS_CNT * Constants.CHAR_COUNT,
+		Constants.SAMPLED_CHAR_HEIGHT *
+			Constants.SAMPLED_CHAR_WIDTH *
+			Constants.RGBA_CHANNELS_CNT *
+			Constants.CHAR_COUNT,
 	);
 	source.fill(255);
 	const renderer = MinimapCharRendererFactory.createFromSampleData(source, 2);

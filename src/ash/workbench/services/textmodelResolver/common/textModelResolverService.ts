@@ -20,9 +20,12 @@ export class TextModelResolverService implements ITextModelService {
 	private readonly contentProviders = new Map<string, ITextModelContentProvider>();
 	private readonly providerModelReferences = new Map<ITextModel, number>();
 
-	constructor(@ITextModelResourceService private readonly models: ITextModelResourceServiceContract) { }
+	constructor(@ITextModelResourceService private readonly models: ITextModelResourceServiceContract) {}
 
-	async createModelReference(resource: URI, options?: { readonly readFile: FileReadOperation; }): Promise<IReference<IResolvedTextEditorModel>> {
+	async createModelReference(
+		resource: URI,
+		options?: { readonly readFile: FileReadOperation },
+	): Promise<IReference<IResolvedTextEditorModel>> {
 		const provider = options ? undefined : this.contentProviders.get(resource.scheme);
 		if (provider) {
 			const model = await provider.provideTextContent(resource);
@@ -32,7 +35,10 @@ export class TextModelResolverService implements ITextModelService {
 			const object = new TextResourceEditorModel({ object: model, ...release });
 			return this.createReference(object);
 		}
-		const reference = await this.models.acquire({ resource, ...(options ? { readFile: options.readFile } : {}) }, new AbortController().signal);
+		const reference = await this.models.acquire(
+			{ resource, ...(options ? { readFile: options.readFile } : {}) },
+			new AbortController().signal,
+		);
 		const object = new BaseTextEditorModel(reference.model, false);
 		return this.createReference(object, reference);
 	}
@@ -54,7 +60,8 @@ export class TextModelResolverService implements ITextModelService {
 	}
 
 	registerTextModelContentProvider(scheme: string, provider: ITextModelContentProvider): IDisposable {
-		if (this.contentProviders.has(scheme)) throw new Error(`Text model content provider already registered: ${scheme}`);
+		if (this.contentProviders.has(scheme))
+			throw new Error(`Text model content provider already registered: ${scheme}`);
 		this.contentProviders.set(scheme, provider);
 		return toDisposable(() => {
 			if (this.contentProviders.get(scheme) === provider) this.contentProviders.delete(scheme);

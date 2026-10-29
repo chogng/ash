@@ -9,7 +9,12 @@ import { CancellationToken } from '../../../../../base/common/cancellation.js';
 import { TestLanguageFeaturesService } from '../../../../test/common/testLanguageFeaturesService.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type DocumentFormattingEditProvider } from '../../../../common/languages.js';
-import { FormattingConflicts, FormattingKind, FormattingMode, getRealAndSyntheticDocumentFormattersOrdered } from '../../browser/format.js';
+import {
+	FormattingConflicts,
+	FormattingKind,
+	FormattingMode,
+	getRealAndSyntheticDocumentFormattersOrdered,
+} from '../../browser/format.js';
 import { FormattingEdit } from '../../browser/formattingEdit.js';
 import { createTestCodeEditor } from '../../../../test/browser/testCodeEditor.js';
 import { Range } from '../../../../common/core/range.js';
@@ -24,14 +29,29 @@ test('one host adapter implementing document and range formatting is one formatt
 	const adapter = { provideDocumentFormattingEdits: () => [], provideDocumentRangeFormattingEdits: () => [] };
 	using document = features.documentFormattingEditProvider.register('*', adapter);
 	using range = features.documentRangeFormattingEditProvider.register('*', adapter);
-	assert.deepEqual(getRealAndSyntheticDocumentFormattersOrdered(features.documentFormattingEditProvider, features.documentRangeFormattingEditProvider, model), [adapter]);
+	assert.deepEqual(
+		getRealAndSyntheticDocumentFormattersOrdered(
+			features.documentFormattingEditProvider,
+			features.documentRangeFormattingEditProvider,
+			model,
+		),
+		[adapter],
+	);
 });
 
 test('document formatters precede range formatters and deduplicate extension identity ignoring case', async () => {
 	using model = new TextModel('alpha');
 	using features = new TestLanguageFeaturesService();
-	using document = features.documentFormattingEditProvider.register('*', { extensionId: new ExtensionIdentifier('Acme.Format'), provideDocumentFormattingEdits: () => [] });
-	using duplicate = features.documentRangeFormattingEditProvider.register('*', { extensionId: new ExtensionIdentifier('acme.format'), provideDocumentRangeFormattingEdits: () => { throw new Error('duplicate formatter invoked'); } });
+	using document = features.documentFormattingEditProvider.register('*', {
+		extensionId: new ExtensionIdentifier('Acme.Format'),
+		provideDocumentFormattingEdits: () => [],
+	});
+	using duplicate = features.documentRangeFormattingEditProvider.register('*', {
+		extensionId: new ExtensionIdentifier('acme.format'),
+		provideDocumentRangeFormattingEdits: () => {
+			throw new Error('duplicate formatter invoked');
+		},
+	});
 	using range = features.documentRangeFormattingEditProvider.register('*', {
 		extensionId: new ExtensionIdentifier('Other.Format'),
 		provideDocumentRangeFormattingEdits(receivedModel, receivedRange, receivedOptions, token) {
@@ -42,8 +62,22 @@ test('document formatters precede range formatters and deduplicate extension ide
 			return [{ range: receivedRange, text: 'ALPHA' }];
 		},
 	});
-	assert.deepEqual(getRealAndSyntheticDocumentFormattersOrdered(features.documentFormattingEditProvider, features.documentRangeFormattingEditProvider, model).map(provider => provider.extensionId?.value), ['Acme.Format', 'Other.Format']);
-	assert.deepEqual(await getRealAndSyntheticDocumentFormattersOrdered(features.documentFormattingEditProvider, features.documentRangeFormattingEditProvider, model)[1].provideDocumentFormattingEdits(model, options, CancellationToken.None), [{ range: model.getFullModelRange(), text: 'ALPHA' }]);
+	assert.deepEqual(
+		getRealAndSyntheticDocumentFormattersOrdered(
+			features.documentFormattingEditProvider,
+			features.documentRangeFormattingEditProvider,
+			model,
+		).map(provider => provider.extensionId?.value),
+		['Acme.Format', 'Other.Format'],
+	);
+	assert.deepEqual(
+		await getRealAndSyntheticDocumentFormattersOrdered(
+			features.documentFormattingEditProvider,
+			features.documentRangeFormattingEditProvider,
+			model,
+		)[1].provideDocumentFormattingEdits(model, options, CancellationToken.None),
+		[{ range: model.getFullModelRange(), text: 'ALPHA' }],
+	);
 });
 
 test('one adapter implementing document and range formatting is one choice without an extension identity', async () => {
@@ -51,13 +85,21 @@ test('one adapter implementing document and range formatting is one choice witho
 	using features = new TestLanguageFeaturesService();
 	const adapter = {
 		provideDocumentFormattingEdits: () => [{ range: model.getFullModelRange(), text: 'ALPHA' }],
-		provideDocumentRangeFormattingEdits: () => { throw new Error('The document provider owns whole-file formatting'); },
+		provideDocumentRangeFormattingEdits: () => {
+			throw new Error('The document provider owns whole-file formatting');
+		},
 	};
 	using document = features.documentFormattingEditProvider.register('*', adapter);
 	using range = features.documentRangeFormattingEditProvider.register('*', adapter);
-	const providers = getRealAndSyntheticDocumentFormattersOrdered(features.documentFormattingEditProvider, features.documentRangeFormattingEditProvider, model);
+	const providers = getRealAndSyntheticDocumentFormattersOrdered(
+		features.documentFormattingEditProvider,
+		features.documentRangeFormattingEditProvider,
+		model,
+	);
 	assert.equal(providers.length, 1);
-	assert.deepEqual(await providers[0].provideDocumentFormattingEdits(model, options, CancellationToken.None), [{ range: model.getFullModelRange(), text: 'ALPHA' }]);
+	assert.deepEqual(await providers[0].provideDocumentFormattingEdits(model, options, CancellationToken.None), [
+		{ range: model.getFullModelRange(), text: 'ALPHA' },
+	]);
 });
 
 test('formatter selectors use the latest registration and restore the previous policy on disposal', async () => {
@@ -73,24 +115,38 @@ test('formatter selectors use the latest registration and restore the previous p
 		assert.equal(kind, FormattingKind.File);
 		return choices[1];
 	});
-	assert.equal(await FormattingConflicts.select(providers, model, FormattingMode.Silent, FormattingKind.File), providers[1]);
+	assert.equal(
+		await FormattingConflicts.select(providers, model, FormattingMode.Silent, FormattingKind.File),
+		providers[1],
+	);
 	second.dispose();
-	assert.equal(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.Selection), providers[0]);
+	assert.equal(
+		await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.Selection),
+		providers[0],
+	);
 });
 
 test('declining formatter selection does not consult an older policy', async () => {
 	using model = new TextModel('alpha');
 	const providers: DocumentFormattingEditProvider[] = [{ provideDocumentFormattingEdits: () => [] }];
 	let calls = 0;
-	using first = FormattingConflicts.setFormatterSelector(async choices => { calls++; return choices[0]; });
+	using first = FormattingConflicts.setFormatterSelector(async choices => {
+		calls++;
+		return choices[0];
+	});
 	using second = FormattingConflicts.setFormatterSelector(async () => undefined);
-	assert.equal(await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File), undefined);
+	assert.equal(
+		await FormattingConflicts.select(providers, model, FormattingMode.Explicit, FormattingKind.File),
+		undefined,
+	);
 	assert.equal(calls, 0);
 });
 
 test('an empty formatter list never opens the selector', async () => {
 	using model = new TextModel('alpha');
-	using selector = FormattingConflicts.setFormatterSelector(async () => { throw new Error('unexpected selector'); });
+	using selector = FormattingConflicts.setFormatterSelector(async () => {
+		throw new Error('unexpected selector');
+	});
 	assert.equal(await FormattingConflicts.select([], model, FormattingMode.Explicit, FormattingKind.File), undefined);
 });
 
@@ -103,14 +159,23 @@ test('formatting edits move collapsed decorations after inserted text through th
 	using closeWindow = toDisposable(() => dom.window.close());
 	using model = new TextModel('abc');
 	using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model });
-	const [id] = model.deltaDecorations([], [{
-		range: new Range(1, 2, 1, 2),
-		options: { description: 'format-boundary', stickiness: TrackedRangeStickiness.GrowsOnlyWhenTypingBefore },
-	}]);
+	const [id] = model.deltaDecorations(
+		[],
+		[
+			{
+				range: new Range(1, 2, 1, 2),
+				options: {
+					description: 'format-boundary',
+					stickiness: TrackedRangeStickiness.GrowsOnlyWhenTypingBefore,
+				},
+			},
+		],
+	);
 	FormattingEdit.execute(editor, [{ range: new Range(1, 2, 1, 2), text: 'XX' }], true);
-	assert.deepEqual({ text: model.getText(), marker: model.getDecorationRange(id!) }, {
-		text: 'aXXbc', marker: new Range(1, 4, 1, 4),
-	});
+	assert.deepEqual(
+		{ text: model.getText(), marker: model.getDecorationRange(id!) },
+		{ text: 'aXXbc', marker: new Range(1, 4, 1, 4) },
+	);
 	editor.controller.undo();
 	assert.equal(model.getText(), 'abc');
 	editor.controller.redo();

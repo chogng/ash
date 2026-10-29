@@ -3,17 +3,17 @@ import { IAccessibleViewService } from '../../../../../platform/accessibility/br
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
 import { DisposableStore, type IDisposable } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../../services/output/common/output.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import type { IAction } from "../../../../../base/common/actions.js";
-import { Event } from "../../../../../base/common/event.js";
-import { toDisposable } from "../../../../../base/common/lifecycle.js";
-import { IContextMenuService } from "../../../../../platform/contextview/browser/contextView.js";
-import { InstantiationService } from "../../../../../platform/instantiation/common/instantiationService.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import type { IAction } from '../../../../../base/common/actions.js';
+import { Event } from '../../../../../base/common/event.js';
+import { toDisposable } from '../../../../../base/common/lifecycle.js';
+import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
+import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 
-test("Output projects channel selection and active-channel clearing into the Panel title", async () => {
-	const browser = new JSDOM("<!doctype html><body></body>");
+test('Output projects channel selection and active-channel clearing into the Panel title', async () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(browser);
 	browser.window.HTMLCanvasElement.prototype.getContext = () => null;
 	let shownActions: readonly IAction[] = [];
@@ -21,52 +21,64 @@ test("Output projects channel selection and active-channel clearing into the Pan
 		contextMenuStyle: 'custom' as const,
 		onDidShowContextMenu: Event.None,
 		onDidHideContextMenu: Event.None,
-		showContextMenu: options => { shownActions = options.getActions?.() ?? []; },
-		hideContextMenu() { },
+		showContextMenu: options => {
+			shownActions = options.getActions?.() ?? [];
+		},
+		hideContextMenu() {},
 	};
 	try {
 		const { createCodeEditorServices } = await import('../../../../../editor/test/browser/testCodeEditor.js');
 		using outputResources = new DisposableStore();
 		const outputScope = workbenchInstantiationService(outputResources);
 		const output = outputScope.get(IOutputService);
-		using rust = output.createChannel({ id: "rust", label: "rust-analyzer" });
-		using typescript = output.createChannel({ id: "typescript", label: "TypeScript" });
-		rust.append({ severity: "warning", text: "check failed" });
-		typescript.append({ severity: "log", text: "server ready" });
-		const { OutputViewPane } = await import("../../../../../workbench/contrib/output/browser/outputView.js");
+		using rust = output.createChannel({ id: 'rust', label: 'rust-analyzer' });
+		using typescript = output.createChannel({ id: 'typescript', label: 'TypeScript' });
+		rust.append({ severity: 'warning', text: 'check failed' });
+		typescript.append({ severity: 'log', text: 'server ready' });
+		const { OutputViewPane } = await import('../../../../../workbench/contrib/output/browser/outputView.js');
 		const overrides = outputResources.add(outputScope.createChild());
 		overrides.registerInstance(IContextMenuService, contextMenus);
 		const services = createCodeEditorServices(outputResources, overrides);
-		services.registerInstance(IAccessibleViewService, { ...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined, disableHint: async () => { }, showAccessibleViewHelp: () => { } });
-		using pane = services.createInstance(OutputViewPane, browser.window.document.body, { id: 'ash.output.test', title: 'Output' });
+		services.registerInstance(IAccessibleViewService, {
+			...toDisposable(() => {}),
+			show: () => false,
+			getOpenAriaHint: () => undefined,
+			disableHint: async () => {},
+			showAccessibleViewHelp: () => {},
+		});
+		using pane = services.createInstance(OutputViewPane, browser.window.document.body, {
+			id: 'ash.output.test',
+			title: 'Output',
+		});
 		const titleActions = pane.partTitleProjection?.actions;
 		assert.ok(titleActions);
 		browser.window.document.body.append(pane.element, titleActions);
-		const selectChannel = titleActions.querySelector<HTMLButtonElement>("[data-action-id='ash.output.selectChannel'] button");
+		const selectChannel = titleActions.querySelector<HTMLButtonElement>(
+			"[data-action-id='ash.output.selectChannel'] button",
+		);
 		const clearOutput = titleActions.querySelector<HTMLButtonElement>("[data-action-id='ash.output.clear'] button");
 		assert.ok(selectChannel);
 		assert.ok(clearOutput);
-		assert.ok(clearOutput.querySelector(".ash-icon"));
-		await waitFor(() => pane.element.querySelector(".stanza-editor-input") !== null);
+		assert.ok(clearOutput.querySelector('.ash-icon'));
+		await waitFor(() => pane.element.querySelector('.stanza-editor-input') !== null);
 		clearOutput.click();
 		assert.deepEqual(rust.entries, []);
 		titleActions.querySelector<HTMLButtonElement>("[data-action-id='ash.output.selectChannel'] button")?.click();
-		const typescriptAction = shownActions.find(action => action.label === "TypeScript");
+		const typescriptAction = shownActions.find(action => action.label === 'TypeScript');
 		assert.ok(typescriptAction);
 		await typescriptAction.run();
 		assert.equal(output.activeChannel, typescript);
-		assert.equal(typescript.getText(), "server ready");
+		assert.equal(typescript.getText(), 'server ready');
 	} finally {
 		installedGlobals.dispose();
 		browser.window.close();
 	}
 });
 
-
 async function waitFor(predicate: () => boolean): Promise<void> {
 	const deadline = Date.now() + 1_000;
 	while (!predicate()) {
-		if (Date.now() > deadline) throw new Error("Timed out waiting for Panel title action");
+		if (Date.now() > deadline) throw new Error('Timed out waiting for Panel title action');
 		await new Promise<void>(resolve => setTimeout(resolve, 0));
 	}
 }
@@ -87,7 +99,11 @@ function installDomGlobals(browser: JSDOM): IDisposable {
 		InputEvent: browser.window.InputEvent,
 		NodeFilter: browser.window.NodeFilter,
 		PointerEvent: browser.window.MouseEvent,
-		ResizeObserver: class { observe() { } unobserve() { } disconnect() { } },
+		ResizeObserver: class {
+			observe() {}
+			unobserve() {}
+			disconnect() {}
+		},
 	};
 	return installEditorTestGlobals(globals);
 }

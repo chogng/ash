@@ -1,6 +1,5 @@
 import { KeyboardLayoutContribution } from './_.contribution.js';
 
-
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 	layout: { id: 'com.apple.inputmethod.Korean.2SetKorean', lang: 'ko', localizedName: '2-Set Korean' },
 	secondaryLayouts: [],
@@ -52,7 +51,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		BracketRight: [']', '}', ']', '}', 0],
 		Backslash: ['\\', '|', '\\', '|', 0],
 		Semicolon: [';', ':', ';', ':', 0],
-		Quote: ['\'', '"', '\'', '"', 0],
+		Quote: ["'", '"', "'", '"', 0],
 		Backquote: ['₩', '~', '`', '~', 0],
 		Comma: [',', '<', ',', '<', 0],
 		Period: ['.', '>', '.', '>', 0],
@@ -122,6 +121,6 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		ControlRight: [],
 		ShiftRight: [],
 		AltRight: [],
-		MetaRight: []
-	}
+		MetaRight: [],
+	},
 });

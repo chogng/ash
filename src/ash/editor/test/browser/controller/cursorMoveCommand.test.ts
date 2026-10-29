@@ -12,7 +12,13 @@ test('vertical navigation retains the requested visual column', () => {
 	using model = new TextModel('12345\n12\n12345');
 	using languages = new TestLanguageConfigurationService();
 	const config = createTestCursorConfiguration(model, languages);
-	const source = new SingleCursorState(Range.fromPositions(new Position(1, 5)), SelectionStartKind.Simple, 0, new Position(1, 5), 0);
+	const source = new SingleCursorState(
+		Range.fromPositions(new Position(1, 5)),
+		SelectionStartKind.Simple,
+		0,
+		new Position(1, 5),
+		0,
+	);
 	const result = MoveOperations.moveDown(config, model, source, false, 1);
 	assert.deepEqual([result.position.lineNumber, result.position.column], [2, 3]);
 	assert.equal(result.leftoverVisibleColumns, 2);

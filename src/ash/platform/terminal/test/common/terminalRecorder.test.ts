@@ -12,7 +12,10 @@ suite('Terminal display recorder', () => {
 		recorder.handleResize(110, 50);
 		recorder.handleData('next');
 		const replay = recorder.generateReplayEventSync();
-		assert.deepEqual(replay.events, [{ cols: 90, rows: 30, data: '中文🙂' }, { cols: 110, rows: 50, data: 'next' }]);
+		assert.deepEqual(replay.events, [
+			{ cols: 90, rows: 30, data: '中文🙂' },
+			{ cols: 110, rows: 50, data: 'next' },
+		]);
 		replay.events[0]!.data = 'outside';
 		assert.equal((await recorder.generateReplayEvent()).events[0]!.data, '中文🙂');
 	});
@@ -34,14 +37,25 @@ suite('Terminal display recorder', () => {
 		values.CURRENT = 'outside';
 		recorder.handleData('prompt');
 		recorder.handleData('', { type: 'commandLine', value: 'sensitive', isTrusted: true });
-		recorder.handleData('', { type: 'commandExecuted', commandId: 'command', command: 'sensitive', isTrusted: true, cwd: undefined, timestampMillis: 1 });
+		recorder.handleData('', {
+			type: 'commandExecuted',
+			commandId: 'command',
+			command: 'sensitive',
+			isTrusted: true,
+			cwd: undefined,
+			timestampMillis: 1,
+		});
 		const first = recorder.generateReplayEventSync();
 		const snapshot = first.events[0]!.shellIntegration;
 		assert.equal(snapshot?.type, 'environment');
 		if (snapshot?.type === 'environment') snapshot.values!.CURRENT = 'changed replay';
 		recorder.handleData('', { type: 'commandStorageDisabled' });
 		const events = recorder.generateReplayEventSync().events;
-		assert.deepEqual(events[0]!.shellIntegration, { type: 'environment', values: { CURRENT: 'committed' }, isTrusted: true });
+		assert.deepEqual(events[0]!.shellIntegration, {
+			type: 'environment',
+			values: { CURRENT: 'committed' },
+			isTrusted: true,
+		});
 		assert.equal(events[1]!.data, 'prompt');
 		assert.deepEqual(events[2]!.shellIntegration, { type: 'commandLine', value: '', isTrusted: false });
 		assert.equal(JSON.stringify(events.slice(2)).includes('sensitive'), false);

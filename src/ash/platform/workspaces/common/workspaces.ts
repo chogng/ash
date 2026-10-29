@@ -3,7 +3,11 @@ import { basename, dirname, extUriBiasedIgnorePathCase, type IExtUri } from '../
 import { Schemas } from '../../../base/common/network.js';
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
-import { hasWorkspaceFileExtension, type IWorkspaceFolder, type IWorkspaceIdentifier } from '../../workspace/common/workspace.js';
+import {
+	hasWorkspaceFileExtension,
+	type IWorkspaceFolder,
+	type IWorkspaceIdentifier,
+} from '../../workspace/common/workspace.js';
 
 export interface IRecentFolder {
 	readonly folderUri: URI;
@@ -41,9 +45,14 @@ export function recentWorkspaceUri(recent: IRecent): URI {
 /** Preserves URI identity across storage and process boundaries. */
 export function toStoreData(recents: IRecentlyOpened): object {
 	return {
-		workspaces: recents.workspaces.map(recent => 'workspace' in recent
-			? { workspace: { id: recent.workspace.id, configPath: recent.workspace.configPath.toString() }, label: recent.label }
-			: { folderUri: recent.folderUri.toString(), label: recent.label }),
+		workspaces: recents.workspaces.map(recent =>
+			'workspace' in recent
+				? {
+						workspace: { id: recent.workspace.id, configPath: recent.workspace.configPath.toString() },
+						label: recent.label,
+					}
+				: { folderUri: recent.folderUri.toString(), label: recent.label },
+		),
 	};
 }
 
@@ -61,7 +70,9 @@ export function restoreRecentlyOpened(data: unknown): IRecentlyOpened {
 			}
 			const uri = URI.file(root);
 			const label = optionalNonEmptyString(entry.name, 'Recent project label');
-			return hasWorkspaceFileExtension(root) ? { workspace: { id: uri.toString(), configPath: uri }, label } : { folderUri: uri, label };
+			return hasWorkspaceFileExtension(root)
+				? { workspace: { id: uri.toString(), configPath: uri }, label }
+				: { folderUri: uri, label };
 		});
 		return { workspaces: legacy.slice(0, MAX_RECENT_WORKSPACES) };
 	}
@@ -99,7 +110,11 @@ function parseRecentUri(value: unknown): URI {
 export function mergeRecentlyOpened(current: IRecentlyOpened, added: readonly IRecent[]): IRecentlyOpened {
 	const workspaces: IRecent[] = [];
 	for (const recent of [...added, ...current.workspaces]) {
-		if (!workspaces.some(existing => extUriBiasedIgnorePathCase.isEqual(recentWorkspaceUri(existing), recentWorkspaceUri(recent)))) {
+		if (
+			!workspaces.some(existing =>
+				extUriBiasedIgnorePathCase.isEqual(recentWorkspaceUri(existing), recentWorkspaceUri(recent)),
+			)
+		) {
 			workspaces.push(recent);
 		}
 	}
@@ -163,12 +178,22 @@ function optionalNonEmptyString(value: unknown, owner: string): string | undefin
 }
 
 /** Resolve persisted entries without granting access to the resources they name. */
-export function toWorkspaceFolders(configuredFolders: readonly IStoredWorkspaceFolder[], workspaceConfigFile: URI, comparison: IExtUri = extUriBiasedIgnorePathCase): IWorkspaceFolder[] {
+export function toWorkspaceFolders(
+	configuredFolders: readonly IStoredWorkspaceFolder[],
+	workspaceConfigFile: URI,
+	comparison: IExtUri = extUriBiasedIgnorePathCase,
+): IWorkspaceFolder[] {
 	const folders: IWorkspaceFolder[] = [];
 	for (const entry of configuredFolders) {
-		let uri = entry.uri ? URI.parse(entry.uri) : (entry.path!.startsWith('/') ? workspaceConfigFile.with({ path: entry.path! }) : URI.joinPath(dirname(workspaceConfigFile), entry.path!));
-		if (uri.path.length > 1 && !/^\/[A-Za-z]:\/$/.test(uri.path)) uri = uri.with({ path: uri.path.replace(/\/+$/, '') });
-		if (uri.scheme !== Schemas.file && uri.scheme !== Schemas.ashRemote) throw new TypeError('Unsupported workspace folder scheme');
+		let uri = entry.uri
+			? URI.parse(entry.uri)
+			: entry.path!.startsWith('/')
+				? workspaceConfigFile.with({ path: entry.path! })
+				: URI.joinPath(dirname(workspaceConfigFile), entry.path!);
+		if (uri.path.length > 1 && !/^\/[A-Za-z]:\/$/.test(uri.path))
+			uri = uri.with({ path: uri.path.replace(/\/+$/, '') });
+		if (uri.scheme !== Schemas.file && uri.scheme !== Schemas.ashRemote)
+			throw new TypeError('Unsupported workspace folder scheme');
 		if (folders.some(folder => comparison.isEqual(folder.uri, uri))) continue;
 		folders.push({ id: uri.toString(), uri, name: entry.name ?? basename(uri), index: folders.length });
 	}
@@ -176,13 +201,30 @@ export function toWorkspaceFolders(configuredFolders: readonly IStoredWorkspaceF
 }
 
 /** Relative paths are meaningful only within the same filesystem authority. */
-export function getStoredWorkspaceFolder(folderURI: URI, forceAbsolute: boolean, folderName: string | undefined, targetConfigFolderURI: URI, comparison: IExtUri = extUriBiasedIgnorePathCase): IStoredWorkspaceFolder {
+export function getStoredWorkspaceFolder(
+	folderURI: URI,
+	forceAbsolute: boolean,
+	folderName: string | undefined,
+	targetConfigFolderURI: URI,
+	comparison: IExtUri = extUriBiasedIgnorePathCase,
+): IStoredWorkspaceFolder {
 	let relative: string | undefined;
-	if (!forceAbsolute && folderURI.scheme === targetConfigFolderURI.scheme && folderURI.authority === targetConfigFolderURI.authority) {
+	if (
+		!forceAbsolute &&
+		folderURI.scheme === targetConfigFolderURI.scheme &&
+		folderURI.authority === targetConfigFolderURI.authority
+	) {
 		const from = targetConfigFolderURI.path.split('/').filter(Boolean);
 		const to = folderURI.path.split('/').filter(Boolean);
 		let shared = 0;
-		while (shared < from.length && shared < to.length && (comparison.ignorePathCasing(folderURI) ? from[shared]!.toLowerCase() === to[shared]!.toLowerCase() : from[shared] === to[shared])) shared++;
+		while (
+			shared < from.length &&
+			shared < to.length &&
+			(comparison.ignorePathCasing(folderURI)
+				? from[shared]!.toLowerCase() === to[shared]!.toLowerCase()
+				: from[shared] === to[shared])
+		)
+			shared++;
 		relative = [...from.slice(shared).map(() => '..'), ...to.slice(shared)].join('/');
 	}
 	return {

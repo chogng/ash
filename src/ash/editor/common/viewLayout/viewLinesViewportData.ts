@@ -5,14 +5,18 @@
 
 import { Range } from '../core/range.js';
 import { Selection } from '../core/selection.js';
-import { IPartialViewLinesViewportData, IViewModel, IViewWhitespaceViewportData, ViewLineRenderingData } from '../viewModel.js';
+import {
+	IPartialViewLinesViewportData,
+	IViewModel,
+	IViewWhitespaceViewportData,
+	ViewLineRenderingData,
+} from '../viewModel.js';
 import { ViewModelDecoration } from '../viewModel/viewModelDecoration.js';
 
 /**
  * Contains all data needed to render at a specific viewport.
  */
 export class ViewportData {
-
 	public readonly selections: Selection[];
 
 	/**
@@ -53,7 +57,7 @@ export class ViewportData {
 		selections: Selection[],
 		partialData: IPartialViewLinesViewportData,
 		whitespaceViewportData: IViewWhitespaceViewportData[],
-		model: IViewModel
+		model: IViewModel,
 	) {
 		this.selections = selections;
 		this.startLineNumber = partialData.startLineNumber | 0;
@@ -69,7 +73,7 @@ export class ViewportData {
 			partialData.startLineNumber,
 			this._model.getLineMinColumn(partialData.startLineNumber),
 			partialData.endLineNumber,
-			this._model.getLineMaxColumn(partialData.endLineNumber)
+			this._model.getLineMaxColumn(partialData.endLineNumber),
 		);
 	}
 

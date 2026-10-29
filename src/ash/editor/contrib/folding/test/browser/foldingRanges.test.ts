@@ -18,8 +18,12 @@ test('folding ranges are sorted, deduplicated, and given provider defaults', () 
 
 test('crossing folding ranges are rejected', () => {
 	using model = new TextModel('a\nb\nc\nd');
-	assert.throws(() => normalizeEditorFoldingRanges(model, [
-		{ startLineIndex: 0, endLineIndex: 2 },
-		{ startLineIndex: 1, endLineIndex: 3 },
-	]), /nested or disjoint/u);
+	assert.throws(
+		() =>
+			normalizeEditorFoldingRanges(model, [
+				{ startLineIndex: 0, endLineIndex: 2 },
+				{ startLineIndex: 1, endLineIndex: 3 },
+			]),
+		/nested or disjoint/u,
+	);
 });

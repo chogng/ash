@@ -1,9 +1,9 @@
-import type { Event } from "../../../../base/common/event.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { RemoteConnectionState } from "../../../../platform/remote/common/remote.js";
-import type { RemoteAgentConnection } from "../../../../platform/remote/common/remoteAgentApi.js";
-import type { RemoteAgentReconnectResult } from "../../../../platform/remote/common/remoteAgentApi.js";
-import type { RemoteRuntimeRollbackResult } from "../../../../platform/remote/common/remoteAgentApi.js";
+import type { Event } from '../../../../base/common/event.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import type { RemoteConnectionState } from '../../../../platform/remote/common/remote.js';
+import type { RemoteAgentConnection } from '../../../../platform/remote/common/remoteAgentApi.js';
+import type { RemoteAgentReconnectResult } from '../../../../platform/remote/common/remoteAgentApi.js';
+import type { RemoteRuntimeRollbackResult } from '../../../../platform/remote/common/remoteAgentApi.js';
 
 /** Owns the window view of App Server connection state and SSH recovery operations. */
 export interface IAppServerRemoteAgentService {
@@ -15,4 +15,5 @@ export interface IAppServerRemoteAgentService {
 	rollbackRuntime(): Promise<RemoteRuntimeRollbackResult>;
 }
 
-export const IAppServerRemoteAgentService = createServiceIdentifier<IAppServerRemoteAgentService>("appServerRemoteAgentService");
+export const IAppServerRemoteAgentService =
+	createServiceIdentifier<IAppServerRemoteAgentService>('appServerRemoteAgentService');

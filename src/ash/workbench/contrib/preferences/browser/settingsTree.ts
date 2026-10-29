@@ -1,9 +1,15 @@
-import "./media/settingsTree.css";
+import './media/settingsTree.css';
 import './media/settingsCard.css';
-import type { ObjectTreeNode } from "../../../../base/browser/ui/tree/objectTreeModel.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { SettingsSectionReference, SettingsTreeElement, SettingsTreeGroup, SettingsTreeItem, SettingsTreeModel } from "./settingsTreeModels.js";
-import { h } from "../../../../base/browser/dom.js";
+import type { ObjectTreeNode } from '../../../../base/browser/ui/tree/objectTreeModel.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import type {
+	SettingsSectionReference,
+	SettingsTreeElement,
+	SettingsTreeGroup,
+	SettingsTreeItem,
+	SettingsTreeModel,
+} from './settingsTreeModels.js';
+import { h } from '../../../../base/browser/dom.js';
 
 export interface SettingsTreeOptions<T> {
 	readonly model: SettingsTreeModel<T>;
@@ -18,7 +24,7 @@ export interface SettingsTreeOptions<T> {
 }
 
 interface RenderedSettingsGroup<T> {
-	readonly kind: "group";
+	readonly kind: 'group';
 	readonly element: HTMLElement;
 	readonly heading: HTMLHeadingElement | undefined;
 	readonly description: HTMLParagraphElement | undefined;
@@ -27,7 +33,7 @@ interface RenderedSettingsGroup<T> {
 }
 
 interface RenderedSettingsItem<T> {
-	readonly kind: "item";
+	readonly kind: 'item';
 	readonly element: HTMLElement;
 	item: SettingsTreeItem<T>;
 }
@@ -51,31 +57,33 @@ export class SettingsTree<T> extends Disposable {
 		super();
 		this.options = options;
 		this.model = options.model;
-		this.element = h(container.ownerDocument, "div");
+		this.element = h(container.ownerDocument, 'div');
 		this.element.className = `ash-settings-tree ${options.rootClassName}`;
 		container.append(this.element);
 		this._register(options.model.onDidChange(() => this.render()));
-		this._register(toDisposable(() => {
-			for (const rendered of this.rendered.values()) this.disposeRenderedNode(rendered);
-			this.rendered.clear();
-			this.element.remove();
-		}));
+		this._register(
+			toDisposable(() => {
+				for (const rendered of this.rendered.values()) this.disposeRenderedNode(rendered);
+				this.rendered.clear();
+				this.element.remove();
+			}),
+		);
 		this.render();
 	}
 
 	getItemElement(id: string): HTMLElement | undefined {
 		const rendered = this.rendered.get(id);
-		return rendered?.kind === "item" ? rendered.element : undefined;
+		return rendered?.kind === 'item' ? rendered.element : undefined;
 	}
 
 	getGroupElement(id: string): HTMLElement | undefined {
 		const rendered = this.rendered.get(id);
-		return rendered?.kind === "group" ? rendered.element : undefined;
+		return rendered?.kind === 'group' ? rendered.element : undefined;
 	}
 
 	setNavigationTarget(targetId: string | undefined): void {
 		this.model.setNavigationTarget(targetId);
-		this.element.classList.toggle("has-navigation-target", targetId !== undefined);
+		this.element.classList.toggle('has-navigation-target', targetId !== undefined);
 		if (targetId === undefined) delete this.element.dataset.settingsNavigationTargetId;
 		else this.element.dataset.settingsNavigationTargetId = targetId;
 	}
@@ -85,7 +93,7 @@ export class SettingsTree<T> extends Disposable {
 	}
 
 	private render(): void {
-		const children = this.options.model.visibleChildren.map((node) => this.renderNode(node));
+		const children = this.options.model.visibleChildren.map(node => this.renderNode(node));
 		reconcileSettingsChildren(this.element, children);
 		for (const [id, rendered] of this.rendered) {
 			if (this.options.model.has(id)) continue;
@@ -95,14 +103,12 @@ export class SettingsTree<T> extends Disposable {
 	}
 
 	private renderNode(node: ObjectTreeNode<SettingsTreeElement<T>>): HTMLElement {
-		return node.element.kind === "item"
-			? this.renderItem(node.element)
-			: this.renderGroup(node, node.element);
+		return node.element.kind === 'item' ? this.renderItem(node.element) : this.renderGroup(node, node.element);
 	}
 
 	private renderItem(item: SettingsTreeItem<T>): HTMLElement {
 		const previous = this.rendered.get(item.id);
-		if (previous?.kind === "item") {
+		if (previous?.kind === 'item') {
 			previous.item = item;
 			this.options.updateItem?.(item, previous.element);
 			return previous.element;
@@ -111,20 +117,22 @@ export class SettingsTree<T> extends Disposable {
 		const element = this.options.renderItem(item);
 		element.dataset.settingsTreeItemId = item.id;
 		if (element.dataset.settingsItemId && element.dataset.settingsItemId !== item.id) {
-			throw new TypeError(`Rendered Settings item '${item.id}' has conflicting identity '${element.dataset.settingsItemId}'`);
+			throw new TypeError(
+				`Rendered Settings item '${item.id}' has conflicting identity '${element.dataset.settingsItemId}'`,
+			);
 		}
 		if (!element.dataset.settingsItemId) {
 			element.dataset.settingsItemId = item.id;
-			element.dataset.settingsItemKind = "setting";
+			element.dataset.settingsItemKind = 'setting';
 		}
-		this.rendered.set(item.id, { kind: "item", element, item });
+		this.rendered.set(item.id, { kind: 'item', element, item });
 		return element;
 	}
 
 	private renderGroup(node: ObjectTreeNode<SettingsTreeElement<T>>, group: SettingsTreeGroup): HTMLElement {
 		const previous = this.rendered.get(group.id);
 		let rendered: RenderedSettingsGroup<T>;
-		if (previous?.kind === "group") {
+		if (previous?.kind === 'group') {
 			rendered = previous;
 			rendered.group = group;
 		} else {
@@ -141,31 +149,34 @@ export class SettingsTree<T> extends Disposable {
 			}
 		}
 		if (rendered.description) rendered.description.textContent = group.description;
-		rendered.element.classList.toggle("collapsed", node.collapsed);
-		rendered.element.classList.toggle("is-navigation-target", this.model.navigationTarget === group.id);
+		rendered.element.classList.toggle('collapsed', node.collapsed);
+		rendered.element.classList.toggle('is-navigation-target', this.model.navigationTarget === group.id);
 		rendered.element.dataset.settingsTreeGroupId = group.id;
 		const children = node.collapsed
 			? []
-			: node.children.filter((child) => child.visible).map((child) => this.renderNode(child));
+			: node.children.filter(child => child.visible).map(child => this.renderNode(child));
 		reconcileSettingsChildren(rendered.items, children);
 		return rendered.element;
 	}
 
-	private createGroup(node: ObjectTreeNode<SettingsTreeElement<T>>, group: SettingsTreeGroup): RenderedSettingsGroup<T> {
+	private createGroup(
+		node: ObjectTreeNode<SettingsTreeElement<T>>,
+		group: SettingsTreeGroup,
+	): RenderedSettingsGroup<T> {
 		const document = this.element.ownerDocument;
-		const element = h(document, "section");
+		const element = h(document, 'section');
 		element.className = `ash-settings-tree-group ${this.options.groupClassName}`;
-		const items = h(document, "div");
+		const items = h(document, 'div');
 		items.className = this.options.itemsClassName;
 		const rootId = settingsRootId(node);
-		const heading = h(document, "h4");
-		heading.className = "ash-settings-tree-group-title";
+		const heading = h(document, 'h4');
+		heading.className = 'ash-settings-tree-group-title';
 		element.append(heading);
 		let description: HTMLParagraphElement | undefined;
 		if (!node.parent || node.parent.element === undefined) {
-			element.classList.add("is-settings-root", `ash-${rootId}-settings`, "ash-configuration-settings");
+			element.classList.add('is-settings-root', `ash-${rootId}-settings`, 'ash-configuration-settings');
 		} else {
-			description = h(document, "p");
+			description = h(document, 'p');
 			description.className = `ash-settings-tree-group-description ${this.options.groupDescriptionClassName}`;
 			element.classList.add(`ash-${rootId}-settings-group`);
 			description.classList.add(`ash-${rootId}-settings-group-description`);
@@ -173,11 +184,11 @@ export class SettingsTree<T> extends Disposable {
 			element.append(description);
 		}
 		element.append(items);
-		return { kind: "group", element, heading, description, items, group };
+		return { kind: 'group', element, heading, description, items, group };
 	}
 
 	private disposeRenderedNode(rendered: RenderedSettingsNode<T>): void {
-		if (rendered.kind === "item") this.options.disposeItem?.(rendered.item, rendered.element);
+		if (rendered.kind === 'item') this.options.disposeItem?.(rendered.item, rendered.element);
 		rendered.element.remove();
 	}
 }

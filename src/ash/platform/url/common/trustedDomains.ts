@@ -5,14 +5,18 @@ import { testUrlMatchesGlob } from './urlGlob.js';
 export function isURLSafeForTrust(resource: URI): boolean {
 	// URI owns browser normalization and credential rejection. Escaped control
 	// characters still require a decision even when the domain has a trust rule.
-	return (resource.scheme === 'http' || resource.scheme === 'https') && !!resource.authority
-		&& !/[\u0000-\u001f\u007f]/u.test(resource.toString(true));
+	return (
+		(resource.scheme === 'http' || resource.scheme === 'https') &&
+		!!resource.authority &&
+		!/[\u0000-\u001f\u007f]/u.test(resource.toString(true))
+	);
 }
 
 /** Validates a user rule without widening its scheme, authority, or path. */
 export function normalizeURLPattern(pattern: string): string {
 	if (pattern === '*') return pattern;
-	if (!pattern || /[\s\\?#@\u0000-\u001f\u007f]/u.test(pattern)) throw new TypeError('Invalid trusted domain pattern');
+	if (!pattern || /[\s\\?#@\u0000-\u001f\u007f]/u.test(pattern))
+		throw new TypeError('Invalid trusted domain pattern');
 	const explicitScheme = /^[^/]+:\/\//u.test(pattern);
 	const authority = /^(?:https?:\/\/)?([^/]+)/iu.exec(pattern)?.[1];
 	if (!authority || !/^(?:[\p{L}\p{N}*._-]+|\[[\da-f:]+\])(?::(?:\d+|\*))?$/iu.test(authority)) {
@@ -30,15 +34,19 @@ export function normalizeURLPattern(pattern: string): string {
 	}
 	const port = /:(\d+)$/u.exec(authority)?.[1];
 	// A scheme-less :443 rule also applies to HTTP, where 443 is not the default.
-	const host = anyPort ? `${url.hostname}:*`
-		: !explicitScheme && port ? `${url.hostname}:${Number(port)}` : url.host;
+	const host = anyPort ? `${url.hostname}:*` : !explicitScheme && port ? `${url.hostname}:${Number(port)}` : url.host;
 	return explicitScheme ? `${url.protocol}//${host}${url.pathname}` : `${host}${url.pathname}`;
 }
 
 export function isURLDomainTrusted(resource: URI, trustedDomains: readonly string[]): boolean {
 	if (!isURLSafeForTrust(resource)) return false;
 	const hostname = new URL(resource.toString()).hostname;
-	if (hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '127.0.0.1' || hostname === '[::1]') {
+	if (
+		hostname === 'localhost' ||
+		hostname.endsWith('.localhost') ||
+		hostname === '127.0.0.1' ||
+		hostname === '[::1]'
+	) {
 		return true;
 	}
 	return trustedDomains.some(pattern => {

@@ -15,7 +15,7 @@ test('closing a window cancels pending callback waits', async () => {
 	const host = new OAuthCallbackHost();
 	const routes = host.routes();
 	const listen = routes.find(route => route.channel === 'ash:oauth-callback:listen')!;
-	const result = await listen.invoke(undefined) as { id: string; };
+	const result = (await listen.invoke(undefined)) as { id: string };
 	const wait = routes.find(route => route.channel === 'ash:oauth-callback:wait')!;
 	const pending = wait.invoke(result.id);
 	host.dispose();
@@ -41,12 +41,15 @@ test('standalone callback forwards issuer and ignores malformed paths and non-GE
 	const wait = routes.find(route => route.channel === 'ash:oauth-callback:wait')!;
 	const path = `/mcp-oauth/${'a'.repeat(64)}/callback`;
 	assert.throws(() => listen.validate({ path: '/unbound' }));
-	const result = await listen.invoke(listen.validate({ path })) as { id: string; redirectUri: string; };
+	const result = (await listen.invoke(listen.validate({ path }))) as { id: string; redirectUri: string };
 	assert.equal(new URL(result.redirectUri).pathname, path);
 	const pending = wait.invoke(result.id);
 	assert.equal(await callbackRequest(result.redirectUri, 'http://['), 404);
 	assert.equal(await callbackRequest(result.redirectUri, `${path}?state=s&code=c`, 'POST'), 404);
-	assert.equal(await callbackRequest(result.redirectUri, `${path}?state=s&code=c&iss=https%3A%2F%2Fissuer.test`), 200);
+	assert.equal(
+		await callbackRequest(result.redirectUri, `${path}?state=s&code=c&iss=https%3A%2F%2Fissuer.test`),
+		200,
+	);
 	assert.deepEqual(await pending, { state: 's', code: 'c', issuer: 'https://issuer.test' });
 });
 
@@ -56,7 +59,7 @@ test('standalone callback rejects duplicate issuers', async () => {
 	const listen = routes.find(route => route.channel === 'ash:oauth-callback:listen')!;
 	const wait = routes.find(route => route.channel === 'ash:oauth-callback:wait')!;
 	const path = `/mcp-oauth/${'b'.repeat(64)}/callback`;
-	const result = await listen.invoke(listen.validate({ path })) as { id: string; redirectUri: string; };
+	const result = (await listen.invoke(listen.validate({ path }))) as { id: string; redirectUri: string };
 	const pending = wait.invoke(result.id);
 	const rejected = assert.rejects(async () => pending, /valid callback/);
 	assert.equal(await callbackRequest(result.redirectUri, `${path}?state=s&code=c&iss=one&iss=two`), 400);

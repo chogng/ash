@@ -24,7 +24,11 @@ export interface IQuickAccessOptions {
 
 /** One search mode hosted by the shared Quick Access picker. */
 export interface IQuickAccessProvider {
-	provide(picker: IQuickPick<IQuickPickItem>, token: CancellationToken, options?: IQuickAccessProviderRunOptions): IDisposable;
+	provide(
+		picker: IQuickPick<IQuickPickItem>,
+		token: CancellationToken,
+		options?: IQuickAccessProviderRunOptions,
+	): IDisposable;
 }
 
 export interface IQuickAccessProviderDescriptor {
@@ -56,7 +60,8 @@ export class QuickAccessRegistry {
 	static get(value: string): IQuickAccessProviderDescriptor | undefined {
 		let match: IQuickAccessProviderDescriptor | undefined;
 		for (const descriptor of this.descriptors) {
-			if (value.startsWith(descriptor.prefix) && (!match || descriptor.prefix.length > match.prefix.length)) match = descriptor;
+			if (value.startsWith(descriptor.prefix) && (!match || descriptor.prefix.length > match.prefix.length))
+				match = descriptor;
 		}
 		return match;
 	}

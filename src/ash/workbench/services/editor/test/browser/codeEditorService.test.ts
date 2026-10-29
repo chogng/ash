@@ -36,7 +36,9 @@ test('active code editor follows the pane control when two editors share a model
 	const services = resources.add(new InstantiationService());
 	let control: unknown;
 	services.registerInstance(IEditorPartsService, {
-		get activePane() { return { getControl: () => control }; },
+		get activePane() {
+			return { getControl: () => control };
+		},
 	} as EditorPartsService);
 	services.registerSingleton(ICodeEditorService, () => services.createInstance(CodeEditorService));
 	const service = services.get(ICodeEditorService);
@@ -44,11 +46,7 @@ test('active code editor follows the pane control when two editors share a model
 	const firstContainer = document.createElement('div');
 	const secondContainer = document.createElement('div');
 	document.body.append(firstContainer, secondContainer);
-	const options = {
-		model,
-		lineHeight: 20,
-		instantiationService: services,
-	};
+	const options = { model, lineHeight: 20, instantiationService: services };
 	const first = resources.add(createTestCodeEditor({ ...options, container: firstContainer }));
 	const second = resources.add(createTestCodeEditor({ ...options, container: secondContainer }));
 	control = first;
@@ -84,7 +82,7 @@ test('code editor services require their host and keep registrations within its 
 test('code editor resource opening reaches the Workbench group with its selection and focus preferences', async () => {
 	using resources = new DisposableStore();
 	const services = resources.add(new InstantiationService());
-	const requests: Array<{ input: IResourceEditorInput; options: EditorOpenOptions; target: EditorOpenTarget; }> = [];
+	const requests: Array<{ input: IResourceEditorInput; options: EditorOpenOptions; target: EditorOpenTarget }> = [];
 	let control: unknown;
 	services.registerInstance(IEditorPartsService, {
 		openEditor: async (input: IResourceEditorInput, options: EditorOpenOptions, target: EditorOpenTarget) => {
@@ -98,11 +96,27 @@ test('code editor resource opening reaches the Workbench group with its selectio
 	const container = document.createElement('div');
 	const source = document.createElement('button');
 	document.body.append(container, source);
-	resources.add(toDisposable(() => { container.remove(); source.remove(); }));
+	resources.add(
+		toDisposable(() => {
+			container.remove();
+			source.remove();
+		}),
+	);
 	control = resources.add(createTestCodeEditor({ container, model, instantiationService: services }));
 	source.focus();
 	const resource = URI.file('/workspace/src/main.ts');
-	const editor = await service.openCodeEditor({ resource, options: { pinned: true, preserveFocus: true, selection: { startLineNumber: 12, startColumn: 7, endLineNumber: 13, endColumn: 2 } } }, null, true);
+	const editor = await service.openCodeEditor(
+		{
+			resource,
+			options: {
+				pinned: true,
+				preserveFocus: true,
+				selection: { startLineNumber: 12, startColumn: 7, endLineNumber: 13, endColumn: 2 },
+			},
+		},
+		null,
+		true,
+	);
 	assert.equal(editor, control);
 	assert.equal(requests[0]?.input.resource, resource);
 	assert.equal(requests[0]?.target, 'sideGroup');

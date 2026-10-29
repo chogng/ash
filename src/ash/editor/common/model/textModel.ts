@@ -1,38 +1,115 @@
 import { TextModelFeatureHost, type TextModelTokenizationOptions } from './textModelFeatures.js';
 import * as languages from '../languages.js';
-import { Emitter, type Event } from "../../../base/common/event.js";
+import { Emitter, type Event } from '../../../base/common/event.js';
 import { BugIndicatingError, onUnexpectedError } from '../../../base/common/errors.js';
 import { StringSHA1 } from '../../../base/common/hash.js';
-import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../base/common/lifecycle.js";
+import {
+	Disposable,
+	DisposableStore,
+	MutableDisposable,
+	type IDisposable,
+	toDisposable,
+} from '../../../base/common/lifecycle.js';
 import * as strings from '../../../base/common/strings.js';
-import { URI } from "../../../base/common/uri.js";
-import { LengthEdit, LengthReplacement } from "../core/edits/lengthEdit.js";
+import { URI } from '../../../base/common/uri.js';
+import { LengthEdit, LengthReplacement } from '../core/edits/lengthEdit.js';
 import { TextEdit } from '../core/edits/textEdit.js';
 import type { DecorationProvider } from './decorationProvider.js';
-import { countEOL } from "../core/misc/eolCounter.js";
+import { countEOL } from '../core/misc/eolCounter.js';
 import { normalizeIndentation } from '../core/misc/indentation.js';
 import { EDITOR_MODEL_DEFAULTS } from '../core/misc/textModelDefaults.js';
-import { OffsetRange } from "../core/ranges/offsetRange.js";
-import { type IPosition, Position } from "../core/position.js";
-import { type IRange, Range } from "../core/range.js";
+import { OffsetRange } from '../core/ranges/offsetRange.js';
+import { type IPosition, Position } from '../core/position.js';
+import { type IRange, Range } from '../core/range.js';
 import { Selection } from '../core/selection.js';
 import { DEFAULT_WORD_REGEXP, getWordAtText, type IWordAtPosition } from '../core/wordHelper.js';
-import { compressConsecutiveTextChanges, TextModelChangeReason, type TextChange, type TextModelChange, type TextModelContentChange, type TextSnapshot } from "../core/textChange.js";
-import { TextEditHistoryMergeMode, type ISingleEditOperation } from "../core/editOperation.js";
-import { TextLength } from "../core/text/textLength.js";
-import { canCoalesceHistoryEdits, canReplaceHistoryEdits, coalesceHistoryUndoEdits, normalizeInverseEdits, replaceHistoryUndoEdits, type OffsetTextEdit } from "./historyCoalescing.js";
+import {
+	compressConsecutiveTextChanges,
+	TextModelChangeReason,
+	type TextChange,
+	type TextModelChange,
+	type TextModelContentChange,
+	type TextSnapshot,
+} from '../core/textChange.js';
+import { TextEditHistoryMergeMode, type ISingleEditOperation } from '../core/editOperation.js';
+import { TextLength } from '../core/text/textLength.js';
+import {
+	canCoalesceHistoryEdits,
+	canReplaceHistoryEdits,
+	coalesceHistoryUndoEdits,
+	normalizeInverseEdits,
+	replaceHistoryUndoEdits,
+	type OffsetTextEdit,
+} from './historyCoalescing.js';
 import { guessIndentation } from './indentationGuesser.js';
-import { findNextTextMatch, findTextMatches, TextSearchPatternKind, type TextSearchMatch, type TextModelSearchQuery } from './textModelSearch.js';
-import { TextModelHistory, type TextModelHistoryEntry, type TextModelHistorySnapshot } from "./editStack.js";
-import { TrackedRangeCollection, type TrackedRange } from "./trackedRange.js";
-import { createLineDocumentSnapshot, freezeLineSemanticAttributes, linePoint, type LineDocumentSnapshot, type LineId, type LinePoint, type LineSemanticAttributes } from "./lineDocument.js";
+import {
+	findNextTextMatch,
+	findTextMatches,
+	TextSearchPatternKind,
+	type TextSearchMatch,
+	type TextModelSearchQuery,
+} from './textModelSearch.js';
+import { TextModelHistory, type TextModelHistoryEntry, type TextModelHistorySnapshot } from './editStack.js';
+import { TrackedRangeCollection, type TrackedRange } from './trackedRange.js';
+import {
+	createLineDocumentSnapshot,
+	freezeLineSemanticAttributes,
+	linePoint,
+	type LineDocumentSnapshot,
+	type LineId,
+	type LinePoint,
+	type LineSemanticAttributes,
+} from './lineDocument.js';
 import * as model from '../model.js';
-import { DefaultEndOfLine, EndOfLinePreference, EndOfLineSequence, FindMatch, PositionAffinity, TextModelResolvedOptions, TrackedRangeStickiness, ValidAnnotatedEditOperation, isITextSnapshot, type BracketPairColorizationOptions, type IAttachedView, type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecorationOptions, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration, type ITextBuffer, type ITextModel, type ITextModelUpdateOptions, type ITextSnapshot, type IValidEditOperation } from '../model.js';
+import {
+	DefaultEndOfLine,
+	EndOfLinePreference,
+	EndOfLineSequence,
+	FindMatch,
+	PositionAffinity,
+	TextModelResolvedOptions,
+	TrackedRangeStickiness,
+	ValidAnnotatedEditOperation,
+	isITextSnapshot,
+	type BracketPairColorizationOptions,
+	type IAttachedView,
+	type ICursorStateComputer,
+	type IIdentifiedSingleEditOperation,
+	type IModelDecorationOptions,
+	type IModelDecorationsChangeAccessor,
+	type IModelDeltaDecoration,
+	type ITextBuffer,
+	type ITextModel,
+	type ITextModelUpdateOptions,
+	type ITextSnapshot,
+	type IValidEditOperation,
+} from '../model.js';
 import { type SyntaxRequest, SYNTAX_DIAGNOSTIC_LANE, type SyntaxLane, type SyntaxResult } from '../languages.js';
-import { InternalModelContentChangeEvent, LineInjectedText, ModelFontChanged, ModelFontChangedEvent, ModelInjectedTextChangedEvent, ModelLineHeightChanged, ModelLineHeightChangedEvent, ModelRawContentChangedEvent, ModelRawEOLChanged, ModelRawFlush, ModelRawLineChanged, type IModelContentChangedEvent, type IModelDecorationsChangedEvent, type IModelLanguageChangedEvent, type IModelLanguageConfigurationChangedEvent, type IModelOptionsChangedEvent, type IModelTokensChangedEvent } from '../textModelEvents.js';
+import {
+	InternalModelContentChangeEvent,
+	LineInjectedText,
+	ModelFontChanged,
+	ModelFontChangedEvent,
+	ModelInjectedTextChangedEvent,
+	ModelLineHeightChanged,
+	ModelLineHeightChangedEvent,
+	ModelRawContentChangedEvent,
+	ModelRawEOLChanged,
+	ModelRawFlush,
+	ModelRawLineChanged,
+	type IModelContentChangedEvent,
+	type IModelDecorationsChangedEvent,
+	type IModelLanguageChangedEvent,
+	type IModelLanguageConfigurationChangedEvent,
+	type IModelOptionsChangedEvent,
+	type IModelTokensChangedEvent,
+} from '../textModelEvents.js';
 import type { ILanguageSelection } from '../languages/language.js';
 import { PLAINTEXT_LANGUAGE_ID } from '../languages/modesRegistry.js';
-import { ResolvedLanguageConfiguration, type ILanguageConfigurationService } from '../languages/languageConfigurationRegistry.js';
+import {
+	ResolvedLanguageConfiguration,
+	type ILanguageConfigurationService,
+} from '../languages/languageConfigurationRegistry.js';
 import { EditSources, type TextModelEditSource } from '../textModelEditSource.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 import type { IBracketPairsTextModelPart } from '../textModelBracketPairs.js';
@@ -40,7 +117,7 @@ import { LineTokens } from '../tokens/lineTokens.js';
 import type { IViewModel } from '../viewModel.js';
 import { createPieceTreeTextBuffer } from './pieceTreeTextBuffer/pieceTreeTextBufferBuilder.js';
 
-interface OffsetEdit extends OffsetTextEdit { }
+interface OffsetEdit extends OffsetTextEdit {}
 
 interface AnnotatedOffsetEdit extends OffsetEdit {
 	readonly identifier: IIdentifiedSingleEditOperation['identifier'];
@@ -59,7 +136,7 @@ interface ModelDecorationEntry {
 	readonly ownerId: number;
 	readonly trackedRange: TrackedRange;
 	readonly options: IModelDecorationOptions;
-	cachedRange?: { readonly versionId: number; readonly range: Range; };
+	cachedRange?: { readonly versionId: number; readonly range: Range };
 }
 
 interface CommitContext {
@@ -161,21 +238,25 @@ export class TextModel implements ITextModel {
 	private readonly languageEmitter = this._register(new Emitter<IModelLanguageChangedEvent>());
 	private readonly optionsEmitter = this._register(new Emitter<IModelOptionsChangedEvent>());
 	private readonly decorationsEmitter = this._register(new Emitter<IModelDecorationsChangedEvent>());
-	private readonly languageConfigurationEmitter = this._register(new Emitter<IModelLanguageConfigurationChangedEvent>());
+	private readonly languageConfigurationEmitter = this._register(
+		new Emitter<IModelLanguageConfigurationChangedEvent>(),
+	);
 	private readonly tokensEmitter = this._register(new Emitter<IModelTokensChangedEvent>());
 	private readonly lineHeightEmitter = this._register(new Emitter<ModelLineHeightChangedEvent>());
 	private readonly fontEmitter = this._register(new Emitter<ModelFontChangedEvent>());
 	private readonly attachedEmitter = this._register(new Emitter<void>());
-	private readonly attachedViews = new Map<IAttachedView, readonly { startLineNumber: number; endLineNumber: number; }[]>();
+	private readonly attachedViews = new Map<
+		IAttachedView,
+		readonly { startLineNumber: number; endLineNumber: number }[]
+	>();
 	private readonly viewModels = new Set<IViewModel>();
 	private readonly languageSelection = this._register(new MutableDisposable<IDisposable>());
-	private readonly trackedRanges = this._register(new TrackedRangeCollection(
-		offset => this.positionAt(offset),
-	));
+	private readonly trackedRanges = this._register(new TrackedRangeCollection(offset => this.positionAt(offset)));
 	private readonly modelTrackedRanges = new Map<string, TrackedRange>();
 	private nextTrackedRangeId = 1;
 	private readonly modelDecorations = new Map<string, ModelDecorationEntry>();
-	private lineInjectedTextCache: { readonly version: number; readonly lines: ReadonlyMap<number, readonly LineInjectedText[]>; } | undefined;
+	private lineInjectedTextCache:
+		{ readonly version: number; readonly lines: ReadonlyMap<number, readonly LineInjectedText[]> } | undefined;
 	private nextDecorationId = 1;
 	private readonly history: TextModelHistory;
 	private readonly maintenance: TextModelMaintenanceOptions | undefined;
@@ -188,7 +269,8 @@ export class TextModel implements ITextModel {
 	private readonly lineMetadata: LineSemanticAttributes;
 	private plainLineIds: readonly LineId[] | undefined;
 	private plainLineSnapshot: LineDocumentSnapshot | undefined;
-	private plainLineIndex: { readonly ids: readonly LineId[]; readonly indices: ReadonlyMap<LineId, number>; } | undefined;
+	private plainLineIndex:
+		{ readonly ids: readonly LineId[]; readonly indices: ReadonlyMap<LineId, number> } | undefined;
 	readonly largeFile: TextModelLargeFilePolicy;
 	private nextTransactionId = 1;
 	private _version = 1;
@@ -200,17 +282,32 @@ export class TextModel implements ITextModel {
 	readonly uri: URI;
 	readonly isForSimpleWidget: boolean;
 	private readonly features: TextModelFeatureHost;
-	private get _bracketPairs() { return this.features.brackets; }
-	private get bracketDecorations() { return this.features.decorations; }
-	get bracketPairs(): IBracketPairsTextModelPart { return this.features.brackets; }
-	get guides() { return this.features.guides; }
-	get tokenization() { return this.features.tokenization; }
-	get diagnostics() { return this.features.diagnostics; }
-	get editingPolicy() { return this.features.editingPolicy; }
+	private get _bracketPairs() {
+		return this.features.brackets;
+	}
+	private get bracketDecorations() {
+		return this.features.decorations;
+	}
+	get bracketPairs(): IBracketPairsTextModelPart {
+		return this.features.brackets;
+	}
+	get guides() {
+		return this.features.guides;
+	}
+	get tokenization() {
+		return this.features.tokenization;
+	}
+	get diagnostics() {
+		return this.features.diagnostics;
+	}
+	get editingPolicy() {
+		return this.features.editingPolicy;
+	}
 
 	readonly onDidChangeContent: Event<TextModelChange> = this.changeEmitter.event;
 	readonly onDidChangeLanguage: Event<IModelLanguageChangedEvent> = this.languageEmitter.event;
-	readonly onDidChangeLanguageConfiguration: Event<IModelLanguageConfigurationChangedEvent> = this.languageConfigurationEmitter.event;
+	readonly onDidChangeLanguageConfiguration: Event<IModelLanguageConfigurationChangedEvent> =
+		this.languageConfigurationEmitter.event;
 	readonly onDidChangeTokens: Event<IModelTokensChangedEvent> = this.tokensEmitter.event;
 	readonly onDidChangeLineHeight: Event<ModelLineHeightChangedEvent> = this.lineHeightEmitter.event;
 	readonly onDidChangeFont: Event<ModelFontChangedEvent> = this.fontEmitter.event;
@@ -220,7 +317,7 @@ export class TextModel implements ITextModel {
 	/** Fires once so registries can release model identity before teardown completes. */
 	readonly onWillDispose: Event<void> = this.willDisposeEmitter.event;
 
-	constructor(initialText = "", options: TextModelOptions = {}) {
+	constructor(initialText = '', options: TextModelOptions = {}) {
 		MODEL_ID += 1;
 		this.id = `$model${MODEL_ID}`;
 		this.uri = options.resource ?? URI.parse(`inmemory://model/${MODEL_ID}`);
@@ -231,31 +328,33 @@ export class TextModel implements ITextModel {
 			insertSpaces: options.insertSpaces ?? EDITOR_MODEL_DEFAULTS.insertSpaces,
 			defaultEOL: options.defaultEOL ?? DefaultEndOfLine.LF,
 			trimAutoWhitespace: options.trimAutoWhitespace ?? EDITOR_MODEL_DEFAULTS.trimAutoWhitespace,
-			bracketPairColorizationOptions: options.bracketPairColorizationOptions ?? EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions,
+			bracketPairColorizationOptions:
+				options.bracketPairColorizationOptions ?? EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions,
 		});
 		this.isForSimpleWidget = options.isForSimpleWidget ?? false;
 		const historyTransactionLimit = readHistoryLimit(
 			options.historyLimit?.transactions,
 			DEFAULT_HISTORY_TRANSACTIONS,
-			"historyLimit.transactions",
+			'historyLimit.transactions',
 		);
 		const historyTextUnitLimit = readHistoryLimit(
 			options.historyLimit?.textUnits,
 			DEFAULT_HISTORY_TEXT_UNITS,
-			"historyLimit.textUnits",
+			'historyLimit.textUnits',
 		);
 		this.maintenance = readMaintenanceOptions(options.maintenance);
-		this.history = new TextModelHistory(
-			historyTransactionLimit,
-			historyTextUnitLimit,
-		);
-		if (options.extensionSnapshot && options.lineIds) throw new TypeError("Extension-backed TextModel identities come from its snapshot");
-		if (options.lineIdGenerator !== undefined && typeof options.lineIdGenerator !== "function") {
-			throw new TypeError("TextModel lineIdGenerator must be a function");
+		this.history = new TextModelHistory(historyTransactionLimit, historyTextUnitLimit);
+		if (options.extensionSnapshot && options.lineIds)
+			throw new TypeError('Extension-backed TextModel identities come from its snapshot');
+		if (options.lineIdGenerator !== undefined && typeof options.lineIdGenerator !== 'function') {
+			throw new TypeError('TextModel lineIdGenerator must be a function');
 		}
 		this.lineIdGenerator = options.lineIdGenerator ?? (() => `line:${this.nextGeneratedLineIdentity++}`);
 		this.extensionSnapshot = options.extensionSnapshot;
-		this.buffer = createPieceTreeTextBuffer(this.extensionSnapshot?.getText() ?? initialText, this.modelOptionsValue.defaultEOL);
+		this.buffer = createPieceTreeTextBuffer(
+			this.extensionSnapshot?.getText() ?? initialText,
+			this.modelOptionsValue.defaultEOL,
+		);
 		if (!this.extensionSnapshot) {
 			this.plainLineIds = this.initializeLineIds(options.lineIds, options.lineIdGenerator === undefined);
 			// Plain editors materialize semantic line records only when a caller asks for them.
@@ -271,25 +370,34 @@ export class TextModel implements ITextModel {
 		this.features = this._register(new TextModelFeatureHost(this, options));
 		this.features.initialize();
 		this._register(this.features.onDidChangeDecorations(() => this.emitDecorationsChanged([])));
-		if (options.languageConfigurationService) this._register(options.languageConfigurationService.onDidChange(event => {
-			if (event.affects(this.languageId)) this.languageConfigurationEmitter.fire({});
-		}));
-		this._register(this.tokenization.onDidChange(ranges => {
-			const event: IModelTokensChangedEvent = {
-				semanticTokensApplied: false,
-				ranges: ranges ? [...ranges] : [{ fromLineNumber: 1, toLineNumber: this.getLineCount() }],
-			};
-			this._bracketPairs.handleDidChangeTokens(event);
-			this._bracketPairs.handleDidChangeBackgroundTokenizationState();
-			this.tokensEmitter.fire(event);
-		}));
-		this._register(toDisposable(() => {
-			this.history.dispose();
-			this.buffer.dispose();
-		}));
-		this._register(this.onDidChangeContent(() => {
-			if (this.modelDecorations.size > 0) this.emitDecorationsChanged(this.modelDecorations.values());
-		}));
+		if (options.languageConfigurationService)
+			this._register(
+				options.languageConfigurationService.onDidChange(event => {
+					if (event.affects(this.languageId)) this.languageConfigurationEmitter.fire({});
+				}),
+			);
+		this._register(
+			this.tokenization.onDidChange(ranges => {
+				const event: IModelTokensChangedEvent = {
+					semanticTokensApplied: false,
+					ranges: ranges ? [...ranges] : [{ fromLineNumber: 1, toLineNumber: this.getLineCount() }],
+				};
+				this._bracketPairs.handleDidChangeTokens(event);
+				this._bracketPairs.handleDidChangeBackgroundTokenizationState();
+				this.tokensEmitter.fire(event);
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				this.history.dispose();
+				this.buffer.dispose();
+			}),
+		);
+		this._register(
+			this.onDidChangeContent(() => {
+				if (this.modelDecorations.size > 0) this.emitDecorationsChanged(this.modelDecorations.values());
+			}),
+		);
 	}
 
 	/** Immutable line-first content snapshot at the current model version. */
@@ -300,9 +408,12 @@ export class TextModel implements ITextModel {
 
 	getLineId(lineIndex: number): LineId {
 		this.assertNotDisposed();
-		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0) throw new RangeError("Line index is outside the TextModel");
-		const id = this.extensionSnapshot ? this.extensionSnapshot.lines.at(lineIndex)?.id : this.plainLineIds?.[lineIndex];
-		if (id === undefined) throw new RangeError("Line index is outside the TextModel");
+		if (!Number.isSafeInteger(lineIndex) || lineIndex < 0)
+			throw new RangeError('Line index is outside the TextModel');
+		const id = this.extensionSnapshot
+			? this.extensionSnapshot.lines.at(lineIndex)?.id
+			: this.plainLineIds?.[lineIndex];
+		if (id === undefined) throw new RangeError('Line index is outside the TextModel');
 		return id;
 	}
 
@@ -313,7 +424,8 @@ export class TextModel implements ITextModel {
 			lineIndex = this.extensionSnapshot.lines.indexOf(lineId);
 		} else {
 			const ids = this.plainLineIds!;
-			if (this.plainLineIndex?.ids !== ids) this.plainLineIndex = { ids, indices: new Map(ids.map((id, index) => [id, index])) };
+			if (this.plainLineIndex?.ids !== ids)
+				this.plainLineIndex = { ids, indices: new Map(ids.map((id, index) => [id, index])) };
 			lineIndex = this.plainLineIndex.indices.get(lineId) ?? -1;
 		}
 		if (lineIndex < 0) throw new RangeError(`Line '${lineId}' does not exist in the TextModel`);
@@ -329,10 +441,14 @@ export class TextModel implements ITextModel {
 	textPositionAt(point: LinePoint): Position {
 		this.assertNotDisposed();
 		const lineIndex = this.getLineIndex(point.lineId);
-		if (!Number.isSafeInteger(point.offset) || point.offset < 0 || point.offset > this.buffer.getLineLength(lineIndex + 1)) {
-			throw new RangeError("Line point offset is outside the TextModel");
+		if (
+			!Number.isSafeInteger(point.offset) ||
+			point.offset < 0 ||
+			point.offset > this.buffer.getLineLength(lineIndex + 1)
+		) {
+			throw new RangeError('Line point offset is outside the TextModel');
 		}
-		return new Position((lineIndex) + 1, (point.offset) + 1);
+		return new Position(lineIndex + 1, point.offset + 1);
 	}
 
 	get version(): number {
@@ -351,7 +467,9 @@ export class TextModel implements ITextModel {
 		this.assertNotDisposed();
 		if (typeof languageIdOrSelection !== 'string') {
 			const selection = languageIdOrSelection;
-			this.languageSelection.value = selection.onDidChange(() => this.setLanguageValue(selection.languageId, source));
+			this.languageSelection.value = selection.onDidChange(() =>
+				this.setLanguageValue(selection.languageId, source),
+			);
 			this.setLanguageValue(selection.languageId, source);
 			return;
 		}
@@ -397,7 +515,7 @@ export class TextModel implements ITextModel {
 	createUndoRedoSnapshot(): TextModelUndoRedoSnapshot | undefined {
 		if (this.isDisposed() && !this.disposing) throw new ReferenceError('TextModel is already disposed');
 		const history = this.history.createSnapshot();
-		if (!history || history.undo.length === 0 && history.redo.length === 0) return undefined;
+		if (!history || (history.undo.length === 0 && history.redo.length === 0)) return undefined;
 		const text = this.buffer.createSnapshot().getText();
 		const sha1 = new StringSHA1();
 		sha1.update(text);
@@ -418,10 +536,16 @@ export class TextModel implements ITextModel {
 	restoreUndoRedoSnapshot(snapshot: TextModelUndoRedoSnapshot): boolean {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
-		if (this._version !== 1 || this.canUndo() || this.canRedo()) throw new Error('Undo and redo history can only be restored into a new TextModel');
+		if (this._version !== 1 || this.canUndo() || this.canRedo())
+			throw new Error('Undo and redo history can only be restored into a new TextModel');
 		const sha1 = new StringSHA1();
 		sha1.update(this.getText());
-		if (snapshot.contentSHA1 !== sha1.digest() || snapshot.eol !== this.getEndOfLineSequence() || snapshot.bom !== this.buffer.getBOM()) return false;
+		if (
+			snapshot.contentSHA1 !== sha1.digest() ||
+			snapshot.eol !== this.getEndOfLineSequence() ||
+			snapshot.bom !== this.buffer.getBOM()
+		)
+			return false;
 		this.history.restoreSnapshot(snapshot.history);
 		// Retained history belongs to this same document, including identities
 		// that only Undo or Redo can make live again in the recreated model.
@@ -451,11 +575,19 @@ export class TextModel implements ITextModel {
 		this.assertNotDisposed();
 		const model = this;
 		const view: IAttachedView = Object.freeze({
-			setVisibleLines(visibleLines: { startLineNumber: number; endLineNumber: number; }[], stabilized: boolean): void {
+			setVisibleLines(
+				visibleLines: { startLineNumber: number; endLineNumber: number }[],
+				stabilized: boolean,
+			): void {
 				if (!model.attachedViews.has(view)) throw new ReferenceError('Text model view is not attached');
 				for (const range of visibleLines) {
-					if (!Number.isSafeInteger(range.startLineNumber) || !Number.isSafeInteger(range.endLineNumber)
-						|| range.startLineNumber < 1 || range.endLineNumber < range.startLineNumber || range.endLineNumber > model.getLineCount()) {
+					if (
+						!Number.isSafeInteger(range.startLineNumber) ||
+						!Number.isSafeInteger(range.endLineNumber) ||
+						range.startLineNumber < 1 ||
+						range.endLineNumber < range.startLineNumber ||
+						range.endLineNumber > model.getLineCount()
+					) {
 						throw new RangeError('Attached view visible lines must be valid model line ranges');
 					}
 				}
@@ -567,7 +699,7 @@ export class TextModel implements ITextModel {
 		const text = this.buffer.createSnapshot().getText();
 		const eolWidth = this.buffer.getEOL().length;
 		let lineStart = 0;
-		for (; ;) {
+		for (;;) {
 			const separator = text.indexOf('\n', lineStart);
 			const lineLength = separator < 0 ? text.length - lineStart : separator - lineStart - (eolWidth - 1);
 			if (lineLength >= LONG_LINE_BOUNDARY) longLineCharacterCount += lineLength;
@@ -589,9 +721,10 @@ export class TextModel implements ITextModel {
 	): FindMatch[] {
 		this.assertNotDisposed();
 		const query = createSearchQuery(searchString, isRegex, matchCase, wordSeparators);
-		const scopes = typeof searchScope === 'boolean'
-			? [this.getFullModelRange()]
-			: (Array.isArray(searchScope) ? searchScope : [searchScope]).map(scope => this.validateRange(scope));
+		const scopes =
+			typeof searchScope === 'boolean'
+				? [this.getFullModelRange()]
+				: (Array.isArray(searchScope) ? searchScope : [searchScope]).map(scope => this.validateRange(scope));
 		const matches: FindMatch[] = [];
 		for (const scope of mergeSearchScopes(scopes)) {
 			const remaining = limitResultCount - matches.length;
@@ -631,11 +764,9 @@ export class TextModel implements ITextModel {
 	): FindMatch | null {
 		this.assertNotDisposed();
 		const startOffset = this.getOffsetAt(this.validatePosition(searchStart));
-		const matches = findTextMatches(
-			this,
-			createSearchQuery(searchString, isRegex, matchCase, wordSeparators),
-			{ resultLimit: 100_000 },
-		);
+		const matches = findTextMatches(this, createSearchQuery(searchString, isRegex, matchCase, wordSeparators), {
+			resultLimit: 100_000,
+		});
 		if (matches.length === 0) return null;
 		let previous: TextSearchMatch | undefined;
 		for (const match of matches) {
@@ -660,7 +791,8 @@ export class TextModel implements ITextModel {
 
 	getValue(eol = EndOfLinePreference.TextDefined, preserveBOM = false): string {
 		this.assertNotDisposed();
-		if (this.isTooLargeForHeapOperation()) throw new BugIndicatingError('Operation would exceed heap memory limits');
+		if (this.isTooLargeForHeapOperation())
+			throw new BugIndicatingError('Operation would exceed heap memory limits');
 		const value = this.getValueInRange(this.getFullModelRange(), eol);
 		return preserveBOM ? this.buffer.getBOM() + value : value;
 	}
@@ -685,9 +817,10 @@ export class TextModel implements ITextModel {
 		// Bracket eligibility and other per-line readers ask for this during layout.
 		// The stored representation already has a length; materializing it here makes
 		// a complete layout quadratic in document size.
-		const length = eol === EndOfLinePreference.TextDefined
-			? this.buffer.getLength()
-			: this.getValueLengthInRange(this.getFullModelRange(), eol);
+		const length =
+			eol === EndOfLinePreference.TextDefined
+				? this.buffer.getLength()
+				: this.getValueLengthInRange(this.getFullModelRange(), eol);
 		return length + (preserveBOM ? this.buffer.getBOM().length : 0);
 	}
 
@@ -700,10 +833,8 @@ export class TextModel implements ITextModel {
 			length: snapshot.length,
 			lineCount: snapshot.lineCount,
 			getText: () => snapshot.getText(),
-			getTextBetweenOffsets: (
-				startOffset: number,
-				endOffset: number,
-			) => snapshot.getTextBetweenOffsets(startOffset, endOffset),
+			getTextBetweenOffsets: (startOffset: number, endOffset: number) =>
+				snapshot.getTextBetweenOffsets(startOffset, endOffset),
 		});
 	}
 
@@ -748,7 +879,8 @@ export class TextModel implements ITextModel {
 
 	getLinesContent(): string[] {
 		this.assertNotDisposed();
-		if (this.isTooLargeForHeapOperation()) throw new BugIndicatingError('Operation would exceed heap memory limits');
+		if (this.isTooLargeForHeapOperation())
+			throw new BugIndicatingError('Operation would exceed heap memory limits');
 		return this.buffer.getLinesContent();
 	}
 
@@ -866,9 +998,7 @@ export class TextModel implements ITextModel {
 	validatePosition(position: IPosition): Position {
 		this.assertNotDisposed();
 		const bounded = this.clampPosition(position);
-		return this.isInsideSurrogatePair(bounded)
-			? new Position(bounded.lineNumber, bounded.column - 1)
-			: bounded;
+		return this.isInsideSurrogatePair(bounded) ? new Position(bounded.lineNumber, bounded.column - 1) : bounded;
 	}
 
 	validateRange(range: IRange): Range {
@@ -891,23 +1021,38 @@ export class TextModel implements ITextModel {
 
 	isValidRange(range: IRange): boolean {
 		this.assertNotDisposed();
-		if (!Number.isSafeInteger(range.startLineNumber) || !Number.isSafeInteger(range.startColumn)
-			|| !Number.isSafeInteger(range.endLineNumber) || !Number.isSafeInteger(range.endColumn)) return false;
-		if (!Position.isBeforeOrEqual(
-			{ lineNumber: range.startLineNumber, column: range.startColumn },
-			{ lineNumber: range.endLineNumber, column: range.endColumn },
-		)) return false;
+		if (
+			!Number.isSafeInteger(range.startLineNumber) ||
+			!Number.isSafeInteger(range.startColumn) ||
+			!Number.isSafeInteger(range.endLineNumber) ||
+			!Number.isSafeInteger(range.endColumn)
+		)
+			return false;
+		if (
+			!Position.isBeforeOrEqual(
+				{ lineNumber: range.startLineNumber, column: range.startColumn },
+				{ lineNumber: range.endLineNumber, column: range.endColumn },
+			)
+		)
+			return false;
 		const lifted = Range.lift(range);
 		if (lifted.startLineNumber < 1 || lifted.endLineNumber > this.lineCount) return false;
 		if (lifted.startColumn < 1 || lifted.endColumn < 1) return false;
 		if (lifted.startColumn > this.getLineMaxColumn(lifted.startLineNumber)) return false;
 		if (lifted.endColumn > this.getLineMaxColumn(lifted.endLineNumber)) return false;
-		return !this.isInsideSurrogatePair(lifted.getStartPosition()) && !this.isInsideSurrogatePair(lifted.getEndPosition());
+		return (
+			!this.isInsideSurrogatePair(lifted.getStartPosition()) &&
+			!this.isInsideSurrogatePair(lifted.getEndPosition())
+		);
 	}
 
 	private clampPosition(position: IPosition): Position {
-		const rawLine = typeof position.lineNumber === 'number' && !Number.isNaN(position.lineNumber) ? Math.floor(position.lineNumber) : 1;
-		const rawColumn = typeof position.column === 'number' && !Number.isNaN(position.column) ? Math.floor(position.column) : 1;
+		const rawLine =
+			typeof position.lineNumber === 'number' && !Number.isNaN(position.lineNumber)
+				? Math.floor(position.lineNumber)
+				: 1;
+		const rawColumn =
+			typeof position.column === 'number' && !Number.isNaN(position.column) ? Math.floor(position.column) : 1;
 		if (rawLine < 1) return new Position(1, 1);
 		if (rawLine > this.lineCount) return new Position(this.lineCount, this.getLineMaxColumn(this.lineCount));
 		return new Position(rawLine, Math.min(Math.max(rawColumn, 1), this.getLineMaxColumn(rawLine)));
@@ -925,7 +1070,12 @@ export class TextModel implements ITextModel {
 	getWordAtPosition(position: IPosition): IWordAtPosition | null {
 		this.assertNotDisposed();
 		const validPosition = this.validatePosition(position);
-		const word = getWordAtText(validPosition.column, DEFAULT_WORD_REGEXP, this.getLineContent(validPosition.lineNumber), 0);
+		const word = getWordAtText(
+			validPosition.column,
+			DEFAULT_WORD_REGEXP,
+			this.getLineContent(validPosition.lineNumber),
+			0,
+		);
 		return word && word.startColumn <= position.column && position.column <= word.endColumn ? word : null;
 	}
 
@@ -965,7 +1115,8 @@ export class TextModel implements ITextModel {
 			insertSpaces: newOptions.insertSpaces ?? current.insertSpaces,
 			defaultEOL: current.defaultEOL,
 			trimAutoWhitespace: newOptions.trimAutoWhitespace ?? current.trimAutoWhitespace,
-			bracketPairColorizationOptions: newOptions.bracketColorizationOptions ?? current.bracketPairColorizationOptions,
+			bracketPairColorizationOptions:
+				newOptions.bracketColorizationOptions ?? current.bracketPairColorizationOptions,
 		});
 		if (current.equals(next)) return;
 		this.modelOptionsValue = next;
@@ -982,10 +1133,7 @@ export class TextModel implements ITextModel {
 		});
 	}
 
-	trackRange(
-		range: Range,
-		stickiness: TrackedRangeStickiness,
-	): TrackedRange {
+	trackRange(range: Range, stickiness: TrackedRangeStickiness): TrackedRange {
 		this.assertNotDisposed();
 		return this.trackedRanges.add(
 			this.offsetAt(range.getStartPosition()),
@@ -1020,11 +1168,9 @@ export class TextModel implements ITextModel {
 		validateDecorationOwnerId(ownerId);
 		if (typeof callback !== 'function') throw new TypeError('Decoration change callback must be a function');
 		const current = [...this.modelDecorations.values()].filter(entry => entry.ownerId === ownerId);
-		const staged = new Map(current.map(entry => [entry.id, {
-			id: entry.id,
-			range: entry.trackedRange.range,
-			options: entry.options,
-		}]));
+		const staged = new Map(
+			current.map(entry => [entry.id, { id: entry.id, range: entry.trackedRange.range, options: entry.options }]),
+		);
 		let changed = false;
 		const requireEntry = (id: string) => {
 			const entry = staged.get(id);
@@ -1054,7 +1200,8 @@ export class TextModel implements ITextModel {
 				changed = true;
 			},
 			deltaDecorations: (oldDecorations, newDecorations) => {
-				if (new Set(oldDecorations).size !== oldDecorations.length) throw new RangeError('Decoration delta contains duplicate IDs');
+				if (new Set(oldDecorations).size !== oldDecorations.length)
+					throw new RangeError('Decoration delta contains duplicate IDs');
 				const previous = oldDecorations.map(requireEntry);
 				const next = newDecorations.map((decoration, index) => ({
 					id: previous[index]?.id ?? this.allocateDecorationId(),
@@ -1075,7 +1222,10 @@ export class TextModel implements ITextModel {
 				replacements.push({
 					id: entry.id,
 					ownerId,
-					trackedRange: this.trackRange(entry.range, entry.options.stickiness ?? TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges),
+					trackedRange: this.trackRange(
+						entry.range,
+						entry.options.stickiness ?? TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
+					),
 					options: entry.options,
 				});
 			}
@@ -1098,7 +1248,8 @@ export class TextModel implements ITextModel {
 	deltaDecorations(oldDecorations: string[], newDecorations: IModelDeltaDecoration[], ownerId = 0): string[] {
 		this.assertNotDisposed();
 		validateDecorationOwnerId(ownerId);
-		if (new Set(oldDecorations).size !== oldDecorations.length) throw new RangeError('Decoration delta contains duplicate IDs');
+		if (new Set(oldDecorations).size !== oldDecorations.length)
+			throw new RangeError('Decoration delta contains duplicate IDs');
 		const previous = oldDecorations.map(id => {
 			const entry = this.modelDecorations.get(id);
 			if (!entry || entry.ownerId !== ownerId) throw new RangeError(`Unknown model decoration '${id}'`);
@@ -1114,7 +1265,10 @@ export class TextModel implements ITextModel {
 				staged.push({
 					id,
 					ownerId,
-					trackedRange: this.trackRange(range, options.stickiness ?? TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges),
+					trackedRange: this.trackRange(
+						range,
+						options.stickiness ?? TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
+					),
 					options,
 				});
 			}
@@ -1161,20 +1315,51 @@ export class TextModel implements ITextModel {
 		return this.modelDecorations.get(id)?.options ?? null;
 	}
 
-	getLineDecorations(lineNumber: number, ownerId = 0, filterOutValidation = false, filterFontDecorations = false): model.IModelDecoration[] {
+	getLineDecorations(
+		lineNumber: number,
+		ownerId = 0,
+		filterOutValidation = false,
+		filterFontDecorations = false,
+	): model.IModelDecoration[] {
 		return this.getLinesDecorations(lineNumber, lineNumber, ownerId, filterOutValidation, filterFontDecorations);
 	}
 
-	getLinesDecorations(startLineNumber: number, endLineNumber: number, ownerId = 0, filterOutValidation = false, filterFontDecorations = false): model.IModelDecoration[] {
+	getLinesDecorations(
+		startLineNumber: number,
+		endLineNumber: number,
+		ownerId = 0,
+		filterOutValidation = false,
+		filterFontDecorations = false,
+	): model.IModelDecoration[] {
 		this.assertNotDisposed();
-		if (!Number.isSafeInteger(startLineNumber) || !Number.isSafeInteger(endLineNumber) || startLineNumber < 1 || endLineNumber < startLineNumber || endLineNumber > this.lineCount) {
+		if (
+			!Number.isSafeInteger(startLineNumber) ||
+			!Number.isSafeInteger(endLineNumber) ||
+			startLineNumber < 1 ||
+			endLineNumber < startLineNumber ||
+			endLineNumber > this.lineCount
+		) {
 			throw new RangeError(`Decoration line range must be between 1 and ${this.lineCount}`);
 		}
-		return this.getDecorationsInRange(new Range(startLineNumber, 1, endLineNumber, this.getLineMaxColumn(endLineNumber)), ownerId, filterOutValidation, filterFontDecorations);
+		return this.getDecorationsInRange(
+			new Range(startLineNumber, 1, endLineNumber, this.getLineMaxColumn(endLineNumber)),
+			ownerId,
+			filterOutValidation,
+			filterFontDecorations,
+		);
 	}
 
-	getAllDecorations(ownerId = 0, filterOutValidation = false, filterFontDecorations = false): model.IModelDecoration[] {
-		return this.getDecorationsInRange(this.getFullModelRange(), ownerId, filterOutValidation, filterFontDecorations);
+	getAllDecorations(
+		ownerId = 0,
+		filterOutValidation = false,
+		filterFontDecorations = false,
+	): model.IModelDecoration[] {
+		return this.getDecorationsInRange(
+			this.getFullModelRange(),
+			ownerId,
+			filterOutValidation,
+			filterFontDecorations,
+		);
 	}
 
 	getAllMarginDecorations(ownerId = 0): model.IModelDecoration[] {
@@ -1192,15 +1377,34 @@ export class TextModel implements ITextModel {
 		onlyMarginDecorations = false,
 	): model.IModelDecoration[] {
 		const validatedRange = this.validateRange(range);
-		const result = this.getStoredDecorationsInRange(validatedRange, ownerId, filterOutValidation, filterFontDecorations, onlyMarginDecorations);
+		const result = this.getStoredDecorationsInRange(
+			validatedRange,
+			ownerId,
+			filterOutValidation,
+			filterFontDecorations,
+			onlyMarginDecorations,
+		);
 		if (!onlyMarginDecorations && !onlyMinimapDecorations) {
-			result.push(...this.bracketDecorations.getDecorationsInRange(validatedRange, ownerId, filterOutValidation, filterFontDecorations));
+			result.push(
+				...this.bracketDecorations.getDecorationsInRange(
+					validatedRange,
+					ownerId,
+					filterOutValidation,
+					filterFontDecorations,
+				),
+			);
 		}
 		return result;
 	}
 
 	/** Generated bracket colors cannot contribute margin, overview, font, or injected text data. */
-	private getStoredDecorationsInRange(range: IRange, ownerId = 0, filterOutValidation = false, filterFontDecorations = false, onlyMarginDecorations = false): model.IModelDecoration[] {
+	private getStoredDecorationsInRange(
+		range: IRange,
+		ownerId = 0,
+		filterOutValidation = false,
+		filterFontDecorations = false,
+		onlyMarginDecorations = false,
+	): model.IModelDecoration[] {
 		this.assertNotDisposed();
 		const validatedRange = this.validateRange(range);
 		const result: model.IModelDecoration[] = [];
@@ -1214,31 +1418,29 @@ export class TextModel implements ITextModel {
 			}
 			const decorationRange = entry.cachedRange.range;
 			if (!Range.areIntersectingOrTouching(validatedRange, decorationRange)) continue;
-			result.push({
-				id: entry.id,
-				ownerId: entry.ownerId,
-				range: decorationRange,
-				options: entry.options,
-			});
+			result.push({ id: entry.id, ownerId: entry.ownerId, range: decorationRange, options: entry.options });
 		}
 		return result;
 	}
 
 	getLineInjectedText(lineNumber: number, ownerId = 0): LineInjectedText[] {
 		this.assertNotDisposed();
-		if (lineNumber < 1 || lineNumber > this.getLineCount()) throw new RangeError('Injected text line is outside the model');
+		if (lineNumber < 1 || lineNumber > this.getLineCount())
+			throw new RangeError('Injected text line is outside the model');
 		if (this.lineInjectedTextCache?.version !== this.version) {
 			const lines = new Map<number, LineInjectedText[]>();
 			// Wrapping asks once per source line. Index only actual injections once,
 			// rather than scanning fold decorations or requesting syntax per line.
 			for (const injection of LineInjectedText.fromDecorations(this.getInjectedTextDecorations())) {
 				let line = lines.get(injection.lineNumber);
-				if (!line) lines.set(injection.lineNumber, line = []);
+				if (!line) lines.set(injection.lineNumber, (line = []));
 				line.push(injection);
 			}
 			this.lineInjectedTextCache = { version: this.version, lines };
 		}
-		return (this.lineInjectedTextCache.lines.get(lineNumber) ?? []).filter(text => ownerId === 0 || text.ownerId === 0 || text.ownerId === ownerId);
+		return (this.lineInjectedTextCache.lines.get(lineNumber) ?? []).filter(
+			text => ownerId === 0 || text.ownerId === 0 || text.ownerId === ownerId,
+		);
 	}
 
 	getInjectedTextDecorations(ownerId = 0): model.IModelDecoration[] {
@@ -1253,14 +1455,27 @@ export class TextModel implements ITextModel {
 			if (entry.cachedRange?.versionId !== this._version) {
 				entry.cachedRange = { versionId: this._version, range: entry.trackedRange.range };
 			}
-			result.push({ id: entry.id, ownerId: entry.ownerId, range: entry.cachedRange.range, options: entry.options });
+			result.push({
+				id: entry.id,
+				ownerId: entry.ownerId,
+				range: entry.cachedRange.range,
+				options: entry.options,
+			});
 		}
 		return result;
 	}
 
-	getOverviewRulerDecorations(ownerId = 0, filterOutValidation = false, filterFontDecorations = false): model.IModelDecoration[] {
-		return this.getStoredDecorationsInRange(this.getFullModelRange(), ownerId, filterOutValidation, filterFontDecorations)
-			.filter(decoration => !!decoration.options.overviewRuler?.color);
+	getOverviewRulerDecorations(
+		ownerId = 0,
+		filterOutValidation = false,
+		filterFontDecorations = false,
+	): model.IModelDecoration[] {
+		return this.getStoredDecorationsInRange(
+			this.getFullModelRange(),
+			ownerId,
+			filterOutValidation,
+			filterFontDecorations,
+		).filter(decoration => !!decoration.options.overviewRuler?.color);
 	}
 
 	getFontDecorationsInRange(range: IRange, ownerId = 0): model.IModelDecoration[] {
@@ -1268,13 +1483,15 @@ export class TextModel implements ITextModel {
 	}
 
 	getCustomLineHeightsDecorations(ownerId = 0): model.IModelDecoration[] {
-		return this.getStoredDecorationsInRange(this.getFullModelRange(), ownerId)
-			.filter(decoration => decoration.options.lineHeight !== null && decoration.options.lineHeight !== undefined);
+		return this.getStoredDecorationsInRange(this.getFullModelRange(), ownerId).filter(
+			decoration => decoration.options.lineHeight !== null && decoration.options.lineHeight !== undefined,
+		);
 	}
 
 	getCustomLineHeightsDecorationsInRange(range: Range, ownerId = 0): model.IModelDecoration[] {
-		return this.getStoredDecorationsInRange(range, ownerId)
-			.filter(decoration => decoration.options.lineHeight !== null && decoration.options.lineHeight !== undefined);
+		return this.getStoredDecorationsInRange(range, ownerId).filter(
+			decoration => decoration.options.lineHeight !== null && decoration.options.lineHeight !== undefined,
+		);
 	}
 
 	private allocateDecorationId(): string {
@@ -1292,24 +1509,30 @@ export class TextModel implements ITextModel {
 			affectsGlyphMargin ||= !!options.glyphMargin || !!options.glyphMarginClassName;
 			affectsLineNumber ||= !!options.lineNumberClassName;
 		}
-		this.decorationsEmitter.fire(Object.freeze({
-			affectsMinimap,
-			affectsOverviewRuler,
-			affectsGlyphMargin,
-			affectsLineNumber,
-		}));
+		this.decorationsEmitter.fire(
+			Object.freeze({ affectsMinimap, affectsOverviewRuler, affectsGlyphMargin, affectsLineNumber }),
+		);
 	}
 
-	private publishDecorationChanges(previous: readonly ModelDecorationEntry[], current: readonly ModelDecorationEntry[]): void {
+	private publishDecorationChanges(
+		previous: readonly ModelDecorationEntry[],
+		current: readonly ModelDecorationEntry[],
+	): void {
 		this.lineInjectedTextCache = undefined;
 		const previousById = new Map(previous.map(entry => [entry.id, entry]));
 		const currentById = new Map(current.map(entry => [entry.id, entry]));
 		const ids = new Set([...previousById.keys(), ...currentById.keys()]);
-		const changed: Array<{ previous?: ModelDecorationEntry; current?: ModelDecorationEntry; }> = [];
+		const changed: Array<{ previous?: ModelDecorationEntry; current?: ModelDecorationEntry }> = [];
 		for (const id of ids) {
 			const oldEntry = previousById.get(id);
 			const newEntry = currentById.get(id);
-			if (oldEntry && newEntry && oldEntry.options === newEntry.options && Range.equalsRange(oldEntry.trackedRange.range, newEntry.trackedRange.range)) continue;
+			if (
+				oldEntry &&
+				newEntry &&
+				oldEntry.options === newEntry.options &&
+				Range.equalsRange(oldEntry.trackedRange.range, newEntry.trackedRange.range)
+			)
+				continue;
 			changed.push({ previous: oldEntry, current: newEntry });
 		}
 
@@ -1319,8 +1542,10 @@ export class TextModel implements ITextModel {
 		for (const pair of changed) {
 			const oldEntry = pair.previous;
 			const newEntry = pair.current;
-			if (oldEntry && hasInjectedText(oldEntry.options)) injectedLines.add(oldEntry.trackedRange.range.startLineNumber);
-			if (newEntry && hasInjectedText(newEntry.options)) injectedLines.add(newEntry.trackedRange.range.startLineNumber);
+			if (oldEntry && hasInjectedText(oldEntry.options))
+				injectedLines.add(oldEntry.trackedRange.range.startLineNumber);
+			if (newEntry && hasInjectedText(newEntry.options))
+				injectedLines.add(newEntry.trackedRange.range.startLineNumber);
 
 			const oldHeight = oldEntry?.options.lineHeight ?? null;
 			const newHeight = newEntry?.options.lineHeight ?? null;
@@ -1348,7 +1573,11 @@ export class TextModel implements ITextModel {
 		}
 		if (lineHeights.length > 0) this.lineHeightEmitter.fire(new ModelLineHeightChangedEvent(lineHeights));
 		if (fontLines.size > 0) this.fontEmitter.fire(new ModelFontChangedEvent([...fontLines.values()]));
-		this.emitDecorationsChanged(changed.flatMap(pair => [pair.previous, pair.current].filter((entry): entry is ModelDecorationEntry => !!entry)));
+		this.emitDecorationsChanged(
+			changed.flatMap(pair =>
+				[pair.previous, pair.current].filter((entry): entry is ModelDecorationEntry => !!entry),
+			),
+		);
 	}
 
 	protected publishTextChange(change: TextModelChange): void {
@@ -1403,9 +1632,7 @@ export class TextModel implements ITextModel {
 		}
 	}
 
-	cancelHistoryRevision(
-		historyGroup: UndoRedoGroup,
-	): TextModelChange | undefined {
+	cancelHistoryRevision(historyGroup: UndoRedoGroup): TextModelChange | undefined {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
 		if (!this.history.getRevisionEntry(historyGroup)) {
@@ -1426,7 +1653,7 @@ export class TextModel implements ITextModel {
 			resultingSelection: entry.beforeCursorState,
 		});
 		if (!result) {
-			throw new Error("History revision contained an empty transaction");
+			throw new Error('History revision contained an empty transaction');
 		}
 		this._alternativeVersion = entry.alternativeVersionId;
 		this.publishTextChange(result.change);
@@ -1439,12 +1666,15 @@ export class TextModel implements ITextModel {
 	 * Input order is irrelevant. Overlapping replacements, including two
 	 * insertions at the same position, are rejected before any mutation.
 	 */
-	applyOperations(operations: readonly ISingleEditOperation[], options: TextEditOptions = {}): TextModelChange | undefined {
+	applyOperations(
+		operations: readonly ISingleEditOperation[],
+		options: TextEditOptions = {},
+	): TextModelChange | undefined {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
-		if (!Array.isArray(operations)) throw new TypeError("Edit operations must be an array");
-		const previousStepOpen = options.historyGroup === undefined
-			&& this.history.findUndoEntry(undefined, () => true) !== undefined;
+		if (!Array.isArray(operations)) throw new TypeError('Edit operations must be an array');
+		const previousStepOpen =
+			options.historyGroup === undefined && this.history.findUndoEntry(undefined, () => true) !== undefined;
 		const versionBefore = this._version;
 		if (options.historyGroup === undefined) this.history.pushStackElement();
 		let change: TextModelChange | undefined;
@@ -1459,7 +1689,7 @@ export class TextModel implements ITextModel {
 		}
 	}
 
-	edit(edit: TextEdit, options: { reason?: TextModelEditSource; } = {}): void {
+	edit(edit: TextEdit, options: { reason?: TextModelEditSource } = {}): void {
 		this.pushEditOperations(
 			null,
 			edit.replacements.map(replacement => ({ range: replacement.range, text: replacement.text })),
@@ -1486,15 +1716,12 @@ export class TextModel implements ITextModel {
 		group?: UndoRedoGroup,
 		reason?: TextModelEditSource,
 	): Selection[] | null {
-		return this.pushEditOperationsWithOptions(
-			beforeCursorState,
-			editOperations,
-			cursorStateComputer,
-			{
+		return (
+			this.pushEditOperationsWithOptions(beforeCursorState, editOperations, cursorStateComputer, {
 				historyGroup: group,
 				editSource: reason ?? EditSources.unknown({ name: 'pushEditOperations' }),
-			},
-		)?.change.resultingSelection ?? null;
+			})?.change.resultingSelection ?? null
+		);
 	}
 
 	private pushEditOperationsWithOptions(
@@ -1502,27 +1729,22 @@ export class TextModel implements ITextModel {
 		editOperations: readonly IIdentifiedSingleEditOperation[],
 		cursorStateComputer: ICursorStateComputer | null,
 		options: TextEditOptions,
-	): { readonly change: TextModelChange; readonly inverseEditOperations: IValidEditOperation[]; } | undefined {
+	): { readonly change: TextModelChange; readonly inverseEditOperations: IValidEditOperation[] } | undefined {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
-		if (!Array.isArray(editOperations)) throw new TypeError("Edit operations must be an array");
-		const historyMergeMode =
-			options.historyMergeMode ??
-			TextEditHistoryMergeMode.Sequential;
+		if (!Array.isArray(editOperations)) throw new TypeError('Edit operations must be an array');
+		const historyMergeMode = options.historyMergeMode ?? TextEditHistoryMergeMode.Sequential;
 		if (
 			historyMergeMode !== TextEditHistoryMergeMode.Sequential &&
 			historyMergeMode !== TextEditHistoryMergeMode.ReplacePrevious
 		) {
-			throw new TypeError("Unknown text edit history merge mode");
+			throw new TypeError('Unknown text edit history merge mode');
 		}
 		if (
 			historyMergeMode === TextEditHistoryMergeMode.ReplacePrevious &&
-			(!options.historyGroup ||
-				!this.history.isRevisionActive(options.historyGroup))
+			(!options.historyGroup || !this.history.isRevisionActive(options.historyGroup))
 		) {
-			throw new Error(
-				"ReplacePrevious requires an active history revision",
-			);
+			throw new Error('ReplacePrevious requires an active history revision');
 		}
 		const validatedOperations = this.validateEditOperations(editOperations);
 		const offsetEdits = validatedOperations.map(edit => {
@@ -1534,22 +1756,15 @@ export class TextModel implements ITextModel {
 			};
 		});
 		const sortedOffsetEdits = [...offsetEdits].sort(compareOffsetEdits);
-		const coalescingEntry = this.findCoalescingEntry(
-			sortedOffsetEdits,
-			options.historyGroup,
-			historyMergeMode,
-		);
+		const coalescingEntry = this.findCoalescingEntry(sortedOffsetEdits, options.historyGroup, historyMergeMode);
 		const previousAlternativeVersionId = this._alternativeVersion;
 		const previousEOL = this.getEndOfLineSequence();
-		const result = this.commitEditOperations(
-			validatedOperations,
-			{
-				reason: TextModelChangeReason.Edit,
-				transactionId: coalescingEntry?.transactionId,
-				editSource: options.editSource,
-				cursorStateComputer,
-			},
-		);
+		const result = this.commitEditOperations(validatedOperations, {
+			reason: TextModelChangeReason.Edit,
+			transactionId: coalescingEntry?.transactionId,
+			editSource: options.editSource,
+			cursorStateComputer,
+		});
 		if (!result) return undefined;
 		this.history.prepareForEdit(options.historyGroup);
 		this.history.clearRedo();
@@ -1558,21 +1773,16 @@ export class TextModel implements ITextModel {
 				[...coalescingEntry.textChanges],
 				result.textChanges,
 			);
-			const accumulatesActiveRevision = options.historyGroup !== undefined
-				&& historyMergeMode === TextEditHistoryMergeMode.Sequential
-				&& this.history.isRevisionActive(options.historyGroup);
-			const mergedEdits = options.historyGroup === undefined || accumulatesActiveRevision
-				? inverseEditsFromTextChanges(mergedTextChanges)
-				: historyMergeMode === TextEditHistoryMergeMode.ReplacePrevious
-					? replaceHistoryUndoEdits(
-						coalescingEntry.edits,
-						result.inverseEdits,
-					)
-					: coalesceHistoryUndoEdits(
-						coalescingEntry.edits,
-						sortedOffsetEdits,
-						result.inverseEdits,
-					);
+			const accumulatesActiveRevision =
+				options.historyGroup !== undefined &&
+				historyMergeMode === TextEditHistoryMergeMode.Sequential &&
+				this.history.isRevisionActive(options.historyGroup);
+			const mergedEdits =
+				options.historyGroup === undefined || accumulatesActiveRevision
+					? inverseEditsFromTextChanges(mergedTextChanges)
+					: historyMergeMode === TextEditHistoryMergeMode.ReplacePrevious
+						? replaceHistoryUndoEdits(coalescingEntry.edits, result.inverseEdits)
+						: coalesceHistoryUndoEdits(coalescingEntry.edits, sortedOffsetEdits, result.inverseEdits);
 			this.history.replaceUndoEntry(
 				coalescingEntry,
 				mergedEdits,
@@ -1607,26 +1817,33 @@ export class TextModel implements ITextModel {
 	): void | IValidEditOperation[] {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
-		if (!Array.isArray(operations)) throw new TypeError("Edit operations must be an array");
-		const computeUndoEdits = typeof computeUndoEditsOrReason === 'boolean'
-			? computeUndoEditsOrReason
-			: false;
-		const reason = typeof computeUndoEditsOrReason === 'boolean'
-			? EditSources.applyEdits()
-			: computeUndoEditsOrReason;
-		const result = this.commitEditOperations(
-			this.validateEditOperations(operations),
-			{ reason: TextModelChangeReason.Edit, editSource: reason },
-		);
+		if (!Array.isArray(operations)) throw new TypeError('Edit operations must be an array');
+		const computeUndoEdits = typeof computeUndoEditsOrReason === 'boolean' ? computeUndoEditsOrReason : false;
+		const reason =
+			typeof computeUndoEditsOrReason === 'boolean' ? EditSources.applyEdits() : computeUndoEditsOrReason;
+		const result = this.commitEditOperations(this.validateEditOperations(operations), {
+			reason: TextModelChangeReason.Edit,
+			editSource: reason,
+		});
 		if (result) this.publishTextChange(result.change);
-		return computeUndoEdits ? result?.inverseEditOperations ?? [] : undefined;
+		return computeUndoEdits ? (result?.inverseEditOperations ?? []) : undefined;
 	}
 
-	_applyUndo(changes: TextChange[], eol: EndOfLineSequence, resultingAlternativeVersionId: number, resultingSelection: Selection[] | null): void {
+	_applyUndo(
+		changes: TextChange[],
+		eol: EndOfLineSequence,
+		resultingAlternativeVersionId: number,
+		resultingSelection: Selection[] | null,
+	): void {
 		this.applyUndoRedoChanges(changes, eol, resultingAlternativeVersionId, resultingSelection, true);
 	}
 
-	_applyRedo(changes: TextChange[], eol: EndOfLineSequence, resultingAlternativeVersionId: number, resultingSelection: Selection[] | null): void {
+	_applyRedo(
+		changes: TextChange[],
+		eol: EndOfLineSequence,
+		resultingAlternativeVersionId: number,
+		resultingSelection: Selection[] | null,
+	): void {
 		this.applyUndoRedoChanges(changes, eol, resultingAlternativeVersionId, resultingSelection, false);
 	}
 
@@ -1662,22 +1879,27 @@ export class TextModel implements ITextModel {
 	reset(text: string, editSource: TextModelEditSource = EditSources.setValue()): TextModelChange {
 		this.assertNotDisposed();
 		this.ensureDirectTextMutationAllowed();
-		if (typeof text !== "string") {
-			throw new TypeError("TextModel reset text must be a string");
+		if (typeof text !== 'string') {
+			throw new TypeError('TextModel reset text must be a string');
 		}
 		const nextBuffer = createPieceTreeTextBuffer(text, this.modelOptionsValue.defaultEOL);
 		const previousBuffer = this.buffer;
 		let result: CommitResult | undefined;
 		try {
-			result = this.commitOffsetEdits([{
-				startOffset: 0,
-				endOffset: previousBuffer.getLength(),
-				text: nextBuffer.createSnapshot().getText(),
-			}], {
-				reason: TextModelChangeReason.Reset,
-				editSource,
-				eol: nextBuffer.getEOL() === '\r\n' ? EndOfLineSequence.CRLF : EndOfLineSequence.LF,
-			});
+			result = this.commitOffsetEdits(
+				[
+					{
+						startOffset: 0,
+						endOffset: previousBuffer.getLength(),
+						text: nextBuffer.createSnapshot().getText(),
+					},
+				],
+				{
+					reason: TextModelChangeReason.Reset,
+					editSource,
+					eol: nextBuffer.getEOL() === '\r\n' ? EndOfLineSequence.CRLF : EndOfLineSequence.LF,
+				},
+			);
 		} catch (error) {
 			nextBuffer.dispose();
 			throw error;
@@ -1713,18 +1935,15 @@ export class TextModel implements ITextModel {
 		if (!entry) return undefined;
 		const previousAlternativeVersionId = this._alternativeVersion;
 		const previousEOL = this.getEndOfLineSequence();
-		const result = this.commitOffsetEdits(
-			this.translateHistoryEdits(entry.edits, entry.editsEOL),
-			{
-				reason: TextModelChangeReason.Undo,
-				eol: entry.eol,
-				transactionId: entry.transactionId,
-				lineIds: entry.lineIds,
-				resultingSelection: entry.beforeCursorState,
-			},
-		);
+		const result = this.commitOffsetEdits(this.translateHistoryEdits(entry.edits, entry.editsEOL), {
+			reason: TextModelChangeReason.Undo,
+			eol: entry.eol,
+			transactionId: entry.transactionId,
+			lineIds: entry.lineIds,
+			resultingSelection: entry.beforeCursorState,
+		});
 		if (!result) {
-			throw new Error("Undo history contained an empty transaction");
+			throw new Error('Undo history contained an empty transaction');
 		}
 		this.history.pushRedo(
 			result.inverseEdits,
@@ -1751,18 +1970,15 @@ export class TextModel implements ITextModel {
 		if (!entry) return undefined;
 		const previousAlternativeVersionId = this._alternativeVersion;
 		const previousEOL = this.getEndOfLineSequence();
-		const result = this.commitOffsetEdits(
-			this.translateHistoryEdits(entry.edits, entry.editsEOL),
-			{
-				reason: TextModelChangeReason.Redo,
-				eol: entry.eol,
-				transactionId: entry.transactionId,
-				lineIds: entry.lineIds,
-				resultingSelection: entry.afterCursorState,
-			},
-		);
+		const result = this.commitOffsetEdits(this.translateHistoryEdits(entry.edits, entry.editsEOL), {
+			reason: TextModelChangeReason.Redo,
+			eol: entry.eol,
+			transactionId: entry.transactionId,
+			lineIds: entry.lineIds,
+			resultingSelection: entry.afterCursorState,
+		});
 		if (!result) {
-			throw new Error("Redo history contained an empty transaction");
+			throw new Error('Redo history contained an empty transaction');
 		}
 		this.history.pushUndo(
 			result.inverseEdits,
@@ -1789,11 +2005,11 @@ export class TextModel implements ITextModel {
 	): TextModelHistoryEntry | undefined {
 		return this.history.findUndoEntry(
 			historyGroup,
-			previous => historyGroup === undefined || (
-				historyMergeMode === TextEditHistoryMergeMode.ReplacePrevious
+			previous =>
+				historyGroup === undefined ||
+				(historyMergeMode === TextEditHistoryMergeMode.ReplacePrevious
 					? canReplaceHistoryEdits(previous.edits, edits)
-					: this.history.isRevisionActive(historyGroup) || canCoalesceHistoryEdits(previous.edits, edits)
-			),
+					: this.history.isRevisionActive(historyGroup) || canCoalesceHistoryEdits(previous.edits, edits)),
 		);
 	}
 
@@ -1819,14 +2035,13 @@ export class TextModel implements ITextModel {
 		);
 	}
 
-	private validateEditOperations(rawOperations: readonly IIdentifiedSingleEditOperation[]): ValidAnnotatedEditOperation[] {
+	private validateEditOperations(
+		rawOperations: readonly IIdentifiedSingleEditOperation[],
+	): ValidAnnotatedEditOperation[] {
 		return rawOperations.map(operation => this.validateEditOperation(operation));
 	}
 
-	private commitOffsetEdits(
-		edits: readonly OffsetEdit[],
-		context: CommitContext,
-	): CommitResult | undefined {
+	private commitOffsetEdits(edits: readonly OffsetEdit[], context: CommitContext): CommitResult | undefined {
 		return this.commitAnnotatedOffsetEdits(
 			edits.map(edit => ({
 				...edit,
@@ -1863,9 +2078,10 @@ export class TextModel implements ITextModel {
 	): CommitResult | undefined {
 		const previousEOL = this.getEndOfLineSequence();
 		const targetEOL = context.eol ?? previousEOL;
-		const replayingHistory = context.reason === TextModelChangeReason.Undo
-			|| context.reason === TextModelChangeReason.Redo
-			|| context.reason === TextModelChangeReason.HistoryCancellation;
+		const replayingHistory =
+			context.reason === TextModelChangeReason.Undo ||
+			context.reason === TextModelChangeReason.Redo ||
+			context.reason === TextModelChangeReason.HistoryCancellation;
 		const prepared = this.prepareEdits(edits, replayingHistory);
 		const eolChanged = targetEOL !== previousEOL;
 		if (prepared.length === 0 && !eolChanged) return undefined;
@@ -1876,11 +2092,21 @@ export class TextModel implements ITextModel {
 			if (context.lineIds !== undefined) {
 				// History retains immutable identity sequences created by this model.
 				// Only the resulting line count changes; the identities need no revalidation.
-				const expected = this.buffer.getLineCount() + prepared.reduce((delta, edit) =>
-					delta + countEOL(edit.text)[0] - (edit.range.endLineNumber - edit.range.startLineNumber), 0);
-				if (context.lineIds.length !== expected) throw new Error("History line identities do not match the edited buffer");
+				const expected =
+					this.buffer.getLineCount() +
+					prepared.reduce(
+						(delta, edit) =>
+							delta + countEOL(edit.text)[0] - (edit.range.endLineNumber - edit.range.startLineNumber),
+						0,
+					);
+				if (context.lineIds.length !== expected)
+					throw new Error('History line identities do not match the edited buffer');
 				nextLineIds = context.lineIds;
-			} else if (prepared.every(edit => edit.range.startLineNumber === edit.range.endLineNumber && countEOL(edit.text)[0] === 0)) {
+			} else if (
+				prepared.every(
+					edit => edit.range.startLineNumber === edit.range.endLineNumber && countEOL(edit.text)[0] === 0,
+				)
+			) {
 				// In-line edits preserve every logical line. Reuse the identity sequence
 				// and its lookup index instead of copying all lines on each keystroke.
 				nextLineIds = previousLineIds;
@@ -1890,39 +2116,50 @@ export class TextModel implements ITextModel {
 		}
 
 		const bufferResult = this.buffer.applyEdits(
-			prepared.map(edit => new ValidAnnotatedEditOperation(
-				edit.identifier ?? null,
-				edit.range,
-				edit.text,
-				edit.forceMoveMarkers,
-				edit.isAutoWhitespaceEdit,
-				edit._isTracked,
-			)),
+			prepared.map(
+				edit =>
+					new ValidAnnotatedEditOperation(
+						edit.identifier ?? null,
+						edit.range,
+						edit.text,
+						edit.forceMoveMarkers,
+						edit.isAutoWhitespaceEdit,
+						edit._isTracked,
+					),
+			),
 			this.modelOptionsValue.trimAutoWhitespace,
 			true,
 		);
 		const inverseEditOperations = bufferResult.reverseEdits ?? [];
 		const textChanges = inverseEditOperations
 			.map((operation, index) => ({ index, textChange: operation.textChange }))
-			.sort((left, right) => left.textChange.oldPosition - right.textChange.oldPosition || left.index - right.index)
+			.sort(
+				(left, right) => left.textChange.oldPosition - right.textChange.oldPosition || left.index - right.index,
+			)
 			.map(entry => entry.textChange);
-		const inverseEdits = inverseEditOperations.map<OffsetEdit>(operation => ({
-			startOffset: this.buffer.getOffsetAt(operation.range.startLineNumber, operation.range.startColumn),
-			endOffset: this.buffer.getOffsetAt(operation.range.endLineNumber, operation.range.endColumn),
-			text: operation.text,
-		})).sort(compareOffsetEdits);
-		const internalChanges = bufferResult.changes.slice().sort((left, right) => left.rangeOffset - right.rangeOffset || left.rangeLength - right.rangeLength);
+		const inverseEdits = inverseEditOperations
+			.map<OffsetEdit>(operation => ({
+				startOffset: this.buffer.getOffsetAt(operation.range.startLineNumber, operation.range.startColumn),
+				endOffset: this.buffer.getOffsetAt(operation.range.endLineNumber, operation.range.endColumn),
+				text: operation.text,
+			}))
+			.sort(compareOffsetEdits);
+		const internalChanges = bufferResult.changes
+			.slice()
+			.sort((left, right) => left.rangeOffset - right.rangeOffset || left.rangeLength - right.rangeLength);
 		const appliedChanges = Object.freeze(
-			internalChanges
-				.map<TextModelContentChange>(change => Object.freeze({
+			internalChanges.map<TextModelContentChange>(change =>
+				Object.freeze({
 					range: change.range,
 					rangeOffset: change.rangeOffset,
 					rangeLength: change.rangeLength,
 					text: change.text,
-				})),
+				}),
+			),
 		);
 		if (nextLineIds) {
-			if (nextLineIds.length !== this.buffer.getLineCount()) throw new Error("TextModel line identity mapping diverged from the ITextBuffer");
+			if (nextLineIds.length !== this.buffer.getLineCount())
+				throw new Error('TextModel line identity mapping diverged from the ITextBuffer');
 			this.plainLineIds = nextLineIds;
 			for (const lineId of reservedLineIds) this.issuedLineIds.add(lineId);
 			this.plainLineSnapshot = undefined;
@@ -1956,10 +2193,11 @@ export class TextModel implements ITextModel {
 		this._version += 1;
 		this._alternativeVersion = this._version;
 		const changes = eolChanged
-			? Object.freeze(appliedChanges.map(change => Object.freeze({
-				...change,
-				text: normalizeTextToEOL(change.text, endOfLineText(targetEOL)),
-			})))
+			? Object.freeze(
+					appliedChanges.map(change =>
+						Object.freeze({ ...change, text: normalizeTextToEOL(change.text, endOfLineText(targetEOL)) }),
+					),
+				)
 			: appliedChanges;
 		const change = Object.freeze<TextModelChange>({
 			version: this._version,
@@ -2008,8 +2246,8 @@ export class TextModel implements ITextModel {
 				this.pendingMaintenance.clear();
 				if (!this.isDisposed()) this.buffer.maintainIfNeeded();
 			});
-			if (!pending || typeof pending.dispose !== "function") {
-				throw new TypeError("TextModel maintenance scheduler must return a disposable");
+			if (!pending || typeof pending.dispose !== 'function') {
+				throw new TypeError('TextModel maintenance scheduler must return a disposable');
 			}
 		} catch {
 			this.buffer.maintain();
@@ -2023,42 +2261,38 @@ export class TextModel implements ITextModel {
 	}
 
 	private prepareEdits(edits: readonly AnnotatedOffsetEdit[], replayingHistory: boolean): PreparedEdit[] {
-		const sorted = edits.map(edit => {
-			this.assertOffsetRange(edit);
-			return {
-				...edit,
-				text: this.normalizeTextToBufferEOL(edit.text),
-			};
-		}).sort(compareOffsetEdits);
+		const sorted = edits
+			.map(edit => {
+				this.assertOffsetRange(edit);
+				return { ...edit, text: this.normalizeTextToBufferEOL(edit.text) };
+			})
+			.sort(compareOffsetEdits);
 
 		for (let index = 1; index < sorted.length; index += 1) {
 			const previous = sorted[index - 1];
 			const current = sorted[index];
 			const ambiguousSharedStart =
 				current.startOffset === previous.startOffset &&
-				(current.startOffset === current.endOffset ||
-					previous.startOffset === previous.endOffset);
-			if (
-				current.startOffset < previous.endOffset ||
-				ambiguousSharedStart
-			) {
-				throw new RangeError("Text edits must not overlap");
+				(current.startOffset === current.endOffset || previous.startOffset === previous.endOffset);
+			if (current.startOffset < previous.endOffset || ambiguousSharedStart) {
+				throw new RangeError('Text edits must not overlap');
 			}
 		}
 
 		return sorted.flatMap<PreparedEdit>(edit => {
-			const replacedText = this.buffer.getValueInRange(this.buffer.getRangeAt(edit.startOffset, edit.endOffset - edit.startOffset));
+			const replacedText = this.buffer.getValueInRange(
+				this.buffer.getRangeAt(edit.startOffset, edit.endOffset - edit.startOffset),
+			);
 			// A forced replacement moves markers even when its characters match. Keep
 			// that semantic edit and its history replay observable to model consumers.
 			if (replacedText === edit.text && !edit.forceMoveMarkers && !replayingHistory) return [];
-			return [{
-				...edit,
-				range: Range.fromPositions(
-					this.positionAt(edit.startOffset),
-					this.positionAt(edit.endOffset),
-				),
-				replacedText,
-			}];
+			return [
+				{
+					...edit,
+					range: Range.fromPositions(this.positionAt(edit.startOffset), this.positionAt(edit.endOffset)),
+					replacedText,
+				},
+			];
 		});
 	}
 
@@ -2070,14 +2304,17 @@ export class TextModel implements ITextModel {
 			edit.endOffset < edit.startOffset ||
 			edit.endOffset > this.buffer.getLength()
 		) {
-			throw new RangeError(
-				`Text edit offsets must satisfy 0 <= start <= end <= ${this.buffer.getLength()}`,
-			);
+			throw new RangeError(`Text edit offsets must satisfy 0 <= start <= end <= ${this.buffer.getLength()}`);
 		}
 	}
 
 	private offsetEditsAreNoOps(edits: readonly OffsetEdit[]): boolean {
-		return edits.every(edit => this.buffer.getValueInRange(this.buffer.getRangeAt(edit.startOffset, edit.endOffset - edit.startOffset)) === edit.text);
+		return edits.every(
+			edit =>
+				this.buffer.getValueInRange(
+					this.buffer.getRangeAt(edit.startOffset, edit.endOffset - edit.startOffset),
+				) === edit.text,
+		);
 	}
 
 	/**
@@ -2085,25 +2322,39 @@ export class TextModel implements ITextModel {
 	 * The extension must finish validation before calling, then install its state and
 	 * publish the returned change synchronously. Semantic-only edits still get a version.
 	 */
-	protected commitExtensionSnapshot(snapshot: LineDocumentSnapshot): { readonly version: number; readonly change?: TextModelChange; } {
+	protected commitExtensionSnapshot(snapshot: LineDocumentSnapshot): {
+		readonly version: number;
+		readonly change?: TextModelChange;
+	} {
 		this.assertNotDisposed();
-		if (!this.extensionSnapshot) throw new Error("TextModel has no extension transaction owner");
+		if (!this.extensionSnapshot) throw new Error('TextModel has no extension transaction owner');
 		const previousText = this.buffer.createSnapshot().getText();
 		const nextText = this.normalizeTextToBufferEOL(snapshot.getText());
 		let prefixLength = 0;
 		const maximumPrefixLength = Math.min(previousText.length, nextText.length);
-		while (prefixLength < maximumPrefixLength && previousText.charCodeAt(prefixLength) === nextText.charCodeAt(prefixLength)) prefixLength += 1;
+		while (
+			prefixLength < maximumPrefixLength &&
+			previousText.charCodeAt(prefixLength) === nextText.charCodeAt(prefixLength)
+		)
+			prefixLength += 1;
 		let suffixLength = 0;
 		const maximumSuffixLength = Math.min(previousText.length - prefixLength, nextText.length - prefixLength);
 		while (
 			suffixLength < maximumSuffixLength &&
-			previousText.charCodeAt(previousText.length - suffixLength - 1) === nextText.charCodeAt(nextText.length - suffixLength - 1)
-		) suffixLength += 1;
-		const result = this.commitOffsetEdits([{
-			startOffset: prefixLength,
-			endOffset: previousText.length - suffixLength,
-			text: nextText.slice(prefixLength, nextText.length - suffixLength),
-		}], { reason: TextModelChangeReason.Extension });
+			previousText.charCodeAt(previousText.length - suffixLength - 1) ===
+				nextText.charCodeAt(nextText.length - suffixLength - 1)
+		)
+			suffixLength += 1;
+		const result = this.commitOffsetEdits(
+			[
+				{
+					startOffset: prefixLength,
+					endOffset: previousText.length - suffixLength,
+					text: nextText.slice(prefixLength, nextText.length - suffixLength),
+				},
+			],
+			{ reason: TextModelChangeReason.Extension },
+		);
 		this.extensionSnapshot = snapshot;
 		this.history.reset();
 		if (result) return { version: this._version, change: result.change };
@@ -2117,12 +2368,14 @@ export class TextModel implements ITextModel {
 			isEolChange: false,
 			detailedReasons: Object.freeze([]),
 			resultingSelection: null,
-			changes: Object.freeze([Object.freeze<TextModelContentChange>({
-				range: Range.fromPositions(new Position((0) + 1, (0) + 1), this.positionAt(this.buffer.getLength())),
-				rangeOffset: 0,
-				rangeLength: this.buffer.getLength(),
-				text: previousText,
-			})]),
+			changes: Object.freeze([
+				Object.freeze<TextModelContentChange>({
+					range: Range.fromPositions(new Position(0 + 1, 0 + 1), this.positionAt(this.buffer.getLength())),
+					rangeOffset: 0,
+					rangeLength: this.buffer.getLength(),
+					text: previousText,
+				}),
+			]),
 		});
 		return { version: this._version, change };
 	}
@@ -2139,24 +2392,37 @@ export class TextModel implements ITextModel {
 		if (useDefaultGenerator) {
 			// This model owns the monotonic generator and the initially empty ID set.
 			// Custom generators and supplied identities keep their validation.
-			return Object.freeze(Array.from({ length: this.buffer.getLineCount() }, () => {
-				const id = `line:${this.nextGeneratedLineIdentity++}`;
-				this.issuedLineIds.add(id);
-				return id;
-			}));
+			return Object.freeze(
+				Array.from({ length: this.buffer.getLineCount() }, () => {
+					const id = `line:${this.nextGeneratedLineIdentity++}`;
+					this.issuedLineIds.add(id);
+					return id;
+				}),
+			);
 		}
 		return Object.freeze(Array.from({ length: this.buffer.getLineCount() }, () => this.allocateLineId()));
 	}
 
 	private projectLineIds(prepared: readonly PreparedEdit[]): readonly (LineId | undefined)[] {
-		const lineEdit = LengthEdit.create(prepared.map(edit => new LengthReplacement(
-			new OffsetRange(edit.range.startLineNumber, edit.range.endLineNumber),
-			countEOL(edit.text)[0],
-		)));
+		const lineEdit = LengthEdit.create(
+			prepared.map(
+				edit =>
+					new LengthReplacement(
+						new OffsetRange(edit.range.startLineNumber, edit.range.endLineNumber),
+						countEOL(edit.text)[0],
+					),
+			),
+		);
 		const projected = lineEdit.applyArray<LineId | undefined>(this.plainLineIds!, undefined);
-		const expected = this.buffer.getLineCount() + prepared.reduce((delta, edit) =>
-			delta + countEOL(edit.text)[0] - (edit.range.endLineNumber - edit.range.startLineNumber), 0);
-		if (projected.length !== expected) throw new Error("TextModel line identity projection does not match the edit ranges");
+		const expected =
+			this.buffer.getLineCount() +
+			prepared.reduce(
+				(delta, edit) =>
+					delta + countEOL(edit.text)[0] - (edit.range.endLineNumber - edit.range.startLineNumber),
+				0,
+			);
+		if (projected.length !== expected)
+			throw new Error('TextModel line identity projection does not match the edit ranges');
 		return projected;
 	}
 
@@ -2167,7 +2433,8 @@ export class TextModel implements ITextModel {
 	private validateLineIdentities(lineIds: readonly LineId[]): readonly LineId[] {
 		const unique = new Set<LineId>();
 		for (const lineId of lineIds) {
-			if (typeof lineId !== "string" || lineId.trim().length === 0) throw new TypeError("TextModel line ids must be non-empty strings");
+			if (typeof lineId !== 'string' || lineId.trim().length === 0)
+				throw new TypeError('TextModel line ids must be non-empty strings');
 			if (unique.has(lineId)) throw new TypeError(`Duplicate TextModel line id '${lineId}'`);
 			unique.add(lineId);
 		}
@@ -2177,14 +2444,14 @@ export class TextModel implements ITextModel {
 	private allocateLineId(reserved: Set<LineId> = this.issuedLineIds): LineId {
 		for (let attempt = 0; attempt < 1_000; attempt += 1) {
 			const lineId = this.lineIdGenerator();
-			if (typeof lineId !== "string" || lineId.trim().length === 0) {
-				throw new TypeError("TextModel lineIdGenerator must return a non-empty string");
+			if (typeof lineId !== 'string' || lineId.trim().length === 0) {
+				throw new TypeError('TextModel lineIdGenerator must return a non-empty string');
 			}
 			if (this.issuedLineIds.has(lineId) || reserved.has(lineId)) continue;
 			reserved.add(lineId);
 			return lineId;
 		}
-		throw new Error("TextModel lineIdGenerator did not produce a unique identity");
+		throw new Error('TextModel lineIdGenerator did not produce a unique identity');
 	}
 
 	private requirePlainLineSnapshot(): LineDocumentSnapshot {
@@ -2197,7 +2464,8 @@ export class TextModel implements ITextModel {
 
 	private createPlainLineSnapshot(metadata: LineSemanticAttributes | undefined): LineDocumentSnapshot {
 		const lineIds = this.plainLineIds;
-		if (!lineIds || lineIds.length !== this.buffer.getLineCount()) throw new Error("TextModel plain line identities are unavailable");
+		if (!lineIds || lineIds.length !== this.buffer.getLineCount())
+			throw new Error('TextModel plain line identities are unavailable');
 		return createLineDocumentSnapshot({
 			lines: lineIds.map((id, lineIndex) => ({ id, text: this.buffer.getLineContent(lineIndex + 1) })),
 			metadata,
@@ -2227,7 +2495,7 @@ export class TextModel implements ITextModel {
 	}
 
 	private ensureDirectTextMutationAllowed(): void {
-		if (this.extensionSnapshot) throw new Error("TextModel edits must use the extension transaction owner");
+		if (this.extensionSnapshot) throw new Error('TextModel edits must use the extension transaction owner');
 	}
 
 	public isDisposed(): boolean {
@@ -2262,13 +2530,16 @@ export class TextModel implements ITextModel {
 	private assertNotDisposed(): void {
 		if (this.disposed) throw new ReferenceError('TextModel is already disposed');
 	}
-
 }
 
-export function getLineTokensWithInjections(tokens: LineTokens, injectionOptions: model.InjectedTextOptions[] | null, injectionOffsets: number[] | null): LineTokens {
+export function getLineTokensWithInjections(
+	tokens: LineTokens,
+	injectionOptions: model.InjectedTextOptions[] | null,
+	injectionOffsets: number[] | null,
+): LineTokens {
 	if (!injectionOffsets) return tokens;
 	if (injectionOptions?.some(options => options.replaceLength)) {
-		const pieces: { text: string; metadata: number; }[] = [];
+		const pieces: { text: string; metadata: number }[] = [];
 		const appendSource = (start: number, end: number): void => {
 			for (let index = tokens.findTokenIndexAtOffset(start); index < tokens.getCount() && start < end; index++) {
 				const stop = Math.min(end, tokens.getEndOffset(index));
@@ -2281,14 +2552,17 @@ export function getLineTokensWithInjections(tokens: LineTokens, injectionOptions
 			const offset = injectionOffsets[index]!;
 			const options = injectionOptions[index]!;
 			appendSource(cursor, offset);
-			if (options.tokens) options.tokens.forEach((range, info) => pieces.push({ text: range.substring(options.content), metadata: info.metadata }));
+			if (options.tokens)
+				options.tokens.forEach((range, info) =>
+					pieces.push({ text: range.substring(options.content), metadata: info.metadata }),
+				);
 			else pieces.push({ text: options.content, metadata: LineTokens.defaultTokenMetadata });
 			cursor = offset + (options.replaceLength ?? 0);
 		}
 		appendSource(cursor, tokens.getLineContent().length);
 		return LineTokens.createFromTextAndMetadata(pieces, tokens.languageIdCodec);
 	}
-	const tokensToInsert: { offset: number; text: string; tokenMetadata: number; }[] = [];
+	const tokensToInsert: { offset: number; text: string; tokenMetadata: number }[] = [];
 	for (let index = 0; index < injectionOffsets.length; index += 1) {
 		const offset = injectionOffsets[index]!;
 		const options = injectionOptions![index]!;
@@ -2304,7 +2578,8 @@ export function getLineTokensWithInjections(tokens: LineTokens, injectionOptions
 }
 
 function toModelContentChangedEvent(change: TextModelChange): IModelContentChangedEvent {
-	const changes = change.changes.map(contentChange => ({ ...contentChange }))
+	const changes = change.changes
+		.map(contentChange => ({ ...contentChange }))
 		.sort((left, right) => Range.compareRangesUsingStarts(right.range, left.range));
 	const detailedReasons = [...change.detailedReasons];
 	return {
@@ -2316,21 +2591,23 @@ function toModelContentChangedEvent(change: TextModelChange): IModelContentChang
 		isFlush: change.reason === TextModelChangeReason.Reset,
 		isEolChange: change.isEolChange,
 		detailedReasons,
-		detailedReasonsChangeLengths: detailedReasons.map((_, index) => index === 0 ? changes.length : 0),
+		detailedReasonsChangeLengths: detailedReasons.map((_, index) => (index === 0 ? changes.length : 0)),
 	};
 }
 
 function toInternalModelContentChangedEvent(change: TextModelChange): InternalModelContentChangeEvent {
-	const structural = change.changes.some(contentChange =>
-		contentChange.range.startLineNumber !== contentChange.range.endLineNumber
-		|| countEOL(contentChange.text)[0] > 0,
+	const structural = change.changes.some(
+		contentChange =>
+			contentChange.range.startLineNumber !== contentChange.range.endLineNumber ||
+			countEOL(contentChange.text)[0] > 0,
 	);
 	const rawChanges = change.isEolChange
 		? [new ModelRawEOLChanged()]
 		: change.reason === TextModelChangeReason.Reset || structural
 			? [new ModelRawFlush()]
-			: [...new Set(change.changes.map(contentChange => contentChange.range.startLineNumber))]
-				.map(lineNumber => new ModelRawLineChanged(lineNumber, lineNumber));
+			: [...new Set(change.changes.map(contentChange => contentChange.range.startLineNumber))].map(
+					lineNumber => new ModelRawLineChanged(lineNumber, lineNumber),
+				);
 	const rawEvent = new ModelRawContentChangedEvent(
 		rawChanges,
 		change.version,
@@ -2342,13 +2619,14 @@ function toInternalModelContentChangedEvent(change: TextModelChange): InternalMo
 }
 
 function hasInjectedText(options: IModelDecorationOptions): boolean {
-	return options.before !== null && options.before !== undefined
-		|| options.after !== null && options.after !== undefined;
+	return (
+		(options.before !== null && options.before !== undefined) ||
+		(options.after !== null && options.after !== undefined)
+	);
 }
 
 function compareOffsetEdits(left: OffsetEdit, right: OffsetEdit): number {
-	return left.startOffset - right.startOffset ||
-		left.endOffset - right.endOffset;
+	return left.startOffset - right.startOffset || left.endOffset - right.endOffset;
 }
 
 function cloneSelections(selections: readonly Selection[] | null): Selection[] | null {
@@ -2363,36 +2641,42 @@ function validateDecorationOptions(options: IModelDecorationOptions): IModelDeco
 		throw new RangeError('Unknown model decoration stickiness');
 	}
 	for (const injection of [options.before, options.after]) {
-		if (injection?.replaceLength !== undefined && (!Number.isSafeInteger(injection.replaceLength) || injection.replaceLength < 0 || injection.replaceLength > 0 && injection.content.length === 0)) {
-			throw new RangeError('Injected text replacement requires a non-negative source length and visible projection content');
+		if (
+			injection?.replaceLength !== undefined &&
+			(!Number.isSafeInteger(injection.replaceLength) ||
+				injection.replaceLength < 0 ||
+				(injection.replaceLength > 0 && injection.content.length === 0))
+		) {
+			throw new RangeError(
+				'Injected text replacement requires a non-negative source length and visible projection content',
+			);
 		}
 	}
 	return Object.freeze({ ...options });
 }
 
 function validateDecorationOwnerId(ownerId: number): void {
-	if (!Number.isSafeInteger(ownerId) || ownerId < 0) throw new RangeError('Decoration ownerId must be a non-negative safe integer');
+	if (!Number.isSafeInteger(ownerId) || ownerId < 0)
+		throw new RangeError('Decoration ownerId must be a non-negative safe integer');
 }
 
 function isValidationDecoration(options: IModelDecorationOptions): boolean {
-	return options.className === 'squiggly-error' ||
+	return (
+		options.className === 'squiggly-error' ||
 		options.className === 'squiggly-warning' ||
-		options.className === 'squiggly-info';
+		options.className === 'squiggly-info'
+	);
 }
 
 function inverseEditsFromTextChanges(changes: readonly TextChange[]): OffsetEdit[] {
-	return normalizeInverseEdits(changes.map(change => ({
-		startOffset: change.newPosition,
-		endOffset: change.newEnd,
-		text: change.oldText,
-	})).sort(compareOffsetEdits));
+	return normalizeInverseEdits(
+		changes
+			.map(change => ({ startOffset: change.newPosition, endOffset: change.newEnd, text: change.oldText }))
+			.sort(compareOffsetEdits),
+	);
 }
 
-function readHistoryLimit(
-	value: number | undefined,
-	defaultValue: number,
-	name: string,
-): number {
+function readHistoryLimit(value: number | undefined, defaultValue: number, name: string): number {
 	const resolved = value ?? defaultValue;
 	if (!Number.isSafeInteger(resolved) || resolved < 0) {
 		throw new RangeError(`${name} must be a non-negative safe integer`);
@@ -2400,10 +2684,12 @@ function readHistoryLimit(
 	return resolved;
 }
 
-function readMaintenanceOptions(value: TextModelMaintenanceOptions | undefined): TextModelMaintenanceOptions | undefined {
+function readMaintenanceOptions(
+	value: TextModelMaintenanceOptions | undefined,
+): TextModelMaintenanceOptions | undefined {
 	if (value === undefined) return undefined;
-	if (!value || typeof value.schedule !== "function") {
-		throw new TypeError("TextModel maintenance requires a scheduler");
+	if (!value || typeof value.schedule !== 'function') {
+		throw new TypeError('TextModel maintenance requires a scheduler');
 	}
 	return Object.freeze({ schedule: value.schedule });
 }
@@ -2455,7 +2741,8 @@ function requireLanguageId(languageId: string): string {
 }
 
 function requireEndOfLineSequence(eol: EndOfLineSequence): EndOfLineSequence {
-	if (eol !== EndOfLineSequence.LF && eol !== EndOfLineSequence.CRLF) throw new TypeError('Unknown end-of-line sequence');
+	if (eol !== EndOfLineSequence.LF && eol !== EndOfLineSequence.CRLF)
+		throw new TypeError('Unknown end-of-line sequence');
 	return eol;
 }
 
@@ -2482,15 +2769,22 @@ export interface TextModelLargeFilePolicy {
 }
 
 /** Classifies the initial model snapshot. The result deliberately remains stable for the model lifetime. */
-export function classifyTextModelSize(textUnits: number, lineCount: number, largeFileOptimizations = true): TextModelLargeFilePolicy {
-	if (!Number.isSafeInteger(textUnits) || textUnits < 0) throw new RangeError("Text model size must be a non-negative safe integer");
-	if (!Number.isSafeInteger(lineCount) || lineCount < 1) throw new RangeError("Text model line count must be a positive safe integer");
+export function classifyTextModelSize(
+	textUnits: number,
+	lineCount: number,
+	largeFileOptimizations = true,
+): TextModelLargeFilePolicy {
+	if (!Number.isSafeInteger(textUnits) || textUnits < 0)
+		throw new RangeError('Text model size must be a non-negative safe integer');
+	if (!Number.isSafeInteger(lineCount) || lineCount < 1)
+		throw new RangeError('Text model line count must be a positive safe integer');
 	return Object.freeze({
-		tooLargeForTokenization: largeFileOptimizations && (
-			textUnits > TEXT_MODEL_LARGE_FILE_LIMITS.tokenizationTextUnits
-			|| lineCount > TEXT_MODEL_LARGE_FILE_LIMITS.tokenizationLineCount
-		),
+		tooLargeForTokenization:
+			largeFileOptimizations &&
+			(textUnits > TEXT_MODEL_LARGE_FILE_LIMITS.tokenizationTextUnits ||
+				lineCount > TEXT_MODEL_LARGE_FILE_LIMITS.tokenizationLineCount),
 		tooLargeForSynchronization: textUnits > TEXT_MODEL_LARGE_FILE_LIMITS.synchronizationTextUnits,
-		tooLargeForHeapOperation: largeFileOptimizations && textUnits > TEXT_MODEL_LARGE_FILE_LIMITS.heapOperationTextUnits,
+		tooLargeForHeapOperation:
+			largeFileOptimizations && textUnits > TEXT_MODEL_LARGE_FILE_LIMITS.heapOperationTextUnits,
 	});
 }

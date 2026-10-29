@@ -5,9 +5,25 @@ import { MainThreadTreeViews } from './mainThreadTreeViews.js';
 import { IViewsService } from '../../services/views/common/viewsService.js';
 import { canLog, isLogLevel, log, LogLevel } from '../../../platform/log/common/log.js';
 import { LogService } from '../../../platform/log/common/logServiceImpl.js';
-import { IAdapterManager, type DebugAdapterFactory, type DebugAdapterFactoryRegistration, IDebugService, type IDebugConfigurationProvider, type DebugConfigurationProviderRegistration, type IDebugAdapterTrackerFactory, type DebugAdapterTrackerFactoryRegistration } from '../../contrib/debug/common/debug.js';
+import {
+	IAdapterManager,
+	type DebugAdapterFactory,
+	type DebugAdapterFactoryRegistration,
+	IDebugService,
+	type IDebugConfigurationProvider,
+	type DebugConfigurationProviderRegistration,
+	type IDebugAdapterTrackerFactory,
+	type DebugAdapterTrackerFactoryRegistration,
+} from '../../contrib/debug/common/debug.js';
 import { MainThreadSpeech } from './mainThreadSpeech.js';
-import { MainThreadTerminalService, type ExtensionTerminalProfileRegistration, type ExtensionTerminalEnvironmentRegistration, type ExtensionTerminalLinkRegistration, type ExtensionTerminalCompletionRegistration, type ExtensionTerminalQuickFixRegistration } from './mainThreadTerminalService.js';
+import {
+	MainThreadTerminalService,
+	type ExtensionTerminalProfileRegistration,
+	type ExtensionTerminalEnvironmentRegistration,
+	type ExtensionTerminalLinkRegistration,
+	type ExtensionTerminalCompletionRegistration,
+	type ExtensionTerminalQuickFixRegistration,
+} from './mainThreadTerminalService.js';
 import { MainThreadLocalization } from './mainThreadLocalization.js';
 import { MainThreadMessageService } from './mainThreadMessageService.js';
 import { extensionMenuId } from '../../services/extensions/common/extensionMenus.js';
@@ -21,23 +37,63 @@ import { MainThreadWorkspace } from './mainThreadWorkspace.js';
 import { IHostService } from '../../services/host/browser/host.js';
 import { getRemoteAuthorityPrefix } from '../../../platform/remote/common/remoteAuthorityResolver.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
-import { IRemoteConnectionService, type RemoteConnectionResolver, type RemoteConnectionResolverRegistration } from '../../../platform/remote/common/remoteConnectionService.js';
+import {
+	IRemoteConnectionService,
+	type RemoteConnectionResolver,
+	type RemoteConnectionResolverRegistration,
+} from '../../../platform/remote/common/remoteConnectionService.js';
 import { localize } from '../../../nls.js';
 import { MainThreadStatusBar } from './mainThreadStatusBar.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
 import { MenuId, MenusRegistry, type IMenuItem } from '../../../platform/actions/common/actions.js';
-import type { CommandDefinition, CommandRegistration, CommandRegistry } from '../../../platform/commands/common/commands.js';
+import type {
+	CommandDefinition,
+	CommandRegistration,
+	CommandRegistry,
+} from '../../../platform/commands/common/commands.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { createExtensionHostInitialization } from '../../services/extensions/common/extensionHostProtocol.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type ExtensionHostLanguageRegistration, type ExtensionHostRegistration, type ExtensionHostRuntime } from '../../../platform/agentHost/common/extensionHostApi.js';
+import {
+	IExtensionHostApi,
+	type ExtensionHostFleetSnapshot,
+	type ExtensionHostLanguageRegistration,
+	type ExtensionHostRegistration,
+	type ExtensionHostRuntime,
+} from '../../../platform/agentHost/common/extensionHostApi.js';
 import { normalizeExtensionHostPayload } from '../../../platform/agentHost/browser/extensionHostProtocol.js';
-import { ILanguageFeaturesService, type LanguageProviderBatch, type LanguageProviderBatchRegistration } from '../../../editor/common/services/languageFeatures.js';
+import {
+	ILanguageFeaturesService,
+	type LanguageProviderBatch,
+	type LanguageProviderBatchRegistration,
+} from '../../../editor/common/services/languageFeatures.js';
 import { ITaskService } from '../../contrib/tasks/common/taskService.js';
 import { type TaskProvider, type TaskProviderRegistration } from '../../contrib/tasks/common/tasks.js';
-import { ITestingService, type TestProfileProvider, type TestProfileProviderRegistration } from '../../services/testing/common/testingService.js';
-import { IOutputService, OUTPUT_VIEW_ID, type IOutputChannel, type OutputEntrySeverity } from '../../services/output/common/output.js';
-import { createExtensionHostLanguageProviderBatch, extensionHostLanguageProviderId, unsupportedExtensionHostLanguageOperations, type ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
-import { createExtensionHostDebugAdapterFactory, createExtensionHostDebugAdapterTrackerFactory, createExtensionHostDebugConfigurationProvider, createExtensionHostTaskProvider, createExtensionHostTestProfileProvider, extensionHostCanonicalTaskId, extensionHostWorkflowProviderId } from './extensionHostWorkflowBridge.js';
+import {
+	ITestingService,
+	type TestProfileProvider,
+	type TestProfileProviderRegistration,
+} from '../../services/testing/common/testingService.js';
+import {
+	IOutputService,
+	OUTPUT_VIEW_ID,
+	type IOutputChannel,
+	type OutputEntrySeverity,
+} from '../../services/output/common/output.js';
+import {
+	createExtensionHostLanguageProviderBatch,
+	extensionHostLanguageProviderId,
+	unsupportedExtensionHostLanguageOperations,
+	type ExtensionHostProviderInvoker,
+} from './extensionHostLanguageBridge.js';
+import {
+	createExtensionHostDebugAdapterFactory,
+	createExtensionHostDebugAdapterTrackerFactory,
+	createExtensionHostDebugConfigurationProvider,
+	createExtensionHostTaskProvider,
+	createExtensionHostTestProfileProvider,
+	extensionHostCanonicalTaskId,
+	extensionHostWorkflowProviderId,
+} from './extensionHostWorkflowBridge.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { MainThreadCustomEditors } from './mainThreadCustomEditors.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
@@ -54,7 +110,11 @@ import { URI } from '../../../base/common/uri.js';
 import { Range } from '../../../editor/common/core/range.js';
 import { throwIfCancelled } from '../../../base/common/cancellation.js';
 import { CancellationError } from '../../../base/common/errors.js';
-import type { ExtensionClientOperation, ExtensionClientResult, ExtensionQuickPickItem } from '../common/extHost.protocol.js';
+import type {
+	ExtensionClientOperation,
+	ExtensionClientResult,
+	ExtensionQuickPickItem,
+} from '../common/extHost.protocol.js';
 import type { JsonValue, ExtensionClientSource } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { MainThreadDocuments, extensionDocumentSnapshot } from './mainThreadDocuments.js';
 import { MainThreadDiagnostics } from './mainThreadDiagnostics.js';
@@ -75,7 +135,7 @@ interface RegistrationLifetime {
 
 interface ExtensionContributionSet {
 	readonly registrations: ReadonlyMap<string, RegistrationLifetime>;
-	readonly menus: readonly { readonly id: MenuId; readonly item: IMenuItem; }[];
+	readonly menus: readonly { readonly id: MenuId; readonly item: IMenuItem }[];
 	readonly commands: readonly CommandDefinition[];
 	readonly languages: Required<LanguageProviderBatch>;
 	readonly tasks: readonly TaskProvider[];
@@ -94,12 +154,19 @@ interface ExtensionContributionSet {
 }
 
 interface ContributionSet extends Omit<ExtensionContributionSet, 'controller' | 'registrations'> {
-	readonly owners: ReadonlyMap<string, { readonly identity: string; readonly runtimeIdentity: string; readonly contributions: ExtensionContributionSet; }>;
+	readonly owners: ReadonlyMap<
+		string,
+		{
+			readonly identity: string;
+			readonly runtimeIdentity: string;
+			readonly contributions: ExtensionContributionSet;
+		}
+	>;
 }
 
 interface ExtensionOutputCursor {
 	readonly incarnation: number | undefined;
-	readonly lifecycle: ExtensionHostRuntime["lifecycle"];
+	readonly lifecycle: ExtensionHostRuntime['lifecycle'];
 	readonly stderrLength: number;
 	readonly failureKey: string;
 }
@@ -176,21 +243,56 @@ export class MainThreadExtensionApi extends Disposable {
 	) {
 		super();
 		this.messages = this._register(instantiation.createInstance(MainThreadMessageService));
-		this.scmApi = this._register(instantiation.createInstance(MainThreadSCM, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' }), commands));
+		this.scmApi = this._register(
+			instantiation.createInstance(
+				MainThreadSCM,
+				this.invocationTimeoutMillis,
+				(error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
+				commands,
+			),
+		);
 		this.backendApi = this._register(instantiation.createInstance(MainThreadExtensionBackend));
 		this.terminalApi = this._register(instantiation.createInstance(MainThreadTerminalService));
 		this.speechApi = this._register(instantiation.createInstance(MainThreadSpeech, this.invocationTimeoutMillis));
-		this.configurationApi = this._register(instantiation.createInstance(MainThreadConfiguration, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
-		this.workspaceApi = this._register(instantiation.createInstance(MainThreadWorkspace, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
+		this.configurationApi = this._register(
+			instantiation.createInstance(MainThreadConfiguration, this.invocationTimeoutMillis, (error: unknown) =>
+				this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
+			),
+		);
+		this.workspaceApi = this._register(
+			instantiation.createInstance(MainThreadWorkspace, this.invocationTimeoutMillis, (error: unknown) =>
+				this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
+			),
+		);
 		// Host adapters validate callback messages; editor contracts stay in the Workbench.
-		const clientHandler = this.api.registerClientHandler((operation, signal, source) => this.handleClientOperation(operation as ExtensionClientOperation, signal, source));
+		const clientHandler = this.api.registerClientHandler((operation, signal, source) =>
+			this.handleClientOperation(operation as ExtensionClientOperation, signal, source),
+		);
 		this._register(toDisposable(() => clientHandler.dispose()));
-		this.customEditors = this._register(instantiation.createInstance(MainThreadCustomEditors, this.invocationTimeoutMillis));
+		this.customEditors = this._register(
+			instantiation.createInstance(MainThreadCustomEditors, this.invocationTimeoutMillis),
+		);
 		this.diagnostics = this._register(instantiation.createInstance(MainThreadDiagnostics));
-		this.statusbar = this._register(instantiation.createInstance(MainThreadStatusBar, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
-		this.documents = this._register(instantiation.createInstance(MainThreadDocuments, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
-		this.taskApi = this._register(instantiation.createInstance(MainThreadTask, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
-		this.debugApi = this._register(instantiation.createInstance(MainThreadDebugService, this.invocationTimeoutMillis, (error: unknown) => this.fleetOutput.appendLine({ text: String(error), severity: 'error' })));
+		this.statusbar = this._register(
+			instantiation.createInstance(MainThreadStatusBar, (error: unknown) =>
+				this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
+			),
+		);
+		this.documents = this._register(
+			instantiation.createInstance(MainThreadDocuments, this.invocationTimeoutMillis, (error: unknown) =>
+				this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
+			),
+		);
+		this.taskApi = this._register(
+			instantiation.createInstance(MainThreadTask, this.invocationTimeoutMillis, (error: unknown) =>
+				this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
+			),
+		);
+		this.debugApi = this._register(
+			instantiation.createInstance(MainThreadDebugService, this.invocationTimeoutMillis, (error: unknown) =>
+				this.fleetOutput.appendLine({ text: String(error), severity: 'error' }),
+			),
+		);
 		this.commandRegistration = this._register(commands.registerMany([]));
 		this.languageRegistration = this._register(languageFeatures.registerProviderBatch({}));
 		this.taskRegistration = this._register(tasks.registerTaskProviders([]));
@@ -199,40 +301,111 @@ export class MainThreadExtensionApi extends Disposable {
 		this.debugTrackerRegistration = this._register(debug.registerDebugAdapterTrackerFactories([]));
 		this.testRegistration = this._register(testing.registerTestProfileProviders([]));
 		this.remoteRegistration = this._register(this.remoteConnections.registerResolvers([]));
-		this._register(toDisposable(() => {
-			this.activationController.abort('Extension API was disposed');
-			this.retireContributions(this.activeContributions, undefined, 'Extension API was disposed');
-			this.activeContributions = undefined;
-			this.remoteSources.clear();
-			this.outputCursors.clear();
-			this.namedOutputCursors.clear();
-		}));
+		this._register(
+			toDisposable(() => {
+				this.activationController.abort('Extension API was disposed');
+				this.retireContributions(this.activeContributions, undefined, 'Extension API was disposed');
+				this.activeContributions = undefined;
+				this.remoteSources.clear();
+				this.outputCursors.clear();
+				this.namedOutputCursors.clear();
+			}),
+		);
 	}
 
 	public get hasContributions(): boolean {
 		return this.activeContributions !== undefined;
 	}
 
-	private async handleClientOperation(operation: ExtensionClientOperation, signal: AbortSignal, source: ExtensionClientSource): Promise<ExtensionClientResult> {
+	private async handleClientOperation(
+		operation: ExtensionClientOperation,
+		signal: AbortSignal,
+		source: ExtensionClientSource,
+	): Promise<ExtensionClientResult> {
 		this.assertNotDisposed();
 		throwIfCancelled(signal);
 		switch (operation.operation) {
-			case 'createTerminal': case 'readTerminal': case 'disposeTerminal': return this.terminalApi.handle(operation, signal, source);
-			case 'scmUpdate': this.scmApi.set(source, operation.registrationId, operation.revision, operation.providers); return { result: 'done' };
-			case 'backendRequest': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress) };
-			case 'backendState': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal, undefined, operation.waitForChange === true) };
+			case 'createTerminal':
+			case 'readTerminal':
+			case 'disposeTerminal':
+				return this.terminalApi.handle(operation, signal, source);
+			case 'scmUpdate':
+				this.scmApi.set(source, operation.registrationId, operation.revision, operation.providers);
+				return { result: 'done' };
+			case 'backendRequest':
+				return {
+					result: 'value',
+					value: await this.backendApi.handle(
+						source,
+						operation.capability,
+						operation.method,
+						operation.params,
+						0,
+						signal,
+						operation.progress,
+					),
+				};
+			case 'backendState':
+				return {
+					result: 'value',
+					value: await this.backendApi.handle(
+						source,
+						operation.capability,
+						undefined,
+						{},
+						operation.after,
+						signal,
+						undefined,
+						operation.waitForChange === true,
+					),
+				};
 			case 'editorOperation':
-				if (operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) && 'method' in operation.payload && operation.payload.method === 'canvasChanged') {
-					if (!this.canvases) { throw new Error('Canvas providers are unavailable'); }
+				if (
+					operation.payload &&
+					typeof operation.payload === 'object' &&
+					!Array.isArray(operation.payload) &&
+					'method' in operation.payload &&
+					operation.payload.method === 'canvasChanged'
+				) {
+					if (!this.canvases) {
+						throw new Error('Canvas providers are unavailable');
+					}
 					await this.canvases.handleChange(operation.payload, source);
 					return { result: 'value', value: null };
 				}
-				if (operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) && 'method' in operation.payload && operation.payload.method === 'jsonSchemaContributions') {
-					if (Object.keys(operation.payload).length !== 1) throw new TypeError('Invalid JSON schema contribution request');
+				if (
+					operation.payload &&
+					typeof operation.payload === 'object' &&
+					!Array.isArray(operation.payload) &&
+					'method' in operation.payload &&
+					operation.payload.method === 'jsonSchemaContributions'
+				) {
+					if (Object.keys(operation.payload).length !== 1)
+						throw new TypeError('Invalid JSON schema contribution request');
 					return { result: 'value', value: this.configurationApi.getJsonSchemaContributions() };
 				}
-				if (operation.payload && typeof operation.payload === 'object' && !Array.isArray(operation.payload) && 'method' in operation.payload && operation.payload.method === 'showImageEditor') { await (this.imageEditors ??= this._register(this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis))).show(operation.payload, signal, source); return { result: 'value', value: null }; }
-				return { result: 'value', value: (this.treeViews?.handleChange(operation.payload, source) || this.handleOutput(source, operation.payload)) ? null : await (this.editorsApi ??= this._register(this.instantiation.createInstance(MainThreadEditors))).handle(operation.payload, signal, source) };
+				if (
+					operation.payload &&
+					typeof operation.payload === 'object' &&
+					!Array.isArray(operation.payload) &&
+					'method' in operation.payload &&
+					operation.payload.method === 'showImageEditor'
+				) {
+					await (this.imageEditors ??= this._register(
+						this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis),
+					)).show(operation.payload, signal, source);
+					return { result: 'value', value: null };
+				}
+				return {
+					result: 'value',
+					value:
+						this.treeViews?.handleChange(operation.payload, source) ||
+						this.handleOutput(source, operation.payload)
+							? null
+							: await (this.editorsApi ??= this._register(
+									this.instantiation.createInstance(MainThreadEditors),
+								)).handle(operation.payload, signal, source),
+				};
 			case 'addDebugBreakpoints':
 			case 'removeDebugBreakpoints':
 			case 'getDebugProtocolBreakpoint':
@@ -240,28 +413,57 @@ export class MainThreadExtensionApi extends Disposable {
 			case 'listDebugSessions':
 			case 'startDebugging':
 			case 'stopDebugging':
-			case 'debugCustomRequest': return this.debugApi.handle(operation, signal);
+			case 'debugCustomRequest':
+				return this.debugApi.handle(operation, signal);
 			case 'fetchTasks':
 			case 'executeTask':
-			case 'terminateTask': return this.taskApi.handle(operation, signal, source);
+			case 'terminateTask':
+				return this.taskApi.handle(operation, signal, source);
 			case 'openRemoteConnection': {
 				const runtime = this.remoteSources.get(source.extensionId);
-				if (!runtime || runtime.incarnation !== source.incarnation || runtime.activationGeneration !== source.activationGeneration) { throw new Error('Remote extension authority was revoked'); }
-				const isStandard = runtime.registrations.some(entry => entry.kind === 'remoteAuthorityResolver' && entry.authorityPrefix === getRemoteAuthorityPrefix(operation.authority));
-				const connection = isStandard ? undefined : await this.remoteConnections.resolveConnection(operation.authority, signal);
+				if (
+					!runtime ||
+					runtime.incarnation !== source.incarnation ||
+					runtime.activationGeneration !== source.activationGeneration
+				) {
+					throw new Error('Remote extension authority was revoked');
+				}
+				const isStandard = runtime.registrations.some(
+					entry =>
+						entry.kind === 'remoteAuthorityResolver' &&
+						entry.authorityPrefix === getRemoteAuthorityPrefix(operation.authority),
+				);
+				const connection = isStandard
+					? undefined
+					: await this.remoteConnections.resolveConnection(operation.authority, signal);
 				throwIfCancelled(signal);
 				const result = await this.dialogs.confirm({
 					title: localize('remote.extension.openTitle', 'Open Remote Window'),
-					message: localize('remote.extension.openMessage', "Extension '{0}' wants to open '{1}'.", source.extensionId, connection?.name ?? operation.authority),
+					message: localize(
+						'remote.extension.openMessage',
+						"Extension '{0}' wants to open '{1}'.",
+						source.extensionId,
+						connection?.name ?? operation.authority,
+					),
 					detail: connection ? `${connection.host}:${connection.workspace}` : operation.authority,
 					primaryButton: localize('remote.extension.openButton', 'Open Remote Window'),
 				});
 				throwIfCancelled(signal);
-				if (this.remoteSources.get(source.extensionId)?.incarnation !== runtime.incarnation || this.remoteSources.get(source.extensionId)?.activationGeneration !== runtime.activationGeneration) { throw new Error('Remote extension authority was revoked'); }
-				if (!result.confirmed) { throw new CancellationError(); }
+				if (
+					this.remoteSources.get(source.extensionId)?.incarnation !== runtime.incarnation ||
+					this.remoteSources.get(source.extensionId)?.activationGeneration !== runtime.activationGeneration
+				) {
+					throw new Error('Remote extension authority was revoked');
+				}
+				if (!result.confirmed) {
+					throw new CancellationError();
+				}
 				// Acceptance hands the window lifetime to the host; retiring the callback does not close it.
-				if (connection) { await this.remoteConnections.connect(connection.name, connection); }
-				else { await this.host.openWindow({ remoteAuthority: operation.authority }); }
+				if (connection) {
+					await this.remoteConnections.connect(connection.name, connection);
+				} else {
+					await this.host.openWindow({ remoteAuthority: operation.authority });
+				}
 				return { result: 'done' };
 			}
 			case 'setStatusBarEntries':
@@ -271,8 +473,15 @@ export class MainThreadExtensionApi extends Disposable {
 				this.diagnostics.set(source, operation.collection, operation.entries, operation.merge);
 				return { result: 'done' };
 			case 'executeCommand': {
-				const value = await this.commandService.executeCommand(operation.command, ...this.scmApi.reviveCommandArguments(source, operation.arguments));
-				return { result: 'command', value: value === undefined ? null : normalizeExtensionHostPayload(value), hasValue: value !== undefined };
+				const value = await this.commandService.executeCommand(
+					operation.command,
+					...this.scmApi.reviveCommandArguments(source, operation.arguments),
+				);
+				return {
+					result: 'command',
+					value: value === undefined ? null : normalizeExtensionHostPayload(value),
+					hasValue: value !== undefined,
+				};
 			}
 			case 'readResourceFile':
 			case 'statResource':
@@ -280,7 +489,14 @@ export class MainThreadExtensionApi extends Disposable {
 				const resource = URI.parse(operation.uri);
 				// Filesystem permissions and virtual resource identity belong to the existing client provider.
 				if (!this.workspace.getWorkspaceFolder(resource)) throw new Error('Resource is outside the workspace');
-				const type = (kind: FileKind): number => kind === FileKind.Directory ? 2 : kind === FileKind.File ? 1 : kind === FileKind.SymbolicLink ? 64 : 0;
+				const type = (kind: FileKind): number =>
+					kind === FileKind.Directory
+						? 2
+						: kind === FileKind.File
+							? 1
+							: kind === FileKind.SymbolicLink
+								? 64
+								: 0;
 				if (operation.operation === 'readResourceFile') {
 					const value = await this.files.readFileBytes(resource);
 					throwIfCancelled(signal);
@@ -289,11 +505,19 @@ export class MainThreadExtensionApi extends Disposable {
 				if (operation.operation === 'statResource') {
 					const value = await this.files.stat(resource);
 					throwIfCancelled(signal);
-					return { result: 'resourceStat', fileType: type(value.kind), size: value.sizeBytes, mtime: value.modifiedAtMillis ?? 0 };
+					return {
+						result: 'resourceStat',
+						fileType: type(value.kind),
+						size: value.sizeBytes,
+						mtime: value.modifiedAtMillis ?? 0,
+					};
 				}
 				const entries = await this.files.readDirectory(resource);
 				throwIfCancelled(signal);
-				return { result: 'resourceDirectory', entries: entries.map(entry => [entry.name, type(entry.kind)] as const) };
+				return {
+					result: 'resourceDirectory',
+					entries: entries.map(entry => [entry.name, type(entry.kind)] as const),
+				};
 			}
 			case 'listDocuments':
 				return { result: 'documents', documents: this.models.getModels().map(extensionDocumentSnapshot) };
@@ -301,43 +525,88 @@ export class MainThreadExtensionApi extends Disposable {
 				const reference = await this.textModels.createModelReference(URI.parse(operation.uri));
 				try {
 					throwIfCancelled(signal);
-					return { result: 'document', document: extensionDocumentSnapshot(reference.object.textEditorModel) };
+					return {
+						result: 'document',
+						document: extensionDocumentSnapshot(reference.object.textEditorModel),
+					};
 				} finally {
 					reference.dispose();
 				}
 			}
 			case 'applyEdit': {
-				const edits = operation.documents.flatMap(document => document.edits.map(edit => {
-					if (!Number.isSafeInteger(document.version) || document.version < 1 ||
-						[edit.start.line, edit.start.character, edit.end.line, edit.end.character].some(value => !Number.isSafeInteger(value) || value < 0) ||
-						edit.start.line > edit.end.line || edit.start.line === edit.end.line && edit.start.character > edit.end.character) {
-						throw new TypeError('Extension edit requires a version and an ordered UTF-16 range');
-					}
-					return new ResourceTextEdit(URI.parse(document.uri), {
-						range: new Range(edit.start.line + 1, edit.start.character + 1, edit.end.line + 1, edit.end.character + 1),
-						text: edit.text,
-					}, document.version);
-				}));
+				const edits = operation.documents.flatMap(document =>
+					document.edits.map(edit => {
+						if (
+							!Number.isSafeInteger(document.version) ||
+							document.version < 1 ||
+							[edit.start.line, edit.start.character, edit.end.line, edit.end.character].some(
+								value => !Number.isSafeInteger(value) || value < 0,
+							) ||
+							edit.start.line > edit.end.line ||
+							(edit.start.line === edit.end.line && edit.start.character > edit.end.character)
+						) {
+							throw new TypeError('Extension edit requires a version and an ordered UTF-16 range');
+						}
+						return new ResourceTextEdit(
+							URI.parse(document.uri),
+							{
+								range: new Range(
+									edit.start.line + 1,
+									edit.start.character + 1,
+									edit.end.line + 1,
+									edit.end.character + 1,
+								),
+								text: edit.text,
+							},
+							document.version,
+						);
+					}),
+				);
 				const result = await this.bulkEdits.apply(edits, { token: signal });
 				return { result: 'applied', applied: result.isApplied };
 			}
 			case 'readInitialization': {
-				const localization = await this.instantiation.createInstance(MainThreadLocalization).getLocalization(source.extensionId);
-				return { result: 'initialization', initialization: { ...createExtensionHostInitialization(this.workspace, this.configuration), ...(localization ? { localization } : {}) } };
+				const localization = await this.instantiation
+					.createInstance(MainThreadLocalization)
+					.getLocalization(source.extensionId);
+				return {
+					result: 'initialization',
+					initialization: {
+						...createExtensionHostInitialization(this.workspace, this.configuration),
+						...(localization ? { localization } : {}),
+					},
+				};
 			}
 			case 'readConfiguration': {
-				const value = this.configuration.getValue(operation.section, operation.resource === null ? {} : { resource: URI.parse(operation.resource) });
-				return { result: 'configuration', value: value === undefined ? null : normalizeExtensionHostPayload(value) };
+				const value = this.configuration.getValue(
+					operation.section,
+					operation.resource === null ? {} : { resource: URI.parse(operation.resource) },
+				);
+				return {
+					result: 'configuration',
+					value: value === undefined ? null : normalizeExtensionHostPayload(value),
+				};
 			}
 			case 'inspectConfiguration': {
-				const value = this.configuration.inspect(operation.section, operation.resource === null ? {} : { resource: URI.parse(operation.resource) });
+				const value = this.configuration.inspect(
+					operation.section,
+					operation.resource === null ? {} : { resource: URI.parse(operation.resource) },
+				);
 				return { result: 'configuration', value: normalizeExtensionHostPayload(value) };
 			}
 			case 'resetConfiguration':
-				await this.configuration.updateValue(operation.section, undefined, operation.target === 'user' ? ConfigurationTarget.USER_LOCAL : ConfigurationTarget.WORKSPACE);
+				await this.configuration.updateValue(
+					operation.section,
+					undefined,
+					operation.target === 'user' ? ConfigurationTarget.USER_LOCAL : ConfigurationTarget.WORKSPACE,
+				);
 				return { result: 'done' };
 			case 'updateConfiguration':
-				await this.configuration.updateValue(operation.section, operation.value, operation.target === 'user' ? ConfigurationTarget.USER_LOCAL : ConfigurationTarget.WORKSPACE);
+				await this.configuration.updateValue(
+					operation.section,
+					operation.value,
+					operation.target === 'user' ? ConfigurationTarget.USER_LOCAL : ConfigurationTarget.WORKSPACE,
+				);
 				return { result: 'done' };
 			case 'showMessage':
 				return this.messages.handle(operation, source.extensionId, signal);
@@ -346,18 +615,40 @@ export class MainThreadExtensionApi extends Disposable {
 		}
 	}
 
-	private showQuickPick(items: readonly ExtensionQuickPickItem[], placeholder: string, signal: AbortSignal): Promise<ExtensionClientResult> {
-		if (!Array.isArray(items) || typeof placeholder !== 'string' || items.some(item => !item || typeof item.label !== 'string' || item.description !== undefined && typeof item.description !== 'string' || item.detail !== undefined && typeof item.detail !== 'string')) { throw new TypeError('Invalid Quick Pick request'); }
-		const pick = this.quickInput.createQuickPick<ExtensionQuickPickItem & { index: number; }>();
+	private showQuickPick(
+		items: readonly ExtensionQuickPickItem[],
+		placeholder: string,
+		signal: AbortSignal,
+	): Promise<ExtensionClientResult> {
+		if (
+			!Array.isArray(items) ||
+			typeof placeholder !== 'string' ||
+			items.some(
+				item =>
+					!item ||
+					typeof item.label !== 'string' ||
+					(item.description !== undefined && typeof item.description !== 'string') ||
+					(item.detail !== undefined && typeof item.detail !== 'string'),
+			)
+		) {
+			throw new TypeError('Invalid Quick Pick request');
+		}
+		const pick = this.quickInput.createQuickPick<ExtensionQuickPickItem & { index: number }>();
 		const listeners = new DisposableStore();
 		return new Promise<ExtensionClientResult>((resolve, reject) => {
 			const finish = (index: number | null): void => resolve({ result: 'selection', index });
-			const cancel = (): void => { reject(new CancellationError()); pick.hide(); };
-			listeners.add(pick.onDidAccept(() => {
-				const item = pick.selectedItems[0];
-				if (!item) return;
-				finish(item.index); pick.hide();
-			}));
+			const cancel = (): void => {
+				reject(new CancellationError());
+				pick.hide();
+			};
+			listeners.add(
+				pick.onDidAccept(() => {
+					const item = pick.selectedItems[0];
+					if (!item) return;
+					finish(item.index);
+					pick.hide();
+				}),
+			);
 			listeners.add(pick.onDidHide(() => finish(null)));
 			signal.addEventListener('abort', cancel, { once: true });
 			listeners.add(toDisposable(() => signal.removeEventListener('abort', cancel)));
@@ -365,7 +656,10 @@ export class MainThreadExtensionApi extends Disposable {
 			pick.ariaLabel = placeholder;
 			pick.placeholder = placeholder;
 			pick.show();
-		}).finally(() => { listeners.dispose(); pick.dispose(); });
+		}).finally(() => {
+			listeners.dispose();
+			pick.dispose();
+		});
 	}
 
 	public update(snapshot: ExtensionHostFleetSnapshot): readonly ExtensionApiIssue[] {
@@ -385,17 +679,47 @@ export class MainThreadExtensionApi extends Disposable {
 		}
 		this.remoteSources.clear();
 		for (const runtime of snapshot.extensions) {
-			if (runtime.lifecycle === 'ready' && runtime.registrations.some(registration => registration.kind === 'remoteConnectionResolver' || registration.kind === 'remoteAuthorityResolver')
-				|| ['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle) && runtime.activation?.events.some(event => event.startsWith('onResolveRemoteAuthority:'))) this.remoteSources.set(runtime.id, runtime);
+			if (
+				(runtime.lifecycle === 'ready' &&
+					runtime.registrations.some(
+						registration =>
+							registration.kind === 'remoteConnectionResolver' ||
+							registration.kind === 'remoteAuthorityResolver',
+					)) ||
+				(['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle) &&
+					runtime.activation?.events.some(event => event.startsWith('onResolveRemoteAuthority:')))
+			)
+				this.remoteSources.set(runtime.id, runtime);
 		}
 		this.projectOutput(snapshot);
 		this.updateOutputLevels(snapshot);
 		this.speechApi.update(snapshot);
-		if (this.instantiation.getOptional(IAgentHostCanvasCollection) && (this.canvases || snapshot.extensions.some(owner => owner.registrations.some(registration => registration.kind === 'dataChannel' && registration.channelId === 'canvas.provider.v1')))) {
-			(this.canvases ??= this._register(this.instantiation.createInstance(MainThreadCanvases, this.invocationTimeoutMillis))).update(snapshot);
+		if (
+			this.instantiation.getOptional(IAgentHostCanvasCollection) &&
+			(this.canvases ||
+				snapshot.extensions.some(owner =>
+					owner.registrations.some(
+						registration =>
+							registration.kind === 'dataChannel' && registration.channelId === 'canvas.provider.v1',
+					),
+				))
+		) {
+			(this.canvases ??= this._register(
+				this.instantiation.createInstance(MainThreadCanvases, this.invocationTimeoutMillis),
+			)).update(snapshot);
 		}
 		this.customEditors.update(snapshot);
-		if (this.imageEditors || snapshot.extensions.some(owner => owner.registrations.some(registration => registration.kind === 'dataChannel' && registration.channelId === 'image.editor.v1'))) (this.imageEditors ??= this._register(this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis))).update(snapshot);
+		if (
+			this.imageEditors ||
+			snapshot.extensions.some(owner =>
+				owner.registrations.some(
+					registration => registration.kind === 'dataChannel' && registration.channelId === 'image.editor.v1',
+				),
+			)
+		)
+			(this.imageEditors ??= this._register(
+				this.instantiation.createInstance(MainThreadImageEditors, this.invocationTimeoutMillis),
+			)).update(snapshot);
 		this.diagnostics.update(snapshot);
 		this.documents.update(snapshot);
 		this.configurationApi.update(snapshot);
@@ -405,11 +729,17 @@ export class MainThreadExtensionApi extends Disposable {
 		this.debugApi.update(snapshot);
 		this.statusbar.update(snapshot);
 		this.scmApi.update(snapshot);
-		const treeIssues = this.treeViews || snapshot.extensions.some(runtime => runtime.registrations.some(registration => registration.kind === 'treeDataProvider'))
-			? (this.treeViews ??= this._register(this.instantiation.createInstance(MainThreadTreeViews, this.invocationTimeoutMillis))).update(snapshot)
-			: [];
+		const treeIssues =
+			this.treeViews ||
+			snapshot.extensions.some(runtime =>
+				runtime.registrations.some(registration => registration.kind === 'treeDataProvider'),
+			)
+				? (this.treeViews ??= this._register(
+						this.instantiation.createInstance(MainThreadTreeViews, this.invocationTimeoutMillis),
+					)).update(snapshot)
+				: [];
 		this.editorsApi?.updateSources(snapshot);
-		return [...this.activeContributions?.issues ?? [], ...treeIssues];
+		return [...(this.activeContributions?.issues ?? []), ...treeIssues];
 	}
 
 	public clear(): void {
@@ -446,7 +776,14 @@ export class MainThreadExtensionApi extends Disposable {
 	}
 
 	private buildContributions(snapshot: ExtensionHostFleetSnapshot): ContributionSet {
-		const owners = new Map<string, { readonly identity: string; readonly runtimeIdentity: string; readonly contributions: ExtensionContributionSet; }>();
+		const owners = new Map<
+			string,
+			{
+				readonly identity: string;
+				readonly runtimeIdentity: string;
+				readonly contributions: ExtensionContributionSet;
+			}
+		>();
 		try {
 			for (const runtime of snapshot.extensions) {
 				const identity = runtimeContributionIdentity(runtime);
@@ -454,25 +791,50 @@ export class MainThreadExtensionApi extends Disposable {
 				const previous = this.activeContributions?.owners.get(runtime.id);
 				// A dormant resolver is a declared selector, not an executable incarnation.
 				// Preserve its first call while the actual registration replaces that selector.
-				const resolverPrefixes = runtime.lifecycle === 'ready'
-					? runtime.registrations.flatMap(registration => registration.kind === 'remoteConnectionResolver' ? [registration.authorityPrefix] : [])
-					: ['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle)
-						? runtime.activation?.events.flatMap(event => event.startsWith('onResolveRemoteAuthority:') ? [event.slice('onResolveRemoteAuthority:'.length)] : []) ?? []
-						: [];
+				const resolverPrefixes =
+					runtime.lifecycle === 'ready'
+						? runtime.registrations.flatMap(registration =>
+								registration.kind === 'remoteConnectionResolver' ? [registration.authorityPrefix] : [],
+							)
+						: ['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle)
+							? (runtime.activation?.events.flatMap(event =>
+									event.startsWith('onResolveRemoteAuthority:')
+										? [event.slice('onResolveRemoteAuthority:'.length)]
+										: [],
+								) ?? [])
+							: [];
 				const activatingResolver = resolverPrefixes.some(prefix => {
 					const pending = previous?.contributions.registrations.get(`remoteResolver:${runtime.id}:${prefix}`);
-					return pending?.remoteResolver && pending.incarnation === undefined && pending.identity === JSON.stringify([runtime.id, runtime.activationGeneration, runtime.packageDigest, prefix]);
+					return (
+						pending?.remoteResolver &&
+						pending.incarnation === undefined &&
+						pending.identity ===
+							JSON.stringify([runtime.id, runtime.activationGeneration, runtime.packageDigest, prefix])
+					);
 				});
-				owners.set(runtime.id, previous?.identity === identity ? previous : {
-					identity, runtimeIdentity, contributions: this.buildExtensionContributions(
-						{ ...snapshot, extensions: [runtime] },
-						previous && (previous.runtimeIdentity === runtimeIdentity || activatingResolver) ? previous.contributions : undefined,
-					),
-				});
+				owners.set(
+					runtime.id,
+					previous?.identity === identity
+						? previous
+						: {
+								identity,
+								runtimeIdentity,
+								contributions: this.buildExtensionContributions(
+									{ ...snapshot, extensions: [runtime] },
+									previous && (previous.runtimeIdentity === runtimeIdentity || activatingResolver)
+										? previous.contributions
+										: undefined,
+								),
+							},
+				);
 			}
 		} catch (error) {
 			for (const [id, owner] of owners) {
-				retireExtensionContributions(owner.contributions, this.activeContributions?.owners.get(id)?.contributions, error);
+				retireExtensionContributions(
+					owner.contributions,
+					this.activeContributions?.owners.get(id)?.contributions,
+					error,
+				);
 			}
 			throw error;
 		}
@@ -480,7 +842,8 @@ export class MainThreadExtensionApi extends Disposable {
 		const languages = mutableLanguageBatch();
 		for (const entry of contributions) appendLanguageBatch(languages, entry.languages);
 		return Object.freeze({
-			owners, languages: freezeLanguageBatch(languages),
+			owners,
+			languages: freezeLanguageBatch(languages),
 			menus: Object.freeze(contributions.flatMap(entry => entry.menus)),
 			commands: Object.freeze(contributions.flatMap(entry => entry.commands)),
 			tasks: Object.freeze(contributions.flatMap(entry => entry.tasks)),
@@ -498,43 +861,77 @@ export class MainThreadExtensionApi extends Disposable {
 		});
 	}
 
-	private retireContributions(previous: ContributionSet | undefined, current: ContributionSet | undefined, reason: unknown): void {
+	private retireContributions(
+		previous: ContributionSet | undefined,
+		current: ContributionSet | undefined,
+		reason: unknown,
+	): void {
 		if (!previous) return;
 		for (const [id, owner] of previous.owners) {
 			retireExtensionContributions(owner.contributions, current?.owners.get(id)?.contributions, reason);
 		}
 	}
 
-	private createRemoteConnectionResolver(owner: ExtensionHostRuntime, prefix: string, lifetime: AbortSignal): RemoteConnectionResolver {
+	private createRemoteConnectionResolver(
+		owner: ExtensionHostRuntime,
+		prefix: string,
+		lifetime: AbortSignal,
+	): RemoteConnectionResolver {
 		return {
 			authorityPrefix: prefix,
 			resolve: async (authority, signal) => {
 				const requestSignal = AbortSignal.any([lifetime, signal, this.activationController.signal]);
 				requestSignal.throwIfAborted();
 				let current = this.remoteSources.get(owner.id);
-				if (!current || current.activationGeneration !== owner.activationGeneration) throw new CancellationError();
+				if (!current || current.activationGeneration !== owner.activationGeneration)
+					throw new CancellationError();
 				if (current.lifecycle !== 'ready') {
 					const activated = await this.api.activateByEvent({
-						extensionId: owner.id, activationGeneration: owner.activationGeneration,
+						extensionId: owner.id,
+						activationGeneration: owner.activationGeneration,
 						event: { type: 'resolveAuthority', authorityPrefix: prefix },
 					});
 					current = activated.extensions.find(runtime => runtime.id === owner.id);
 				}
 				requestSignal.throwIfAborted();
-				const registration = current?.registrations.find(entry => entry.kind === 'remoteConnectionResolver' && entry.authorityPrefix === prefix);
-				if (current?.lifecycle !== 'ready' || current.incarnation === undefined || current.activationGeneration !== owner.activationGeneration || current.packageDigest !== owner.packageDigest || !registration) throw new CancellationError();
-				const result = await this.registrationInvoker(current, registration, requestSignal)('resolveConnection', { authority }, requestSignal);
-				if (!result || typeof result !== 'object' || Array.isArray(result) || !('connectionName' in result) || Object.keys(result).join(',') !== 'connectionName' || typeof result.connectionName !== 'string') throw new TypeError('Invalid Remote resolver result');
+				const registration = current?.registrations.find(
+					entry => entry.kind === 'remoteConnectionResolver' && entry.authorityPrefix === prefix,
+				);
+				if (
+					current?.lifecycle !== 'ready' ||
+					current.incarnation === undefined ||
+					current.activationGeneration !== owner.activationGeneration ||
+					current.packageDigest !== owner.packageDigest ||
+					!registration
+				)
+					throw new CancellationError();
+				const result = await this.registrationInvoker(current, registration, requestSignal)(
+					'resolveConnection',
+					{ authority },
+					requestSignal,
+				);
+				if (
+					!result ||
+					typeof result !== 'object' ||
+					Array.isArray(result) ||
+					!('connectionName' in result) ||
+					Object.keys(result).join(',') !== 'connectionName' ||
+					typeof result.connectionName !== 'string'
+				)
+					throw new TypeError('Invalid Remote resolver result');
 				return { connectionName: result.connectionName };
 			},
 		};
 	}
 
-	private buildExtensionContributions(snapshot: ExtensionHostFleetSnapshot, previous?: ExtensionContributionSet): ExtensionContributionSet {
+	private buildExtensionContributions(
+		snapshot: ExtensionHostFleetSnapshot,
+		previous?: ExtensionContributionSet,
+	): ExtensionContributionSet {
 		const controller = previous?.controller ?? new AbortController();
 		const registrations = new Map<string, RegistrationLifetime>();
 		const commands: CommandDefinition[] = [];
-		const menus: { id: MenuId; item: IMenuItem; }[] = [];
+		const menus: { id: MenuId; item: IMenuItem }[] = [];
 		const languages = mutableLanguageBatch();
 		const tasks: TaskProvider[] = [];
 		const debugAdapters: DebugAdapterFactory[] = [];
@@ -551,25 +948,43 @@ export class MainThreadExtensionApi extends Disposable {
 		const taskProviders = new Map<string, Map<string, string>>();
 		for (const runtime of snapshot.extensions) {
 			const providers = new Map<string, string>();
-			for (const registration of runtime.registrations) if (registration.kind === "taskProvider") providers.set(registration.registrationId, extensionHostWorkflowProviderId(runtime.id, registration.registrationId));
+			for (const registration of runtime.registrations)
+				if (registration.kind === 'taskProvider')
+					providers.set(
+						registration.registrationId,
+						extensionHostWorkflowProviderId(runtime.id, registration.registrationId),
+					);
 			taskProviders.set(runtime.id, providers);
 		}
 		for (const runtime of snapshot.extensions) {
 			const extensionId = runtime.id;
 			const activationGeneration = runtime.activationGeneration;
 			const remotePrefixes = ['dormant', 'starting', 'handshaking'].includes(runtime.lifecycle)
-				? (runtime.activation?.events ?? []).filter(event => event.startsWith('onResolveRemoteAuthority:')).map(event => event.slice('onResolveRemoteAuthority:'.length))
-				: runtime.registrations.flatMap(registration => registration.kind === 'remoteConnectionResolver' ? [registration.authorityPrefix] : []);
+				? (runtime.activation?.events ?? [])
+						.filter(event => event.startsWith('onResolveRemoteAuthority:'))
+						.map(event => event.slice('onResolveRemoteAuthority:'.length))
+				: runtime.registrations.flatMap(registration =>
+						registration.kind === 'remoteConnectionResolver' ? [registration.authorityPrefix] : [],
+					);
 			for (const prefix of remotePrefixes) {
 				const key = `remoteResolver:${extensionId}:${prefix}`;
 				const identity = JSON.stringify([extensionId, activationGeneration, runtime.packageDigest, prefix]);
 				const previousLifetime = previous?.registrations.get(key);
-				let lifetime = previousLifetime?.identity === identity && (previousLifetime.incarnation === undefined || previousLifetime.incarnation === runtime.incarnation) ? previousLifetime : undefined;
+				let lifetime =
+					previousLifetime?.identity === identity &&
+					(previousLifetime.incarnation === undefined || previousLifetime.incarnation === runtime.incarnation)
+						? previousLifetime
+						: undefined;
 				if (!lifetime) {
 					const resolverController = new AbortController();
 					lifetime = {
-						identity, controller: resolverController,
-						remoteResolver: this.createRemoteConnectionResolver(runtime, prefix, AbortSignal.any([controller.signal, resolverController.signal])),
+						identity,
+						controller: resolverController,
+						remoteResolver: this.createRemoteConnectionResolver(
+							runtime,
+							prefix,
+							AbortSignal.any([controller.signal, resolverController.signal]),
+						),
 					};
 				}
 				lifetime.incarnation = runtime.lifecycle === 'ready' ? runtime.incarnation : undefined;
@@ -581,51 +996,110 @@ export class MainThreadExtensionApi extends Disposable {
 				const signal = this.activationController.signal;
 				for (const command of runtime.activation!.commands) {
 					commands.push({
-						id: command.command, metadata: { description: command.title }, handler: async (accessor, ...args) => {
+						id: command.command,
+						metadata: { description: command.title },
+						handler: async (accessor, ...args) => {
 							signal.throwIfAborted();
 							// Activation can outlive the originating editor focus. Capture
 							// context now, then attach it if the real command owns editor menus.
 							const activeEditor = this.commandEditorContext(accessor, args);
 							const activated = await this.api.activateByEvent({
-								extensionId, activationGeneration, event: { type: 'command', command: command.command }, initialization: createExtensionHostInitialization(this.workspace, this.configuration)
+								extensionId,
+								activationGeneration,
+								event: { type: 'command', command: command.command },
+								initialization: createExtensionHostInitialization(this.workspace, this.configuration),
 							});
 							signal.throwIfAborted();
-							const current = activated.extensions.find(candidate => candidate.id === extensionId && candidate.activationGeneration === activationGeneration && candidate.lifecycle === 'ready');
-							const registration = current?.registrations.find(candidate => candidate.kind === 'command' && candidate.command === command.command);
-							if (!current || !registration) { throw new Error(localize({ bundle: 'ash.workbench', key: 'missingCommandAfterActivation' }, "Extension command '{0}' was not registered after activation.", command.command)); }
+							const current = activated.extensions.find(
+								candidate =>
+									candidate.id === extensionId &&
+									candidate.activationGeneration === activationGeneration &&
+									candidate.lifecycle === 'ready',
+							);
+							const registration = current?.registrations.find(
+								candidate => candidate.kind === 'command' && candidate.command === command.command,
+							);
+							if (!current || !registration) {
+								throw new Error(
+									localize(
+										{ bundle: 'ash.workbench', key: 'missingCommandAfterActivation' },
+										"Extension command '{0}' was not registered after activation.",
+										command.command,
+									),
+								);
+							}
 							// Activating replaces process registrations. This command retains the connection
 							// lifetime signal and uses the new process fence, rather than the retired batch.
-							return this.registrationInvoker(current, registration, signal)('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(extensionId, args), ...(registration.kind === 'command' && registration.menus?.some(placement => placement.menu.startsWith('editor/')) ? { activeEditor } : {}) }), signal);
-						}
+							return this.registrationInvoker(current, registration, signal)(
+								'execute',
+								normalizeExtensionHostPayload({
+									arguments: await this.scmApi.prepareCommandArguments(extensionId, args),
+									...(registration.kind === 'command' &&
+									registration.menus?.some(placement => placement.menu.startsWith('editor/'))
+										? { activeEditor }
+										: {}),
+								}),
+								signal,
+							);
+						},
 					});
 				}
 			}
-			if (runtime.lifecycle !== "ready" || runtime.incarnation === undefined) continue;
+			if (runtime.lifecycle !== 'ready' || runtime.incarnation === undefined) continue;
 			for (const registration of runtime.registrations) {
-				if (!ownsExecutableContribution(registration) || registration.kind === 'remoteConnectionResolver') continue;
+				if (!ownsExecutableContribution(registration) || registration.kind === 'remoteConnectionResolver')
+					continue;
 				const runtimeId = runtime.id;
 				const identity = JSON.stringify(registration);
 				const oldLifetime = previous?.registrations.get(registration.registrationId);
-				const lifetime = oldLifetime?.identity === identity ? oldLifetime : { identity, controller: new AbortController() };
+				const lifetime =
+					oldLifetime?.identity === identity ? oldLifetime : { identity, controller: new AbortController() };
 				registrations.set(registration.registrationId, lifetime);
-				const invoke = this.registrationInvoker(runtime, registration, AbortSignal.any([controller.signal, lifetime.controller.signal]));
-				if (registration.kind === "command") {
-					commands.push(Object.freeze({
-						id: registration.command, metadata: { description: registration.category ? `${registration.category}: ${registration.title}` : registration.title }, handler: async (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
-							if (!registration.menus?.some(placement => placement.menu.startsWith('editor/'))) {
-								return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtimeId, args) }), controller.signal);
-							}
-							const activeEditor = this.commandEditorContext(accessor, args);
-							return invoke('execute', normalizeExtensionHostPayload({ arguments: await this.scmApi.prepareCommandArguments(runtimeId, args), activeEditor }), controller.signal);
-						}
-					}));
+				const invoke = this.registrationInvoker(
+					runtime,
+					registration,
+					AbortSignal.any([controller.signal, lifetime.controller.signal]),
+				);
+				if (registration.kind === 'command') {
+					commands.push(
+						Object.freeze({
+							id: registration.command,
+							metadata: {
+								description: registration.category
+									? `${registration.category}: ${registration.title}`
+									: registration.title,
+							},
+							handler: async (accessor: ServicesAccessor, ...args: readonly unknown[]) => {
+								if (!registration.menus?.some(placement => placement.menu.startsWith('editor/'))) {
+									return invoke(
+										'execute',
+										normalizeExtensionHostPayload({
+											arguments: await this.scmApi.prepareCommandArguments(runtimeId, args),
+										}),
+										controller.signal,
+									);
+								}
+								const activeEditor = this.commandEditorContext(accessor, args);
+								return invoke(
+									'execute',
+									normalizeExtensionHostPayload({
+										arguments: await this.scmApi.prepareCommandArguments(runtimeId, args),
+										activeEditor,
+									}),
+									controller.signal,
+								);
+							},
+						}),
+					);
 					for (const placement of registration.menus ?? []) {
 						const [group, orderText] = (placement.group ?? '').split('@');
 						const order = orderText === undefined ? undefined : Number(orderText);
 						if (order !== undefined && !Number.isFinite(order)) {
 							throw new TypeError(`Invalid menu order for extension command '${registration.command}'`);
 						}
-						const alternate = runtime.registrations.find(candidate => candidate.kind === 'command' && candidate.command === placement.alt);
+						const alternate = runtime.registrations.find(
+							candidate => candidate.kind === 'command' && candidate.command === placement.alt,
+						);
 						let id = extensionMenuId(placement.menu);
 						if (placement.menu === 'editor/title') {
 							id = MenuId.EditorTitle;
@@ -633,33 +1107,76 @@ export class MainThreadExtensionApi extends Disposable {
 							id = MenuId.EditorTitleContext;
 						}
 						menus.push({
-							id, item: {
-								command: { id: registration.command, title: registration.title, precondition: registration.enablement ? ContextKeyExpr.deserialize(registration.enablement) : undefined, icon: registration.icon ? Icon.fromId(registration.icon) : undefined },
-								alt: alternate?.kind === 'command' ? { id: alternate.command, title: alternate.title, precondition: alternate.enablement ? ContextKeyExpr.deserialize(alternate.enablement) : undefined, icon: alternate.icon ? Icon.fromId(alternate.icon) : undefined } : undefined,
+							id,
+							item: {
+								command: {
+									id: registration.command,
+									title: registration.title,
+									precondition: registration.enablement
+										? ContextKeyExpr.deserialize(registration.enablement)
+										: undefined,
+									icon: registration.icon ? Icon.fromId(registration.icon) : undefined,
+								},
+								alt:
+									alternate?.kind === 'command'
+										? {
+												id: alternate.command,
+												title: alternate.title,
+												precondition: alternate.enablement
+													? ContextKeyExpr.deserialize(alternate.enablement)
+													: undefined,
+												icon: alternate.icon ? Icon.fromId(alternate.icon) : undefined,
+											}
+										: undefined,
 								when: placement.when ? ContextKeyExpr.deserialize(placement.when) : undefined,
 								group,
 								order,
-							}
+							},
 						});
 					}
 					continue;
 				}
-				if (registration.kind === "languageProvider") {
-					appendLanguageBatch(languages, createExtensionHostLanguageProviderBatch(registration, runtime.id, extensionHostLanguageProviderId(runtime.id, registration.registrationId), invoke));
+				if (registration.kind === 'languageProvider') {
+					appendLanguageBatch(
+						languages,
+						createExtensionHostLanguageProviderBatch(
+							registration,
+							runtime.id,
+							extensionHostLanguageProviderId(runtime.id, registration.registrationId),
+							invoke,
+						),
+					);
 					const unsupported = unsupportedExtensionHostLanguageOperations(registration);
-					if (unsupported.length > 0) issues.push(unsupportedLanguageIssue(runtime, registration, unsupported));
+					if (unsupported.length > 0)
+						issues.push(unsupportedLanguageIssue(runtime, registration, unsupported));
 					continue;
 				}
 				if (registration.kind === 'terminalCompletionProvider') {
-					terminalCompletions.push({ runtimeId: runtime.id, packageDigest: runtime.packageDigest, registrationId: registration.registrationId, triggerCharacters: registration.triggerCharacters, invoke });
+					terminalCompletions.push({
+						runtimeId: runtime.id,
+						packageDigest: runtime.packageDigest,
+						registrationId: registration.registrationId,
+						triggerCharacters: registration.triggerCharacters,
+						invoke,
+					});
 					continue;
 				}
 				if (registration.kind === 'terminalQuickFixProvider') {
-					terminalQuickFixes.push({ runtimeId: runtime.id, packageDigest: runtime.packageDigest, registrationId: registration.registrationId, invoke });
+					terminalQuickFixes.push({
+						runtimeId: runtime.id,
+						packageDigest: runtime.packageDigest,
+						registrationId: registration.registrationId,
+						invoke,
+					});
 					continue;
 				}
 				if (registration.kind === 'terminalLinkProvider') {
-					terminalLinks.push({ runtimeId: runtime.id, packageDigest: runtime.packageDigest, registrationId: registration.registrationId, invoke });
+					terminalLinks.push({
+						runtimeId: runtime.id,
+						packageDigest: runtime.packageDigest,
+						registrationId: registration.registrationId,
+						invoke,
+					});
 					continue;
 				}
 				if (registration.kind === 'terminalEnvironment') {
@@ -669,72 +1186,159 @@ export class MainThreadExtensionApi extends Disposable {
 				if (registration.kind === 'terminalProfileProvider') {
 					// Issued PTYs use their own backend registration and the runtime's
 					// authority signal; withdrawing this factory must not cancel their IO.
-					const fence = { id: runtime.id, activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation };
+					const fence = {
+						id: runtime.id,
+						activationGeneration: runtime.activationGeneration,
+						incarnation: runtime.incarnation,
+					};
 					terminalProfiles.push({
-						runtimeId: runtime.id, packageDigest: runtime.packageDigest, profileId: registration.profileId, title: registration.title, invoke,
+						runtimeId: runtime.id,
+						packageDigest: runtime.packageDigest,
+						profileId: registration.profileId,
+						title: registration.title,
+						invoke,
 						pty: {
 							signal: controller.signal,
-							invoker: registrationId => this.registrationInvoker(fence, { kind: 'terminalPty', registrationId }, controller.signal),
+							invoker: registrationId =>
+								this.registrationInvoker(
+									fence,
+									{ kind: 'terminalPty', registrationId },
+									controller.signal,
+								),
 						},
 					});
 					continue;
 				}
-				if (registration.kind === "taskProvider") {
-					tasks.push(createExtensionHostTaskProvider(extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, this.workspace, registration.taskType));
+				if (registration.kind === 'taskProvider') {
+					tasks.push(
+						createExtensionHostTaskProvider(
+							extensionHostWorkflowProviderId(runtime.id, registration.registrationId),
+							invoke,
+							this.workspace,
+							registration.taskType,
+						),
+					);
 					continue;
 				}
-				if (registration.kind === "testProfileProvider") {
+				if (registration.kind === 'testProfileProvider') {
 					const localTaskProviders = taskProviders.get(runtime.id)!;
-					tests.push(createExtensionHostTestProfileProvider(extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, (taskProviderRegistrationId, taskId) => {
-						const providerId = localTaskProviders.get(taskProviderRegistrationId);
-						if (!providerId) throw new TypeError(`Test Profile references unknown Task provider registration '${taskProviderRegistrationId}' in extension '${extensionId}'`);
-						return extensionHostCanonicalTaskId(providerId, taskId);
-					}));
+					tests.push(
+						createExtensionHostTestProfileProvider(
+							extensionHostWorkflowProviderId(runtime.id, registration.registrationId),
+							invoke,
+							(taskProviderRegistrationId, taskId) => {
+								const providerId = localTaskProviders.get(taskProviderRegistrationId);
+								if (!providerId)
+									throw new TypeError(
+										`Test Profile references unknown Task provider registration '${taskProviderRegistrationId}' in extension '${extensionId}'`,
+									);
+								return extensionHostCanonicalTaskId(providerId, taskId);
+							},
+						),
+					);
 					continue;
 				}
 				if (registration.kind === 'debugAdapterTracker') {
-					debugTrackers.push(createExtensionHostDebugAdapterTrackerFactory(registration.debuggerType, extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, this.workspace));
+					debugTrackers.push(
+						createExtensionHostDebugAdapterTrackerFactory(
+							registration.debuggerType,
+							extensionHostWorkflowProviderId(runtime.id, registration.registrationId),
+							invoke,
+							this.workspace,
+						),
+					);
 					continue;
 				}
 				if (registration.kind === 'debugConfigurationProvider') {
-					debugConfigurations.push(createExtensionHostDebugConfigurationProvider(registration.debuggerType, extensionHostWorkflowProviderId(runtime.id, registration.registrationId), registration.triggerKind, invoke, this.workspace));
+					debugConfigurations.push(
+						createExtensionHostDebugConfigurationProvider(
+							registration.debuggerType,
+							extensionHostWorkflowProviderId(runtime.id, registration.registrationId),
+							registration.triggerKind,
+							invoke,
+							this.workspace,
+						),
+					);
 					continue;
 				}
-				debugAdapters.push(createExtensionHostDebugAdapterFactory(registration.debuggerType, extensionHostWorkflowProviderId(runtime.id, registration.registrationId), invoke, this.workspace));
+				debugAdapters.push(
+					createExtensionHostDebugAdapterFactory(
+						registration.debuggerType,
+						extensionHostWorkflowProviderId(runtime.id, registration.registrationId),
+						invoke,
+						this.workspace,
+					),
+				);
 			}
 		}
-		return Object.freeze({ registrations, menus: Object.freeze(menus), commands: Object.freeze(commands), languages: freezeLanguageBatch(languages), tasks: Object.freeze(tasks), debugAdapters: Object.freeze(debugAdapters), debugConfigurations: Object.freeze(debugConfigurations), debugTrackers: Object.freeze(debugTrackers), tests: Object.freeze(tests), remoteResolvers: Object.freeze(remoteResolvers), terminalProfiles: Object.freeze(terminalProfiles), terminalEnvironments: Object.freeze(terminalEnvironments), terminalLinks: Object.freeze(terminalLinks), terminalCompletions: Object.freeze(terminalCompletions), terminalQuickFixes: Object.freeze(terminalQuickFixes), issues: Object.freeze(issues), controller });
+		return Object.freeze({
+			registrations,
+			menus: Object.freeze(menus),
+			commands: Object.freeze(commands),
+			languages: freezeLanguageBatch(languages),
+			tasks: Object.freeze(tasks),
+			debugAdapters: Object.freeze(debugAdapters),
+			debugConfigurations: Object.freeze(debugConfigurations),
+			debugTrackers: Object.freeze(debugTrackers),
+			tests: Object.freeze(tests),
+			remoteResolvers: Object.freeze(remoteResolvers),
+			terminalProfiles: Object.freeze(terminalProfiles),
+			terminalEnvironments: Object.freeze(terminalEnvironments),
+			terminalLinks: Object.freeze(terminalLinks),
+			terminalCompletions: Object.freeze(terminalCompletions),
+			terminalQuickFixes: Object.freeze(terminalQuickFixes),
+			issues: Object.freeze(issues),
+			controller,
+		});
 	}
 
 	private commandEditorContext(accessor: ServicesAccessor, args: readonly unknown[]) {
 		const part = accessor.get(IEditorPart);
-		const context = args[0] as { groupId?: number; editorIndex?: number; } | undefined;
-		const group = typeof context?.groupId === 'number' ? part.groups.find(group => group.id === context.groupId) : part.activeGroup;
-		const input = typeof context?.editorIndex === 'number' ? group?.inputs[context.editorIndex] : group?.activeInput;
-		return input ? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) } : null;
+		const context = args[0] as { groupId?: number; editorIndex?: number } | undefined;
+		const group =
+			typeof context?.groupId === 'number'
+				? part.groups.find(group => group.id === context.groupId)
+				: part.activeGroup;
+		const input =
+			typeof context?.editorIndex === 'number' ? group?.inputs[context.editorIndex] : group?.activeInput;
+		return input
+			? { resource: input.resource.toJSON(), groupId: group!.id, editorIndex: group!.inputs.indexOf(input) }
+			: null;
 	}
 
-	private registrationInvoker(runtime: Pick<ExtensionHostRuntime, 'id' | 'activationGeneration' | 'incarnation'>, registration: Pick<ExtensionHostRegistration, 'registrationId' | 'kind'>, generationSignal: AbortSignal): ExtensionHostProviderInvoker {
+	private registrationInvoker(
+		runtime: Pick<ExtensionHostRuntime, 'id' | 'activationGeneration' | 'incarnation'>,
+		registration: Pick<ExtensionHostRegistration, 'registrationId' | 'kind'>,
+		generationSignal: AbortSignal,
+	): ExtensionHostProviderInvoker {
 		// Provider callbacks outlive UI snapshots. Retain only their process fence,
 		// so replacing a status value can release its previous command arguments.
 		const { id: extensionId, activationGeneration, incarnation } = runtime;
 		const { registrationId } = registration;
 		return async (operation, payload, callerSignal) => {
-			if (incarnation === undefined) throw new Error(`Extension '${extensionId}' has no active runtime incarnation`);
+			if (incarnation === undefined)
+				throw new Error(`Extension '${extensionId}' has no active runtime incarnation`);
 			const combined = combineSignals(generationSignal, callerSignal);
 			try {
 				combined.signal.throwIfAborted();
-				const result = await this.api.invoke({
-					extensionId,
-					registrationId,
-					activationGeneration,
-					incarnation,
-					operation,
-					payload,
-					// Adapter creation can prepare a runtime on first use. Cancellation still
-					// follows this launch and the registration's activation generation.
-					deadlineUnixMillis: Date.now() + (registration.kind === 'debugAdapter' ? Math.max(this.invocationTimeoutMillis, 300_000) : this.invocationTimeoutMillis),
-				}, combined.signal);
+				const result = await this.api.invoke(
+					{
+						extensionId,
+						registrationId,
+						activationGeneration,
+						incarnation,
+						operation,
+						payload,
+						// Adapter creation can prepare a runtime on first use. Cancellation still
+						// follows this launch and the registration's activation generation.
+						deadlineUnixMillis:
+							Date.now() +
+							(registration.kind === 'debugAdapter'
+								? Math.max(this.invocationTimeoutMillis, 300_000)
+								: this.invocationTimeoutMillis),
+					},
+					combined.signal,
+				);
 				// A completed profile may already own an issued PTY. Let its caller
 				// release that late result instead of hiding the resource on cancellation.
 				if (operation !== 'createTerminalProfile') combined.signal.throwIfAborted();
@@ -752,7 +1356,11 @@ export class MainThreadExtensionApi extends Disposable {
 		// to domains whose executable owners actually changed.
 		const changed = {
 			commands: !sameContributions(previous?.commands, next.commands),
-			languages: !previous || (Object.keys(next.languages) as (keyof LanguageProviderBatch)[]).some(key => !sameContributions(previous.languages[key], next.languages[key])),
+			languages:
+				!previous ||
+				(Object.keys(next.languages) as (keyof LanguageProviderBatch)[]).some(
+					key => !sameContributions(previous.languages[key], next.languages[key]),
+				),
 			tasks: !sameContributions(previous?.tasks, next.tasks),
 			debugAdapters: !sameContributions(previous?.debugAdapters, next.debugAdapters),
 			debugConfigurations: !sameContributions(previous?.debugConfigurations, next.debugConfigurations),
@@ -785,15 +1393,19 @@ export class MainThreadExtensionApi extends Disposable {
 				if (changed.languages) this.languageRegistration.replace(previous?.languages ?? {});
 				if (changed.tasks) this.taskRegistration.replace(previous?.tasks ?? []);
 				if (changed.debugAdapters) this.debugAdapterRegistration.replace(previous?.debugAdapters ?? []);
-				if (changed.debugConfigurations) this.debugConfigurationRegistration.replace(previous?.debugConfigurations ?? []);
+				if (changed.debugConfigurations)
+					this.debugConfigurationRegistration.replace(previous?.debugConfigurations ?? []);
 				if (changed.debugTrackers) this.debugTrackerRegistration.replace(previous?.debugTrackers ?? []);
 				if (changed.tests) this.testRegistration.replace(previous?.tests ?? []);
 				if (changed.remoteResolvers) this.remoteRegistration.replace(previous?.remoteResolvers ?? []);
 				if (changed.terminalProfiles) this.terminalApi.replaceProfiles(previous?.terminalProfiles ?? []);
-				if (changed.terminalEnvironments) this.terminalApi.replaceEnvironmentProviders(previous?.terminalEnvironments ?? []);
+				if (changed.terminalEnvironments)
+					this.terminalApi.replaceEnvironmentProviders(previous?.terminalEnvironments ?? []);
 				if (changed.terminalLinks) this.terminalApi.replaceLinkProviders(previous?.terminalLinks ?? []);
-				if (changed.terminalCompletions) this.terminalApi.replaceCompletionProviders(previous?.terminalCompletions ?? []);
-				if (changed.terminalQuickFixes) this.terminalApi.replaceQuickFixProviders(previous?.terminalQuickFixes ?? []);
+				if (changed.terminalCompletions)
+					this.terminalApi.replaceCompletionProviders(previous?.terminalCompletions ?? []);
+				if (changed.terminalQuickFixes)
+					this.terminalApi.replaceQuickFixProviders(previous?.terminalQuickFixes ?? []);
 				this.activeContributions = previous;
 			} catch (rollbackError) {
 				this.commandRegistration.replace([]);
@@ -813,19 +1425,32 @@ export class MainThreadExtensionApi extends Disposable {
 				this.terminalApi.replaceQuickFixProviders([]);
 				this.activeContributions = undefined;
 				this.retireContributions(previous, undefined, rollbackError);
-				throw new AggregateError([error, rollbackError], "Extension Host contribution commit and rollback both failed");
+				throw new AggregateError(
+					[error, rollbackError],
+					'Extension Host contribution commit and rollback both failed',
+				);
 			}
 			throw error;
 		}
 		this.activeContributions = next;
 		this.commandMenus.clear();
 		for (const command of next.commands) {
-			if (command.metadata?.description === command.id || next.menus.some(placement => placement.id === MenuId.CommandPalette && placement.item.command.id === command.id)) continue;
-			this.commandMenus.add(MenusRegistry.appendMenuItem(MenuId.CommandPalette, { command: { id: command.id, title: command.metadata!.description } }));
+			if (
+				command.metadata?.description === command.id ||
+				next.menus.some(
+					placement => placement.id === MenuId.CommandPalette && placement.item.command.id === command.id,
+				)
+			)
+				continue;
+			this.commandMenus.add(
+				MenusRegistry.appendMenuItem(MenuId.CommandPalette, {
+					command: { id: command.id, title: command.metadata!.description },
+				}),
+			);
 		}
 		// Menu declarations belong to the activated package, and disappear with its command authority.
 		this.commandMenus.add(MenusRegistry.appendMenuItems(next.menus));
-		this.retireContributions(previous, next, "Extension Host fleet generation was replaced");
+		this.retireContributions(previous, next, 'Extension Host fleet generation was replaced');
 	}
 
 	private revokeContributions(): void {
@@ -847,7 +1472,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.terminalApi.replaceCompletionProviders([]);
 		this.terminalApi.replaceQuickFixProviders([]);
 		this.remoteSources.clear();
-		this.retireContributions(active, undefined, "Extension Host authority was revoked");
+		this.retireContributions(active, undefined, 'Extension Host authority was revoked');
 	}
 
 	private projectOutput(snapshot: ExtensionHostFleetSnapshot): void {
@@ -856,8 +1481,15 @@ export class MainThreadExtensionApi extends Disposable {
 			const runtime = runtimes.get(extensionId);
 			// Activation callbacks can create Output before the ready snapshot reaches this window.
 			// Only retirement or a different process fence invalidates those registrations.
-			if (!runtime || runtime.lifecycle === 'stopped' || runtime.lifecycle === 'failed' || runtime.lifecycle === 'crashLoop' || runtime.lifecycle === 'recovering'
-				|| runtime.activationGeneration !== cursor.activationGeneration || runtime.incarnation !== undefined && runtime.incarnation !== cursor.incarnation) {
+			if (
+				!runtime ||
+				runtime.lifecycle === 'stopped' ||
+				runtime.lifecycle === 'failed' ||
+				runtime.lifecycle === 'crashLoop' ||
+				runtime.lifecycle === 'recovering' ||
+				runtime.activationGeneration !== cursor.activationGeneration ||
+				(runtime.incarnation !== undefined && runtime.incarnation !== cursor.incarnation)
+			) {
 				this.disposeNamedOutputChannels(extensionId);
 			}
 		}
@@ -865,35 +1497,106 @@ export class MainThreadExtensionApi extends Disposable {
 			const channel = this.extensionOutput(runtime.id);
 			const previous = this.outputCursors.get(runtime.id);
 			if (!previous || previous.incarnation !== runtime.incarnation || previous.lifecycle !== runtime.lifecycle) {
-				channel.appendLine({ severity: runtimeLifecycleSeverity(runtime.lifecycle), category: "lifecycle", text: runtimeLifecycleMessage(runtime) });
+				channel.appendLine({
+					severity: runtimeLifecycleSeverity(runtime.lifecycle),
+					category: 'lifecycle',
+					text: runtimeLifecycleMessage(runtime),
+				});
 			}
-			const stderrStart = previous && previous.incarnation === runtime.incarnation && runtime.stderr.length >= previous.stderrLength ? previous.stderrLength : 0;
+			const stderrStart =
+				previous &&
+				previous.incarnation === runtime.incarnation &&
+				runtime.stderr.length >= previous.stderrLength
+					? previous.stderrLength
+					: 0;
 			const stderrDelta = runtime.stderr.slice(stderrStart);
-			if (stderrDelta) channel.append({ severity: "log", category: "stderr", text: stderrDelta });
-			const failureKey = runtime.failure ? `${runtime.failure.code}\0${runtime.failure.incarnation ?? ""}\0${runtime.failure.message}` : "";
-			if (runtime.failure && failureKey !== previous?.failureKey) channel.appendLine({ severity: "error", category: "lifecycle", text: `${runtime.failure.code}: ${runtime.failure.message}` });
-			this.outputCursors.set(runtime.id, { incarnation: runtime.incarnation, lifecycle: runtime.lifecycle, stderrLength: runtime.stderr.length, failureKey });
+			if (stderrDelta) channel.append({ severity: 'log', category: 'stderr', text: stderrDelta });
+			const failureKey = runtime.failure
+				? `${runtime.failure.code}\0${runtime.failure.incarnation ?? ''}\0${runtime.failure.message}`
+				: '';
+			if (runtime.failure && failureKey !== previous?.failureKey)
+				channel.appendLine({
+					severity: 'error',
+					category: 'lifecycle',
+					text: `${runtime.failure.code}: ${runtime.failure.message}`,
+				});
+			this.outputCursors.set(runtime.id, {
+				incarnation: runtime.incarnation,
+				lifecycle: runtime.lifecycle,
+				stderrLength: runtime.stderr.length,
+				failureKey,
+			});
 			if (runtime.lifecycle === 'ready') this.projectNamedOutput(runtime);
 		}
 	}
 
 	private handleOutput(source: ExtensionClientSource, payload: JsonValue): boolean {
-		if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !('method' in payload) || payload.method !== 'output') { return false; }
+		if (
+			!payload ||
+			typeof payload !== 'object' ||
+			Array.isArray(payload) ||
+			!('method' in payload) ||
+			payload.method !== 'output'
+		) {
+			return false;
+		}
 		const value = payload as Record<string, JsonValue>;
-		const text = (input: JsonValue, maximum: number): string => { if (typeof input !== 'string' || input.length > maximum || input.includes('\0')) { throw new TypeError('Invalid extension output text'); } return input; };
-		const id = text(value.channelId, 256), key = namedOutputKey(source.extensionId, id);
+		const text = (input: JsonValue, maximum: number): string => {
+			if (typeof input !== 'string' || input.length > maximum || input.includes('\0')) {
+				throw new TypeError('Invalid extension output text');
+			}
+			return input;
+		};
+		const id = text(value.channelId, 256),
+			key = namedOutputKey(source.extensionId, id);
 		const cursor = this.namedOutputCursors.get(source.extensionId);
-		if (cursor && (cursor.incarnation !== source.incarnation || cursor.activationGeneration !== source.activationGeneration)) this.disposeNamedOutputChannels(source.extensionId);
-		this.namedOutputCursors.set(source.extensionId, { incarnation: source.incarnation, activationGeneration: source.activationGeneration, sequence: 0 });
+		if (
+			cursor &&
+			(cursor.incarnation !== source.incarnation || cursor.activationGeneration !== source.activationGeneration)
+		)
+			this.disposeNamedOutputChannels(source.extensionId);
+		this.namedOutputCursors.set(source.extensionId, {
+			incarnation: source.incarnation,
+			activationGeneration: source.activationGeneration,
+			sequence: 0,
+		});
 		if (value.action === 'create') {
 			if (this.namedOutputChannels.has(key)) throw new TypeError('Output channel is already registered');
-			if ([...this.namedOutputChannels].filter(([, channel]) => channel.descriptor.extensionId === source.extensionId).length >= 128) throw new RangeError('Too many extension output channels');
+			if (
+				[...this.namedOutputChannels].filter(
+					([, channel]) => channel.descriptor.extensionId === source.extensionId,
+				).length >= 128
+			)
+				throw new RangeError('Too many extension output channels');
 			const label = text(value.label, 512).trim();
-			if (!label || value.kind !== undefined && value.kind !== 'log' && value.kind !== 'output') throw new TypeError('Invalid output channel metadata');
+			if (!label || (value.kind !== undefined && value.kind !== 'log' && value.kind !== 'output'))
+				throw new TypeError('Invalid output channel metadata');
 			const languageId = value.languageId === undefined ? undefined : text(value.languageId, 256).trim();
 			if (languageId === '') throw new TypeError('Invalid output channel language');
-			const logger = value.kind === 'log' ? new LogService({ sinks: [{ log: entry => channel.appendLine({ text: entry.message, timestamp: entry.timestampMillis, severity: entry.level }) }] }) : undefined;
-			const channel = this.outputService.createChannel({ id: `extension.${encodeURIComponent(source.extensionId)}.${encodeURIComponent(id)}`, label, kind: value.kind === 'log' ? 'log' : 'output', languageId, source: 'extension', extensionId: source.extensionId, logger: logger ? { label, control: logger } : undefined });
+			const logger =
+				value.kind === 'log'
+					? new LogService({
+							sinks: [
+								{
+									log: entry =>
+										channel.appendLine({
+											text: entry.message,
+											timestamp: entry.timestampMillis,
+											severity: entry.level,
+										}),
+								},
+							],
+						})
+					: undefined;
+			const channel = this.outputService.createChannel({
+				id: `extension.${encodeURIComponent(source.extensionId)}.${encodeURIComponent(id)}`,
+				label,
+				kind: value.kind === 'log' ? 'log' : 'output',
+				languageId,
+				source: 'extension',
+				extensionId: source.extensionId,
+				logger: logger ? { label, control: logger } : undefined,
+			});
 			this.namedOutputChannels.set(key, channel);
 			if (logger) {
 				this.outputLoggers.set(key, logger);
@@ -908,20 +1611,22 @@ export class MainThreadExtensionApi extends Disposable {
 		if (!channel) throw new TypeError('Output channel is unavailable');
 		const logger = this.outputLoggers.get(key);
 		if (value.action === 'log') {
-			if (!logger || !isLogLevel(value.severity) || value.severity === LogLevel.Off) throw new TypeError('Invalid extension log entry');
+			if (!logger || !isLogLevel(value.severity) || value.severity === LogLevel.Off)
+				throw new TypeError('Invalid extension log entry');
 			const message = text(value.text, 524_288);
 			if (message.trim()) log(logger, value.severity, message);
-		}
-		else if (value.action === 'append') {
+		} else if (value.action === 'append') {
 			const message = text(value.text, 524_288);
-			if (!logger || canLog(logger.getLevel(), LogLevel.Info)) channel.append({ text: message, severity: logger ? 'information' : 'log' });
-		}
-		else if (value.action === 'replace') channel.replace({ text: text(value.text, 524_288) });
+			if (!logger || canLog(logger.getLevel(), LogLevel.Info))
+				channel.append({ text: message, severity: logger ? 'information' : 'log' });
+		} else if (value.action === 'replace') channel.replace({ text: text(value.text, 524_288) });
 		else if (value.action === 'clear') channel.clear();
 		else if (value.action === 'show') channel.show({ focus: value.preserveFocus === true ? 'preserve' : 'take' });
 		else if (value.action === 'dispose') this.namedOutputChannels.deleteAndDispose(key);
-		else if (value.action === 'hide') { if (this.outputService.activeChannel === channel && this.views.isViewVisible(OUTPUT_VIEW_ID)) this.views.closeView(OUTPUT_VIEW_ID); }
-		else throw new TypeError('Invalid extension output operation');
+		else if (value.action === 'hide') {
+			if (this.outputService.activeChannel === channel && this.views.isViewVisible(OUTPUT_VIEW_ID))
+				this.views.closeView(OUTPUT_VIEW_ID);
+		} else throw new TypeError('Invalid extension output operation');
 		return true;
 	}
 
@@ -934,7 +1639,12 @@ export class MainThreadExtensionApi extends Disposable {
 			for (const [key, logger] of this.outputLoggers) {
 				const channel = this.namedOutputChannels.get(key);
 				if (channel?.descriptor.extensionId !== runtime.id) continue;
-				const identity = JSON.stringify([key, runtime.incarnation, runtime.activationGeneration, registration.registrationId]);
+				const identity = JSON.stringify([
+					key,
+					runtime.incarnation,
+					runtime.activationGeneration,
+					registration.registrationId,
+				]);
 				retained.add(identity);
 				if (this.outputLevelBindings.has(identity)) continue;
 				const lifetime = new DisposableStore();
@@ -944,11 +1654,34 @@ export class MainThreadExtensionApi extends Disposable {
 				const { id: extensionId, incarnation, activationGeneration } = runtime;
 				const channelId = key.slice(extensionId.length + 1);
 				const send = (level: LogLevel): void => {
-					const numericLevel = [LogLevel.Off, LogLevel.Trace, LogLevel.Debug, LogLevel.Info, LogLevel.Warning, LogLevel.Error].indexOf(level);
-					queue = queue.then(async () => {
-						if (controller.signal.aborted) return;
-						await this.api.invoke({ extensionId, incarnation, activationGeneration, registrationId: registration.registrationId, operation: 'outputEvent', payload: { channelId, level: numericLevel }, deadlineUnixMillis: Date.now() + this.invocationTimeoutMillis }, controller.signal);
-					}).catch(error => { if (!controller.signal.aborted) this.fleetOutput.appendLine({ severity: 'error', text: String(error) }); });
+					const numericLevel = [
+						LogLevel.Off,
+						LogLevel.Trace,
+						LogLevel.Debug,
+						LogLevel.Info,
+						LogLevel.Warning,
+						LogLevel.Error,
+					].indexOf(level);
+					queue = queue
+						.then(async () => {
+							if (controller.signal.aborted) return;
+							await this.api.invoke(
+								{
+									extensionId,
+									incarnation,
+									activationGeneration,
+									registrationId: registration.registrationId,
+									operation: 'outputEvent',
+									payload: { channelId, level: numericLevel },
+									deadlineUnixMillis: Date.now() + this.invocationTimeoutMillis,
+								},
+								controller.signal,
+							);
+						})
+						.catch(error => {
+							if (!controller.signal.aborted)
+								this.fleetOutput.appendLine({ severity: 'error', text: String(error) });
+						});
 				};
 				lifetime.add(logger.onDidChangeLogLevel(send));
 				lifetime.add(channel.onDidDispose(() => this.outputLevelBindings.deleteAndDispose(identity)));
@@ -956,43 +1689,68 @@ export class MainThreadExtensionApi extends Disposable {
 				send(logger.getLevel());
 			}
 		}
-		for (const key of this.outputLevelBindings.keys()) if (!retained.has(key)) this.outputLevelBindings.deleteAndDispose(key);
+		for (const key of this.outputLevelBindings.keys())
+			if (!retained.has(key)) this.outputLevelBindings.deleteAndDispose(key);
 	}
 
 	private projectNamedOutput(runtime: ExtensionHostRuntime): void {
 		const previous = this.namedOutputCursors.get(runtime.id);
-		const reset = previous !== undefined && (previous.activationGeneration !== runtime.activationGeneration || previous.incarnation !== runtime.incarnation);
+		const reset =
+			previous !== undefined &&
+			(previous.activationGeneration !== runtime.activationGeneration ||
+				previous.incarnation !== runtime.incarnation);
 		if (reset) this.disposeNamedOutputChannels(runtime.id);
 		const initial = previous === undefined || reset;
-		let sequence = reset ? 0 : previous?.sequence ?? 0;
+		let sequence = reset ? 0 : (previous?.sequence ?? 0);
 		for (const event of runtime.outputEvents) {
-			if (event.activationGeneration !== runtime.activationGeneration || event.incarnation !== runtime.incarnation || event.sequence <= sequence) continue;
+			if (
+				event.activationGeneration !== runtime.activationGeneration ||
+				event.incarnation !== runtime.incarnation ||
+				event.sequence <= sequence
+			)
+				continue;
 			sequence = event.sequence;
 			const operation = event.operation;
 			const key = namedOutputKey(runtime.id, operation.channelId);
-			if (operation.operation === "create") {
+			if (operation.operation === 'create') {
 				const existing = this.namedOutputChannels.get(key);
 				if (existing && existing.label === operation.label && existing.kind === operation.kind) continue;
 				this.namedOutputChannels.deleteAndDispose(key);
-				const channel = this.outputService.createChannel({ id: `extension.${encodeURIComponent(runtime.id)}.${encodeURIComponent(operation.channelId)}`, label: operation.label, kind: operation.kind, source: "extension", extensionId: runtime.id });
+				const channel = this.outputService.createChannel({
+					id: `extension.${encodeURIComponent(runtime.id)}.${encodeURIComponent(operation.channelId)}`,
+					label: operation.label,
+					kind: operation.kind,
+					source: 'extension',
+					extensionId: runtime.id,
+				});
 				this.namedOutputChannels.set(key, channel);
 				continue;
 			}
 			const channel = this.namedOutputChannels.get(key);
 			if (!channel) {
-				this.fleetOutput?.appendLine({ severity: "warning", category: "output", text: `${runtime.id} emitted '${operation.operation}' for unknown Output channel '${operation.channelId}'.` });
+				this.fleetOutput?.appendLine({
+					severity: 'warning',
+					category: 'output',
+					text: `${runtime.id} emitted '${operation.operation}' for unknown Output channel '${operation.channelId}'.`,
+				});
 				continue;
 			}
-			if (operation.operation === "append") channel.append({ text: operation.text, severity: operation.severity, category: operation.category });
-			else if (operation.operation === "replace") channel.replace({ text: operation.text, severity: operation.severity, category: operation.category });
-			else if (operation.operation === "clear") channel.clear();
-			else if (operation.operation === "show") {
-				if (!initial) channel.show({ focus: operation.preserveFocus ? "preserve" : "take" });
+			if (operation.operation === 'append')
+				channel.append({ text: operation.text, severity: operation.severity, category: operation.category });
+			else if (operation.operation === 'replace')
+				channel.replace({ text: operation.text, severity: operation.severity, category: operation.category });
+			else if (operation.operation === 'clear') channel.clear();
+			else if (operation.operation === 'show') {
+				if (!initial) channel.show({ focus: operation.preserveFocus ? 'preserve' : 'take' });
 			} else {
 				this.namedOutputChannels.deleteAndDispose(key);
 			}
 		}
-		this.namedOutputCursors.set(runtime.id, { activationGeneration: runtime.activationGeneration, incarnation: runtime.incarnation, sequence });
+		this.namedOutputCursors.set(runtime.id, {
+			activationGeneration: runtime.activationGeneration,
+			incarnation: runtime.incarnation,
+			sequence,
+		});
 	}
 
 	private disposeNamedOutputChannels(extensionId: string): void {
@@ -1006,71 +1764,128 @@ export class MainThreadExtensionApi extends Disposable {
 	private extensionOutput(extensionId: string): IOutputChannel {
 		const existing = this.extensionOutputs.get(extensionId);
 		if (existing) return existing;
-		const channel = this.outputService.createChannel({ id: `extension-host.${encodeURIComponent(extensionId)}`, label: `${extensionId} (Extension Host)`, kind: "log", source: "extension", extensionId });
+		const channel = this.outputService.createChannel({
+			id: `extension-host.${encodeURIComponent(extensionId)}`,
+			label: `${extensionId} (Extension Host)`,
+			kind: 'log',
+			source: 'extension',
+			extensionId,
+		});
 		this.extensionOutputs.set(extensionId, channel);
 		return channel;
 	}
-
 }
 
 function namedOutputKey(extensionId: string, channelId: string): string {
 	return `${extensionId}\0${channelId}`;
 }
 
-function runtimeLifecycleSeverity(state: ExtensionHostRuntime["lifecycle"]): OutputEntrySeverity {
-	if (state === "failed" || state === "crashLoop") return "error";
-	if (state === "recovering") return "warning";
-	return state === "ready" ? "information" : "log";
+function runtimeLifecycleSeverity(state: ExtensionHostRuntime['lifecycle']): OutputEntrySeverity {
+	if (state === 'failed' || state === 'crashLoop') return 'error';
+	if (state === 'recovering') return 'warning';
+	return state === 'ready' ? 'information' : 'log';
 }
 
 function runtimeLifecycleMessage(runtime: ExtensionHostRuntime): string {
-	const incarnation = runtime.incarnation === undefined ? "" : ` (incarnation ${runtime.incarnation})`;
+	const incarnation = runtime.incarnation === undefined ? '' : ` (incarnation ${runtime.incarnation})`;
 	return `Extension Host ${runtime.lifecycle}${incarnation}.`;
 }
 
-function unsupportedLanguageIssue(runtime: ExtensionHostRuntime, registration: ExtensionHostLanguageRegistration, operations: readonly string[]): ExtensionApiIssue {
-	return { extensionId: runtime.id, registrationId: registration.registrationId, message: `Language registration '${registration.registrationId}' operation(s) ${operations.join(", ")} were not projected because they do not yet have strict Workbench codecs; supported operations remain active` };
+function unsupportedLanguageIssue(
+	runtime: ExtensionHostRuntime,
+	registration: ExtensionHostLanguageRegistration,
+	operations: readonly string[],
+): ExtensionApiIssue {
+	return {
+		extensionId: runtime.id,
+		registrationId: registration.registrationId,
+		message: `Language registration '${registration.registrationId}' operation(s) ${operations.join(', ')} were not projected because they do not yet have strict Workbench codecs; supported operations remain active`,
+	};
 }
 
 /** Process authority and provider data have separate lifetimes. */
 function runtimeLifetimeIdentity(runtime: ExtensionHostRuntime): string {
 	return JSON.stringify([
-		runtime.id, runtime.version, runtime.packageDigest, runtime.runtimeApiVersion,
-		runtime.activationGeneration, runtime.incarnation, runtime.lifecycle,
+		runtime.id,
+		runtime.version,
+		runtime.packageDigest,
+		runtime.runtimeApiVersion,
+		runtime.activationGeneration,
+		runtime.incarnation,
+		runtime.lifecycle,
 	]);
 }
 
 function runtimeContributionIdentity(runtime: ExtensionHostRuntime): string {
 	return JSON.stringify([
-		runtimeLifetimeIdentity(runtime), runtime.activation,
+		runtimeLifetimeIdentity(runtime),
+		runtime.activation,
 		// Only registrations installed by this owner affect its contribution batch.
 		// Mutable SCM/status/output snapshots are reconciled by their own owners.
 		runtime.registrations.filter(ownsExecutableContribution),
 	]);
 }
 
-type ExecutableRegistration = Extract<ExtensionHostRegistration, {
-	kind:
-	'command' | 'languageProvider' | 'taskProvider' | 'testProfileProvider' | 'debugAdapter' |
-	'debugConfigurationProvider' | 'debugAdapterTracker' | 'remoteConnectionResolver' |
-	'terminalProfileProvider' | 'terminalEnvironment' | 'terminalLinkProvider' | 'terminalCompletionProvider' | 'terminalQuickFixProvider';
-}>;
+type ExecutableRegistration = Extract<
+	ExtensionHostRegistration,
+	{
+		kind:
+			| 'command'
+			| 'languageProvider'
+			| 'taskProvider'
+			| 'testProfileProvider'
+			| 'debugAdapter'
+			| 'debugConfigurationProvider'
+			| 'debugAdapterTracker'
+			| 'remoteConnectionResolver'
+			| 'terminalProfileProvider'
+			| 'terminalEnvironment'
+			| 'terminalLinkProvider'
+			| 'terminalCompletionProvider'
+			| 'terminalQuickFixProvider';
+	}
+>;
 
 function ownsExecutableContribution(registration: ExtensionHostRegistration): registration is ExecutableRegistration {
 	switch (registration.kind) {
-		case 'command': case 'languageProvider': case 'taskProvider': case 'testProfileProvider':
-		case 'debugAdapter': case 'debugConfigurationProvider': case 'debugAdapterTracker':
-		case 'remoteConnectionResolver': case 'terminalProfileProvider': case 'terminalEnvironment': case 'terminalLinkProvider': case 'terminalCompletionProvider': case 'terminalQuickFixProvider':
+		case 'command':
+		case 'languageProvider':
+		case 'taskProvider':
+		case 'testProfileProvider':
+		case 'debugAdapter':
+		case 'debugConfigurationProvider':
+		case 'debugAdapterTracker':
+		case 'remoteConnectionResolver':
+		case 'terminalProfileProvider':
+		case 'terminalEnvironment':
+		case 'terminalLinkProvider':
+		case 'terminalCompletionProvider':
+		case 'terminalQuickFixProvider':
 			return true;
-		case 'outputEvents': case 'remoteAuthorityResolver': case 'workspaceEvents': case 'statusBar':
-		case 'sourceControl': case 'textDocumentEvents': case 'taskEvents': case 'debugEvents':
-		case 'customTextEditor': case 'dataChannel': case 'speechProvider': case 'linkPresentationProvider': case 'externalUriOpener':
-		case 'terminalPty': case 'treeDataProvider':
+		case 'outputEvents':
+		case 'remoteAuthorityResolver':
+		case 'workspaceEvents':
+		case 'statusBar':
+		case 'sourceControl':
+		case 'textDocumentEvents':
+		case 'taskEvents':
+		case 'debugEvents':
+		case 'customTextEditor':
+		case 'dataChannel':
+		case 'speechProvider':
+		case 'linkPresentationProvider':
+		case 'externalUriOpener':
+		case 'terminalPty':
+		case 'treeDataProvider':
 			return false;
 	}
 }
 
-function retireExtensionContributions(previous: ExtensionContributionSet, current: ExtensionContributionSet | undefined, reason: unknown): void {
+function retireExtensionContributions(
+	previous: ExtensionContributionSet,
+	current: ExtensionContributionSet | undefined,
+	reason: unknown,
+): void {
 	if (previous.controller !== current?.controller) previous.controller.abort(reason);
 	for (const [id, lifetime] of previous.registrations) {
 		if (lifetime !== current?.registrations.get(id)) lifetime.controller.abort(reason);
@@ -1078,10 +1893,16 @@ function retireExtensionContributions(previous: ExtensionContributionSet, curren
 }
 
 function sameContributions(previous: readonly unknown[] | undefined, current: readonly unknown[]): boolean {
-	return previous !== undefined && previous.length === current.length && current.every((value, index) => value === previous[index]);
+	return (
+		previous !== undefined &&
+		previous.length === current.length &&
+		current.every((value, index) => value === previous[index])
+	);
 }
 
-type MutableLanguageBatch = { -readonly [K in keyof Required<LanguageProviderBatch>]: NonNullable<LanguageProviderBatch[K]>[number][]; };
+type MutableLanguageBatch = {
+	-readonly [K in keyof Required<LanguageProviderBatch>]: NonNullable<LanguageProviderBatch[K]>[number][];
+};
 
 function mutableLanguageBatch(): MutableLanguageBatch {
 	return {
@@ -1147,19 +1968,19 @@ function freezeLanguageBatch(value: MutableLanguageBatch): Required<LanguageProv
 	});
 }
 
-function combineSignals(first: AbortSignal, second: AbortSignal): { readonly signal: AbortSignal; dispose(): void; } {
+function combineSignals(first: AbortSignal, second: AbortSignal): { readonly signal: AbortSignal; dispose(): void } {
 	const controller = new AbortController();
 	const abortFirst = (): void => controller.abort(first.reason);
 	const abortSecond = (): void => controller.abort(second.reason);
 	if (first.aborted) abortFirst();
-	else first.addEventListener("abort", abortFirst, { once: true });
+	else first.addEventListener('abort', abortFirst, { once: true });
 	if (second.aborted) abortSecond();
-	else second.addEventListener("abort", abortSecond, { once: true });
+	else second.addEventListener('abort', abortSecond, { once: true });
 	return {
 		signal: controller.signal,
 		dispose: () => {
-			first.removeEventListener("abort", abortFirst);
-			second.removeEventListener("abort", abortSecond);
+			first.removeEventListener('abort', abortFirst);
+			second.removeEventListener('abort', abortSecond);
 		},
 	};
 }

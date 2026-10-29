@@ -32,7 +32,8 @@ export class FileEditorInputSerializer implements EditorInputSerializer {
 	deserialize(value: unknown): FileEditorInput {
 		const record = requireRecord(value, 'serialized file editor');
 		const readOnly = record.readOnly;
-		if (readOnly !== undefined && typeof readOnly !== 'boolean') throw new TypeError('Serialized file read-only state must be boolean');
+		if (readOnly !== undefined && typeof readOnly !== 'boolean')
+			throw new TypeError('Serialized file read-only state must be boolean');
 		return new FileEditorInput(URI.parse(requireString(record.resource, 'serialized file resource')), {
 			label: optionalString(record.label, 'serialized file label'),
 			contentType: optionalString(record.contentType, 'serialized file content type'),

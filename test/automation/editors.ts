@@ -1,4 +1,4 @@
-import { expect, type Locator, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from '@playwright/test';
 import { Editor } from './editor.js';
 
 /** Product-level automation surface for one editor group. */
@@ -13,17 +13,17 @@ export class EditorGroup {
 
 	constructor(element: Locator) {
 		this.element = element;
-		this.title = element.locator(".ash-editor-title-control");
-		this.content = element.locator(".ash-editor-group-content");
+		this.title = element.locator('.ash-editor-title-control');
+		this.content = element.locator('.ash-editor-group-content');
 		this.watermark = this.content.locator('.ash-editor-group-watermark-shortcuts');
 		this.welcome = this.content.locator('.ash-getting-started');
-		this.tabs = element.getByRole("tab");
+		this.tabs = element.getByRole('tab');
 		this.editor = new Editor(this.content);
 	}
 
 	async waitForReady(): Promise<void> {
-		await this.element.waitFor({ state: "visible" });
-		await this.content.waitFor({ state: "visible" });
+		await this.element.waitFor({ state: 'visible' });
+		await this.content.waitFor({ state: 'visible' });
 	}
 }
 
@@ -33,8 +33,8 @@ export class Editors {
 	readonly groups: Locator;
 
 	constructor(page: Page) {
-		this.element = page.locator(".ash-workbench-editor");
-		this.groups = this.element.locator(".ash-editor-group");
+		this.element = page.locator('.ash-workbench-editor');
+		this.groups = this.element.locator('.ash-editor-group');
 	}
 
 	groupAt(index: number): EditorGroup {
@@ -42,7 +42,7 @@ export class Editors {
 	}
 
 	async waitForReady(): Promise<void> {
-		await this.element.waitFor({ state: "visible" });
+		await this.element.waitFor({ state: 'visible' });
 		await this.groupAt(0).waitForReady();
 	}
 }

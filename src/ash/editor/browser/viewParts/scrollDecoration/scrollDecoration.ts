@@ -46,23 +46,29 @@ export class ScrollDecorationViewPart extends ViewPart {
 		return event.scrollTopChanged || event.scrollLeftChanged || event.scrollHeightChanged;
 	}
 
-	public override prepareRender(_context: RenderingContext): void {
-	}
+	public override prepareRender(_context: RenderingContext): void {}
 
 	public render(context: RestrictedRenderingContext): void {
 		this.root.setWidth(this.width);
 		this.root.setHeight(context.viewportHeight);
 		this.topShadow.setClassName(this.shadowClassName('top', this.useShadows && context.scrollTop > 0));
-		this.bottomShadow.setClassName(this.shadowClassName('bottom', this.useShadows && context.scrollTop < context.scrollHeight - context.viewportHeight));
+		this.bottomShadow.setClassName(
+			this.shadowClassName(
+				'bottom',
+				this.useShadows && context.scrollTop < context.scrollHeight - context.viewportHeight,
+			),
+		);
 	}
 
 	private updateConfiguration(): boolean {
 		const options = this._context.configuration.options;
 		const layoutInfo = options.get(EditorOption.layoutInfo);
 		const scrollbar = options.get(EditorOption.scrollbar);
-		const width = layoutInfo.minimap.renderMinimap === RenderMinimap.None || (layoutInfo.minimap.minimapWidth > 0 && layoutInfo.minimap.minimapLeft === 0)
-			? layoutInfo.width
-			: layoutInfo.width - layoutInfo.verticalScrollbarWidth;
+		const width =
+			layoutInfo.minimap.renderMinimap === RenderMinimap.None ||
+			(layoutInfo.minimap.minimapWidth > 0 && layoutInfo.minimap.minimapLeft === 0)
+				? layoutInfo.width
+				: layoutInfo.width - layoutInfo.verticalScrollbarWidth;
 		const changed = this.width !== width || this.useShadows !== scrollbar.useShadows;
 		this.width = width;
 		this.useShadows = scrollbar.useShadows;

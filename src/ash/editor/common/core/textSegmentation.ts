@@ -4,8 +4,8 @@ export interface TextWordSegment {
 	readonly wordLike: boolean;
 }
 
-const graphemeSegmenter = createSegmenter("grapheme");
-const wordSegmenter = createSegmenter("word");
+const graphemeSegmenter = createSegmenter('grapheme');
+const wordSegmenter = createSegmenter('word');
 
 /** Returns ordered UTF-16 caret boundaries including zero and text length. */
 export function getTextGraphemeBoundaries(text: string): readonly number[] {
@@ -30,29 +30,23 @@ export function getTextGraphemeBoundaries(text: string): readonly number[] {
  */
 export function getTextWordSegments(text: string): readonly TextWordSegment[] {
 	if (wordSegmenter) {
-		return Object.freeze([...wordSegmenter.segment(text)].map(segment =>
-			Object.freeze({
-				start: segment.index,
-				end: segment.index + segment.segment.length,
-				wordLike: segment.isWordLike === true,
-			})
-		));
+		return Object.freeze(
+			[...wordSegmenter.segment(text)].map(segment =>
+				Object.freeze({
+					start: segment.index,
+					end: segment.index + segment.segment.length,
+					wordLike: segment.isWordLike === true,
+				}),
+			),
+		);
 	}
-	const result: Array<{
-		start: number;
-		end: number;
-		wordLike: boolean;
-	}> = [];
+	const result: Array<{ start: number; end: number; wordLike: boolean }> = [];
 	let offset = 0;
 	let activeKind: TextSegmentKind | undefined;
 	for (const value of text) {
 		const kind = classify(value);
 		if (kind !== activeKind) {
-			result.push({
-				start: offset,
-				end: offset + value.length,
-				wordLike: kind === TextSegmentKind.Word,
-			});
+			result.push({ start: offset, end: offset + value.length, wordLike: kind === TextSegmentKind.Word });
 			activeKind = kind;
 		} else {
 			result[result.length - 1]!.end += value.length;
@@ -74,11 +68,9 @@ function classify(value: string): TextSegmentKind {
 	return TextSegmentKind.Other;
 }
 
-function createSegmenter(granularity: Intl.SegmenterOptions["granularity"]): Intl.Segmenter | undefined {
+function createSegmenter(granularity: Intl.SegmenterOptions['granularity']): Intl.Segmenter | undefined {
 	try {
-		return typeof Intl.Segmenter === "function"
-			? new Intl.Segmenter(undefined, { granularity })
-			: undefined;
+		return typeof Intl.Segmenter === 'function' ? new Intl.Segmenter(undefined, { granularity }) : undefined;
 	} catch {
 		return undefined;
 	}

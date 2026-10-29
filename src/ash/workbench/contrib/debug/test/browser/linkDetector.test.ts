@@ -14,7 +14,11 @@ import { INotificationService } from '../../../../../platform/notification/commo
 import { IOpenerService } from '../../../../../platform/opener/common/opener.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
-import { IEditorService, type EditorOpenOptions, type EditorOpenTarget } from '../../../../services/editor/common/editorService.js';
+import {
+	IEditorService,
+	type EditorOpenOptions,
+	type EditorOpenTarget,
+} from '../../../../services/editor/common/editorService.js';
 import { TestNotificationService } from '../../../../services/notification/test/common/testNotificationService.js';
 import { emptyEditorServiceState } from '../../../../test/common/testEditorService.js';
 import { workbenchInstantiationService } from '../../../../test/browser/workbenchTestServices.js';
@@ -37,10 +41,17 @@ suite('Debug Console text links', () => {
 		const text = '(HTTPS://EXAMPLE.test/a(b)), https://two.test/path?q=a#b. mailto:me@example.test!';
 		const row = f.render(text);
 		assert.equal(row.element.textContent, text);
-		assert.deepEqual(row.links().map(link => link.textContent), ['HTTPS://EXAMPLE.test/a(b)', 'https://two.test/path?q=a#b', 'mailto:me@example.test']);
+		assert.deepEqual(
+			row.links().map(link => link.textContent),
+			['HTTPS://EXAMPLE.test/a(b)', 'https://two.test/path?q=a#b', 'mailto:me@example.test'],
+		);
 		for (const link of row.links()) key(link, 'Enter');
 		await settle();
-		assert.deepEqual(f.external, ['https://example.test/a(b)', 'https://two.test/path?q=a#b', 'mailto:me@example.test']);
+		assert.deepEqual(f.external, [
+			'https://example.test/a(b)',
+			'https://two.test/path?q=a#b',
+			'mailto:me@example.test',
+		]);
 	});
 
 	test('does not turn commands, scripts, data or malformed URLs into executable links', () => {
@@ -61,7 +72,10 @@ suite('Debug Console text links', () => {
 	test('does not guess filesystem authority when the originating folder is unavailable', async () => {
 		using f = fixture();
 		let reads = 0;
-		f.files.stat = async () => { reads++; throw new Error('No execution context'); };
+		f.files.stat = async () => {
+			reads++;
+			throw new Error('No execution context');
+		};
 		const text = '/workspace/main.ts:2 and src/main.ts:3';
 		const row = f.render(text, DebugLinkHoverBehavior.None, false);
 		await settle();
@@ -110,9 +124,30 @@ suite('Debug Console text links', () => {
 		['Windows path', 'file:///C:/work', 'C:\\work\\main.ts:12:2', 'file:///C:/work/main.ts', 12, 2],
 		['file URI', 'file:///workspace', 'file:///workspace/main.ts:10:5', 'file:///workspace/main.ts', 10, 5],
 		['escaped file URI', 'file:///workspace', 'file:///workspace/a%20b.ts:2', 'file:///workspace/a%20b.ts', 2, 1],
-		['Remote absolute path', 'ash-remote://ssh+links/workspace', '/workspace/main.ts:3:6', 'ash-remote://ssh+links/workspace/main.ts', 3, 6],
-		['Remote relative path', 'ash-remote://ssh+links/workspace', 'src/main.ts:4:2', 'ash-remote://ssh+links/workspace/src/main.ts', 4, 2],
-		['Remote file URI', 'ash-remote://ssh+links/workspace', 'file:///workspace/main.ts:5:2', 'ash-remote://ssh+links/workspace/main.ts', 5, 2],
+		[
+			'Remote absolute path',
+			'ash-remote://ssh+links/workspace',
+			'/workspace/main.ts:3:6',
+			'ash-remote://ssh+links/workspace/main.ts',
+			3,
+			6,
+		],
+		[
+			'Remote relative path',
+			'ash-remote://ssh+links/workspace',
+			'src/main.ts:4:2',
+			'ash-remote://ssh+links/workspace/src/main.ts',
+			4,
+			2,
+		],
+		[
+			'Remote file URI',
+			'ash-remote://ssh+links/workspace',
+			'file:///workspace/main.ts:5:2',
+			'ash-remote://ssh+links/workspace/main.ts',
+			5,
+			2,
+		],
 	] as const) {
 		test(`opens an existing ${name} through its captured authority and selection`, async () => {
 			using f = fixture(URI.parse(root));
@@ -121,10 +156,18 @@ suite('Debug Console text links', () => {
 				// This POSIX test host has no Windows filesystem; assert the URI at the stat boundary.
 				f.files.stat = async candidate => {
 					assert.equal(candidate.toString(), resource.toString());
-					return { resource: candidate, kind: FileKind.File, sizeBytes: 6, readonly: false, modifiedAtMillis: undefined };
+					return {
+						resource: candidate,
+						kind: FileKind.File,
+						sizeBytes: 6,
+						readonly: false,
+						modifiedAtMillis: undefined,
+					};
 				};
 			} else {
-				await f.files.createDirectory(resource.with({ path: resource.path.slice(0, resource.path.lastIndexOf('/')) }));
+				await f.files.createDirectory(
+					resource.with({ path: resource.path.slice(0, resource.path.lastIndexOf('/')) }),
+				);
 				await f.files.writeFile({ resource, content: 'source' }, { create: true, overwrite: true });
 			}
 			const row = f.render(text);
@@ -158,7 +201,13 @@ suite('Debug Console text links', () => {
 			const row = f.render('/workspace/main.ts:2');
 			if (change === 'row disposal') row.store.dispose();
 			else f.workspace.updateWorkspace({ id: 'other', uri: URI.file('/other') });
-			await reply.complete({ resource: URI.file('/workspace/main.ts'), kind: FileKind.File, sizeBytes: 0, readonly: false, modifiedAtMillis: undefined });
+			await reply.complete({
+				resource: URI.file('/workspace/main.ts'),
+				kind: FileKind.File,
+				sizeBytes: 0,
+				readonly: false,
+				modifiedAtMillis: undefined,
+			});
 			await settle();
 			assert.equal(row.links().length, 0);
 		});
@@ -174,7 +223,11 @@ suite('Debug Console text links', () => {
 		await reply.error(new Error('retired'));
 		await settle();
 		assert.equal(f.notifications.model.getNotifications().length, 0);
-		f.openers.setDefaultExternalOpener({ openExternal: async () => { throw new Error('Open failed'); } });
+		f.openers.setDefaultExternalOpener({
+			openExternal: async () => {
+				throw new Error('Open failed');
+			},
+		});
 		key(f.render('https://example.test').links()[0]!, 'Enter');
 		await settle();
 		assert.equal(f.notifications.model.getNotifications()[0]?.message, 'Open failed');
@@ -189,21 +242,47 @@ function fixture(root = URI.file('/workspace')) {
 	resources.add(files.registerProvider('ash-remote', provider));
 	const workspace = resources.add(new TestWorkspaceService({ id: 'workspace', uri: root }));
 	const notifications = resources.add(new TestNotificationService());
-	const opened: { resource: URI; options?: EditorOpenOptions; target?: EditorOpenTarget; }[] = [];
-	const editors: IEditorService = { ...emptyEditorServiceState, openEditor: async (input, options, target) => { opened.push({ resource: input.resource, options, target }); }, focusActiveEditor() { } };
-	const services = workbenchInstantiationService(resources).createChild(new ServiceCollection(
-		[IFileService, files], [IWorkspaceContextService, workspace], [IEditorService, editors], [INotificationService, notifications],
-	));
+	const opened: { resource: URI; options?: EditorOpenOptions; target?: EditorOpenTarget }[] = [];
+	const editors: IEditorService = {
+		...emptyEditorServiceState,
+		openEditor: async (input, options, target) => {
+			opened.push({ resource: input.resource, options, target });
+		},
+		focusActiveEditor() {},
+	};
+	const services = workbenchInstantiationService(resources).createChild(
+		new ServiceCollection(
+			[IFileService, files],
+			[IWorkspaceContextService, workspace],
+			[IEditorService, editors],
+			[INotificationService, notifications],
+		),
+	);
 	registerCodeEditorServices(services);
 	const openers = services.get(IOpenerService);
 	const external: string[] = [];
-	openers.setDefaultExternalOpener({ openExternal: async value => { external.push(value); return true; } });
+	openers.setDefaultExternalOpener({
+		openExternal: async value => {
+			external.push(value);
+			return true;
+		},
+	});
 	const detector = services.createInstance(LinkDetector);
 	return Object.assign(resources, {
-		files, workspace, notifications, openers, opened, external,
+		files,
+		workspace,
+		notifications,
+		openers,
+		opened,
+		external,
 		render(text: string, type = DebugLinkHoverBehavior.Rich, withFolder = true) {
 			const store = resources.add(new DisposableStore());
-			const element = detector.linkify(text, { type, store }, true, withFolder ? workspace.getWorkspace().folders[0] : undefined);
+			const element = detector.linkify(
+				text,
+				{ type, store },
+				true,
+				withFolder ? workspace.getWorkspace().folders[0] : undefined,
+			);
 			document.body.append(element);
 			resources.add(toDisposable(() => element.remove()));
 			return { element, store, links: () => [...element.querySelectorAll<HTMLElement>('[role=link]')] };
@@ -212,7 +291,12 @@ function fixture(root = URI.file('/workspace')) {
 }
 
 function key(target: HTMLElement, key: string, options: KeyboardEventInit = {}): KeyboardEvent {
-	const event = new browserEnvironment.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options });
+	const event = new browserEnvironment.window.KeyboardEvent('keydown', {
+		key,
+		bubbles: true,
+		cancelable: true,
+		...options,
+	});
 	target.dispatchEvent(event);
 	return event;
 }
@@ -221,4 +305,6 @@ function click(target: HTMLElement, options: MouseEventInit = {}): void {
 	target.dispatchEvent(new browserEnvironment.window.MouseEvent('click', { bubbles: true, ...options }));
 }
 
-async function settle(): Promise<void> { await new Promise<void>(resolve => setImmediate(resolve)); }
+async function settle(): Promise<void> {
+	await new Promise<void>(resolve => setImmediate(resolve));
+}

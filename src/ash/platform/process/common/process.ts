@@ -6,10 +6,7 @@ export const IProcessService = createDecorator<IProcessService>('processService'
 
 export interface IResolvedProcessInformation {
 	readonly pidToNames: [number, string][];
-	readonly processes: {
-		readonly name: string;
-		readonly rootProcess: ProcessItem | IRemoteDiagnosticError;
-	}[];
+	readonly processes: { readonly name: string; readonly rootProcess: ProcessItem | IRemoteDiagnosticError }[];
 }
 
 export interface IProcessService {
@@ -17,5 +14,5 @@ export interface IProcessService {
 	resolveProcesses(): Promise<IResolvedProcessInformation>;
 	getSystemStatus(): Promise<string>;
 	getSystemInfo(): Promise<SystemInfo>;
-	getPerformanceInfo(options?: { skipCache?: boolean; unbounded?: boolean; }): Promise<PerformanceInfo>;
+	getPerformanceInfo(options?: { skipCache?: boolean; unbounded?: boolean }): Promise<PerformanceInfo>;
 }

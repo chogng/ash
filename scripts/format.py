@@ -26,7 +26,6 @@ CONFIGURATION = (
     "Cargo.toml",
     "rust-toolchain.toml",
     "rustfmt.toml",
-    "tsfmt.json",
     ".prettierrc.toml",
     ".prettierignore",
     ".gitignore",

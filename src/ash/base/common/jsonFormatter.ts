@@ -17,10 +17,15 @@ export interface Range {
 	readonly length: number;
 }
 
-export function format(documentText: string, range: Range | undefined, options: FormattingOptions = {}): readonly Edit[] {
+export function format(
+	documentText: string,
+	range: Range | undefined,
+	options: FormattingOptions = {},
+): readonly Edit[] {
 	if (typeof documentText !== 'string') throw new TypeError('JSON document must be text');
 	const tabSize = options.tabSize ?? 4;
-	if (!Number.isSafeInteger(tabSize) || tabSize < 1) throw new RangeError('JSON formatting tab size must be positive');
+	if (!Number.isSafeInteger(tabSize) || tabSize < 1)
+		throw new RangeError('JSON formatting tab size must be positive');
 	const insertSpaces = options.insertSpaces ?? false;
 	let initialIndentLevel: number;
 	let formatText: string;
@@ -63,7 +68,12 @@ export function format(documentText: string, range: Range | undefined, options: 
 		return token;
 	};
 	const addEdit = (content: string, startOffset: number, endOffset: number): void => {
-		if (!hasError && startOffset < rangeEnd && endOffset > rangeStart && documentText.substring(startOffset, endOffset) !== content) {
+		if (
+			!hasError &&
+			startOffset < rangeEnd &&
+			endOffset > rangeStart &&
+			documentText.substring(startOffset, endOffset) !== content
+		) {
 			editOperations.push(Object.freeze({ offset: startOffset, length: endOffset - startOffset, content }));
 		}
 	};
@@ -76,7 +86,10 @@ export function format(documentText: string, range: Range | undefined, options: 
 		let firstTokenEnd = scanner.getTokenOffset() + scanner.getTokenLength() + formatTextStart;
 		let secondToken = scanNext();
 		let replaceContent = '';
-		while (!lineBreak && (secondToken === SyntaxKind.LineCommentTrivia || secondToken === SyntaxKind.BlockCommentTrivia)) {
+		while (
+			!lineBreak &&
+			(secondToken === SyntaxKind.LineCommentTrivia || secondToken === SyntaxKind.BlockCommentTrivia)
+		) {
 			const commentTokenStart = scanner.getTokenOffset() + formatTextStart;
 			addEdit(' ', firstTokenEnd, commentTokenStart);
 			firstTokenEnd = scanner.getTokenOffset() + scanner.getTokenLength() + formatTextStart;
@@ -118,14 +131,18 @@ export function format(documentText: string, range: Range | undefined, options: 
 				case SyntaxKind.NumericLiteral:
 				case SyntaxKind.CloseBraceToken:
 				case SyntaxKind.CloseBracketToken:
-					if (secondToken === SyntaxKind.LineCommentTrivia || secondToken === SyntaxKind.BlockCommentTrivia) replaceContent = ' ';
+					if (secondToken === SyntaxKind.LineCommentTrivia || secondToken === SyntaxKind.BlockCommentTrivia)
+						replaceContent = ' ';
 					else if (secondToken !== SyntaxKind.CommaToken && secondToken !== SyntaxKind.EOF) hasError = true;
 					break;
 				case SyntaxKind.Unknown:
 					hasError = true;
 					break;
 			}
-			if (lineBreak && (secondToken === SyntaxKind.LineCommentTrivia || secondToken === SyntaxKind.BlockCommentTrivia)) {
+			if (
+				lineBreak &&
+				(secondToken === SyntaxKind.LineCommentTrivia || secondToken === SyntaxKind.BlockCommentTrivia)
+			) {
 				replaceContent = newLineAndIndent();
 			}
 		}
@@ -137,7 +154,7 @@ export function format(documentText: string, range: Range | undefined, options: 
 }
 
 export function toFormattedString(value: unknown, options: FormattingOptions = {}): string {
-	const content = JSON.stringify(value, undefined, options.insertSpaces ? options.tabSize ?? 4 : '\t');
+	const content = JSON.stringify(value, undefined, options.insertSpaces ? (options.tabSize ?? 4) : '\t');
 	if (content === undefined) throw new TypeError('JSON value must be serializable');
 	return options.eol === undefined ? content : content.replace(/\r\n|\r|\n/gu, options.eol);
 }

@@ -55,7 +55,10 @@ export function isCancellationError(error: unknown): error is CancellationError 
 }
 
 export class CancellationError extends Error {
-	public constructor(message = 'Operation cancelled', public readonly reason?: unknown) {
+	public constructor(
+		message = 'Operation cancelled',
+		public readonly reason?: unknown,
+	) {
 		super(message, { cause: reason });
 		this.name = 'CancellationError';
 	}

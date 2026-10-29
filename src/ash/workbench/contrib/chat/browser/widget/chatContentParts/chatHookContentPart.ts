@@ -7,7 +7,9 @@ import type { IChatHookPart } from '../../../../../services/chat/common/chatServ
 /** Collapsed Hook feedback in the conversation; the transcript owns its execution state. */
 export class ChatHookContentPart extends DomWidget {
 	public readonly domNode: HTMLDetailsElement;
-	public get element(): HTMLElement { return this.domNode; }
+	public get element(): HTMLElement {
+		return this.domNode;
+	}
 	private readonly summary: HTMLElement;
 	private readonly reason: HTMLElement;
 
@@ -52,7 +54,12 @@ export class ChatHookContentPart extends DomWidget {
 					: localize('hooks.cancelled', '{0} Hook cancelled', run.event);
 				break;
 		}
-		this.reason.textContent = run.status.type === 'denied' || run.status.type === 'cancelled' ? run.status.reason : run.status.type === 'failed' ? run.status.message : '';
+		this.reason.textContent =
+			run.status.type === 'denied' || run.status.type === 'cancelled'
+				? run.status.reason
+				: run.status.type === 'failed'
+					? run.status.message
+					: '';
 		this.reason.hidden = !this.reason.textContent;
 		this.domNode.dataset.runId = run.runId;
 		this.domNode.dataset.status = run.status.type;

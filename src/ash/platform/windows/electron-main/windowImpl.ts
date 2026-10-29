@@ -11,13 +11,35 @@ import { ILogService } from '../../log/common/log.js';
 import { IDialogMainService } from '../../dialogs/electron-main/dialogMainService.js';
 import { ILifecycleMainService } from '../../lifecycle/electron-main/lifecycleMainService.js';
 import { Disposable, toDisposable, type DisposableStore, type IDisposable } from '../../../base/common/lifecycle.js';
-import { WindowMode, LoadReason, type ILoadEvent, type ICodeWindow, type IWindowBounds, type IWindowState } from '../../window/electron-main/window.js';
-import { WINDOW_ZOOM_CHANGED_CHANNEL, WINDOW_CLIENT_SIZE_CHANGED_CHANNEL, type IWindowClientSize, type TitleBarStyleConfiguration } from '../../window/common/window.js';
 import {
-	applyWindowState, resolveBrowserWindowOptions, resolveWindowTitleBarOptions, restoreWindowBounds, WindowControlsOverlay,
-	type IWindowConstructorOptions, type IWindowWebPreferences,
+	WindowMode,
+	LoadReason,
+	type ILoadEvent,
+	type ICodeWindow,
+	type IWindowBounds,
+	type IWindowState,
+} from '../../window/electron-main/window.js';
+import {
+	WINDOW_ZOOM_CHANGED_CHANNEL,
+	WINDOW_CLIENT_SIZE_CHANGED_CHANNEL,
+	type IWindowClientSize,
+	type TitleBarStyleConfiguration,
+} from '../../window/common/window.js';
+import {
+	applyWindowState,
+	resolveBrowserWindowOptions,
+	resolveWindowTitleBarOptions,
+	restoreWindowBounds,
+	WindowControlsOverlay,
+	type IWindowConstructorOptions,
+	type IWindowWebPreferences,
 } from './windows.js';
-import { UNKNOWN_EMPTY_WINDOW_WORKSPACE, isSingleFolderWorkspaceIdentifier, isWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../workspace/common/workspace.js';
+import {
+	UNKNOWN_EMPTY_WINDOW_WORKSPACE,
+	isSingleFolderWorkspaceIdentifier,
+	isWorkspaceIdentifier,
+	type IAnyWorkspaceIdentifier,
+} from '../../workspace/common/workspace.js';
 
 export interface IWindowCreationOptions {
 	/** Rebuilds the window's host resources without asking the old renderer to unload. */
@@ -38,19 +60,43 @@ export interface ICodeWindowHandle<TWindow = Electron.BrowserWindow> {
 	readonly webContents: {
 		on(event: 'will-prevent-unload' | 'zoom-changed', listener: () => void): unknown;
 		off(event: 'will-prevent-unload' | 'zoom-changed', listener: () => void): unknown;
-		on(event: 'render-process-gone', listener: (event: unknown, details: Electron.RenderProcessGoneDetails) => void): unknown;
-		off(event: 'render-process-gone', listener: (event: unknown, details: Electron.RenderProcessGoneDetails) => void): unknown;
-		on(event: 'did-fail-load', listener: (event: unknown, code: number, description: string, url: string, mainFrame: boolean) => void): unknown;
-		off(event: 'did-fail-load', listener: (event: unknown, code: number, description: string, url: string, mainFrame: boolean) => void): unknown;
+		on(
+			event: 'render-process-gone',
+			listener: (event: unknown, details: Electron.RenderProcessGoneDetails) => void,
+		): unknown;
+		off(
+			event: 'render-process-gone',
+			listener: (event: unknown, details: Electron.RenderProcessGoneDetails) => void,
+		): unknown;
+		on(
+			event: 'did-fail-load',
+			listener: (event: unknown, code: number, description: string, url: string, mainFrame: boolean) => void,
+		): unknown;
+		off(
+			event: 'did-fail-load',
+			listener: (event: unknown, code: number, description: string, url: string, mainFrame: boolean) => void,
+		): unknown;
 		isDestroyed(): boolean;
 		getZoomLevel(): number;
 		send(channel: string, ...args: unknown[]): void;
-		on(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
-		off(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
+		on(
+			event: 'did-start-navigation',
+			listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void,
+		): unknown;
+		off(
+			event: 'did-start-navigation',
+			listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void,
+		): unknown;
 		reload(): void;
 	};
-	on(event: 'unresponsive' | 'responsive' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: () => void): unknown;
-	off(event: 'unresponsive' | 'responsive' | 'focus' | 'enter-full-screen' | 'leave-full-screen', listener: () => void): unknown;
+	on(
+		event: 'unresponsive' | 'responsive' | 'focus' | 'enter-full-screen' | 'leave-full-screen',
+		listener: () => void,
+	): unknown;
+	off(
+		event: 'unresponsive' | 'responsive' | 'focus' | 'enter-full-screen' | 'leave-full-screen',
+		listener: () => void,
+	): unknown;
 	once(event: 'ready-to-show' | 'closed', listener: () => void): this;
 	isDestroyed(): boolean;
 	isMinimized(): boolean;
@@ -66,7 +112,7 @@ export interface ICodeWindowHandle<TWindow = Electron.BrowserWindow> {
 	setBounds(bounds: IWindowBounds): void;
 	hookWindowMessage(message: number, callback: (wParam: Buffer, lParam: Buffer) => void): void;
 	unhookWindowMessage(message: number): void;
-	setTitleBarOverlay(colors: { color: string; symbolColor: string; height: number; }): void;
+	setTitleBarOverlay(colors: { color: string; symbolColor: string; height: number }): void;
 	maximize(): void;
 	setFullScreen(fullscreen: boolean): void;
 	loadURL(url: string): Promise<void>;
@@ -118,7 +164,9 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 	private clientSize: IWindowClientSize | undefined;
 
 	constructor(
-		createWindow: (options: IWindowConstructorOptions & Pick<IWindowCreationOptions, 'title' | 'icon' | 'tabbingIdentifier'>) => TWindow,
+		createWindow: (
+			options: IWindowConstructorOptions & Pick<IWindowCreationOptions, 'title' | 'icon' | 'tabbingIdentifier'>,
+		) => TWindow,
 		options: IWindowCreationOptions,
 		resources: DisposableStore,
 		@ILogService private readonly logService: ILogService,
@@ -137,7 +185,12 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 		try {
 			backgroundColor = options.backgroundColor ?? themeMainService.getBackgroundColor(scope);
 			this.win = createWindow({
-				...resolveBrowserWindowOptions({ state: options.state, webPreferences: options.webPreferences, titleBarStyle: options.titleBarStyle, backgroundColor }),
+				...resolveBrowserWindowOptions({
+					state: options.state,
+					webPreferences: options.webPreferences,
+					titleBarStyle: options.titleBarStyle,
+					backgroundColor,
+				}),
 				show: false,
 				title: options.title,
 				icon: options.icon,
@@ -156,7 +209,8 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 				if (wParam.byteLength < 4 || lParam.byteLength < 4 || wParam.readUInt32LE() === 1) return;
 				const width = lParam.readUInt16LE(0);
 				const height = lParam.readUInt16LE(2);
-				if (!width || !height || this.clientSize?.width === width && this.clientSize.height === height) return;
+				if (!width || !height || (this.clientSize?.width === width && this.clientSize.height === height))
+					return;
 				this.clientSize = { width, height };
 				pending ??= setImmediate(() => {
 					pending = undefined;
@@ -165,17 +219,25 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 					}
 				});
 			});
-			this._register(toDisposable(() => {
-				if (pending !== undefined) clearImmediate(pending);
-				if (!window.isDestroyed()) window.unhookWindowMessage(0x0005);
-			}));
+			this._register(
+				toDisposable(() => {
+					if (pending !== undefined) clearImmediate(pending);
+					if (!window.isDestroyed()) window.unhookWindowMessage(0x0005);
+				}),
+			);
 		}
 		this.controls = new WindowControlsOverlay(colors => {
-			if ((options.titleBarStyle ?? 'custom') === 'custom' && (process.platform === 'win32' || process.platform === 'linux')) {
+			if (
+				(options.titleBarStyle ?? 'custom') === 'custom' &&
+				(process.platform === 'win32' || process.platform === 'linux')
+			) {
 				window.setTitleBarOverlay(colors);
 			}
 		});
-		this.controls.setTheme({ backgroundColor, symbolColor: Color.fromHex(backgroundColor).isDarker() ? '#ffffff' : '#000000' });
+		this.controls.setTheme({
+			backgroundColor,
+			symbolColor: Color.fromHex(backgroundColor).isDarker() ? '#ffffff' : '#000000',
+		});
 		const { x, y, width, height } = options.state;
 		if (process.platform === 'win32' && x !== undefined && y !== undefined) {
 			// Windows may size the constructor frame using the primary display's DPI.
@@ -189,7 +251,9 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			window.show();
 		});
 		const contents = window.webContents;
-		const onFocus = (): void => { this.focusTime = performance.now(); };
+		const onFocus = (): void => {
+			this.focusTime = performance.now();
+		};
 		const onEnterFullScreen = (): void => this.enteredFullScreen.fire();
 		const onLeaveFullScreen = (): void => this.leftFullScreen.fire();
 		const onZoom = (): void => {
@@ -215,7 +279,11 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			this.preparedNavigation = false;
 		};
 		const onGone = (_event: unknown, details: Electron.RenderProcessGoneDetails): void => {
-			this.logService.error('window', 'Renderer process gone', { windowId: window.id, reason: details.reason, exitCode: details.exitCode });
+			this.logService.error('window', 'Renderer process gone', {
+				windowId: window.id,
+				reason: details.reason,
+				exitCode: details.exitCode,
+			});
 			this.rendererGone = true;
 			this.resetReady();
 			this.loadCancellation?.abort();
@@ -230,7 +298,9 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			}
 			void this.reportWindowError(true);
 		};
-		const onUnresponsive = (): void => { void this.reportWindowError(false); };
+		const onUnresponsive = (): void => {
+			void this.reportWindowError(false);
+		};
 		const onResponsive = (): void => {
 			if (!this.rendererGone && !this.shutdownPrompt) {
 				this.errorPrompt?.abort();
@@ -238,14 +308,29 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			}
 		};
 		const onReload = (): void => {
-			void this.reload().catch(error => this.logService.error('window', 'Could not prepare window reload', error));
+			void this.reload().catch(error =>
+				this.logService.error('window', 'Could not prepare window reload', error),
+			);
 		};
-		const onFailedLoad = (_event: unknown, code: number, description: string, url: string, mainFrame: boolean): void => {
+		const onFailedLoad = (
+			_event: unknown,
+			code: number,
+			description: string,
+			url: string,
+			mainFrame: boolean,
+		): void => {
 			if (!mainFrame || code === -3) return;
-			this.logService.error('window', 'Renderer navigation failed', { windowId: window.id, code, description, url });
+			this.logService.error('window', 'Renderer navigation failed', {
+				windowId: window.id,
+				code,
+				description,
+				url,
+			});
 			const configuration = this.configuration;
 			if (configuration?.useDevelopmentUrl && configuration.url === url && developmentLoadErrors.has(code)) {
-				void this.load(configuration).catch(error => this.logService.error('window', 'Renderer recovery failed', error));
+				void this.load(configuration).catch(error =>
+					this.logService.error('window', 'Renderer recovery failed', error),
+				);
 			}
 		};
 		contents.on('did-start-navigation', onNavigation);
@@ -254,27 +339,29 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 		contents.on('did-fail-load', onFailedLoad);
 		window.on('unresponsive', onUnresponsive);
 		window.on('responsive', onResponsive);
-		this._register(toDisposable(() => {
-			this.loadCancellation?.abort();
-			this.errorPrompt?.abort();
-			void this.readiness.complete();
-			void this.documentLifetime.complete();
-			for (const message of this.pendingMessages) message.cancellation?.dispose();
-			this.pendingMessages.clear();
-			// Keep the original emitter: Electron drops window.webContents on close.
-			if (!window.isDestroyed()) {
-				contents.off('zoom-changed', onZoom);
-				contents.off('did-start-navigation', onNavigation);
-				contents.off('render-process-gone', onGone);
-				contents.off('will-prevent-unload', onReload);
-				contents.off('did-fail-load', onFailedLoad);
-			}
-			window.off('focus', onFocus);
-			window.off('enter-full-screen', onEnterFullScreen);
-			window.off('leave-full-screen', onLeaveFullScreen);
-			window.off('unresponsive', onUnresponsive);
-			window.off('responsive', onResponsive);
-		}));
+		this._register(
+			toDisposable(() => {
+				this.loadCancellation?.abort();
+				this.errorPrompt?.abort();
+				void this.readiness.complete();
+				void this.documentLifetime.complete();
+				for (const message of this.pendingMessages) message.cancellation?.dispose();
+				this.pendingMessages.clear();
+				// Keep the original emitter: Electron drops window.webContents on close.
+				if (!window.isDestroyed()) {
+					contents.off('zoom-changed', onZoom);
+					contents.off('did-start-navigation', onNavigation);
+					contents.off('render-process-gone', onGone);
+					contents.off('will-prevent-unload', onReload);
+					contents.off('did-fail-load', onFailedLoad);
+				}
+				window.off('focus', onFocus);
+				window.off('enter-full-screen', onEnterFullScreen);
+				window.off('leave-full-screen', onLeaveFullScreen);
+				window.off('unresponsive', onUnresponsive);
+				window.off('responsive', onResponsive);
+			}),
+		);
 		window.once('closed', () => {
 			this.closed.fire();
 			this.dispose();
@@ -291,8 +378,12 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 		}
 	}
 
-	public get id(): number { return this.win.id; }
-	public get lastFocusTime(): number { return this.focusTime; }
+	public get id(): number {
+		return this.win.id;
+	}
+	public get lastFocusTime(): number {
+		return this.focusTime;
+	}
 
 	public focus(): void {
 		if (this.isDisposed || this.win.isDestroyed()) return;
@@ -304,14 +395,24 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 		if (!this.isDisposed && !this.win.isDestroyed()) this.win.close();
 	}
 
-	public getBounds(): IWindowBounds { return this.win.getBounds(); }
-	public getClientSize(): IWindowClientSize | undefined { return this.clientSize; }
-	public isFullScreen(): boolean { return this.win.isFullScreen(); }
+	public getBounds(): IWindowBounds {
+		return this.win.getBounds();
+	}
+	public getClientSize(): IWindowClientSize | undefined {
+		return this.clientSize;
+	}
+	public isFullScreen(): boolean {
+		return this.win.isFullScreen();
+	}
 
 	public serializeWindowState(): IWindowState & IWindowBounds {
 		return {
 			...this.win.getNormalBounds(),
-			mode: this.isFullScreen() ? WindowMode.Fullscreen : this.win.isMaximized() ? WindowMode.Maximized : WindowMode.Normal,
+			mode: this.isFullScreen()
+				? WindowMode.Fullscreen
+				: this.win.isMaximized()
+					? WindowMode.Maximized
+					: WindowMode.Normal,
 		};
 	}
 
@@ -339,7 +440,11 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			this.send(channel, ...args);
 			return;
 		}
-		const message: { channel: string; args: unknown[]; token: CancellationToken; cancellation?: IDisposable; } = { channel, args, token };
+		const message: { channel: string; args: unknown[]; token: CancellationToken; cancellation?: IDisposable } = {
+			channel,
+			args,
+			token,
+		};
 		this.pendingMessages.add(message);
 		message.cancellation = token.onCancellationRequested(() => {
 			this.pendingMessages.delete(message);
@@ -347,7 +452,9 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 		});
 	}
 
-	public get whenClosedOrLoaded(): Promise<void> { return this.documentLifetime.p; }
+	public get whenClosedOrLoaded(): Promise<void> {
+		return this.documentLifetime.p;
+	}
 
 	public get isReady(): boolean {
 		return this.readyState && !this.isDisposed && !this.win.isDestroyed();
@@ -390,62 +497,82 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 		this.resetReady();
 		const workspace = this.openedWorkspace;
 		this.documentLoading.fire({
-			workspace: isWorkspaceIdentifier(workspace) || isSingleFolderWorkspaceIdentifier(workspace) ? workspace : undefined,
+			workspace:
+				isWorkspaceIdentifier(workspace) || isSingleFolderWorkspaceIdentifier(workspace)
+					? workspace
+					: undefined,
 			reason,
 		});
 	}
 
 	public load(configuration: Parameters<ICodeWindow<TWindow>['load']>[0]): Promise<void> {
 		this.assertNotDisposed();
-		if (this.loading && !this.loadCancellation?.signal.aborted && this.configuration?.url === configuration.url) return this.loading;
+		if (this.loading && !this.loadCancellation?.signal.aborted && this.configuration?.url === configuration.url)
+			return this.loading;
 		this.loadCancellation?.abort();
 		const cancellation = new AbortController();
 		this.loadCancellation = cancellation;
-		const reason = !this.configuration ? LoadReason.INITIAL : this.configuration.url === configuration.url ? LoadReason.RELOAD : LoadReason.LOAD;
+		const reason = !this.configuration
+			? LoadReason.INITIAL
+			: this.configuration.url === configuration.url
+				? LoadReason.RELOAD
+				: LoadReason.LOAD;
 		this.configuration = { ...configuration };
 		this.rendererGone = false;
 		this.preparedNavigation = true;
 		this.beginDocumentLoad(reason);
 		// Publish before navigation can synchronously emit did-fail-load. Startup
 		// and recovery of the same document must share one operation.
-		const loading = Promise.resolve().then(async () => {
-			if (!configuration.useDevelopmentUrl) {
-				if (cancellation.signal.aborted) return;
-				await (new URL(configuration.url).search ? this.win.loadURL(configuration.url) : this.win.loadFile(configuration.file));
-				return;
-			}
-			let waiting = false;
-			while (!cancellation.signal.aborted) {
-				let available = false;
-				try {
-					// A listening HMR socket does not imply the HTML is available.
-					const response = await fetch(configuration.url, {
-						redirect: 'error',
-						signal: AbortSignal.any([cancellation.signal, AbortSignal.timeout(2_000)]),
-					});
-					available = response.ok;
-					await response.body?.cancel();
-				} catch {
+		const loading = Promise.resolve()
+			.then(async () => {
+				if (!configuration.useDevelopmentUrl) {
 					if (cancellation.signal.aborted) return;
+					await (new URL(configuration.url).search
+						? this.win.loadURL(configuration.url)
+						: this.win.loadFile(configuration.file));
+					return;
 				}
-				if (available && !cancellation.signal.aborted) {
+				let waiting = false;
+				while (!cancellation.signal.aborted) {
+					let available = false;
 					try {
-						await this.win.loadURL(configuration.url);
-						return;
-					} catch (error) {
+						// A listening HMR socket does not imply the HTML is available.
+						const response = await fetch(configuration.url, {
+							redirect: 'error',
+							signal: AbortSignal.any([cancellation.signal, AbortSignal.timeout(2_000)]),
+						});
+						available = response.ok;
+						await response.body?.cancel();
+					} catch {
 						if (cancellation.signal.aborted) return;
-						if (!isRecord(error) || typeof error.errno !== 'number' || !developmentLoadErrors.has(error.errno)) throw error;
 					}
+					if (available && !cancellation.signal.aborted) {
+						try {
+							await this.win.loadURL(configuration.url);
+							return;
+						} catch (error) {
+							if (cancellation.signal.aborted) return;
+							if (
+								!isRecord(error) ||
+								typeof error.errno !== 'number' ||
+								!developmentLoadErrors.has(error.errno)
+							)
+								throw error;
+						}
+					}
+					if (!waiting) {
+						this.logService.warn('window', 'Waiting for development renderer', {
+							windowId: this.win.id,
+							url: configuration.url,
+						});
+						waiting = true;
+					}
+					await delay(500, undefined, { signal: cancellation.signal });
 				}
-				if (!waiting) {
-					this.logService.warn('window', 'Waiting for development renderer', { windowId: this.win.id, url: configuration.url });
-					waiting = true;
-				}
-				await delay(500, undefined, { signal: cancellation.signal });
-			}
-		}).catch(error => {
-			if (!cancellation.signal.aborted) throw error;
-		});
+			})
+			.catch(error => {
+				if (!cancellation.signal.aborted) throw error;
+			});
 		this.loading = loading;
 		const complete = (): void => {
 			if (this.loading === loading) this.loading = undefined;
@@ -468,25 +595,36 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			}
 		});
 		this.reloading = reloading;
-		const complete = (): void => { this.reloading = undefined; };
+		const complete = (): void => {
+			this.reloading = undefined;
+		};
 		void reloading.then(complete, complete);
 		return reloading;
 	}
 
 	public updateWindowControls(options: Parameters<ICodeWindow<TWindow>['updateWindowControls']>[0]): void {
 		this.assertNotDisposed();
-		if (options.backgroundColor !== undefined || options.foregroundColor !== undefined || options.backdropColor !== undefined) {
+		if (
+			options.backgroundColor !== undefined ||
+			options.foregroundColor !== undefined ||
+			options.backdropColor !== undefined
+		) {
 			const theme = this.controls.setTheme({
 				...(options.backgroundColor !== undefined ? { backgroundColor: options.backgroundColor } : {}),
 				...(options.foregroundColor !== undefined ? { symbolColor: options.foregroundColor } : {}),
 				...(options.backdropColor !== undefined ? { backdropColor: options.backdropColor } : {}),
 			});
-			const overlay = resolveWindowTitleBarOptions(this.titleBarStyle, process.platform, theme.backgroundColor).titleBarOverlay;
+			const overlay = resolveWindowTitleBarOptions(
+				this.titleBarStyle,
+				process.platform,
+				theme.backgroundColor,
+			).titleBarOverlay;
 			if (typeof overlay === 'object') {
 				// Detached editors share the palette, but their modal backdrop belongs
 				// to their own window and must not inherit this window's dim state.
 				for (const auxiliary of this.auxiliaryWindowsMainService.getWindows()) {
-					if (auxiliary.parentId === this.win.id) auxiliary.win.setTitleBarOverlay({ ...overlay, symbolColor: theme.symbolColor });
+					if (auxiliary.parentId === this.win.id)
+						auxiliary.win.setTitleBarOverlay({ ...overlay, symbolColor: theme.symbolColor });
 				}
 			}
 		}
@@ -503,46 +641,63 @@ export class CodeWindow<TWindow extends ICodeWindowHandle<TWindow>> extends Disp
 			shutdownSignal.addEventListener('abort', cancel, { once: true });
 			return this.errorPromptTask!.finally(() => shutdownSignal.removeEventListener('abort', cancel));
 		}
-		if (!gone) this.logService.error('window', 'Window is unresponsive', { windowId: this.win.id, source: shutdownSignal ? 'shutdown-timeout' : 'renderer-unresponsive' });
+		if (!gone)
+			this.logService.error('window', 'Window is unresponsive', {
+				windowId: this.win.id,
+				source: shutdownSignal ? 'shutdown-timeout' : 'renderer-unresponsive',
+			});
 		const prompt = new AbortController();
 		this.errorPrompt = prompt;
 		this.shutdownPrompt = shutdownSignal !== undefined;
 		const cancel = (): void => prompt.abort();
 		shutdownSignal?.addEventListener('abort', cancel, { once: true });
-		const task = this.dialogMainService.showMessageBox({
-			type: 'warning',
-			message: gone
-				? localize('window.rendererGone', "The window closed unexpectedly.")
-				: localize('window.unresponsive', "The window is not responding."),
-			detail: gone
-				? localize('window.recoveryDetail', "Reopen the window to continue, or close it.")
-				: localize('window.waitRecoveryDetail', "You can keep waiting, reopen the window, or close it. Reopening or closing may lose changes that have not been backed up."),
-			buttons: gone
-				? [localize('window.reopen', "Reopen"), localize('window.close', "Close")]
-				: [localize('window.reopen', "Reopen"), localize('window.close', "Close"), localize('window.keepWaiting', "Keep Waiting")],
-			defaultId: gone ? 0 : 2,
-			cancelId: gone ? 1 : 2,
-			noLink: true,
-			signal: prompt.signal,
-		}, this.win).then(async result => {
-			// Recovery and close invalidate an already visible dialog's result too.
-			if (prompt.signal.aborted || this.isDisposed) return;
-			if (result.response === 0) {
-				await this.reopen();
-				if (!this.win.isDestroyed()) this.win.destroy();
-			} else if (result.response === 1) {
-				this.win.destroy();
-			}
-		}).catch(error => this.logService.error('window', 'Window recovery failed', error)).finally(() => {
-			shutdownSignal?.removeEventListener('abort', cancel);
-			if (this.errorPrompt === prompt) {
-				this.errorPrompt = undefined;
-				this.errorPromptTask = undefined;
-				this.shutdownPrompt = false;
-			}
-		});
+		const task = this.dialogMainService
+			.showMessageBox(
+				{
+					type: 'warning',
+					message: gone
+						? localize('window.rendererGone', 'The window closed unexpectedly.')
+						: localize('window.unresponsive', 'The window is not responding.'),
+					detail: gone
+						? localize('window.recoveryDetail', 'Reopen the window to continue, or close it.')
+						: localize(
+								'window.waitRecoveryDetail',
+								'You can keep waiting, reopen the window, or close it. Reopening or closing may lose changes that have not been backed up.',
+							),
+					buttons: gone
+						? [localize('window.reopen', 'Reopen'), localize('window.close', 'Close')]
+						: [
+								localize('window.reopen', 'Reopen'),
+								localize('window.close', 'Close'),
+								localize('window.keepWaiting', 'Keep Waiting'),
+							],
+					defaultId: gone ? 0 : 2,
+					cancelId: gone ? 1 : 2,
+					noLink: true,
+					signal: prompt.signal,
+				},
+				this.win,
+			)
+			.then(async result => {
+				// Recovery and close invalidate an already visible dialog's result too.
+				if (prompt.signal.aborted || this.isDisposed) return;
+				if (result.response === 0) {
+					await this.reopen();
+					if (!this.win.isDestroyed()) this.win.destroy();
+				} else if (result.response === 1) {
+					this.win.destroy();
+				}
+			})
+			.catch(error => this.logService.error('window', 'Window recovery failed', error))
+			.finally(() => {
+				shutdownSignal?.removeEventListener('abort', cancel);
+				if (this.errorPrompt === prompt) {
+					this.errorPrompt = undefined;
+					this.errorPromptTask = undefined;
+					this.shutdownPrompt = false;
+				}
+			});
 		this.errorPromptTask = task;
 		return task;
 	}
-
 }

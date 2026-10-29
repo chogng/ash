@@ -9,7 +9,11 @@ export interface DiffRowLayout {
 }
 
 /** Retains only wrapping exceptions; unwrapped offsets are constant-time arithmetic. */
-export function computeDiffRowLayout(model: DiffModel, lineHeight: number, wrapping?: { readonly fontInfo: FontInfo; readonly column: number; }): DiffRowLayout {
+export function computeDiffRowLayout(
+	model: DiffModel,
+	lineHeight: number,
+	wrapping?: { readonly fontInfo: FontInfo; readonly column: number },
+): DiffRowLayout {
 	const rows = model.diff?.rows;
 	const length = rows?.length ?? 0;
 	if (!wrapping || !rows) return { height: length * lineHeight, getOffset: index => index * lineHeight };
@@ -22,13 +26,19 @@ export function computeDiffRowLayout(model: DiffModel, lineHeight: number, wrapp
 		const end = Math.min(length, start + 256);
 		const batch = Array.from({ length: end - start }, (_, offset) => rows.get(start + offset)!);
 		const compute = (source: typeof model.original, side: 'originalLineIndex' | 'modifiedLineIndex'): number[] => {
-			const computer = factory.createLineBreaksComputer({
-				getLineContent: line => source.getLineContent(line), getLineInjectedText: () => null,
-			}, wrapping.fontInfo, source.getOptions().tabSize, wrapping.column, WrappingIndent.None, 'normal', false);
+			const computer = factory.createLineBreaksComputer(
+				{ getLineContent: line => source.getLineContent(line), getLineInjectedText: () => null },
+				wrapping.fontInfo,
+				source.getOptions().tabSize,
+				wrapping.column,
+				WrappingIndent.None,
+				'normal',
+				false,
+			);
 			for (const row of batch) if (row[side] !== undefined) computer.addRequest(row[side]! + 1, null);
 			const breaks = computer.finalize();
 			let next = 0;
-			return batch.map(row => row[side] === undefined ? 1 : breaks[next++]?.breakOffsets.length ?? 1);
+			return batch.map(row => (row[side] === undefined ? 1 : (breaks[next++]?.breakOffsets.length ?? 1)));
 		};
 		const original = compute(model.original, 'originalLineIndex');
 		const modified = compute(model.modified, 'modifiedLineIndex');

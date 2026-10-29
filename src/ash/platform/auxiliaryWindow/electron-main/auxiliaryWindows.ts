@@ -6,13 +6,22 @@ import { createServiceIdentifier } from '../../instantiation/common/instantiatio
 import type { IAuxiliaryWindow } from './auxiliaryWindow.js';
 import type { TitleBarStyleConfiguration } from '../../window/common/window.js';
 
-export const IAuxiliaryWindowsMainService = createServiceIdentifier<IAuxiliaryWindowsMainService>('auxiliaryWindowsMainService');
+export const IAuxiliaryWindowsMainService =
+	createServiceIdentifier<IAuxiliaryWindowsMainService>('auxiliaryWindowsMainService');
 
 export interface IAuxiliaryWindowsMainService {
-	readonly onDidChangeWindowState: Event<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent; }>;
-	createWindow(details: HandlerDetails, titleBarStyle: TitleBarStyleConfiguration, zoomLevel?: number): BrowserWindowConstructorOptions;
+	readonly onDidChangeWindowState: Event<{ readonly parentId: number; readonly event: IAuxiliaryWindowStateEvent }>;
+	createWindow(
+		details: HandlerDetails,
+		titleBarStyle: TitleBarStyleConfiguration,
+		zoomLevel?: number,
+	): BrowserWindowConstructorOptions;
 	/** The opener's resources own this registration, including any descendant windows. */
-	registerWindow(webContents: WebContents, parentId: number, options?: Pick<BrowserWindowConstructorOptions, 'x' | 'y' | 'width' | 'height' | 'show'>): IDisposable;
+	registerWindow(
+		webContents: WebContents,
+		parentId: number,
+		options?: Pick<BrowserWindowConstructorOptions, 'x' | 'y' | 'width' | 'height' | 'show'>,
+	): IDisposable;
 	getWindowByWebContents(webContents: WebContents): IAuxiliaryWindow | undefined;
 	getFocusedWindow(): IAuxiliaryWindow | undefined;
 	getLastActiveWindow(): IAuxiliaryWindow | undefined;

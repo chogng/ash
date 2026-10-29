@@ -6,7 +6,6 @@ import { ICommand, ICursorStateComputerData, IEditOperationBuilder } from '../ed
 import { ITextModel } from '../model.js';
 
 export class ReplaceCommand implements ICommand {
-
 	private readonly _range: Range;
 	private readonly _text: string;
 	public readonly insertsAutoWhitespace: boolean;
@@ -30,7 +29,12 @@ export class ReplaceCommand implements ICommand {
 
 /** Restores an explicit selection in UTF-16 offsets relative to the inserted text. */
 export class ReplaceCommandWithOffsetSelection extends ReplaceCommand {
-	constructor(range: Range, text: string, private readonly anchorOffset: number, private readonly activeOffset: number) {
+	constructor(
+		range: Range,
+		text: string,
+		private readonly anchorOffset: number,
+		private readonly activeOffset: number,
+	) {
 		super(range, text);
 	}
 
@@ -38,12 +42,14 @@ export class ReplaceCommandWithOffsetSelection extends ReplaceCommand {
 		// The inverse range includes shifts caused by the other cursors in this
 		// transaction; offsets describe the selection in this insertion alone.
 		const start = helper.getInverseEditOperations()[0]!.range.getStartPosition();
-		return Selection.fromPositions(model.modifyPosition(start, this.anchorOffset), model.modifyPosition(start, this.activeOffset));
+		return Selection.fromPositions(
+			model.modifyPosition(start, this.anchorOffset),
+			model.modifyPosition(start, this.activeOffset),
+		);
 	}
 }
 
 export class ReplaceOvertypeCommand implements ICommand {
-
 	private readonly _range: Range;
 	private readonly _text: string;
 	public readonly insertsAutoWhitespace: boolean;
@@ -75,7 +81,6 @@ export class ReplaceOvertypeCommand implements ICommand {
 }
 
 export class ReplaceCommandThatSelectsText implements ICommand {
-
 	private readonly _range: Range;
 	private readonly _text: string;
 
@@ -96,7 +101,6 @@ export class ReplaceCommandThatSelectsText implements ICommand {
 }
 
 export class ReplaceCommandWithoutChangingPosition implements ICommand {
-
 	private readonly _range: Range;
 	private readonly _text: string;
 	public readonly insertsAutoWhitespace: boolean;
@@ -119,14 +123,19 @@ export class ReplaceCommandWithoutChangingPosition implements ICommand {
 }
 
 export class ReplaceCommandWithOffsetCursorState implements ICommand {
-
 	private readonly _range: Range;
 	private readonly _text: string;
 	private readonly _columnDeltaOffset: number;
 	private readonly _lineNumberDeltaOffset: number;
 	public readonly insertsAutoWhitespace: boolean;
 
-	constructor(range: Range, text: string, lineNumberDeltaOffset: number, columnDeltaOffset: number, insertsAutoWhitespace: boolean = false) {
+	constructor(
+		range: Range,
+		text: string,
+		lineNumberDeltaOffset: number,
+		columnDeltaOffset: number,
+		insertsAutoWhitespace: boolean = false,
+	) {
 		this._range = range;
 		this._text = text;
 		this._columnDeltaOffset = columnDeltaOffset;
@@ -141,12 +150,13 @@ export class ReplaceCommandWithOffsetCursorState implements ICommand {
 	public computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
 		const inverseEditOperations = helper.getInverseEditOperations();
 		const srcRange = inverseEditOperations[0].range;
-		return Selection.fromPositions(srcRange.getEndPosition().delta(this._lineNumberDeltaOffset, this._columnDeltaOffset));
+		return Selection.fromPositions(
+			srcRange.getEndPosition().delta(this._lineNumberDeltaOffset, this._columnDeltaOffset),
+		);
 	}
 }
 
 export class ReplaceOvertypeCommandOnCompositionEnd implements ICommand {
-
 	private readonly _range: Range;
 
 	constructor(range: Range) {
@@ -175,7 +185,6 @@ export class ReplaceOvertypeCommandOnCompositionEnd implements ICommand {
 }
 
 export class ReplaceCommandThatPreservesSelection implements ICommand {
-
 	private readonly _range: Range;
 	private readonly _text: string;
 	private readonly _initialSelection: Selection;

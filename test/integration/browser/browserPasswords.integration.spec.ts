@@ -3,15 +3,23 @@ import { expect, test } from '@playwright/test';
 import { ModuleKind, ScriptTarget, transpileModule } from 'typescript';
 
 // Exercise the sandbox preload with trusted Chromium input and a test-owned IPC sink.
-const preload = transpileModule(readFileSync(new URL('../../../src/ash/platform/browserView/electron-browser/preload-browserView.ts', import.meta.url), 'utf8'), {
-	compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.None },
-}).outputText;
+const preload = transpileModule(
+	readFileSync(
+		new URL('../../../src/ash/platform/browserView/electron-browser/preload-browserView.ts', import.meta.url),
+		'utf8',
+	),
+	{ compilerOptions: { target: ScriptTarget.ES2022, module: ModuleKind.None } },
+).outputText;
 
 for (const nativeForm of [true, false]) {
-	test(`Browser password submission ignores visibility toggles and retains ${nativeForm ? 'native form validation and keyboard submit' : 'SPA click submission'}`, async ({ page }) => {
+	test(`Browser password submission ignores visibility toggles and retains ${nativeForm ? 'native form validation and keyboard submit' : 'SPA click submission'}`, async ({
+		page,
+	}) => {
 		const tag = nativeForm ? 'form' : 'div role="form"';
-		await page.route('https://password.test/**', route => route.fulfill({
-			contentType: 'text/html', body: `<!doctype html>
+		await page.route('https://password.test/**', route =>
+			route.fulfill({
+				contentType: 'text/html',
+				body: `<!doctype html>
 			<${tag} id="login">
 			<label>Account<input name="username" autocomplete="username"></label>
 			<label>Password<input name="password" type="password" autocomplete="current-password"></label>
@@ -28,19 +36,24 @@ for (const nativeForm of [true, false]) {
 				input.type = input.type === 'password' ? 'text' : 'password';
 			};
 			${nativeForm ? 'login.onsubmit = event => event.preventDefault();' : `document.getElementById('submit').onclick = () => { login.innerHTML = '<p>Signed in</p>'; };`}
-			</script>` }));
-		type PasswordHost = { passwordMessages: { type: string; data: unknown; }[]; };
+			</script>`,
+			}),
+		);
+		type PasswordHost = { passwordMessages: { type: string; data: unknown }[] };
 		await page.addInitScript(() => {
 			const host = window as unknown as PasswordHost;
 			host.passwordMessages = [];
 			Object.assign(window, {
 				require: () => ({
-					contextBridge: { exposeInIsolatedWorld() { } }, ipcRenderer: {
-						send(_channel: string, message: { type: string; data: unknown; }) {
-							if (['passwordSubmitted', 'passwordIdentitySubmitted'].includes(message.type)) host.passwordMessages.push({ type: message.type, data: message.data });
-						}, on() { },
-					}
-				})
+					contextBridge: { exposeInIsolatedWorld() {} },
+					ipcRenderer: {
+						send(_channel: string, message: { type: string; data: unknown }) {
+							if (['passwordSubmitted', 'passwordIdentitySubmitted'].includes(message.type))
+								host.passwordMessages.push({ type: message.type, data: message.data });
+						},
+						on() {},
+					},
+				}),
 			});
 		});
 		await page.addInitScript(preload);
@@ -61,8 +74,18 @@ for (const nativeForm of [true, false]) {
 		} else {
 			await page.getByRole('button', { name: 'Sign in', exact: true }).click();
 		}
-		await expect.poll(() => page.evaluate(() => (window as unknown as PasswordHost).passwordMessages)).toEqual([{
-			type: 'passwordSubmitted', data: { action: 'https://password.test/login', username: 'user@example.test', hasUsername: true, password: 'unverified-value' },
-		}]);
+		await expect
+			.poll(() => page.evaluate(() => (window as unknown as PasswordHost).passwordMessages))
+			.toEqual([
+				{
+					type: 'passwordSubmitted',
+					data: {
+						action: 'https://password.test/login',
+						username: 'user@example.test',
+						hasUsername: true,
+						password: 'unverified-value',
+					},
+				},
+			]);
 	});
 }

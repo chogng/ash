@@ -9,7 +9,11 @@ import { bindContextKey, observableConfigValue } from '../../common/platformObse
 
 test('configuration observables read current values and ignore unrelated settings after disposal', async () => {
 	const registry = new ConfigurationRegistry();
-	registry.registerConfiguration({ key: 'scm.workingSets.enabled', defaultValue: false, parse: value => Boolean(value) });
+	registry.registerConfiguration({
+		key: 'scm.workingSets.enabled',
+		defaultValue: false,
+		parse: value => Boolean(value),
+	});
 	registry.registerConfiguration({ key: 'editor.fontSize', defaultValue: 14, parse: value => Number(value) });
 	using configuration = new InMemoryConfigurationService(registry);
 	const value = observableConfigValue('scm.workingSets.enabled', false, configuration);

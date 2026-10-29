@@ -8,7 +8,7 @@ export interface IAgentSessionListItem {
 	readonly kind: 'draft' | 'session';
 	readonly active: boolean;
 	readonly pinned?: boolean;
-	readonly group?: { readonly sectionId: string; readonly name: string; };
+	readonly group?: { readonly sectionId: string; readonly name: string };
 	getActions(): readonly IAction[];
 	open(): void;
 }

@@ -1,59 +1,44 @@
 import './aria.css';
-import {
-	Disposable,
-	MutableDisposable,
-	type IDisposable,
-
-	toDisposable,
-} from "../../../common/lifecycle.js";
-import { scheduleAtNextAnimationFrame } from "../../scheduler.js";
-import { h } from "../../dom.js";
+import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../../../common/lifecycle.js';
+import { scheduleAtNextAnimationFrame } from '../../scheduler.js';
+import { h } from '../../dom.js';
 
 export type AriaRole =
-	| "alert"
-	| "button"
-	| "combobox"
-	| "dialog"
-	| "listbox"
-	| "menu"
-	| "menuitem"
-	| "option"
-	| "status"
-	| "textbox"
+	| 'alert'
+	| 'button'
+	| 'combobox'
+	| 'dialog'
+	| 'listbox'
+	| 'menu'
+	| 'menuitem'
+	| 'option'
+	| 'status'
+	| 'textbox'
 	| (string & {});
 
-export type AriaAutoComplete = "none" | "inline" | "list" | "both";
-export type AriaLivePriority = "polite" | "assertive";
+export type AriaAutoComplete = 'none' | 'inline' | 'list' | 'both';
+export type AriaLivePriority = 'polite' | 'assertive';
 export type AriaAttribute =
-	| "activedescendant"
-	| "atomic"
-	| "autocomplete"
-	| "checked"
-	| "controls"
-	| "describedby"
-	| "disabled"
-	| "expanded"
-	| "haspopup"
-	| "hidden"
-	| "invalid"
-	| "label"
-	| "labelledby"
-	| "live"
-	| "pressed"
-	| "selected";
-export type AriaAttributeValue =
-	| string
-	| number
-	| boolean
-	| null
-	| undefined;
+	| 'activedescendant'
+	| 'atomic'
+	| 'autocomplete'
+	| 'checked'
+	| 'controls'
+	| 'describedby'
+	| 'disabled'
+	| 'expanded'
+	| 'haspopup'
+	| 'hidden'
+	| 'invalid'
+	| 'label'
+	| 'labelledby'
+	| 'live'
+	| 'pressed'
+	| 'selected';
+export type AriaAttributeValue = string | number | boolean | null | undefined;
 
 /** Sets or removes one ARIA attribute while preserving boolean false. */
-export function setAriaAttribute(
-	element: Element,
-	attribute: AriaAttribute,
-	value: AriaAttributeValue,
-): void {
+export function setAriaAttribute(element: Element, attribute: AriaAttribute, value: AriaAttributeValue): void {
 	const name = `aria-${attribute}`;
 	if (value === undefined || value === null) {
 		element.removeAttribute(name);
@@ -63,22 +48,16 @@ export function setAriaAttribute(
 }
 
 /** Reads one ARIA attribute without exposing DOM null semantics. */
-export function getAriaAttribute(
-	element: Element,
-	attribute: AriaAttribute,
-): string | undefined {
+export function getAriaAttribute(element: Element, attribute: AriaAttribute): string | undefined {
 	return element.getAttribute(`aria-${attribute}`) ?? undefined;
 }
 
 /** Sets or removes an element's semantic role. */
-export function setRole(
-	element: Element,
-	role: AriaRole | undefined,
-): void {
+export function setRole(element: Element, role: AriaRole | undefined): void {
 	if (role === undefined) {
-		element.removeAttribute("role");
+		element.removeAttribute('role');
 	} else {
-		element.setAttribute("role", role);
+		element.setAttribute('role', role);
 	}
 }
 
@@ -97,81 +76,60 @@ export class AriaLiveRegion extends Disposable {
 
 	constructor(ownerDocument: Document, container: HTMLElement = ownerDocument.body) {
 		super();
-		this.root = h(ownerDocument, "div");
-		this.root.className = "ash-aria-live";
-		this.polite = [
-			this.createRegion(ownerDocument, "polite"),
-			this.createRegion(ownerDocument, "polite"),
-		];
-		this.assertive = [
-			this.createRegion(ownerDocument, "assertive"),
-			this.createRegion(ownerDocument, "assertive"),
-		];
+		this.root = h(ownerDocument, 'div');
+		this.root.className = 'ash-aria-live';
+		this.polite = [this.createRegion(ownerDocument, 'polite'), this.createRegion(ownerDocument, 'polite')];
+		this.assertive = [this.createRegion(ownerDocument, 'assertive'), this.createRegion(ownerDocument, 'assertive')];
 		this.root.append(...this.polite, ...this.assertive);
 		container.append(this.root);
 		this._register(toDisposable(() => this.root.remove()));
 	}
 
 	status(message: string): void {
-		this.announce(message, "polite");
+		this.announce(message, 'polite');
 	}
 
 	alert(message: string): void {
-		this.announce(message, "assertive");
+		this.announce(message, 'assertive');
 	}
 
-	announce(
-		message: string,
-		priority: AriaLivePriority = "polite",
-	): void {
-		const regions = priority === "assertive"
-			? this.assertive
-			: this.polite;
-		const index = priority === "assertive"
-			? this.assertiveIndex
-			: this.politeIndex;
+	announce(message: string, priority: AriaLivePriority = 'polite'): void {
+		const regions = priority === 'assertive' ? this.assertive : this.polite;
+		const index = priority === 'assertive' ? this.assertiveIndex : this.politeIndex;
 		const target = regions[index];
 		const alternate = regions[index === 0 ? 1 : 0];
-		if (priority === "assertive") {
+		if (priority === 'assertive') {
 			this.assertiveIndex = index === 0 ? 1 : 0;
 		} else {
 			this.politeIndex = index === 0 ? 1 : 0;
 		}
 		this.pending.clear();
-		target.textContent = "";
-		alternate.textContent = "";
+		target.textContent = '';
+		alternate.textContent = '';
 		const targetWindow = target.ownerDocument.defaultView;
 		if (!targetWindow) return;
-		this.pending.value = scheduleAtNextAnimationFrame(
-			targetWindow,
-			() => {
-				this.pending.clear();
-				target.textContent = message.slice(0, maximumMessageLength);
-			},
-		);
+		this.pending.value = scheduleAtNextAnimationFrame(targetWindow, () => {
+			this.pending.clear();
+			target.textContent = message.slice(0, maximumMessageLength);
+		});
 	}
 
 	clear(): void {
 		this.pending.clear();
 		for (const region of [...this.polite, ...this.assertive]) {
-			region.textContent = "";
+			region.textContent = '';
 		}
 	}
 
-	private createRegion(
-		ownerDocument: Document,
-		priority: AriaLivePriority,
-	): HTMLDivElement {
-		const region = h(ownerDocument, "div");
-		region.className = priority === "assertive"
-			? "ash-aria-alert"
-			: "ash-aria-status";
-		if (priority === "assertive") {
-			setRole(region, "alert");
+	private createRegion(ownerDocument: Document, priority: AriaLivePriority): HTMLDivElement {
+		const region = h(ownerDocument, 'div');
+		region.className = priority === 'assertive' ? 'ash-aria-alert' : 'ash-aria-status';
+		if (priority === 'assertive') {
+			setRole(region, 'alert');
 		} else {
-			setAriaAttribute(region, "live", "polite");
+			setAriaAttribute(region, 'live', 'polite');
 		}
-		setAriaAttribute(region, "atomic", true);
+		setAriaAttribute(region, 'atomic', true);
 		return region;
 	}
 }
@@ -195,6 +153,6 @@ export function status(message: string): void {
 }
 
 function getARIAContainer(): AriaLiveRegion {
-	if (!ariaLiveRegion) throw new Error("ARIA container has not been initialized");
+	if (!ariaLiveRegion) throw new Error('ARIA container has not been initialized');
 	return ariaLiveRegion;
 }

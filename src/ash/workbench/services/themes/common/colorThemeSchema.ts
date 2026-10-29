@@ -5,7 +5,10 @@ import { fileIconThemeSchema, fileIconThemeSchemaId } from './fileIconThemeSchem
 import { productIconThemeSchema, productIconThemeSchemaId } from './productIconThemeSchema.js';
 import type { JsonSchema } from '../../../../base/common/jsonSchema.js';
 import type { IDisposable } from '../../../../base/common/lifecycle.js';
-import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
+import {
+	Extensions as JSONExtensions,
+	type IJSONContributionRegistry,
+} from '../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { Colors } from '../../../../platform/theme/common/colorRegistry.js';
 import '../../../../platform/theme/common/colorTheme.js';
 import '../../../../editor/common/core/editorColorRegistry.js';
@@ -14,7 +17,10 @@ const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONC
 
 export const colorThemeSchemaId = 'vscode://schemas/color-theme';
 
-const color: JsonSchema = { type: 'string', pattern: '^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$' };
+const color: JsonSchema = {
+	type: 'string',
+	pattern: '^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$',
+};
 
 /** Color-theme document shared by built-in, user, and extension themes. */
 export const colorThemeSchema: JsonSchema = {
@@ -30,20 +36,48 @@ export const colorThemeSchema: JsonSchema = {
 		colors: {
 			type: 'object',
 			get properties() {
-				return Object.fromEntries(Colors.getColors().map(entry => [entry.id, { ...color, description: entry.description }]));
+				return Object.fromEntries(
+					Colors.getColors().map(entry => [entry.id, { ...color, description: entry.description }]),
+				);
 			},
 			additionalProperties: color,
 		},
 		semanticHighlighting: { type: 'boolean' },
 		semanticTokenColors: {
 			type: 'object',
-			get properties() { return Object.fromEntries(getTokenClassificationRegistry().getTokenTypes().map(type => [type.id, { ...colorThemeSchema.properties!.semanticTokenColors!.additionalProperties as JsonSchema, description: type.description }])); },
+			get properties() {
+				return Object.fromEntries(
+					getTokenClassificationRegistry()
+						.getTokenTypes()
+						.map(type => [
+							type.id,
+							{
+								...(colorThemeSchema.properties!.semanticTokenColors!
+									.additionalProperties as JsonSchema),
+								description: type.description,
+							},
+						]),
+				);
+			},
 			additionalProperties: {
-				anyOf: [color, {
-					type: 'object',
-					additionalProperties: false,
-					properties: { foreground: color, fontStyle: { type: 'string', pattern: '^\\s*(?:(?:italic|bold|underline|strikethrough)\\s*)*$' }, bold: { type: 'boolean' }, italic: { type: 'boolean' }, underline: { type: 'boolean' }, strikethrough: { type: 'boolean' } },
-				}],
+				anyOf: [
+					color,
+					{
+						type: 'object',
+						additionalProperties: false,
+						properties: {
+							foreground: color,
+							fontStyle: {
+								type: 'string',
+								pattern: '^\\s*(?:(?:italic|bold|underline|strikethrough)\\s*)*$',
+							},
+							bold: { type: 'boolean' },
+							italic: { type: 'boolean' },
+							underline: { type: 'boolean' },
+							strikethrough: { type: 'boolean' },
+						},
+					},
+				],
 			},
 		},
 	},

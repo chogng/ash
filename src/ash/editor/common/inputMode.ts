@@ -12,7 +12,8 @@ export class InputMode {
 	}
 
 	public static setInputMode(inputMode: 'insert' | 'overtype'): void {
-		if (inputMode !== 'insert' && inputMode !== 'overtype') throw new TypeError('Editor input mode must be insert or overtype');
+		if (inputMode !== 'insert' && inputMode !== 'overtype')
+			throw new TypeError('Editor input mode must be insert or overtype');
 		if (inputMode === InputMode.inputMode) return;
 		InputMode.inputMode = inputMode;
 		InputMode.changeEmitter.fire(inputMode);

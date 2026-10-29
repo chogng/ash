@@ -1,17 +1,17 @@
-import type { Event } from "../../../base/common/event.js";
-import type { IDisposable } from "../../../base/common/lifecycle.js";
-import type { URI } from "../../../base/common/uri.js";
+import type { Event } from '../../../base/common/event.js';
+import type { IDisposable } from '../../../base/common/lifecycle.js';
+import type { URI } from '../../../base/common/uri.js';
 import type { CancellationToken } from '../../../base/common/cancellation.js';
 import type { VSBufferReadableStream } from '../../../base/common/buffer.js';
 import type { ReadableStreamEvents } from '../../../base/common/stream.js';
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 /** Stable file kind used by Workbench consumers independently of wire DTOs. */
 export enum FileKind {
-	Directory = "directory",
-	File = "file",
-	SymbolicLink = "symbolicLink",
-	Other = "other",
+	Directory = 'directory',
+	File = 'file',
+	SymbolicLink = 'symbolicLink',
+	Other = 'other',
 }
 
 /** Metadata for one existing workspace resource. */
@@ -53,9 +53,9 @@ export interface IFileWriteResult {
 	readonly revision: string;
 }
 
-export type FileExistingTargetBehavior = "error" | "overwrite" | "ignore";
-export type FileMissingTargetBehavior = "error" | "ignore";
-export type FileDeleteMode = "fileOrEmptyDirectory" | "recursive";
+export type FileExistingTargetBehavior = 'error' | 'overwrite' | 'ignore';
+export type FileMissingTargetBehavior = 'error' | 'ignore';
+export type FileDeleteMode = 'fileOrEmptyDirectory' | 'recursive';
 
 export enum FileSystemProviderCapabilities {
 	None = 0,
@@ -104,25 +104,42 @@ export interface IFileSystemProviderError extends Error {
 }
 
 export class FileSystemProviderError extends Error implements IFileSystemProviderError {
-	constructor(message: string, public readonly code: FileSystemProviderErrorCode) {
+	constructor(
+		message: string,
+		public readonly code: FileSystemProviderErrorCode,
+	) {
 		super(message);
 		this.name = `${code} (FileSystemError)`;
 	}
 }
 
-export function createFileSystemProviderError(error: Error | string, code: FileSystemProviderErrorCode): FileSystemProviderError {
+export function createFileSystemProviderError(
+	error: Error | string,
+	code: FileSystemProviderErrorCode,
+): FileSystemProviderError {
 	return new FileSystemProviderError(typeof error === 'string' ? error : error.message, code);
 }
 
 /** Revives the stable category retained by channel error serialization. */
 export function toFileSystemProviderErrorCode(error: Error | undefined | null): FileSystemProviderErrorCode {
-	if (error instanceof FileSystemProviderError) { return error.code; }
-	if (error?.name === 'FileNotFoundError') { return FileSystemProviderErrorCode.FileNotFound; }
-	if (error?.name === 'FileOperationNotSupportedError') { return FileSystemProviderErrorCode.Unavailable; }
-	return Object.values(FileSystemProviderErrorCode).find(code => error?.name === `${code} (FileSystemError)`) ?? FileSystemProviderErrorCode.Unknown;
+	if (error instanceof FileSystemProviderError) {
+		return error.code;
+	}
+	if (error?.name === 'FileNotFoundError') {
+		return FileSystemProviderErrorCode.FileNotFound;
+	}
+	if (error?.name === 'FileOperationNotSupportedError') {
+		return FileSystemProviderErrorCode.Unavailable;
+	}
+	return (
+		Object.values(FileSystemProviderErrorCode).find(code => error?.name === `${code} (FileSystemError)`) ??
+		FileSystemProviderErrorCode.Unknown
+	);
 }
 
-export interface IFileReadLimits { readonly size?: number; }
+export interface IFileReadLimits {
+	readonly size?: number;
+}
 
 export interface IFileReadStreamOptions {
 	readonly position?: number;
@@ -130,16 +147,22 @@ export interface IFileReadStreamOptions {
 	readonly limits?: IFileReadLimits;
 }
 
-export interface IReadFileStreamOptions extends IFileReadStreamOptions { }
+export interface IReadFileStreamOptions extends IFileReadStreamOptions {}
 
 export interface IFileStreamContent extends IFileStat {
 	readonly value: VSBufferReadableStream;
 }
 
-export interface IFileOpenOptions { readonly create: boolean; }
+export interface IFileOpenOptions {
+	readonly create: boolean;
+}
 
 export interface IFileSystemProviderWithFileReadStreamCapability extends IFileSystemProvider {
-	readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStreamEvents<Uint8Array>;
+	readFileStream(
+		resource: URI,
+		options: IFileReadStreamOptions,
+		token: CancellationToken,
+	): ReadableStreamEvents<Uint8Array>;
 }
 
 export interface IFileSystemProviderWithOpenReadWriteCloseCapability extends IFileSystemProvider {
@@ -149,7 +172,9 @@ export interface IFileSystemProviderWithOpenReadWriteCloseCapability extends IFi
 	close(fd: number): Promise<void>;
 }
 
-export function hasFileReadStreamCapability(provider: IFileSystemProvider): provider is IFileSystemProviderWithFileReadStreamCapability {
+export function hasFileReadStreamCapability(
+	provider: IFileSystemProvider,
+): provider is IFileSystemProviderWithFileReadStreamCapability {
 	return (provider.capabilities & FileSystemProviderCapabilities.FileReadStream) !== 0;
 }
 
@@ -157,7 +182,7 @@ export function hasFileReadStreamCapability(provider: IFileSystemProvider): prov
 export class FileRevisionConflictError extends Error {
 	constructor(readonly resource: URI) {
 		super(`File changed since it was read: ${resource.toString()}`);
-		this.name = "FileRevisionConflictError";
+		this.name = 'FileRevisionConflictError';
 	}
 }
 
@@ -188,8 +213,15 @@ export interface IFileSystemProviderWithPathIdentity extends IFileSystemProvider
 	getPathIdentity(resource: URI): IFilePathIdentity;
 }
 
-export function hasPathIdentityCapability(provider: IFileSystemProvider): provider is IFileSystemProviderWithPathIdentity {
-	return 'resolvePathIdentity' in provider && 'getPathIdentity' in provider && 'retainPathIdentity' in provider && 'onDidChangePathIdentity' in provider;
+export function hasPathIdentityCapability(
+	provider: IFileSystemProvider,
+): provider is IFileSystemProviderWithPathIdentity {
+	return (
+		'resolvePathIdentity' in provider &&
+		'getPathIdentity' in provider &&
+		'retainPathIdentity' in provider &&
+		'onDidChangePathIdentity' in provider
+	);
 }
 
 /** Codec policy for provider-owned text decoding. Explicit encoding requests omit this policy. */
@@ -199,7 +231,12 @@ export interface IFileReadOptions {
 }
 
 /** Operation-scoped reader supplied by an authority narrower than the editor's file service. */
-export type FileReadOperation = (resource: URI, encoding: string, options: IFileReadOptions | undefined, signal: AbortSignal) => Promise<IFileContent>;
+export type FileReadOperation = (
+	resource: URI,
+	encoding: string,
+	options: IFileReadOptions | undefined,
+	signal: AbortSignal,
+) => Promise<IFileContent>;
 
 /** Storage operations implemented by a runtime or virtual resource provider. */
 export interface IFileSystemProvider {
@@ -213,8 +250,19 @@ export interface IFileSystemProvider {
 	readFile(resource: URI): Promise<IFileBytes>;
 	/** Text codecs are provider-owned; absence limits this provider to UTF-8. */
 	readTextFile?(resource: URI, encoding: string, options?: IFileReadOptions): Promise<IFileContent>;
-	writeTextFile?(resource: URI, content: string, encoding: string, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
-	writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
+	writeTextFile?(
+		resource: URI,
+		content: string,
+		encoding: string,
+		options: IFileWriteOptions,
+		signal?: AbortSignal,
+	): Promise<IFileWriteResult>;
+	writeFile(
+		resource: URI,
+		content: Uint8Array,
+		options: IFileWriteOptions,
+		signal?: AbortSignal,
+	): Promise<IFileWriteResult>;
 	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
 	createDirectory(resource: URI): Promise<IFileStat>;
 	/** Copies one file or directory, failing if the target exists. */
@@ -234,11 +282,21 @@ export interface IFileSystemProviderCopyScope extends IDisposable {
 	stat(resource: URI, token?: CancellationToken): Promise<IFileStat>;
 	readDirectory(resource: URI, token?: CancellationToken): Promise<readonly IFileEntry[]>;
 	readFile(resource: URI, token?: CancellationToken): Promise<IFileBytes>;
-	writeFile(resource: URI, content: Uint8Array, options: IFileWriteOptions, token?: CancellationToken): Promise<IFileWriteResult>;
+	writeFile(
+		resource: URI,
+		content: Uint8Array,
+		options: IFileWriteOptions,
+		token?: CancellationToken,
+	): Promise<IFileWriteResult>;
 	createDirectory(resource: URI, token?: CancellationToken): Promise<IFileStat>;
 	/** Publishes a staged copy without replacing an existing destination on the pinned connection. */
 	rename(source: URI, target: URI, existing: FileExistingTargetBehavior, token?: CancellationToken): Promise<void>;
-	delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode, token?: CancellationToken): Promise<void>;
+	delete(
+		resource: URI,
+		missing: FileMissingTargetBehavior,
+		mode: FileDeleteMode,
+		token?: CancellationToken,
+	): Promise<void>;
 }
 
 /** Providers that route one namespace to replaceable connections pin a copy to its original owner. */
@@ -267,10 +325,19 @@ export interface IFileService {
 	readDirectory(resource: URI): Promise<readonly IFileEntry[]>;
 	readFile(resource: URI, encoding?: string, options?: IFileReadOptions): Promise<IFileContent>;
 	readFileBytes(resource: URI): Promise<IFileBytes>;
-	readFileStream(resource: URI, options?: IReadFileStreamOptions, token?: CancellationToken): Promise<IFileStreamContent>;
+	readFileStream(
+		resource: URI,
+		options?: IReadFileStreamOptions,
+		token?: CancellationToken,
+	): Promise<IFileStreamContent>;
 	writeFile(request: IFileWriteRequest, options?: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
 	/** Writes exact bytes; default import options reject existing files, including empty ones. */
-	writeFileBytes(resource: URI, bytes: Uint8Array, options?: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
+	writeFileBytes(
+		resource: URI,
+		bytes: Uint8Array,
+		options?: IFileWriteOptions,
+		signal?: AbortSignal,
+	): Promise<IFileWriteResult>;
 	createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat>;
 	createDirectory(resource: URI): Promise<IFileStat>;
 	copy(source: URI, target: URI): Promise<void>;
@@ -302,16 +369,21 @@ export interface IFileSystemProviderPathIdentityChangeEvent {
 export class FileNotFoundError extends FileSystemProviderError {
 	constructor(readonly resource: URI) {
 		super(`File does not exist: ${resource.toString()}`, FileSystemProviderErrorCode.FileNotFound);
-		this.name = "FileNotFoundError";
+		this.name = 'FileNotFoundError';
 	}
 }
 
 export class FileOperationNotSupportedError extends FileSystemProviderError {
-	constructor(readonly resource: URI, readonly operation: string) {
-		super(`File operation '${operation}' is not supported for ${resource.toString()}`, FileSystemProviderErrorCode.Unavailable);
-		this.name = "FileOperationNotSupportedError";
+	constructor(
+		readonly resource: URI,
+		readonly operation: string,
+	) {
+		super(
+			`File operation '${operation}' is not supported for ${resource.toString()}`,
+			FileSystemProviderErrorCode.Unavailable,
+		);
+		this.name = 'FileOperationNotSupportedError';
 	}
 }
 
-export const IFileService =
-	createServiceIdentifier<IFileService>("fileService");
+export const IFileService = createServiceIdentifier<IFileService>('fileService');

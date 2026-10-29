@@ -10,7 +10,7 @@ export class DebugWatchAccessibilityAnnouncer {
 	constructor(
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IAccessibilityService private readonly accessibility: IAccessibilityService,
-	) { }
+	) {}
 
 	announce(sessionId: string, results: readonly IDebugWatchResult[]): void {
 		if (sessionId !== this.sessionId) {

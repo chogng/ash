@@ -1,7 +1,7 @@
-import { spawn } from "node:child_process";
-import { throwIfCancelled } from "../../../base/common/cancellation.js";
-import { CancellationError } from "../../../base/common/errors.js";
-import { normalizeRemoteWorkspacePath } from "../common/remote.js";
+import { spawn } from 'node:child_process';
+import { throwIfCancelled } from '../../../base/common/cancellation.js';
+import { CancellationError } from '../../../base/common/errors.js';
+import { normalizeRemoteWorkspacePath } from '../common/remote.js';
 
 const SSH_HOST_PATTERN = /^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,251}[A-Za-z0-9])?$/;
 const MAX_OUTPUT_LENGTH = 1024 * 1024;
@@ -17,48 +17,65 @@ export interface RemoteCommandObserver {
 	readonly signal?: AbortSignal;
 }
 
-export type RunRemoteCommand = (executable: string, args: readonly string[], environment: NodeJS.ProcessEnv, observer?: RemoteCommandObserver) => Promise<RemoteCommandResult>;
+export type RunRemoteCommand = (
+	executable: string,
+	args: readonly string[],
+	environment: NodeJS.ProcessEnv,
+	observer?: RemoteCommandObserver,
+) => Promise<RemoteCommandResult>;
 
 export function normalizeCredentialFreeSshHost(host: string): string {
 	const normalized = host.trim().toLowerCase();
-	if (!SSH_HOST_PATTERN.test(normalized)) throw new Error("Remote command requires a credential-free OpenSSH config host");
+	if (!SSH_HOST_PATTERN.test(normalized))
+		throw new Error('Remote command requires a credential-free OpenSSH config host');
 	return normalized;
 }
 
 export function validLocalCommand(value: string): boolean {
-	return value.trim().length > 0 && !value.includes("\0") && !value.includes("\n") && !value.includes("\r");
+	return value.trim().length > 0 && !value.includes('\0') && !value.includes('\n') && !value.includes('\r');
 }
 
 export function isCanonicalAbsoluteRemotePath(value: string): boolean {
 	try {
-		return normalizeRemoteWorkspacePath(value) === value && !value.endsWith("/") && !(value.startsWith("//") && value.slice(2).split("/").length < 3);
+		return (
+			normalizeRemoteWorkspacePath(value) === value &&
+			!value.endsWith('/') &&
+			!(value.startsWith('//') && value.slice(2).split('/').length < 3)
+		);
 	} catch {
 		return false;
 	}
 }
 
-export function runRemoteCommand(executable: string, args: readonly string[], environment: NodeJS.ProcessEnv, observer?: RemoteCommandObserver): Promise<RemoteCommandResult> {
-	if (observer?.signal) throwIfCancelled(observer.signal, "Remote command cancelled");
-	const child = spawn(executable, [...args], { env: { ...environment }, shell: false, stdio: "pipe" });
+export function runRemoteCommand(
+	executable: string,
+	args: readonly string[],
+	environment: NodeJS.ProcessEnv,
+	observer?: RemoteCommandObserver,
+): Promise<RemoteCommandResult> {
+	if (observer?.signal) throwIfCancelled(observer.signal, 'Remote command cancelled');
+	const child = spawn(executable, [...args], { env: { ...environment }, shell: false, stdio: 'pipe' });
 	child.stdin.end();
 	return new Promise((resolve, reject) => {
-		let stdout = "";
-		let stderr = "";
+		let stdout = '';
+		let stderr = '';
 		let observerFailed = false;
 		let observerFailure: unknown;
 		let cancelled = false;
 		const signal = observer?.signal;
-		const removeAbortListener = (): void => signal?.removeEventListener("abort", abort);
+		const removeAbortListener = (): void => signal?.removeEventListener('abort', abort);
 		const abort = (): void => {
 			cancelled = true;
 			child.kill();
 		};
-		signal?.addEventListener("abort", abort, { once: true });
+		signal?.addEventListener('abort', abort, { once: true });
 		if (signal?.aborted) abort();
-		child.stdout.setEncoding("utf8");
-		child.stderr.setEncoding("utf8");
-		child.stdout.on("data", chunk => { stdout = appendBounded(stdout, String(chunk)); });
-		child.stderr.on("data", chunk => {
+		child.stdout.setEncoding('utf8');
+		child.stderr.setEncoding('utf8');
+		child.stdout.on('data', chunk => {
+			stdout = appendBounded(stdout, String(chunk));
+		});
+		child.stderr.on('data', chunk => {
 			const text = String(chunk);
 			if (!observerFailed) {
 				try {
@@ -71,13 +88,13 @@ export function runRemoteCommand(executable: string, args: readonly string[], en
 			}
 			stderr = appendBounded(stderr, text);
 		});
-		child.once("error", error => {
+		child.once('error', error => {
 			removeAbortListener();
-			reject(cancelled ? new CancellationError("Remote command cancelled", signal?.reason) : error);
+			reject(cancelled ? new CancellationError('Remote command cancelled', signal?.reason) : error);
 		});
-		child.once("close", exitCode => {
+		child.once('close', exitCode => {
 			removeAbortListener();
-			if (cancelled) reject(new CancellationError("Remote command cancelled", signal?.reason));
+			if (cancelled) reject(new CancellationError('Remote command cancelled', signal?.reason));
 			else if (observerFailed) reject(observerFailure);
 			else resolve({ exitCode, stdout, stderr });
 		});

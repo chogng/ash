@@ -15,13 +15,15 @@ test('LineDocumentSnapshot keeps rich semantics orthogonal to ordered logical li
 			{ id: 'figure', text: '\uFFFC' },
 			{ id: 'caption', text: 'System architecture' },
 		],
-		marks: [{
-			id: 'latin-font',
-			kind: 'textStyle',
-			from: { lineId: 'prose', offset: 0 },
-			to: { lineId: 'prose', offset: 4 },
-			attrs: { fontFamily: 'Times New Roman' },
-		}],
+		marks: [
+			{
+				id: 'latin-font',
+				kind: 'textStyle',
+				from: { lineId: 'prose', offset: 0 },
+				to: { lineId: 'prose', offset: 4 },
+				attrs: { fontFamily: 'Times New Roman' },
+			},
+		],
 		atoms: [
 			{
 				id: 'citation',
@@ -44,30 +46,50 @@ test('LineDocumentSnapshot keeps rich semantics orthogonal to ordered logical li
 				display: 'inline',
 				attrs: { format: 'number' },
 			},
-			{ id: 'image', kind: 'image', position: { lineId: 'figure', offset: 0 }, display: 'block', attrs: { assetId: 'asset-1' } },
+			{
+				id: 'image',
+				kind: 'image',
+				position: { lineId: 'figure', offset: 0 },
+				display: 'block',
+				attrs: { assetId: 'asset-1' },
+			},
 		],
 		facets: [{ id: 'heading', kind: 'outline', lineId: 'prose', attrs: { level: 1, labelId: 'introduction' } }],
-		regions: [{ id: 'code', kind: 'code', startLineId: 'code-1', endLineId: 'code-2', attrs: { languageId: 'typescript' } }],
-		relations: [{
-			id: 'caption-image',
-			kind: 'caption',
-			source: { kind: 'line', lineId: 'caption' },
-			target: { kind: 'atom', atomId: 'image' },
-			attrs: {},
-		}, {
-			id: 'cross-reference-image',
-			kind: 'crossReference',
-			source: { kind: 'atom', atomId: 'cross-reference' },
-			target: { kind: 'atom', atomId: 'image' },
-			attrs: { format: 'number' },
-		}],
+		regions: [
+			{
+				id: 'code',
+				kind: 'code',
+				startLineId: 'code-1',
+				endLineId: 'code-2',
+				attrs: { languageId: 'typescript' },
+			},
+		],
+		relations: [
+			{
+				id: 'caption-image',
+				kind: 'caption',
+				source: { kind: 'line', lineId: 'caption' },
+				target: { kind: 'atom', atomId: 'image' },
+				attrs: {},
+			},
+			{
+				id: 'cross-reference-image',
+				kind: 'crossReference',
+				source: { kind: 'atom', atomId: 'cross-reference' },
+				target: { kind: 'atom', atomId: 'image' },
+				attrs: { format: 'number' },
+			},
+		],
 		metadata: { profile: 'academy' },
 	});
 
 	assert.equal(snapshot.getText(), `${prose}\nconst answer = 42;\nreturn answer;\n\uFFFC\nSystem architecture`);
 	assert.equal(snapshot.lines.get('code-2')?.text, 'return answer;');
 	assert.equal(snapshot.atoms.at({ lineId: 'prose', offset: prose.indexOf('\uFFFC') })?.kind, 'citation');
-	assert.deepEqual(snapshot.facets.forLine('prose').map(facet => facet.kind), ['outline']);
+	assert.deepEqual(
+		snapshot.facets.forLine('prose').map(facet => facet.kind),
+		['outline'],
+	);
 	assert.equal(snapshot.regions.get('code')?.attrs.languageId, 'typescript');
 	assert.equal(snapshot.relations.get('caption-image')?.target.kind, 'atom');
 	assert.equal(snapshot.metadata.profile, 'academy');
@@ -77,33 +99,76 @@ test('LineDocumentSnapshot treats only CR and LF as physical line boundaries', (
 	const snapshot = createLineDocumentSnapshot({ lines: [{ id: 'line', text: 'left\u2028right\u2029' }] });
 
 	assert.equal(snapshot.getText(), 'left\u2028right\u2029');
-	assert.throws(() => createLineDocumentSnapshot({ lines: [{ id: 'line', text: 'left\nright' }] }), /line terminator/);
+	assert.throws(
+		() => createLineDocumentSnapshot({ lines: [{ id: 'line', text: 'left\nright' }] }),
+		/line terminator/,
+	);
 });
 
 test('LineDocumentSnapshot rejects detached atoms, atom marks, non-exclusive block atoms, and crossing regions', () => {
 	const cyclic: Record<string, unknown> = {};
 	cyclic.self = cyclic;
-	assert.throws(() => createLineDocumentSnapshot({
-		lines: [{ id: 'line', text: '' }],
-		metadata: cyclic as LineSemanticAttributes,
-	}), /must not contain cycles/);
+	assert.throws(
+		() =>
+			createLineDocumentSnapshot({
+				lines: [{ id: 'line', text: '' }],
+				metadata: cyclic as LineSemanticAttributes,
+			}),
+		/must not contain cycles/,
+	);
 	assert.throws(() => createLineDocumentSnapshot({ lines: [{ id: 'line', text: '\uFFFC' }] }), /has no atom/);
-	assert.throws(() => createLineDocumentSnapshot({
-		lines: [{ id: 'line', text: 'a\uFFFCb' }],
-		atoms: [{ id: 'image', kind: 'image', position: { lineId: 'line', offset: 1 }, display: 'block', attrs: {} }],
-	}), /only content/);
-	assert.throws(() => createLineDocumentSnapshot({
-		lines: [{ id: 'line', text: 'a\uFFFCb' }],
-		marks: [{ id: 'mark', kind: 'strong', from: { lineId: 'line', offset: 0 }, to: { lineId: 'line', offset: 3 }, attrs: {} }],
-		atoms: [{ id: 'atom', kind: 'citation', position: { lineId: 'line', offset: 1 }, display: 'inline', attrs: {} }],
-	}), /must not include atom/);
-	assert.throws(() => createLineDocumentSnapshot({
-		lines: ['a', 'b', 'c', 'd'].map(id => ({ id, text: id })),
-		regions: [
-			{ id: 'left', kind: 'code', startLineId: 'a', endLineId: 'c', attrs: {} },
-			{ id: 'right', kind: 'quote', startLineId: 'b', endLineId: 'd', attrs: {} },
-		],
-	}), /cross/);
+	assert.throws(
+		() =>
+			createLineDocumentSnapshot({
+				lines: [{ id: 'line', text: 'a\uFFFCb' }],
+				atoms: [
+					{
+						id: 'image',
+						kind: 'image',
+						position: { lineId: 'line', offset: 1 },
+						display: 'block',
+						attrs: {},
+					},
+				],
+			}),
+		/only content/,
+	);
+	assert.throws(
+		() =>
+			createLineDocumentSnapshot({
+				lines: [{ id: 'line', text: 'a\uFFFCb' }],
+				marks: [
+					{
+						id: 'mark',
+						kind: 'strong',
+						from: { lineId: 'line', offset: 0 },
+						to: { lineId: 'line', offset: 3 },
+						attrs: {},
+					},
+				],
+				atoms: [
+					{
+						id: 'atom',
+						kind: 'citation',
+						position: { lineId: 'line', offset: 1 },
+						display: 'inline',
+						attrs: {},
+					},
+				],
+			}),
+		/must not include atom/,
+	);
+	assert.throws(
+		() =>
+			createLineDocumentSnapshot({
+				lines: ['a', 'b', 'c', 'd'].map(id => ({ id, text: id })),
+				regions: [
+					{ id: 'left', kind: 'code', startLineId: 'a', endLineId: 'c', attrs: {} },
+					{ id: 'right', kind: 'quote', startLineId: 'b', endLineId: 'd', attrs: {} },
+				],
+			}),
+		/cross/,
+	);
 });
 
 test('TextModel preserves logical line identity through edits and history without creating code blocks', () => {
@@ -116,24 +181,42 @@ test('TextModel preserves logical line identity through edits and history withou
 	const initialSnapshot = model.lineDocument;
 	assert.equal(model.lineDocument, initialSnapshot);
 
-	model.pushEditOperations(null, [{ range: Range.fromPositions(new Position((0) + 1, (1) + 1), new Position((0) + 1, (1) + 1)), text: 'X\nY' }], () => null);
+	model.pushEditOperations(
+		null,
+		[{ range: Range.fromPositions(new Position(0 + 1, 1 + 1), new Position(0 + 1, 1 + 1)), text: 'X\nY' }],
+		() => null,
+	);
 	assert.notEqual(model.lineDocument, initialSnapshot);
 	assert.equal(initialSnapshot.getText(), 'a\nb');
-	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['first', 'inserted:1', 'second']);
+	assert.deepEqual(
+		model.lineDocument.lines.values.map(line => line.id),
+		['first', 'inserted:1', 'second'],
+	);
 	assert.equal(model.lineDocument.metadata.languageId, 'typescript');
 	assert.deepEqual(model.lineDocument.marks.values, []);
 	assert.deepEqual(model.lineDocument.atoms.values, []);
 
 	model.undo();
-	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['first', 'second']);
+	assert.deepEqual(
+		model.lineDocument.lines.values.map(line => line.id),
+		['first', 'second'],
+	);
 	model.redo();
-	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['first', 'inserted:1', 'second']);
+	assert.deepEqual(
+		model.lineDocument.lines.values.map(line => line.id),
+		['first', 'inserted:1', 'second'],
+	);
 
-	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (2) + 1), new Position((1) + 1, (0) + 1)), text: '' }]);
-	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['first', 'second']);
+	model.applyEdits([
+		{ range: Range.fromPositions(new Position(0 + 1, 2 + 1), new Position(1 + 1, 0 + 1)), text: '' },
+	]);
+	assert.deepEqual(
+		model.lineDocument.lines.values.map(line => line.id),
+		['first', 'second'],
+	);
 	assert.equal(model.getText(), 'aXY\nb');
-	assert.deepEqual(model.linePointAt(new Position((1) + 1, (1) + 1)), { lineId: 'second', offset: 1 });
-	assert.deepEqual(model.textPositionAt({ lineId: 'second', offset: 1 }), new Position((1) + 1, (1) + 1));
+	assert.deepEqual(model.linePointAt(new Position(1 + 1, 1 + 1)), { lineId: 'second', offset: 1 });
+	assert.deepEqual(model.textPositionAt({ lineId: 'second', offset: 1 }), new Position(1 + 1, 1 + 1));
 });
 
 test('TextModel line points use the identified line length and reject invalid indexes', () => {
@@ -163,34 +246,36 @@ test('TextModel leaves text and line identities unchanged when a line id generat
 	const edit = { range: new Range(1, 2, 1, 2), text: '\n\n' };
 
 	assert.throws(() => model.applyOperations([edit]), /line id unavailable/);
-	assert.deepEqual({
-		text: model.getText(),
-		version: model.getVersionId(),
-		lineIds: model.lineDocument.lines.values.map(line => line.id),
-		snapshotRetained: model.lineDocument === snapshot,
-		canUndo: model.canUndo(),
-		eventCount: events.length,
-	}, {
-		text: 'a\nb',
-		version: 1,
-		lineIds: ['first', 'second'],
-		snapshotRetained: true,
-		canUndo: false,
-		eventCount: 0,
-	});
+	assert.deepEqual(
+		{
+			text: model.getText(),
+			version: model.getVersionId(),
+			lineIds: model.lineDocument.lines.values.map(line => line.id),
+			snapshotRetained: model.lineDocument === snapshot,
+			canUndo: model.canUndo(),
+			eventCount: events.length,
+		},
+		{
+			text: 'a\nb',
+			version: 1,
+			lineIds: ['first', 'second'],
+			snapshotRetained: true,
+			canUndo: false,
+			eventCount: 0,
+		},
+	);
 
 	fail = false;
 	requests = 0;
 	model.applyOperations([edit]);
-	assert.deepEqual({
-		text: model.getText(),
-		lineIds: model.lineDocument.lines.values.map(line => line.id),
-		version: model.getVersionId(),
-	}, {
-		text: 'a\n\n\nb',
-		lineIds: ['first', 'generated:1', 'generated:2', 'second'],
-		version: 2,
-	});
+	assert.deepEqual(
+		{
+			text: model.getText(),
+			lineIds: model.lineDocument.lines.values.map(line => line.id),
+			version: model.getVersionId(),
+		},
+		{ text: 'a\n\n\nb', lineIds: ['first', 'generated:1', 'generated:2', 'second'], version: 2 },
+	);
 });
 
 test('TextModel keeps undo history when reset cannot allocate line identities', () => {
@@ -209,27 +294,22 @@ test('TextModel keeps undo history when reset cannot allocate line identities', 
 	using listener = model.onDidChangeContent(change => events.push(change));
 
 	assert.throws(() => model.reset('a!\n\nb'), /reset line id unavailable/);
-	assert.deepEqual({
-		text: model.getText(),
-		version: model.getVersionId(),
-		lineIds: model.lineDocument.lines.values.map(line => line.id),
-		snapshotRetained: model.lineDocument === snapshot,
-		canUndo: model.canUndo(),
-		eventCount: events.length,
-	}, {
-		text: 'a!\nb',
-		version,
-		lineIds: ['first', 'second'],
-		snapshotRetained: true,
-		canUndo: true,
-		eventCount: 0,
-	});
+	assert.deepEqual(
+		{
+			text: model.getText(),
+			version: model.getVersionId(),
+			lineIds: model.lineDocument.lines.values.map(line => line.id),
+			snapshotRetained: model.lineDocument === snapshot,
+			canUndo: model.canUndo(),
+			eventCount: events.length,
+		},
+		{ text: 'a!\nb', version, lineIds: ['first', 'second'], snapshotRetained: true, canUndo: true, eventCount: 0 },
+	);
 
 	fail = false;
 	model.undo();
 	assert.equal(model.getText(), 'a\nb');
 });
-
 
 test('plain model identities and metadata remain stable before requesting the first line snapshot', async () => {
 	const metadata = { nested: { tags: ['before'] } };
@@ -244,17 +324,20 @@ test('plain model identities and metadata remain stable before requesting the fi
 	assert.deepEqual(snapshot.metadata, { nested: { tags: ['before'] } });
 	assert.ok(Object.isFrozen(snapshot.metadata.nested));
 	await model.undo();
-	assert.deepEqual(model.lineDocument.lines.values.map(line => line.id), ['line:1', 'line:3']);
+	assert.deepEqual(
+		model.lineDocument.lines.values.map(line => line.id),
+		['line:1', 'line:3'],
+	);
 	assert.equal(snapshot.getText(), 'a\ninserted\nb');
 	assert.throws(() => new TextModel('text', { metadata: { invalid: Infinity } }), /finite/);
 	assert.throws(() => new TextModel('text', { lineIdGenerator: () => '' }), /non-empty/);
 });
 
-
 test('in-line edit batches and history preserve line points while equal-height replacements allocate new lines', () => {
 	let generated = 0;
 	using model = new TextModel('first\n😀second\nlast', {
-		lineIds: ['a', 'b', 'c'], lineIdGenerator: () => `new:${++generated}`,
+		lineIds: ['a', 'b', 'c'],
+		lineIdGenerator: () => `new:${++generated}`,
 	});
 	const original = model.lineDocument;
 	model.applyOperations([
@@ -262,21 +345,36 @@ test('in-line edit batches and history preserve line points while equal-height r
 		{ range: new Range(2, 3, 2, 9), text: '中文' },
 	]);
 	assert.equal(model.getText(), 'first!\n😀中文\nlast');
-	assert.deepEqual([0, 1, 2].map(index => model.getLineId(index)), ['a', 'b', 'c']);
+	assert.deepEqual(
+		[0, 1, 2].map(index => model.getLineId(index)),
+		['a', 'b', 'c'],
+	);
 	assert.deepEqual(model.textPositionAt({ lineId: 'b', offset: 4 }), new Position(2, 5));
 	assert.equal(original.getText(), 'first\n😀second\nlast');
 	model.undo();
 	assert.equal(model.getText(), original.getText());
 	model.redo();
-	assert.deepEqual([0, 1, 2].map(index => model.getLineId(index)), ['a', 'b', 'c']);
+	assert.deepEqual(
+		[0, 1, 2].map(index => model.getLineId(index)),
+		['a', 'b', 'c'],
+	);
 	assert.equal(generated, 0);
 
 	model.pushStackElement();
 	model.applyOperations([{ range: new Range(1, 1, 2, 5), text: 'replacement\nline' }]);
-	assert.deepEqual([0, 1, 2].map(index => model.getLineId(index)), ['a', 'new:1', 'c']);
+	assert.deepEqual(
+		[0, 1, 2].map(index => model.getLineId(index)),
+		['a', 'new:1', 'c'],
+	);
 	model.undo();
-	assert.deepEqual([0, 1, 2].map(index => model.getLineId(index)), ['a', 'b', 'c']);
+	assert.deepEqual(
+		[0, 1, 2].map(index => model.getLineId(index)),
+		['a', 'b', 'c'],
+	);
 	model.redo();
-	assert.deepEqual([0, 1, 2].map(index => model.getLineId(index)), ['a', 'new:1', 'c']);
+	assert.deepEqual(
+		[0, 1, 2].map(index => model.getLineId(index)),
+		['a', 'new:1', 'c'],
+	);
 	assert.equal(generated, 1);
 });

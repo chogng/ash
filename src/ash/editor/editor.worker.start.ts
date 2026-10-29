@@ -16,14 +16,19 @@ export interface StanzaWorkerContext {
 let activeResources: DisposableStore | undefined;
 
 /** Starts one editor worker runtime over the canonical structured-clone port. */
-export function start(bootstrap: (context: StanzaWorkerContext) => void, portFactory: () => StanzaWorkerPort = createDedicatedWorkerPort): void {
+export function start(
+	bootstrap: (context: StanzaWorkerContext) => void,
+	portFactory: () => StanzaWorkerPort = createDedicatedWorkerPort,
+): void {
 	if (typeof bootstrap !== 'function') throw new TypeError('Stanza worker bootstrap must be a function');
 	if (activeResources) throw new Error('Stanza worker has already started');
 	const resources = new DisposableStore();
 	activeResources = resources;
-	resources.add(toDisposable(() => {
-		if (activeResources === resources) activeResources = undefined;
-	}));
+	resources.add(
+		toDisposable(() => {
+			if (activeResources === resources) activeResources = undefined;
+		}),
+	);
 	try {
 		const port = resources.add(portFactory());
 		bootstrap({ port, resources });
@@ -35,7 +40,11 @@ export function start(bootstrap: (context: StanzaWorkerContext) => void, portFac
 
 function createDedicatedWorkerPort(): StanzaWorkerPort {
 	const scope = globalThis as unknown as DedicatedWorkerScope;
-	if (typeof scope.postMessage !== 'function' || typeof scope.addEventListener !== 'function' || typeof scope.removeEventListener !== 'function') {
+	if (
+		typeof scope.postMessage !== 'function' ||
+		typeof scope.addEventListener !== 'function' ||
+		typeof scope.removeEventListener !== 'function'
+	) {
 		throw new ReferenceError('Stanza worker must run in a dedicated worker scope');
 	}
 	let disposed = false;
@@ -47,8 +56,9 @@ function createDedicatedWorkerPort(): StanzaWorkerPort {
 	return {
 		onMessage(listener) {
 			if (disposed) throw new ReferenceError('Stanza worker port is disposed');
-			if (typeof listener !== 'function') throw new TypeError('Stanza worker message listener must be a function');
-			const handler = (event: { readonly data: unknown; }) => listener(event.data);
+			if (typeof listener !== 'function')
+				throw new TypeError('Stanza worker message listener must be a function');
+			const handler = (event: { readonly data: unknown }) => listener(event.data);
 			scope.addEventListener('message', handler);
 			return toDisposable(() => scope.removeEventListener('message', handler));
 		},
@@ -63,7 +73,7 @@ function createDedicatedWorkerPort(): StanzaWorkerPort {
 
 interface DedicatedWorkerScope {
 	postMessage(message: unknown, transfer?: ArrayBuffer[]): void;
-	addEventListener(type: 'message', listener: (event: { readonly data: unknown; }) => void): void;
-	removeEventListener(type: 'message', listener: (event: { readonly data: unknown; }) => void): void;
+	addEventListener(type: 'message', listener: (event: { readonly data: unknown }) => void): void;
+	removeEventListener(type: 'message', listener: (event: { readonly data: unknown }) => void): void;
 	close(): void;
 }

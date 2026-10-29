@@ -1,4 +1,3 @@
-
 import { expect } from '@playwright/test';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../../test/unit/browser/context.js';
@@ -16,31 +15,56 @@ suite('themes browser component', () => {
 		const select = page.getByRole('combobox', { name: 'Styled select', exact: true });
 		const retainedInput = await input.elementHandle();
 		for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
-			await page.evaluate(id => { window.selectColorTheme(id); window.openStyledTreeFind(); }, id);
+			await page.evaluate(id => {
+				window.selectColorTheme(id);
+				window.openStyledTreeFind();
+			}, id);
 			const colors = await page.locator('#root').evaluate(root => {
 				const probe = document.createElement('span');
 				root.append(probe);
 				try {
-					return Object.fromEntries([
-						'error-foreground', 'selection-background', 'accent-background',
-						'foreground', 'badge-background', 'widget-border',
-						'input-background', 'input-border', 'input-foreground',
-						'list-activeSelectionBackground', 'list-activeSelectionForeground', 'list-inactiveSelectionBackground', 'list-hoverBackground',
-					].map(id => {
-						probe.style.color = `var(--ash-${id})`;
-						return [id, getComputedStyle(probe).color];
-					}));
-				} finally { probe.remove(); }
+					return Object.fromEntries(
+						[
+							'error-foreground',
+							'selection-background',
+							'accent-background',
+							'foreground',
+							'badge-background',
+							'widget-border',
+							'input-background',
+							'input-border',
+							'input-foreground',
+							'list-activeSelectionBackground',
+							'list-activeSelectionForeground',
+							'list-inactiveSelectionBackground',
+							'list-hoverBackground',
+						].map(id => {
+							probe.style.color = `var(--ash-${id})`;
+							return [id, getComputedStyle(probe).color];
+						}),
+					);
+				} finally {
+					probe.remove();
+				}
 			});
 			await expect(input.locator('..')).toHaveCSS('background-color', colors['selection-background']!);
 			await expect(find.locator('..')).toHaveCSS('background-color', colors['error-foreground']!);
 			await find.fill('missing');
-			await expect(page.locator('#styled-tree .ash-tree-find-widget')).toHaveCSS('border-top-color', colors['error-foreground']!);
+			await expect(page.locator('#styled-tree .ash-tree-find-widget')).toHaveCSS(
+				'border-top-color',
+				colors['error-foreground']!,
+			);
 			await find.fill('');
-			await expect(page.locator('#styled-tree .ash-tree-find-widget')).toHaveCSS('border-top-color', colors['widget-border']!);
+			await expect(page.locator('#styled-tree .ash-tree-find-widget')).toHaveCSS(
+				'border-top-color',
+				colors['widget-border']!,
+			);
 			await find.press('Escape');
 			await page.locator('#styled-tree .ash-tree').focus();
-			await expect(page.locator('#styled-tree .ash-tree-row.focused')).toHaveCSS('outline-color', colors['error-foreground']!);
+			await expect(page.locator('#styled-tree .ash-tree-row.focused')).toHaveCSS(
+				'outline-color',
+				colors['error-foreground']!,
+			);
 			const selected = page.locator('#styled-tree .ash-tree-row.selected');
 			await expect(selected).toHaveAttribute('aria-selected', 'true');
 			await selected.hover();
@@ -53,26 +77,48 @@ suite('themes browser component', () => {
 			const hovered = page.locator('#styled-tree .ash-tree-row').nth(1);
 			await hovered.hover();
 			await expect(hovered).toHaveCSS('background-color', colors['list-hoverBackground']!);
-			await expect(page.locator('#default-style-probes .ash-count-badge')).toHaveCSS('background-color', colors['badge-background']!);
-			await expect(page.locator('#default-style-probes progress')).toHaveCSS('accent-color', colors['accent-background']!);
+			await expect(page.locator('#default-style-probes .ash-count-badge')).toHaveCSS(
+				'background-color',
+				colors['badge-background']!,
+			);
+			await expect(page.locator('#default-style-probes progress')).toHaveCSS(
+				'accent-color',
+				colors['accent-background']!,
+			);
 			const checkbox = page.getByRole('checkbox', { name: 'Styled checkbox' });
 			await expect(checkbox).toBeChecked();
 			await expect(checkbox).toHaveCSS('background-color', colors['input-background']!);
 			await expect(checkbox).toHaveCSS('border-top-color', colors['input-border']!);
-			await expect(checkbox.locator('..').locator('.ash-checkbox-checkmark')).toHaveCSS('color', colors['input-foreground']!);
+			await expect(checkbox.locator('..').locator('.ash-checkbox-checkmark')).toHaveCSS(
+				'color',
+				colors['input-foreground']!,
+			);
 			await expect(page.locator('#default-style-probes .ash-switch-track')).toHaveCSS(
-				'background-color', colors[id.includes('high-contrast') ? 'foreground' : 'error-foreground']!,
+				'background-color',
+				colors[id.includes('high-contrast') ? 'foreground' : 'error-foreground']!,
 			);
 			const list = page.getByRole('listbox', { name: 'Styled list', exact: true });
 			await list.focus();
-			await expect(list.locator('.ash-list-row.selected')).toHaveCSS('background-color', colors['error-foreground']!);
+			await expect(list.locator('.ash-list-row.selected')).toHaveCSS(
+				'background-color',
+				colors['error-foreground']!,
+			);
 			await input.focus();
-			await expect(list.locator('.ash-list-row.selected')).toHaveCSS('background-color', colors['selection-background']!);
+			await expect(list.locator('.ash-list-row.selected')).toHaveCSS(
+				'background-color',
+				colors['selection-background']!,
+			);
 			await list.locator('.ash-list-row').nth(1).hover();
-			await expect(list.locator('.ash-list-row').nth(1)).toHaveCSS('background-color', colors['selection-background']!);
+			await expect(list.locator('.ash-list-row').nth(1)).toHaveCSS(
+				'background-color',
+				colors['selection-background']!,
+			);
 			await expect(select).toHaveCSS('background-color', colors['selection-background']!);
 			await select.click();
-			await expect(page.locator('.ash-select-box-list')).toHaveCSS('background-color', colors['error-foreground']!);
+			await expect(page.locator('.ash-select-box-list')).toHaveCSS(
+				'background-color',
+				colors['error-foreground']!,
+			);
 			const options = page.locator('.ash-select-box-option');
 			await expect(options).toHaveText(['One', 'Two']);
 			for (const option of await options.all()) {
@@ -85,18 +131,27 @@ suite('themes browser component', () => {
 			await submenu.press('ArrowRight');
 			const leaf = page.getByRole('menuitem', { name: 'Styled leaf', exact: true });
 			await expect(leaf).toBeVisible();
-			await expect.poll(() => leaf.evaluate(element => getComputedStyle(element.closest('.ash-menu')!).backgroundColor))
+			await expect
+				.poll(() => leaf.evaluate(element => getComputedStyle(element.closest('.ash-menu')!).backgroundColor))
 				.toBe(colors['error-foreground']);
 			await leaf.press('Escape');
 			await page.evaluate(() => window.openStyledDialog());
 			const dialog = page.getByRole('dialog', { name: 'Styled dialog', exact: true });
 			await expect(dialog).toHaveCSS('background-color', colors['selection-background']!);
-			await expect(dialog.getByRole('button', { name: 'Styled done' })).toHaveCSS('background-color', colors['error-foreground']!);
+			await expect(dialog.getByRole('button', { name: 'Styled done' })).toHaveCSS(
+				'background-color',
+				colors['error-foreground']!,
+			);
 			await page.keyboard.press('Escape');
 			await expect(dialog).toBeHidden();
 		}
-		expect(await retainedInput!.evaluate(element => element === document.querySelector('#default-style-probes input'))).toBe(true);
-		await browserTests.info.attach('nested-default-styles', { body: await page.screenshot(), contentType: 'image/png' });
+		expect(
+			await retainedInput!.evaluate(element => element === document.querySelector('#default-style-probes input')),
+		).toBe(true);
+		await browserTests.info.attach('nested-default-styles', {
+			body: await page.screenshot(),
+			contentType: 'image/png',
+		});
 	});
 
 	test('default widget styles and overrides follow the containing theme without replacing their controls', async function () {
@@ -120,11 +175,15 @@ suite('themes browser component', () => {
 				};
 				try {
 					return {
-						background: resolve('--ash-button-primaryBackground'), foreground: resolve('--ash-button-primaryForeground'),
-						customBackground: resolve('--ash-error-foreground'), customForeground: resolve('--ash-editor-background'),
+						background: resolve('--ash-button-primaryBackground'),
+						foreground: resolve('--ash-button-primaryForeground'),
+						customBackground: resolve('--ash-error-foreground'),
+						customForeground: resolve('--ash-editor-background'),
 						hover: resolve('--ash-focusBorder'),
 					};
-				} finally { probe.remove(); }
+				} finally {
+					probe.remove();
+				}
 			});
 			await expect(defaultButton).toHaveCSS('background-color', colors.background);
 			await expect(defaultButton).toHaveCSS('color', colors.foreground);
@@ -135,10 +194,15 @@ suite('themes browser component', () => {
 			await overrideButton.hover();
 			await expect(overrideButton).toHaveCSS('background-color', colors.hover);
 			await browserTests.info.attach(`default-styles-${id}`, {
-				body: await page.screenshot(), contentType: 'image/png',
+				body: await page.screenshot(),
+				contentType: 'image/png',
 			});
 		}
-		expect(await retained!.evaluate(element => element === document.querySelector('#default-style-buttons button:nth-child(2)'))).toBe(true);
+		expect(
+			await retained!.evaluate(
+				element => element === document.querySelector('#default-style-buttons button:nth-child(2)'),
+			),
+		).toBe(true);
 	});
 
 	test('high contrast classes activate focused icon borders and are cleared and restored with the binding', async function () {
@@ -176,26 +240,36 @@ suite('themes browser component', () => {
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(id => window.selectColorTheme(id), id);
-			await expect.poll(() => page.locator('#root').evaluate(element => {
-				const probe = document.createElement('span');
-				probe.style.fontSize = 'var(--ash-fontSize-body1)';
-				probe.style.fontWeight = 'var(--ash-fontWeight-semiBold)';
-				probe.style.borderRadius = 'var(--ash-cornerRadius-medium)';
-				element.append(probe);
-				try {
-					const rootStyle = getComputedStyle(element);
-					const style = getComputedStyle(probe);
-					return {
-						fontSize: style.fontSize,
-						fontWeight: style.fontWeight,
-						borderRadius: style.borderRadius,
-						oldFontSize: rootStyle.getPropertyValue('--ash-font-size-body1'),
-						oldFontWeight: rootStyle.getPropertyValue('--ash-font-weight-semi-bold'),
-					};
-				} finally {
-					probe.remove();
-				}
-			})).toEqual({ fontSize: '13px', fontWeight: '600', borderRadius: '6px', oldFontSize: '', oldFontWeight: '' });
+			await expect
+				.poll(() =>
+					page.locator('#root').evaluate(element => {
+						const probe = document.createElement('span');
+						probe.style.fontSize = 'var(--ash-fontSize-body1)';
+						probe.style.fontWeight = 'var(--ash-fontWeight-semiBold)';
+						probe.style.borderRadius = 'var(--ash-cornerRadius-medium)';
+						element.append(probe);
+						try {
+							const rootStyle = getComputedStyle(element);
+							const style = getComputedStyle(probe);
+							return {
+								fontSize: style.fontSize,
+								fontWeight: style.fontWeight,
+								borderRadius: style.borderRadius,
+								oldFontSize: rootStyle.getPropertyValue('--ash-font-size-body1'),
+								oldFontWeight: rootStyle.getPropertyValue('--ash-font-weight-semi-bold'),
+							};
+						} finally {
+							probe.remove();
+						}
+					}),
+				)
+				.toEqual({
+					fontSize: '13px',
+					fontWeight: '600',
+					borderRadius: '6px',
+					oldFontSize: '',
+					oldFontWeight: '',
+				});
 		}
 	});
 
@@ -206,21 +280,25 @@ suite('themes browser component', () => {
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		const label = page.locator('#decorated-label .ash-icon-label');
 		const name = label.locator('.ash-icon-label-text');
-		await page.evaluate(() => window.setLabelDecoration({ color: 'description.foreground', letter: 'I', tooltip: 'Ignored by Git' }));
+		await page.evaluate(() =>
+			window.setLabelDecoration({ color: 'description.foreground', letter: 'I', tooltip: 'Ignored by Git' }),
+		);
 		await expect(label).toHaveAttribute('aria-label', 'ignored.log, Ignored by Git');
 		await expect.poll(() => label.evaluate(element => getComputedStyle(element, '::after').content)).toBe('"I"');
 		for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(id => window.selectColorTheme(id), id);
-			await expect.poll(async () => {
-				return name.evaluate(element => {
-					const reference = document.createElement('span');
-					reference.style.color = 'var(--ash-description-foreground)';
-					element.parentElement!.append(reference);
-					const matches = getComputedStyle(element).color === getComputedStyle(reference).color;
-					reference.remove();
-					return matches;
-				});
-			}).toBe(true);
+			await expect
+				.poll(async () => {
+					return name.evaluate(element => {
+						const reference = document.createElement('span');
+						reference.style.color = 'var(--ash-description-foreground)';
+						element.parentElement!.append(reference);
+						const matches = getComputedStyle(element).color === getComputedStyle(reference).color;
+						reference.remove();
+						return matches;
+					});
+				})
+				.toBe(true);
 		}
 		await page.evaluate(() => window.removeLabelDecorationProvider());
 		await expect(label).not.toHaveAttribute('aria-label', /Ignored/u);
@@ -237,13 +315,24 @@ suite('themes browser component', () => {
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		const root = page.locator('#root');
 		await page.evaluate(() => window.registerLateThemeColor());
-		expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browserLate'))).toBe('#123456');
+		expect(
+			await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browserLate')),
+		).toBe('#123456');
 		await page.getByRole('button', { name: 'Light', exact: true }).click();
-		expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browserLate'))).toBe('#abcdef');
+		expect(
+			await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browserLate')),
+		).toBe('#abcdef');
 		await root.evaluate(element => element.style.setProperty('--ash-test-browserLate', '#fedcba', 'important'));
-		expect(await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browserLate'))).toBe('#fedcba');
+		expect(
+			await root.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-test-browserLate')),
+		).toBe('#fedcba');
 		await page.evaluate(() => window.disposeThemeRoot());
-		expect(await root.evaluate(element => [element.style.getPropertyValue('--ash-test-browserLate'), element.style.getPropertyPriority('--ash-test-browserLate')])).toEqual(['#fedcba', 'important']);
+		expect(
+			await root.evaluate(element => [
+				element.style.getPropertyValue('--ash-test-browserLate'),
+				element.style.getPropertyPriority('--ash-test-browserLate'),
+			]),
+		).toEqual(['#fedcba', 'important']);
 		expect(errors).toEqual([]);
 	});
 
@@ -261,44 +350,60 @@ suite('themes browser component', () => {
 		const editorHover = page.locator('.stanza-editor-hover');
 		await root.evaluate(element => {
 			element.classList.add('ash-workbench');
-			for (const className of ['ash-notification', 'ash-context-view-default', 'ash-context-view-hover', 'ash-list-row ash-dnd-drop-before', 'ash-pdf-page', 'stanza-editor-hover']) {
+			for (const className of [
+				'ash-notification',
+				'ash-context-view-default',
+				'ash-context-view-hover',
+				'ash-list-row ash-dnd-drop-before',
+				'ash-pdf-page',
+				'stanza-editor-hover',
+			]) {
 				const item = document.createElement('div');
 				item.className = className;
 				item.textContent = className;
 				element.append(item);
 			}
-
 		});
 		expect(await notification.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
 		expect(await contextView.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
 		expect(await hoverView.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
 		expect(await dropRow.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
 		expect(await pdfPage.evaluate(element => getComputedStyle(element).boxShadow)).not.toBe('none');
-		for (const [id, border] of [['ash-high-contrast-dark', 'rgb(255, 255, 255)'], ['ash-high-contrast-light', 'rgb(0, 0, 0)']] as const) {
+		for (const [id, border] of [
+			['ash-high-contrast-dark', 'rgb(255, 255, 255)'],
+			['ash-high-contrast-light', 'rgb(0, 0, 0)'],
+		] as const) {
 			await page.evaluate(id => window.selectColorTheme(id), id);
 			await expect(root).toHaveAttribute('data-color-theme', id);
 			await expect(editorHover).toHaveCSS('box-shadow', 'none');
 			await expect(editorHover).toHaveCSS('border-top-color', border);
-			expect(await notification.evaluate(element => ({
-				shadow: getComputedStyle(element).boxShadow,
-				border: getComputedStyle(element).borderColor,
-			}))).toEqual({ shadow: 'none', border });
-			expect(await contextView.evaluate(element => ({
-				shadow: getComputedStyle(element).boxShadow,
-				border: getComputedStyle(element).borderColor,
-			}))).toEqual({ shadow: 'none', border });
-			expect(await hoverView.evaluate(element => ({
-				shadow: getComputedStyle(element).boxShadow,
-				border: getComputedStyle(element).borderColor,
-				style: getComputedStyle(element).borderStyle,
-			}))).toEqual({ shadow: 'none', border, style: 'solid' });
+			expect(
+				await notification.evaluate(element => ({
+					shadow: getComputedStyle(element).boxShadow,
+					border: getComputedStyle(element).borderColor,
+				})),
+			).toEqual({ shadow: 'none', border });
+			expect(
+				await contextView.evaluate(element => ({
+					shadow: getComputedStyle(element).boxShadow,
+					border: getComputedStyle(element).borderColor,
+				})),
+			).toEqual({ shadow: 'none', border });
+			expect(
+				await hoverView.evaluate(element => ({
+					shadow: getComputedStyle(element).boxShadow,
+					border: getComputedStyle(element).borderColor,
+					style: getComputedStyle(element).borderStyle,
+				})),
+			).toEqual({ shadow: 'none', border, style: 'solid' });
 			expect(await dropRow.evaluate(element => getComputedStyle(element).boxShadow)).toContain(border);
-			expect(await pdfPage.evaluate(element => ({
-				shadow: getComputedStyle(element).boxShadow,
-				outline: getComputedStyle(element).outlineColor,
-				style: getComputedStyle(element).outlineStyle,
-			}))).toEqual({ shadow: 'none', outline: border, style: 'solid' });
-
+			expect(
+				await pdfPage.evaluate(element => ({
+					shadow: getComputedStyle(element).boxShadow,
+					outline: getComputedStyle(element).outlineColor,
+					style: getComputedStyle(element).outlineStyle,
+				})),
+			).toEqual({ shadow: 'none', outline: border, style: 'solid' });
 		}
 	});
 
@@ -308,12 +413,18 @@ suite('themes browser component', () => {
 		await page.goto('/themes.html?backend=offline');
 		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 		const outer = page.locator('#root');
-		expect(await outer.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-widget-shadow'))).not.toBe('');
+		expect(
+			await outer.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-widget-shadow')),
+		).not.toBe('');
 		await page.evaluate(() => window.mountNestedHighContrastWidget());
 		try {
 			const nested = page.locator('#nested-high-contrast-root');
 			await expect(nested).toHaveAttribute('data-color-scheme', 'hcDark');
-			expect(await nested.locator('.ash-context-view-default').evaluate(element => getComputedStyle(element).boxShadow)).toBe('none');
+			expect(
+				await nested
+					.locator('.ash-context-view-default')
+					.evaluate(element => getComputedStyle(element).boxShadow),
+			).toBe('none');
 		} finally {
 			await page.evaluate(() => window.disposeNestedHighContrastWidget());
 		}
@@ -340,16 +451,28 @@ suite('themes browser component', () => {
 		});
 		for (const theme of ['ash-dark', 'ash-high-contrast-dark']) {
 			await page.evaluate(id => window.selectColorTheme(id), theme);
-			for (const id of ['focus-menu', 'focus-select', 'focus-scrollbar', 'focus-tree', 'focus-code-action', 'focus-outline', 'focus-scm', 'focus-modal']) {
+			for (const id of [
+				'focus-menu',
+				'focus-select',
+				'focus-scrollbar',
+				'focus-tree',
+				'focus-code-action',
+				'focus-outline',
+				'focus-scm',
+				'focus-modal',
+			]) {
 				await page.keyboard.press('Tab');
 				const control = page.locator(`#${id}`);
 				await control.focus();
-				expect(await control.evaluate(element => ({
-					visible: element.matches(':focus-visible'),
-					style: getComputedStyle(element).outlineStyle,
-					width: getComputedStyle(element).outlineWidth,
-					offset: getComputedStyle(element).outlineOffset,
-				})), `${theme} ${id}`).toEqual({ visible: true, style: 'solid', width: '1px', offset: '-1px' });
+				expect(
+					await control.evaluate(element => ({
+						visible: element.matches(':focus-visible'),
+						style: getComputedStyle(element).outlineStyle,
+						width: getComputedStyle(element).outlineWidth,
+						offset: getComputedStyle(element).outlineOffset,
+					})),
+					`${theme} ${id}`,
+				).toEqual({ visible: true, style: 'solid', width: '1px', offset: '-1px' });
 			}
 		}
 	});
@@ -363,7 +486,8 @@ suite('themes browser component', () => {
 			root.classList.add('ash-workbench');
 			const icon = document.createElement('span');
 			icon.id = 'todo-suggestion-icon';
-			icon.className = 'ash-themed-file-icon file-icon todo.md-name-file-icon md-ext-file-icon markdown-lang-file-icon';
+			icon.className =
+				'ash-themed-file-icon file-icon todo.md-name-file-icon md-ext-file-icon markdown-lang-file-icon';
 			icon.setAttribute('aria-hidden', 'true');
 			root.append(icon);
 		});
@@ -373,18 +497,29 @@ suite('themes browser component', () => {
 			await page.evaluate(id => window.selectColorTheme(id), id);
 			await expect(icon).toHaveText('\uE096');
 			await expect(icon).toHaveAttribute('aria-hidden', 'true');
-			const expectedColor = id === 'ash-light' || id === 'ash-high-contrast-light' ? 'rgb(73, 139, 167)' : 'rgb(81, 154, 186)';
+			const expectedColor =
+				id === 'ash-light' || id === 'ash-high-contrast-light' ? 'rgb(73, 139, 167)' : 'rgb(81, 154, 186)';
 			await expect(icon).toHaveCSS('color', expectedColor);
 			await expect(page.locator('#markdown-icon .ash-icon-label-icon')).toHaveCSS('color', expectedColor);
-			await expect.poll(() => suggestion.evaluate(element => {
-				const style = getComputedStyle(element, '::before');
-				return { content: style.content, color: style.color, font: style.fontFamily };
-			})).toEqual({ content: '"\uE096"', color: expectedColor, font: await icon.evaluate(element => getComputedStyle(element).fontFamily) });
+			await expect
+				.poll(() =>
+					suggestion.evaluate(element => {
+						const style = getComputedStyle(element, '::before');
+						return { content: style.content, color: style.color, font: style.fontFamily };
+					}),
+				)
+				.toEqual({
+					content: '"\uE096"',
+					color: expectedColor,
+					font: await icon.evaluate(element => getComputedStyle(element).fontFamily),
+				});
 			await icon.evaluate(element => document.fonts.load('16px ' + getComputedStyle(element).fontFamily));
-			await browserTests.info.attach(`seti-todo-${id}`, { body: await page.screenshot(), contentType: 'image/png' });
+			await browserTests.info.attach(`seti-todo-${id}`, {
+				body: await page.screenshot(),
+				contentType: 'image/png',
+			});
 		}
 	});
-
 
 	test('open models update file and untitled icons in place and release their language state', async function () {
 		const { page } = browserTests;
@@ -406,7 +541,9 @@ suite('themes browser component', () => {
 		await expect(untitledIcon).toHaveClass(/rust-lang-file-icon/u);
 		await expect(icon).not.toHaveText(glyph!);
 		await expect(host).toBeFocused();
-		expect(await retained!.evaluate(node => node === document.querySelector('#model-icon .ash-icon-label-icon'))).toBe(true);
+		expect(
+			await retained!.evaluate(node => node === document.querySelector('#model-icon .ash-icon-label-icon')),
+		).toBe(true);
 		await page.getByRole('button', { name: 'None', exact: true }).click();
 		await expect(icon).toBeHidden();
 		await expect(untitledIcon).not.toHaveClass(/is-reserved/u);
@@ -445,7 +582,6 @@ suite('themes browser component', () => {
 		await expect(page.locator('#root')).not.toHaveAttribute('data-color-theme', /.+/);
 	});
 
-
 	test('resource labels keep the filename readable before truncating its directory', async function () {
 		const { page } = browserTests;
 
@@ -456,29 +592,41 @@ suite('themes browser component', () => {
 		const description = host.locator('.ash-icon-label-description');
 		await expect(name).toHaveText('gitHistoryProvider.ts');
 		await expect(description).toHaveText('src/ash/workbench/contrib/git/browser');
-		const layout = async () => host.evaluate(element => {
-			const container = element.querySelector('.ash-icon-label-container')!;
-			const name = element.querySelector('.ash-icon-label-text')!;
-			const description = element.querySelector('.ash-icon-label-description')!;
-			const bounds = container.getBoundingClientRect();
-			return {
-				nameFits: name.clientWidth >= name.scrollWidth,
-				directoryFits: description.clientWidth >= description.scrollWidth,
-				nameContained: name.getBoundingClientRect().right <= bounds.right + 1,
-				directoryVisible: description.clientWidth > 0,
-			};
+		const layout = async () =>
+			host.evaluate(element => {
+				const container = element.querySelector('.ash-icon-label-container')!;
+				const name = element.querySelector('.ash-icon-label-text')!;
+				const description = element.querySelector('.ash-icon-label-description')!;
+				const bounds = container.getBoundingClientRect();
+				return {
+					nameFits: name.clientWidth >= name.scrollWidth,
+					directoryFits: description.clientWidth >= description.scrollWidth,
+					nameContained: name.getBoundingClientRect().right <= bounds.right + 1,
+					directoryVisible: description.clientWidth > 0,
+				};
+			});
+		await expect
+			.poll(layout)
+			.toEqual({ nameFits: true, directoryFits: false, nameContained: true, directoryVisible: true });
+		await expect
+			.poll(() => description.evaluate(element => getComputedStyle(element, '::before').content))
+			.toBe('none');
+		await host.evaluate(element => {
+			element.style.width = '100px';
 		});
-		await expect.poll(layout).toEqual({ nameFits: true, directoryFits: false, nameContained: true, directoryVisible: true });
-		await expect.poll(() => description.evaluate(element => getComputedStyle(element, '::before').content)).toBe('none');
-		await host.evaluate(element => { element.style.width = '100px'; });
-		await expect.poll(layout).toEqual({ nameFits: false, directoryFits: false, nameContained: true, directoryVisible: false });
+		await expect
+			.poll(layout)
+			.toEqual({ nameFits: false, directoryFits: false, nameContained: true, directoryVisible: false });
 		await expect(name).toHaveCSS('text-overflow', 'ellipsis');
-		await host.evaluate(element => { element.style.width = '600px'; });
-		await expect.poll(layout).toEqual({ nameFits: true, directoryFits: true, nameContained: true, directoryVisible: true });
+		await host.evaluate(element => {
+			element.style.width = '600px';
+		});
+		await expect
+			.poll(layout)
+			.toEqual({ nameFits: true, directoryFits: true, nameContained: true, directoryVisible: true });
 		await page.evaluate(() => window.disposeIconLabels());
 		await expect(host.locator('.ash-icon-label')).toHaveCount(0);
 	});
-
 
 	test('window theme styles reach popups outside the workbench without inline theme bindings', async function () {
 		const { page } = browserTests;
@@ -495,21 +643,27 @@ suite('themes browser component', () => {
 		for (const id of ['ash-dark', 'ash-light', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
 			await page.evaluate(id => window.selectColorTheme(id), id);
 			await expect(page.locator('html')).toHaveAttribute('data-color-theme', id);
-			const colors = await page.locator('#root').evaluate(root => ({
-				background: getComputedStyle(root).getPropertyValue('--ash-editor-background').trim(),
-				body1: getComputedStyle(root).getPropertyValue('--ash-fontSize-body1').trim(),
-			}));
-			expect(await popup.evaluate(element => ({
-				background: getComputedStyle(element).getPropertyValue('--ash-editor-background').trim(),
-				body1: getComputedStyle(element).getPropertyValue('--ash-fontSize-body1').trim(),
-				inline: element.style.length,
-			}))).toEqual({ ...colors, inline: 0 });
+			const colors = await page
+				.locator('#root')
+				.evaluate(root => ({
+					background: getComputedStyle(root).getPropertyValue('--ash-editor-background').trim(),
+					body1: getComputedStyle(root).getPropertyValue('--ash-fontSize-body1').trim(),
+				}));
+			expect(
+				await popup.evaluate(element => ({
+					background: getComputedStyle(element).getPropertyValue('--ash-editor-background').trim(),
+					body1: getComputedStyle(element).getPropertyValue('--ash-fontSize-body1').trim(),
+					inline: element.style.length,
+				})),
+			).toEqual({ ...colors, inline: 0 });
 			if (id.includes('high-contrast')) {
 				await expect(popup).toHaveCSS('box-shadow', 'none');
 				await expect(page.locator('html')).toHaveClass(/ash-high-contrast/);
 			}
 		}
 		await page.evaluate(() => window.disposeThemeRoot());
-		expect(await popup.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'))).toBe('');
+		expect(
+			await popup.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background')),
+		).toBe('');
 	});
 });

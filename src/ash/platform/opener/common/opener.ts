@@ -14,7 +14,7 @@ export function withSelection(uri: URI, selection: ITextEditorSelection): URI {
 }
 
 /** Separates editor coordinates before the resource enters file or model resolution. */
-export function extractSelection(uri: URI): { selection: ITextEditorSelection | undefined; uri: URI; } {
+export function extractSelection(uri: URI): { selection: ITextEditorSelection | undefined; uri: URI } {
 	const points = uri.fragment.split('-');
 	if (points.length > 2 || points.some(point => !/^L?\d+(,\d+)?$/.test(point))) {
 		return { uri, selection: undefined };
@@ -27,7 +27,12 @@ export function extractSelection(uri: URI): { selection: ITextEditorSelection | 
 	const end = coordinates[1];
 	return {
 		uri: uri.with({ fragment: '' }),
-		selection: { startLineNumber: start[0]!, startColumn: start[1] ?? 1, endLineNumber: end?.[0], endColumn: end ? end[1] ?? 1 : undefined },
+		selection: {
+			startLineNumber: start[0]!,
+			startColumn: start[1] ?? 1,
+			endLineNumber: end?.[0],
+			endColumn: end ? (end[1] ?? 1) : undefined,
+		},
 	};
 }
 
@@ -65,7 +70,7 @@ export interface IExternalUriResolver {
 export interface IExternalOpener {
 	openExternal(
 		href: string,
-		context: { readonly sourceUri: URI; readonly preferredOpenerId?: string; },
+		context: { readonly sourceUri: URI; readonly preferredOpenerId?: string },
 		token: CancellationToken,
 	): Promise<boolean>;
 }

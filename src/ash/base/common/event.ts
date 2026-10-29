@@ -1,4 +1,11 @@
-import { AbstractDisposable, Disposable, DisposableStore, noneDisposable, toDisposable, type IDisposable } from './lifecycle.js';
+import {
+	AbstractDisposable,
+	Disposable,
+	DisposableStore,
+	noneDisposable,
+	toDisposable,
+	type IDisposable,
+} from './lifecycle.js';
 import { onUnexpectedError } from './errors.js';
 
 export interface Event<T> {
@@ -36,7 +43,8 @@ export namespace Event {
 	}
 
 	export function map<T, R>(event: Event<T>, transform: (value: T) => R): Event<R> {
-		return (listener, thisArgs, disposables) => event(value => listener.call(thisArgs, transform(value)), undefined, disposables);
+		return (listener, thisArgs, disposables) =>
+			event(value => listener.call(thisArgs, transform(value)), undefined, disposables);
 	}
 
 	export function any<T>(...events: Event<T>[]): Event<T>;
@@ -145,7 +153,7 @@ export function runWithBufferedEvents<T>(mutation: () => T): T {
 	let failed = false;
 	try {
 		result = mutation();
-		if (typeof (result as { readonly then?: unknown; } | undefined)?.then === 'function') {
+		if (typeof (result as { readonly then?: unknown } | undefined)?.then === 'function') {
 			throw new TypeError('Buffered event mutations must be synchronous');
 		}
 	} catch (error) {
@@ -190,7 +198,7 @@ export class Emitter<T> extends AbstractDisposable {
 	constructor(private readonly options: EmitterOptions = {}) {
 		super();
 		this.deliveryQueue = options.deliveryQueue
-			? options.deliveryQueue as EventDeliveryQueueImpl
+			? (options.deliveryQueue as EventDeliveryQueueImpl)
 			: new EventDeliveryQueueImpl();
 	}
 
@@ -263,7 +271,7 @@ export class PauseableEmitter<T> extends Emitter<T> {
 	private readonly eventQueue: T[] = [];
 	private readonly merge: ((events: readonly T[]) => T) | undefined;
 
-	constructor(options: EmitterOptions & { readonly merge?: (events: readonly T[]) => T; } = {}) {
+	constructor(options: EmitterOptions & { readonly merge?: (events: readonly T[]) => T } = {}) {
 		super(options);
 		this.merge = options.merge;
 	}
@@ -318,7 +326,7 @@ export class ValueWithChangeEvent<T> implements IValueWithChangeEvent<T> {
 	private readonly changeEmitter = new Emitter<void>();
 	readonly onDidChange = this.changeEmitter.event;
 
-	constructor(private currentValue: T) { }
+	constructor(private currentValue: T) {}
 
 	get value(): T {
 		return this.currentValue;

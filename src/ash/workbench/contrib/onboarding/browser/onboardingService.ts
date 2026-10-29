@@ -37,9 +37,11 @@ export class OnboardingScenarioService extends Disposable implements IOnboarding
 		this._register(onboardingScenarioRegistry.onDidChange(() => this.schedule()));
 		this._register(onboardingTargetRegistry.onDidChange(() => this.schedule()));
 		this._register(this.contextKeys.onDidChangeContext(() => this.schedule()));
-		this._register(this.configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(ONBOARDING_ENABLED_CONFIG)) this.schedule();
-		}));
+		this._register(
+			this.configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(ONBOARDING_ENABLED_CONFIG)) this.schedule();
+			}),
+		);
 		this.schedule();
 	}
 
@@ -47,12 +49,17 @@ export class OnboardingScenarioService extends Disposable implements IOnboarding
 		const scenario = onboardingScenarioRegistry.get(id);
 		if (token.isCancellationRequested) return 'cancelled';
 		if (!scenario || !this.contextKeys.contextMatchesRules(scenario.when)) return 'unavailable';
-		if (scenario.isEligible && !await scenario.isEligible(token)) return token.isCancellationRequested ? 'cancelled' : 'unavailable';
+		if (scenario.isEligible && !(await scenario.isEligible(token)))
+			return token.isCancellationRequested ? 'cancelled' : 'unavailable';
 		if (token.isCancellationRequested) return 'cancelled';
 		return this.showSteps(scenario.steps, token);
 	}
 
-	public showSteps(steps: readonly IOnboardingStep[], token: CancellationToken, scope?: string): Promise<OnboardingOutcome> {
+	public showSteps(
+		steps: readonly IOnboardingStep[],
+		token: CancellationToken,
+		scope?: string,
+	): Promise<OnboardingOutcome> {
 		const version = ++this.requestVersion;
 		this.active.value?.cancel();
 		const run = async (): Promise<OnboardingOutcome> => {
@@ -66,7 +73,10 @@ export class OnboardingScenarioService extends Disposable implements IOnboarding
 			}
 		};
 		const result = this.pending.then(run, run);
-		this.pending = result.then(() => undefined, () => undefined);
+		this.pending = result.then(
+			() => undefined,
+			() => undefined,
+		);
 		return result;
 	}
 
@@ -80,13 +90,21 @@ export class OnboardingScenarioService extends Disposable implements IOnboarding
 
 	private schedule(): void {
 		if (!this.started || this.configuration.getValue<boolean>(ONBOARDING_ENABLED_CONFIG) !== true) return;
-		if (this.evaluating) { this.rescheduleRequested = true; return; }
+		if (this.evaluating) {
+			this.rescheduleRequested = true;
+			return;
+		}
 		this.evaluating = true;
 		queueMicrotask(() => {
-			void this.evaluate().catch(error => console.error('Unable to evaluate onboarding scenarios', error)).finally(() => {
-				this.evaluating = false;
-				if (this.rescheduleRequested) { this.rescheduleRequested = false; this.schedule(); }
-			});
+			void this.evaluate()
+				.catch(error => console.error('Unable to evaluate onboarding scenarios', error))
+				.finally(() => {
+					this.evaluating = false;
+					if (this.rescheduleRequested) {
+						this.rescheduleRequested = false;
+						this.schedule();
+					}
+				});
 		});
 	}
 
@@ -96,8 +114,13 @@ export class OnboardingScenarioService extends Disposable implements IOnboarding
 			if (this.shownInWindow.has(scenario.id)) continue;
 			if (this.storage.getBoolean(this.storageKey(scenario.id), StorageScope.PROFILE, false)) continue;
 			if (!this.contextKeys.contextMatchesRules(scenario.when)) continue;
-			if (scenario.isEligible && !await scenario.isEligible(CancellationToken.None)) continue;
-			if (this.isDisposed || this.active.value || this.configuration.getValue<boolean>(ONBOARDING_ENABLED_CONFIG) !== true) return;
+			if (scenario.isEligible && !(await scenario.isEligible(CancellationToken.None))) continue;
+			if (
+				this.isDisposed ||
+				this.active.value ||
+				this.configuration.getValue<boolean>(ONBOARDING_ENABLED_CONFIG) !== true
+			)
+				return;
 			const result = await this.showSteps(scenario.steps, CancellationToken.None);
 			if (result === 'completed' || result === 'dismissed') {
 				this.shownInWindow.add(scenario.id);

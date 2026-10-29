@@ -33,8 +33,14 @@ export class ChatWidgetPasteTarget extends AbstractDisposable implements IChatPa
 		return this.references.getInputState();
 	}
 
-	public addAttachments(entries: readonly ChatContextAttachment[], signal?: AbortSignal): readonly ChatContextAttachment[] {
-		if (entries.length > 1 && entries.every(entry => entry.kind !== 'toolSelection' && entry.lifetime !== 'source')) {
+	public addAttachments(
+		entries: readonly ChatContextAttachment[],
+		signal?: AbortSignal,
+	): readonly ChatContextAttachment[] {
+		if (
+			entries.length > 1 &&
+			entries.every(entry => entry.kind !== 'toolSelection' && entry.lifetime !== 'source')
+		) {
 			this.assertCurrent(signal);
 			const selection = this.input.getSelection();
 			const start = Math.min(selection.anchor, selection.active);

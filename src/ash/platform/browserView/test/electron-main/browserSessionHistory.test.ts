@@ -9,7 +9,10 @@ import { EventEmitter } from 'node:events';
 import type { Session } from 'electron/main';
 import { suite, test } from 'mocha';
 import { StorageScope, StorageTarget } from '../../../storage/common/storage.js';
-import { IApplicationStorageMainService, StorageMainService } from '../../../storage/electron-main/storageMainService.js';
+import {
+	IApplicationStorageMainService,
+	StorageMainService,
+} from '../../../storage/electron-main/storageMainService.js';
 import { ILogService, NullLoggerService } from '../../../log/common/log.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { BrowserSession } from '../../electron-main/browserSession.js';
@@ -26,7 +29,10 @@ suite('Persistent browser session history', () => {
 
 	test('history construction requires the application storage registration', () => {
 		using services = new InstantiationService();
-		assert.throws(() => services.createInstance(BrowserSessionHistory, session('missing', BrowserViewStorageScope.Global)), /applicationStorageMainService/);
+		assert.throws(
+			() => services.createInstance(BrowserSessionHistory, session('missing', BrowserViewStorageScope.Global)),
+			/applicationStorageMainService/,
+		);
 	});
 
 	test('actual process restart restores visits and images; deleting and clearing survive the next restart', async () => {
@@ -37,16 +43,27 @@ suite('Persistent browser session history', () => {
 			const written = await run('write');
 			const restored = await run('read');
 			assert.deepEqual(restored, written);
-			assert.deepEqual(restored.items.map((item: { title: string; }) => item.title), ['First', 'Second']);
+			assert.deepEqual(
+				restored.items.map((item: { title: string }) => item.title),
+				['First', 'Second'],
+			);
 			assert.deepEqual(Object.values(restored.favicons), [icon]);
 			await run('delete');
-			assert.deepEqual((await run('read')).items.map((item: { title: string; }) => item.title), ['Second']);
+			assert.deepEqual(
+				(await run('read')).items.map((item: { title: string }) => item.title),
+				['Second'],
+			);
 			await run('clear');
 			assert.deepEqual(await run('read'), { items: [], favicons: {} });
 			const document = JSON.parse(await readFile(file, 'utf8'));
-			const values = document.storages.find((scope: { identity: { scope: string; }; }) => scope.identity.scope === 'application').entries;
+			const values = document.storages.find(
+				(scope: { identity: { scope: string } }) => scope.identity.scope === 'application',
+			).entries;
 			assert.deepEqual(Object.keys(values), ['unrelated']);
-		} finally { assert.equal(dirname(directory), tmpdir()); await rm(directory, { recursive: true, force: true }); }
+		} finally {
+			assert.equal(dirname(directory), tmpdir());
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 
 	test('global and workspace identities restore independently; ephemeral and agent scopes never write history', async () => {
@@ -56,7 +73,13 @@ suite('Persistent browser session history', () => {
 			using storage = new StorageMainService(file);
 			await storage.initialize();
 			using services = createServices(storage);
-			for (const [id, scope] of [['global', BrowserViewStorageScope.Global], ['workspace-one', BrowserViewStorageScope.Workspace], ['workspace-two', BrowserViewStorageScope.Workspace], ['temporary', BrowserViewStorageScope.Ephemeral], ['agent', BrowserViewStorageScope.Agent]] as const) {
+			for (const [id, scope] of [
+				['global', BrowserViewStorageScope.Global],
+				['workspace-one', BrowserViewStorageScope.Workspace],
+				['workspace-two', BrowserViewStorageScope.Workspace],
+				['temporary', BrowserViewStorageScope.Ephemeral],
+				['agent', BrowserViewStorageScope.Agent],
+			] as const) {
 				using history = services.createInstance(BrowserSessionHistory, session(id, scope));
 				await history.initialize();
 				history.add(`https://${id}.test/`, id, icon);
@@ -66,15 +89,25 @@ suite('Persistent browser session history', () => {
 			using restartedStorage = new StorageMainService(file);
 			await restartedStorage.initialize();
 			using restarted = createServices(restartedStorage);
-			for (const [id, scope] of [['global', BrowserViewStorageScope.Global], ['workspace-one', BrowserViewStorageScope.Workspace], ['workspace-two', BrowserViewStorageScope.Workspace]] as const) {
+			for (const [id, scope] of [
+				['global', BrowserViewStorageScope.Global],
+				['workspace-one', BrowserViewStorageScope.Workspace],
+				['workspace-two', BrowserViewStorageScope.Workspace],
+			] as const) {
 				using history = restarted.createInstance(BrowserSessionHistory, session(id, scope));
 				await history.initialize();
-				assert.deepEqual(history.entries.items.map(item => item.title), [id]);
+				assert.deepEqual(
+					history.entries.items.map(item => item.title),
+					[id],
+				);
 			}
 			const snapshot = await restartedStorage.getItems(applicationStorage);
 			assert.ok(!Object.keys(snapshot.entries).some(key => key.includes('temporary') || key.includes('agent')));
 			await restartedStorage.close();
-		} finally { assert.equal(dirname(directory), tmpdir()); await rm(directory, { recursive: true, force: true }); }
+		} finally {
+			assert.equal(dirname(directory), tmpdir());
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 
 	test('restoration validates persisted values, discards unsafe suggestions and does not rewrite hydrated data', async () => {
@@ -83,18 +116,27 @@ suite('Persistent browser session history', () => {
 			using storage = new StorageMainService(join(directory, 'state.json'));
 			await storage.initialize();
 			await storage.getItems(applicationStorage);
-			await storage.updateItems(applicationStorage, 'browser.history.entries.corrupt', entry(JSON.stringify({
-				items: [
-					{ id: 1, url: 'https://valid.test/', title: 'Valid', time: 1, icon: 'missing' },
-					{ id: 2, url: 'javascript:alert(1)', title: 'Unsafe', time: 2 },
-					{ id: 1, url: 'https://duplicate.test/', title: 'Duplicate', time: 3 },
-					{ id: 'wrong', url: 'https://wrong.test/', title: 'Wrong id', time: 4 },
-				]
-			})));
+			await storage.updateItems(
+				applicationStorage,
+				'browser.history.entries.corrupt',
+				entry(
+					JSON.stringify({
+						items: [
+							{ id: 1, url: 'https://valid.test/', title: 'Valid', time: 1, icon: 'missing' },
+							{ id: 2, url: 'javascript:alert(1)', title: 'Unsafe', time: 2 },
+							{ id: 1, url: 'https://duplicate.test/', title: 'Duplicate', time: 3 },
+							{ id: 'wrong', url: 'https://wrong.test/', title: 'Wrong id', time: 4 },
+						],
+					}),
+				),
+			);
 			await storage.updateItems(applicationStorage, 'browser.history.favicons.corrupt', entry('{bad json'));
 			const before = await storage.getItems(applicationStorage);
 			using services = createServices(storage);
-			using history = services.createInstance(BrowserSessionHistory, session('corrupt', BrowserViewStorageScope.Workspace));
+			using history = services.createInstance(
+				BrowserSessionHistory,
+				session('corrupt', BrowserViewStorageScope.Workspace),
+			);
 			await history.initialize();
 			assert.deepEqual(history.entries.items, [{ id: 1, url: 'https://valid.test/', time: 1, title: 'Valid' }]);
 			assert.deepEqual(history.favicons.serialize(), { map: {} });
@@ -103,7 +145,10 @@ suite('Persistent browser session history', () => {
 			const added = history.add('https://next.test/', 'Next');
 			assert.equal(added.id, 2);
 			await storage.close();
-		} finally { assert.equal(dirname(directory), tmpdir()); await rm(directory, { recursive: true, force: true }); }
+		} finally {
+			assert.equal(dirname(directory), tmpdir());
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 
 	test('changes share a two-second deadline and title-only edits do not rewrite the favicon map', async () => {
@@ -113,11 +158,17 @@ suite('Persistent browser session history', () => {
 			using storage = new StorageMainService(join(directory, 'state.json'));
 			await storage.initialize();
 			using services = createServices(storage);
-			using history = services.createInstance(BrowserSessionHistory, session('timing', BrowserViewStorageScope.Global));
+			using history = services.createInstance(
+				BrowserSessionHistory,
+				session('timing', BrowserViewStorageScope.Global),
+			);
 			await history.initialize();
 			const writes: string[] = [];
 			const update = storage.updateItems.bind(storage);
-			storage.updateItems = (identity, key, value) => { writes.push(key); return update(identity, key, value); };
+			storage.updateItems = (identity, key, value) => {
+				writes.push(key);
+				return update(identity, key, value);
+			};
 			const handle = history.add('https://first.test/', 'First', icon);
 			mock.timers.tick(1999);
 			history.add('https://second.test/', 'Second', icon);
@@ -130,7 +181,11 @@ suite('Persistent browser session history', () => {
 			mock.timers.tick(2000);
 			assert.deepEqual(writes, ['browser.history.entries.timing']);
 			await storage.close();
-		} finally { mock.timers.reset(); assert.equal(dirname(directory), tmpdir()); await rm(directory, { recursive: true, force: true }); }
+		} finally {
+			mock.timers.reset();
+			assert.equal(dirname(directory), tmpdir());
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 
 	test('failed writes remain retryable without poisoning the next flush', async () => {
@@ -139,10 +194,15 @@ suite('Persistent browser session history', () => {
 			using storage = new StorageMainService(join(directory, 'state.json'));
 			await storage.initialize();
 			using services = createServices(storage);
-			using history = services.createInstance(BrowserSessionHistory, session('retry', BrowserViewStorageScope.Workspace));
+			using history = services.createInstance(
+				BrowserSessionHistory,
+				session('retry', BrowserViewStorageScope.Workspace),
+			);
 			await history.initialize();
 			const update = storage.updateItems.bind(storage);
-			storage.updateItems = async () => { throw new Error('Deliberate write failure'); };
+			storage.updateItems = async () => {
+				throw new Error('Deliberate write failure');
+			};
 			history.add('https://retry.test/', 'Retry');
 			await assert.rejects(history.flushNow(), /Deliberate write failure/);
 			storage.updateItems = update;
@@ -150,13 +210,18 @@ suite('Persistent browser session history', () => {
 			const snapshot = await storage.getItems(applicationStorage);
 			assert.equal(JSON.parse(snapshot.entries[history.storageKeys.history!]!.value).items[0].title, 'Retry');
 			await storage.close();
-		} finally { assert.equal(dirname(directory), tmpdir()); await rm(directory, { recursive: true, force: true }); }
+		} finally {
+			assert.equal(dirname(directory), tmpdir());
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 });
 
 function session(id: string, scope: BrowserViewStorageScope): BrowserSession {
 	const electronSession = Object.assign(new EventEmitter(), {
-		setPermissionCheckHandler: () => { }, setPermissionRequestHandler: () => { }, setDevicePermissionHandler: () => { },
+		setPermissionCheckHandler: () => {},
+		setPermissionRequestHandler: () => {},
+		setDevicePermissionHandler: () => {},
 	}) as unknown as Session;
 	return BrowserSession.getOrCreate(id, scope, electronSession);
 }
@@ -168,7 +233,10 @@ function createServices(storage: IApplicationStorageMainService): InstantiationS
 	return services;
 }
 
-async function runProcess(file: string, mode: string): Promise<{ items: Array<{ id: number; title: string; }>; favicons: Record<string, string>; }> {
+async function runProcess(
+	file: string,
+	mode: string,
+): Promise<{ items: Array<{ id: number; title: string }>; favicons: Record<string, string> }> {
 	const script = `
 		import { StorageMainService, IApplicationStorageMainService } from ${JSON.stringify(new URL('../../../storage/electron-main/storageMainService.js', import.meta.url).href)};
 		import { ILogService, NullLoggerService } from ${JSON.stringify(new URL('../../../log/common/log.js', import.meta.url).href)};

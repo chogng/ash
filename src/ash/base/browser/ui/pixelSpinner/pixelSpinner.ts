@@ -33,10 +33,15 @@ export function createPixelSpinner(parent?: HTMLElement, options?: IPixelSpinner
 		element.classList.toggle('paused', element.ownerDocument.hidden || !isVisible);
 	};
 	resources.add(addDisposableListener(element.ownerDocument, 'visibilitychange', updateAnimation));
-	resources.add(observeIntersection(element, entry => {
-		isVisible = entry.isIntersecting;
-		updateAnimation();
-	}));
+	resources.add(
+		observeIntersection(element, entry => {
+			isVisible = entry.isIntersecting;
+			updateAnimation();
+		}),
+	);
 	updateAnimation();
-	return Object.assign(toDisposable(() => resources.dispose()), { element });
+	return Object.assign(
+		toDisposable(() => resources.dispose()),
+		{ element },
+	);
 }

@@ -1,6 +1,12 @@
 import './accessibilityConfiguration.js';
 import './accessibleViewActions.js';
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	AccessibleContentProvider,
+	AccessibleViewProviderId,
+	AccessibleViewType,
+	AccessibilityVerbositySettingId,
+	IAccessibleViewService,
+} from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ILayoutService } from '../../../../platform/layout/browser/layoutService.js';
 import { BannerFocused } from '../../../common/contextkeys.js';
@@ -19,11 +25,14 @@ import { UnfocusedViewDimmingContribution } from './unfocusedViewDimmingContribu
 registerSingleton(IAccessibleViewService, AccessibleViewService, InstantiationType.Delayed);
 
 registerWorkbenchContribution(EditorAccessibilityHelpContribution.ID, WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(EditorAccessibilityHelpContribution));
+	accessor.get(IInstantiationService).createInstance(EditorAccessibilityHelpContribution),
+);
 registerWorkbenchContribution(AccessibilityStatus.ID, WorkbenchPhase.BlockRestore, accessor =>
-	accessor.get(IInstantiationService).createInstance(AccessibilityStatus));
+	accessor.get(IInstantiationService).createInstance(AccessibilityStatus),
+);
 registerWorkbenchContribution('workbench.contrib.unfocusedViewDimming', WorkbenchPhase.AfterRestored, accessor =>
-	accessor.get(IInstantiationService).createInstance(UnfocusedViewDimmingContribution));
+	accessor.get(IInstantiationService).createInstance(UnfocusedViewDimmingContribution),
+);
 
 for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 	AccessibleViewRegistry.register({
@@ -38,18 +47,24 @@ for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
 			if (!region) return undefined;
 			const focused = region.ownerDocument.activeElement;
 			const provider = new AccessibleContentProvider(
-				AccessibleViewProviderId.Banner, { type },
+				AccessibleViewProviderId.Banner,
+				{ type },
 				() => {
 					if (type === AccessibleViewType.Help) {
-						return localize('banner.accessibilityHelp', 'Window Banner\nBanners show persistent window status, including Agent Host connection recovery. Use Tab and Shift+Tab or the arrow keys to move between actions and Close Banner. Press Enter or Space to activate an action. Escape focuses the banner message without dismissing it. Manage opens Workspace Trust for the current workspace. Changes require saving and confirmation. Close Banner dismisses the notice. Focus Banner in the Command Palette returns here. Press <keybinding:editor.action.accessibleView> to read the full message. When Agent Host recovery fails, Reconnect tries again without resending an unfinished message. Agent Host: Reconnect is also available in the Command Palette. If authorization expired, open a new authenticated link.');
+						return localize(
+							'banner.accessibilityHelp',
+							'Window Banner\nBanners show persistent window status, including Agent Host connection recovery. Use Tab and Shift+Tab or the arrow keys to move between actions and Close Banner. Press Enter or Space to activate an action. Escape focuses the banner message without dismissing it. Manage opens Workspace Trust for the current workspace. Changes require saving and confirmation. Close Banner dismisses the notice. Focus Banner in the Command Palette returns here. Press <keybinding:editor.action.accessibleView> to read the full message. When Agent Host recovery fails, Reconnect tries again without resending an unfinished message. Agent Host: Reconnect is also available in the Command Palette. If authorization expired, open a new authenticated link.',
+						);
 					}
 					const message = region.querySelector('.ash-banner-message')?.textContent?.trim();
-					const actions = [...region.querySelectorAll<HTMLElement>('a, button')]
-						.map(action => action.textContent || action.getAttribute('aria-label'));
+					const actions = [...region.querySelectorAll<HTMLElement>('a, button')].map(
+						action => action.textContent || action.getAttribute('aria-label'),
+					);
 					return [message, ...actions].filter(Boolean).join('\n');
 				},
 				() => {
-					if (isHTMLElement(focused) && focused.isConnected && focused.getClientRects().length) focused.focus();
+					if (isHTMLElement(focused) && focused.isConnected && focused.getClientRects().length)
+						focused.focus();
 					else if (!region.hidden) banners.focus();
 					else layout.focus();
 				},

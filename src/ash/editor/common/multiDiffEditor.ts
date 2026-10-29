@@ -9,10 +9,7 @@ export interface IMultiDiffResourceId {
 }
 
 export interface IMultiDiffEditorOptionsViewState {
-	readonly revealData?: {
-		readonly resource: IMultiDiffResourceId;
-		readonly range?: IRange;
-	};
+	readonly revealData?: { readonly resource: IMultiDiffResourceId; readonly range?: IRange };
 }
 
 export interface IMultiDiffEditorOptions extends ITextEditorOptions {

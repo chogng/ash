@@ -18,8 +18,8 @@ export interface DesignScene {
 /** DOM events and pointer capture stay in browser input; drawing receives design coordinates. */
 export interface DesignDrawingParticipant {
 	readonly preview: DesignShape | undefined;
-	begin(point: DesignPoint, modifiers?: { shift: boolean; alt: boolean; tolerance: number; }): boolean;
-	update(point: DesignPoint, modifiers?: { shift: boolean; alt: boolean; }): void;
+	begin(point: DesignPoint, modifiers?: { shift: boolean; alt: boolean; tolerance: number }): boolean;
+	update(point: DesignPoint, modifiers?: { shift: boolean; alt: boolean }): void;
 	end(): void;
 	complete(): boolean;
 	cancel(): void;
@@ -67,7 +67,7 @@ export interface IDesignTextContribution {
 	readonly editingId: string | undefined;
 	readonly typingStyleId: string | undefined;
 	readonly typingStyle: DesignTextStyle | undefined;
-	readonly range: { start: number; end: number; } | undefined;
+	readonly range: { start: number; end: number } | undefined;
 	readonly onDidChangeSelection: Event<void>;
 	edit(id: string): void;
 	finish(commit?: boolean): void;
@@ -92,7 +92,7 @@ export interface DesignEditorContributionContext {
 	readonly ownerDocument: Document;
 	readonly canvasDomNode: HTMLElement;
 	readonly overlayDomNode: SVGGElement;
-	toDesignPoint(point: { readonly clientX: number; readonly clientY: number; }): DesignPoint;
+	toDesignPoint(point: { readonly clientX: number; readonly clientY: number }): DesignPoint;
 	readonly documentController: DesignDocumentController;
 	readonly commands: DocumentCommands;
 	readonly selection: DesignSelection;

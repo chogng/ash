@@ -1,11 +1,40 @@
-import { type Event } from "../../../../base/common/event.js";
-import { type IDisposable } from "../../../../base/common/lifecycle.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import { type Event } from '../../../../base/common/event.js';
+import { type IDisposable } from '../../../../base/common/lifecycle.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
 /** Aggregate lifecycle of the extension-process fleet owned by the service. */
-export type ExtensionHostState = "stopped" | "starting" | "ready" | "degraded" | "failed";
-export type ExtensionRuntimeState = "dormant" | "stopped" | "starting" | "handshaking" | "ready" | "recovering" | "crashLoop" | "failed";
-export type ExtensionHostRegistrationKind = 'treeDataProvider' | 'terminalCompletionProvider' | 'terminalQuickFixProvider' | 'terminalLinkProvider' | 'terminalEnvironment' | 'terminalProfileProvider' | 'terminalPty' | 'remoteConnectionResolver' | 'remoteAuthorityResolver' | 'workspaceEvents' | 'outputEvents' | 'statusBar' | 'sourceControl' | 'textDocumentEvents' | 'taskEvents' | 'debugEvents' | 'customTextEditor' | "command" | "languageProvider" | "debugAdapter" | 'debugConfigurationProvider' | 'debugAdapterTracker' | "taskProvider" | "testProfileProvider" | 'speechProvider' | 'dataChannel' | 'linkPresentationProvider' | 'externalUriOpener';
+export type ExtensionHostState = 'stopped' | 'starting' | 'ready' | 'degraded' | 'failed';
+export type ExtensionRuntimeState =
+	'dormant' | 'stopped' | 'starting' | 'handshaking' | 'ready' | 'recovering' | 'crashLoop' | 'failed';
+export type ExtensionHostRegistrationKind =
+	| 'treeDataProvider'
+	| 'terminalCompletionProvider'
+	| 'terminalQuickFixProvider'
+	| 'terminalLinkProvider'
+	| 'terminalEnvironment'
+	| 'terminalProfileProvider'
+	| 'terminalPty'
+	| 'remoteConnectionResolver'
+	| 'remoteAuthorityResolver'
+	| 'workspaceEvents'
+	| 'outputEvents'
+	| 'statusBar'
+	| 'sourceControl'
+	| 'textDocumentEvents'
+	| 'taskEvents'
+	| 'debugEvents'
+	| 'customTextEditor'
+	| 'command'
+	| 'languageProvider'
+	| 'debugAdapter'
+	| 'debugConfigurationProvider'
+	| 'debugAdapterTracker'
+	| 'taskProvider'
+	| 'testProfileProvider'
+	| 'speechProvider'
+	| 'dataChannel'
+	| 'linkPresentationProvider'
+	| 'externalUriOpener';
 
 /** Stable frontend identity for one registration owned by exactly one extension process. */
 export interface ExtensionHostRegistration {
@@ -63,7 +92,7 @@ export interface IExtensionHostService extends IDisposable {
 	stop(): Promise<void>;
 }
 
-export const IExtensionHostService = createServiceIdentifier<IExtensionHostService>("extensionHostService");
+export const IExtensionHostService = createServiceIdentifier<IExtensionHostService>('extensionHostService');
 
 export const EmptyExtensionHostSnapshot: ExtensionHostSnapshot = Object.freeze({
 	fleetGeneration: 0,

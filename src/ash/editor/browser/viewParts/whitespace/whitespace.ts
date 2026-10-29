@@ -45,18 +45,37 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 		return changed || event.hasChanged(EditorOption.layoutInfo) || event.hasChanged(EditorOption.fontInfo);
 	}
 
-	public override onCursorStateChanged(_event: viewEvents.ViewCursorStateChangedEvent): boolean { return this.mode === 'selection'; }
-	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean { return true; }
-	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return true; }
-	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean { return true; }
-	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
-	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
-	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean { return event.scrollTopChanged; }
-	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
+	public override onCursorStateChanged(_event: viewEvents.ViewCursorStateChangedEvent): boolean {
+		return this.mode === 'selection';
+	}
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean {
+		return true;
+	}
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
+		return true;
+	}
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean {
+		return true;
+	}
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean {
+		return true;
+	}
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean {
+		return true;
+	}
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
+		return event.scrollTopChanged;
+	}
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
+		return true;
+	}
 
 	public prepareRender(context: RenderingContext): void {
-		if (this.mode === 'none'
-			|| (this.mode === 'selection' && this.viewModel.getCursorStates().every(state => state.modelState.selection.isEmpty()))) {
+		if (
+			this.mode === 'none' ||
+			(this.mode === 'selection' &&
+				this.viewModel.getCursorStates().every(state => state.modelState.selection.isEmpty()))
+		) {
 			this._renderResult = [];
 			return;
 		}
@@ -68,7 +87,9 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 				if (!visualLine) {
 					continue;
 				}
-				const text = this.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, visualLine.endColumn);
+				const text = this.model
+					.getLineContent(visualLine.logicalLineIndex + 1)
+					.slice(visualLine.startColumn, visualLine.endColumn);
 				const trailingStart = text.search(/\s*$/u);
 				for (let index = 0; index < text.length; index += 1) {
 					const character = text[index];
@@ -81,7 +102,10 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 					if (this.mode === 'boundary' && index > 0 && index < trailingStart) {
 						continue;
 					}
-					if (this.mode === 'selection' && !this.isSelected(visualLine.logicalLineIndex, visualLine.startColumn + index)) {
+					if (
+						this.mode === 'selection' &&
+						!this.isSelected(visualLine.logicalLineIndex, visualLine.startColumn + index)
+					) {
 						continue;
 					}
 					const marker = h(row.ownerDocument, 'span');
@@ -99,7 +123,12 @@ export class WhitespaceOverlay extends DynamicViewOverlay {
 	}
 
 	private isSelected(lineIndex: number, columnIndex: number): boolean {
-		const characterRange = Range.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1), new Position((lineIndex) + 1, (columnIndex + 1) + 1));
-		return this.viewModel.getCursorStates().some(state => Range.areIntersecting(state.modelState.selection, characterRange));
+		const characterRange = Range.fromPositions(
+			new Position(lineIndex + 1, columnIndex + 1),
+			new Position(lineIndex + 1, columnIndex + 1 + 1),
+		);
+		return this.viewModel
+			.getCursorStates()
+			.some(state => Range.areIntersecting(state.modelState.selection, characterRange));
 	}
 }

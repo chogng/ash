@@ -16,7 +16,10 @@ export function computeDefaultDocumentColors(model: IDocumentColorComputerTarget
 }
 
 /** Uses the same matcher while allowing input and cancellation between batches. */
-export async function computeDefaultDocumentColorsAsync(model: IDocumentColorComputerTarget, signal: AbortSignal): Promise<IColorInformation[]> {
+export async function computeDefaultDocumentColorsAsync(
+	model: IDocumentColorComputerTarget,
+	signal: AbortSignal,
+): Promise<IColorInformation[]> {
 	signal.throwIfAborted();
 	const colors: IColorInformation[] = [];
 	let scanned = 0;
@@ -35,12 +38,19 @@ function* documentColors(model: IDocumentColorComputerTarget): IterableIterator<
 	for (const match of model.findMatches(COLOR_LITERAL_PATTERN)) {
 		const color = parseColorLiteral(match[0]);
 		yield color && match.index !== undefined
-			? Object.freeze({ range: Range.fromPositions(model.positionAt(match.index), model.positionAt(match.index + match[0].length)), color })
+			? Object.freeze({
+					range: Range.fromPositions(
+						model.positionAt(match.index),
+						model.positionAt(match.index + match[0].length),
+					),
+					color,
+				})
 			: undefined;
 	}
 }
 
-const COLOR_LITERAL_PATTERN = /#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{4}|[0-9a-f]{3})(?![0-9a-f])|\b(?:rgba?|hsla?)\([^)]*\)|\btransparent\b/giu;
+const COLOR_LITERAL_PATTERN =
+	/#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{4}|[0-9a-f]{3})(?![0-9a-f])|\b(?:rgba?|hsla?)\([^)]*\)|\btransparent\b/giu;
 
 function parseColorLiteral(value: string): IColor | undefined {
 	const normalized = value.trim().toLowerCase();
@@ -79,21 +89,30 @@ function parseHsl(value: string): IColor | undefined {
 	const saturation = parsePercentage(parts.channels[1]!);
 	const lightness = parsePercentage(parts.channels[2]!);
 	const alpha = parseAlpha(parts.alpha);
-	if (hue === undefined || saturation === undefined || lightness === undefined || alpha === undefined) return undefined;
+	if (hue === undefined || saturation === undefined || lightness === undefined || alpha === undefined)
+		return undefined;
 	const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
 	const section = hue / 60;
-	const secondary = chroma * (1 - Math.abs(section % 2 - 1));
-	const [red, green, blue] = section < 1 ? [chroma, secondary, 0]
-		: section < 2 ? [secondary, chroma, 0]
-			: section < 3 ? [0, chroma, secondary]
-				: section < 4 ? [0, secondary, chroma]
-					: section < 5 ? [secondary, 0, chroma]
-						: [chroma, 0, secondary];
+	const secondary = chroma * (1 - Math.abs((section % 2) - 1));
+	const [red, green, blue] =
+		section < 1
+			? [chroma, secondary, 0]
+			: section < 2
+				? [secondary, chroma, 0]
+				: section < 3
+					? [0, chroma, secondary]
+					: section < 4
+						? [0, secondary, chroma]
+						: section < 5
+							? [secondary, 0, chroma]
+							: [chroma, 0, secondary];
 	const match = lightness - chroma / 2;
 	return normalizedColor(red + match, green + match, blue + match, alpha / 255);
 }
 
-function colorFunctionParts(value: string): { readonly channels: readonly string[]; readonly alpha?: string; } | undefined {
+function colorFunctionParts(
+	value: string,
+): { readonly channels: readonly string[]; readonly alpha?: string } | undefined {
 	const start = value.indexOf('(');
 	const end = value.lastIndexOf(')');
 	if (start < 0 || end <= start) return undefined;
@@ -135,8 +154,9 @@ function parseHue(value: string): number | undefined {
 	const unit = /(?:deg|grad|rad|turn)$/u.exec(value)?.[0] ?? '';
 	const hue = parseNumber(unit ? value.slice(0, -unit.length) : value);
 	if (!Number.isFinite(hue)) return undefined;
-	const degrees = unit === 'turn' ? hue * 360 : unit === 'rad' ? hue * 180 / Math.PI : unit === 'grad' ? hue * 0.9 : hue;
-	return (degrees % 360 + 360) % 360;
+	const degrees =
+		unit === 'turn' ? hue * 360 : unit === 'rad' ? (hue * 180) / Math.PI : unit === 'grad' ? hue * 0.9 : hue;
+	return ((degrees % 360) + 360) % 360;
 }
 
 function parsePercentage(value: string): number | undefined {

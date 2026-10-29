@@ -1,14 +1,25 @@
-import { addDisposableListener, h, text as createText } from "../../../../../base/browser/dom.js";
+import { addDisposableListener, h, text as createText } from '../../../../../base/browser/dom.js';
 import { type FastDomNode } from '../../../../../base/browser/fastDomNode.js';
 import { IME } from '../../../../../base/common/ime.js';
-import { Disposable, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
+import { Disposable, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { AccessibilitySupport } from '../../../../../platform/accessibility/common/accessibility.js';
 import { EditorOption, type IComputedEditorOptions } from '../../../../common/config/editorOptions.js';
 import { Selection } from '../../../../common/core/selection.js';
 import { TextModel } from '../../../../common/model/textModel.js';
 import { type ViewContext } from '../../../../common/viewModel/viewContext.js';
 import { type EditContextViewController } from '../editContext.js';
-import { clampScreenReaderOffset, createScreenReaderContentState, DEFAULT_SCREEN_READER_PAGE_SIZE, domOffsetAtPoint, domPointAtOffset, modelOffsetAtContentOffset, screenReaderLineOffsetAtModelOffset, type IScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from "./screenReaderUtils.js";
+import {
+	clampScreenReaderOffset,
+	createScreenReaderContentState,
+	DEFAULT_SCREEN_READER_PAGE_SIZE,
+	domOffsetAtPoint,
+	domPointAtOffset,
+	modelOffsetAtContentOffset,
+	screenReaderLineOffsetAtModelOffset,
+	type IScreenReaderContent,
+	type ScreenReaderContentLayout,
+	type ScreenReaderContentState,
+} from './screenReaderUtils.js';
 
 /** Plain-text screen-reader projection used by the native EditContext. */
 export class SimpleScreenReaderContent extends Disposable implements IScreenReaderContent {
@@ -35,12 +46,12 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 		}
 		this.model = model;
 		const host = domNode.domNode;
-		this.element = h(host.ownerDocument, "div");
-		this.element.className = "stanza-native-screen-reader-content";
-		this.element.setAttribute("aria-hidden", "true");
+		this.element = h(host.ownerDocument, 'div');
+		this.element.className = 'stanza-native-screen-reader-content';
+		this.element.setAttribute('aria-hidden', 'true');
 		host.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
-		this._register(addDisposableListener(this.element, "mousedown", event => event.preventDefault()));
+		this._register(addDisposableListener(this.element, 'mousedown', event => event.preventDefault()));
 	}
 
 	onWillCut(): void {
@@ -74,17 +85,16 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 			this.clear();
 			return;
 		}
-		this.sync(createScreenReaderContentState(this.model, primarySelection, {
-			pageSize: this.accessibilityPageSize,
-		}));
+		this.sync(
+			createScreenReaderContentState(this.model, primarySelection, { pageSize: this.accessibilityPageSize }),
+		);
 	}
 
 	updateScrollTop(primarySelection: Selection): void {
 		if (!this.state) return;
-		this.element.scrollTop = screenReaderLineOffsetAtModelOffset(
-			this.state,
-			this.model.offsetAt(primarySelection.getPosition()),
-		) * this.lineHeight;
+		this.element.scrollTop =
+			screenReaderLineOffsetAtModelOffset(this.state, this.model.offsetAt(primarySelection.getPosition())) *
+			this.lineHeight;
 	}
 
 	getState(): ScreenReaderContentState | undefined {
@@ -94,7 +104,7 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 	private sync(state: ScreenReaderContentState): void {
 		this.state = state;
 		this.renderText(state.text, state);
-		this.element.setAttribute("aria-hidden", "false");
+		this.element.setAttribute('aria-hidden', 'false');
 		this.setDomSelection(state);
 	}
 
@@ -103,7 +113,7 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 		this.element.replaceChildren();
 		this.element.scrollTop = 0;
 		this.resetLayout();
-		this.element.setAttribute("aria-hidden", "true");
+		this.element.setAttribute('aria-hidden', 'true');
 	}
 
 	layout(layout: ScreenReaderContentLayout): void {
@@ -115,7 +125,7 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 		this.lineHeight = layout.lineHeight;
 	}
 
-	private readSelection(): { readonly anchorOffset: number; readonly activeOffset: number; } | undefined {
+	private readSelection(): { readonly anchorOffset: number; readonly activeOffset: number } | undefined {
 		const state = this.state;
 		if (!state) return undefined;
 		const selection = this.domNode.domNode.ownerDocument.getSelection();
@@ -123,10 +133,18 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 		const anchorOffset = domOffsetAtPoint(this.element, selection.anchorNode, selection.anchorOffset);
 		const activeOffset = domOffsetAtPoint(this.element, selection.focusNode, selection.focusOffset);
 		if (anchorOffset === undefined || activeOffset === undefined) return undefined;
-		const backward = selection.direction === "backward";
+		const backward = selection.direction === 'backward';
 		return {
-			anchorOffset: modelOffsetAtContentOffset(state, clampScreenReaderOffset(anchorOffset, state.text.length), backward ? "end" : "start"),
-			activeOffset: modelOffsetAtContentOffset(state, clampScreenReaderOffset(activeOffset, state.text.length), backward ? "start" : "end"),
+			anchorOffset: modelOffsetAtContentOffset(
+				state,
+				clampScreenReaderOffset(anchorOffset, state.text.length),
+				backward ? 'end' : 'start',
+			),
+			activeOffset: modelOffsetAtContentOffset(
+				state,
+				clampScreenReaderOffset(activeOffset, state.text.length),
+				backward ? 'start' : 'end',
+			),
 		};
 	}
 
@@ -155,21 +173,23 @@ export class SimpleScreenReaderContent extends Disposable implements IScreenRead
 	}
 
 	private resetLayout(): void {
-		this.element.style.removeProperty("left");
-		this.element.style.removeProperty("top");
-		this.element.style.removeProperty("width");
-		this.element.style.removeProperty("height");
-		this.element.style.removeProperty("line-height");
+		this.element.style.removeProperty('left');
+		this.element.style.removeProperty('top');
+		this.element.style.removeProperty('width');
+		this.element.style.removeProperty('height');
+		this.element.style.removeProperty('line-height');
 	}
 
 	private handleSelectionChange(): void {
 		if (
 			!this.state ||
 			!this.focused ||
-			this.context.configuration.options.get(EditorOption.accessibilitySupport) !== AccessibilitySupport.Enabled ||
+			this.context.configuration.options.get(EditorOption.accessibilitySupport) !==
+				AccessibilitySupport.Enabled ||
 			this.viewController.compositionController.composing ||
 			!IME.enabled
-		) return;
+		)
+			return;
 		const now = Date.now();
 		if (now - this.previousSelectionChangeEventTime < 5) return;
 		this.previousSelectionChangeEventTime = now;

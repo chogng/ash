@@ -4,10 +4,18 @@ import { URI } from '../../../../base/common/uri.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import {
-	FileKind, FileSystemProviderErrorCode, IFileService, toFileSystemProviderErrorCode,
+	FileKind,
+	FileSystemProviderErrorCode,
+	IFileService,
+	toFileSystemProviderErrorCode,
 } from '../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { IOpenerService, extractSelection, type IOpener, type OpenOptions } from '../../../../platform/opener/common/opener.js';
+import {
+	IOpenerService,
+	extractSelection,
+	type IOpener,
+	type OpenOptions,
+} from '../../../../platform/opener/common/opener.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IsSessionsWindowContext } from '../../../common/contextkeys.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
@@ -37,7 +45,10 @@ export class WorkbenchOpenerContribution extends Disposable implements IOpener {
 		let { uri } = extractSelection(typeof link === 'string' ? URI.parse(link) : link);
 		if (uri.scheme === 'file') uri = uri.with({ path: posix.normalize(uri.path) });
 		const insideWorkspace = this.workspace.getWorkspaceFolder(uri) !== null;
-		const revealInOS = uri.scheme === 'file' && this.contextKeys.getValue(IsSessionsWindowContext.key) === true && this.revealLocalFolder;
+		const revealInOS =
+			uri.scheme === 'file' &&
+			this.contextKeys.getValue(IsSessionsWindowContext.key) === true &&
+			this.revealLocalFolder;
 		if ((!insideWorkspace && !revealInOS) || !this.files.hasProvider(uri)) {
 			return false;
 		}
@@ -46,7 +57,10 @@ export class WorkbenchOpenerContribution extends Disposable implements IOpener {
 				return false;
 			}
 		} catch (error) {
-			if (error instanceof Error && toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.FileNotFound) {
+			if (
+				error instanceof Error &&
+				toFileSystemProviderErrorCode(error) === FileSystemProviderErrorCode.FileNotFound
+			) {
 				return false;
 			}
 			throw error;
@@ -66,5 +80,10 @@ export class WorkbenchOpenerContribution extends Disposable implements IOpener {
 registerWorkbenchContribution(WorkbenchOpenerContribution.ID, WorkbenchPhase.AfterRestored, accessor => {
 	// Native capability selection belongs to this composition boundary; browser windows have no OS reveal route.
 	const native = accessor.getOptional(INativeHostService);
-	return accessor.get(IInstantiationService).createInstance(WorkbenchOpenerContribution, native ? (resource: URI) => native.revealFile(resource.fsPath) : undefined);
+	return accessor
+		.get(IInstantiationService)
+		.createInstance(
+			WorkbenchOpenerContribution,
+			native ? (resource: URI) => native.revealFile(resource.fsPath) : undefined,
+		);
 });

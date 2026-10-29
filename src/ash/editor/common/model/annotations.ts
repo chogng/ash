@@ -33,7 +33,6 @@ export interface IAnnotatedString<T> {
 }
 
 export class AnnotatedString<T> implements IAnnotatedString<T> {
-
 	/**
 	 * Annotations are non intersecting and contiguous in the array.
 	 */
@@ -53,7 +52,10 @@ export class AnnotatedString<T> implements IAnnotatedString<T> {
 			const startIndex = this._getStartIndexOfIntersectingAnnotation(annotation.range.start);
 			const endIndexExclusive = this._getEndIndexOfIntersectingAnnotation(annotation.range.endExclusive);
 			if (annotation.annotation !== undefined) {
-				this._annotations.splice(startIndex, endIndexExclusive - startIndex, { range: annotation.range, annotation: annotation.annotation });
+				this._annotations.splice(startIndex, endIndexExclusive - startIndex, {
+					range: annotation.range,
+					annotation: annotation.annotation,
+				});
 			} else {
 				this._annotations.splice(startIndex, endIndexExclusive - startIndex);
 			}
@@ -71,7 +73,7 @@ export class AnnotatedString<T> implements IAnnotatedString<T> {
 
 	private _getStartIndexOfIntersectingAnnotation(offset: number): number {
 		// Find index to the left of the offset
-		const startIndexWhereToReplace = binarySearch2(this._annotations.length, (index) => {
+		const startIndexWhereToReplace = binarySearch2(this._annotations.length, index => {
 			return this._annotations[index].range.start - offset;
 		});
 		let startIndex: number;
@@ -83,11 +85,11 @@ export class AnnotatedString<T> implements IAnnotatedString<T> {
 				startIndex--;
 			}
 		} else {
-			const candidate = this._annotations[- (startIndexWhereToReplace + 2)]?.range;
+			const candidate = this._annotations[-(startIndexWhereToReplace + 2)]?.range;
 			if (candidate && offset >= candidate.start && offset < candidate.endExclusive) {
-				startIndex = - (startIndexWhereToReplace + 2);
+				startIndex = -(startIndexWhereToReplace + 2);
 			} else {
-				startIndex = - (startIndexWhereToReplace + 1);
+				startIndex = -(startIndexWhereToReplace + 1);
 			}
 		}
 		return startIndex;
@@ -95,7 +97,7 @@ export class AnnotatedString<T> implements IAnnotatedString<T> {
 
 	private _getEndIndexOfIntersectingAnnotation(offset: number): number {
 		// Find index to the right of the offset
-		const endIndexWhereToReplace = binarySearch2(this._annotations.length, (index) => {
+		const endIndexWhereToReplace = binarySearch2(this._annotations.length, index => {
 			return this._annotations[index].range.endExclusive - offset;
 		});
 		let endIndexExclusive: number;
@@ -109,9 +111,9 @@ export class AnnotatedString<T> implements IAnnotatedString<T> {
 		} else {
 			const candidate = this._annotations[-(endIndexWhereToReplace + 1)]?.range;
 			if (candidate && offset >= candidate.start && offset <= candidate.endExclusive) {
-				endIndexExclusive = - endIndexWhereToReplace;
+				endIndexExclusive = -endIndexWhereToReplace;
 			} else {
-				endIndexExclusive = - (endIndexWhereToReplace + 1);
+				endIndexExclusive = -(endIndexWhereToReplace + 1);
 			}
 		}
 		return endIndexExclusive;
@@ -177,7 +179,8 @@ export class AnnotatedString<T> implements IAnnotatedString<T> {
 				let r = annotation.range;
 
 				// Inserted text will extend the first intersecting annotation, if the edit truly overlaps it
-				const shouldExtend = i === 0 && (e.replaceRange.endExclusive > r.start) && (e.replaceRange.start < r.endExclusive);
+				const shouldExtend =
+					i === 0 && e.replaceRange.endExclusive > r.start && e.replaceRange.start < r.endExclusive;
 				// Annotation shrinks by the overlap then grows with the new text length
 				const overlap = r.intersect(e.replaceRange)!.length;
 				r = r.deltaEnd(-overlap + (shouldExtend ? e.newText.length : 0));
@@ -237,12 +240,11 @@ export interface IAnnotationUpdate<T> {
 type DefinedValue = object | string | number | boolean;
 
 export type ISerializedAnnotation<TSerializedProperty extends DefinedValue> = {
-	range: { start: number; endExclusive: number; };
+	range: { start: number; endExclusive: number };
 	annotation: TSerializedProperty | undefined;
 };
 
 export class AnnotationsUpdate<T> {
-
 	public static create<T>(annotations: IAnnotationUpdate<T>[]): AnnotationsUpdate<T> {
 		return new AnnotationsUpdate(annotations);
 	}
@@ -263,7 +265,9 @@ export class AnnotationsUpdate<T> {
 		this._annotations = annotatedString.getAllAnnotations();
 	}
 
-	public serialize<TSerializedProperty extends DefinedValue>(serializingFunc: (annotation: T) => TSerializedProperty): ISerializedAnnotation<TSerializedProperty>[] {
+	public serialize<TSerializedProperty extends DefinedValue>(
+		serializingFunc: (annotation: T) => TSerializedProperty,
+	): ISerializedAnnotation<TSerializedProperty>[] {
 		return this._annotations.map(annotation => {
 			const range = { start: annotation.range.start, endExclusive: annotation.range.endExclusive };
 			if (!annotation.annotation) {
@@ -273,7 +277,10 @@ export class AnnotationsUpdate<T> {
 		});
 	}
 
-	static deserialize<T, TSerializedProperty extends DefinedValue>(serializedAnnotations: ISerializedAnnotation<TSerializedProperty>[], deserializingFunc: (annotation: TSerializedProperty) => T): AnnotationsUpdate<T> {
+	static deserialize<T, TSerializedProperty extends DefinedValue>(
+		serializedAnnotations: ISerializedAnnotation<TSerializedProperty>[],
+		deserializingFunc: (annotation: TSerializedProperty) => T,
+	): AnnotationsUpdate<T> {
 		const annotations: IAnnotationUpdate<T>[] = serializedAnnotations.map(serializedAnnotation => {
 			const range = new OffsetRange(serializedAnnotation.range.start, serializedAnnotation.range.endExclusive);
 			if (!serializedAnnotation.annotation) {
@@ -284,5 +291,3 @@ export class AnnotationsUpdate<T> {
 		return new AnnotationsUpdate(annotations);
 	}
 }
-
-

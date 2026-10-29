@@ -20,34 +20,44 @@ export class Menubar extends Disposable {
 	}
 
 	private installDockMenu(): void {
-		app.dock?.setMenu(Menu.buildFromTemplate([{
-			label: this.newWindowLabel(),
-			click: () => {
-				void this.windows.open({
-					cwd: process.cwd(),
-					files: [],
-					forceNewWindow: true,
-					forceReuseWindow: false,
-					waitForFiles: false,
-				}).catch(error => this.log.error('menubar', 'Failed to open a window from the Dock', error));
-			},
-		}]));
+		app.dock?.setMenu(
+			Menu.buildFromTemplate([
+				{
+					label: this.newWindowLabel(),
+					click: () => {
+						void this.windows
+							.open({
+								cwd: process.cwd(),
+								files: [],
+								forceNewWindow: true,
+								forceReuseWindow: false,
+								waitForFiles: false,
+							})
+							.catch(error => this.log.error('menubar', 'Failed to open a window from the Dock', error));
+					},
+				},
+			]),
+		);
 	}
 }
 
 export function createElectronMenubarHost(): INativeMenubarMainHost {
 	return {
 		applicationName: app.name,
-		setApplicationMenu: template => Menu.setApplicationMenu(
-			template ? Menu.buildFromTemplate([...template] as MenuItemConstructorOptions[]) : null,
-		),
+		setApplicationMenu: template =>
+			Menu.setApplicationMenu(
+				template ? Menu.buildFromTemplate([...template] as MenuItemConstructorOptions[]) : null,
+			),
 		setWindowTouchBar: (window, items, select) => {
-			const buttons = items.map(item => new TouchBar.TouchBarButton({
-				label: item.label,
-				icon: nativeImage.createFromDataURL(item.icon),
-				enabled: item.enabled,
-				click: () => select(item.id),
-			}));
+			const buttons = items.map(
+				item =>
+					new TouchBar.TouchBarButton({
+						label: item.label,
+						icon: nativeImage.createFromDataURL(item.icon),
+						enabled: item.enabled,
+						click: () => select(item.id),
+					}),
+			);
 			(window as BrowserWindow).setTouchBar(buttons.length > 0 ? new TouchBar({ items: buttons }) : null);
 		},
 	};

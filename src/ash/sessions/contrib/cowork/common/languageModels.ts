@@ -1,11 +1,20 @@
 import type { Event } from '../../../../base/common/event.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
-import type { CustomModelProvider, ModelProviderTestResult } from '../../../../platform/agentHost/common/agentModels.js';
+import type {
+	CustomModelProvider,
+	ModelProviderTestResult,
+} from '../../../../platform/agentHost/common/agentModels.js';
 import type { ModelPreferencesUpdate } from '../../../../platform/agentHost/common/agentModels.js';
 import type { ApprovalReviewModelSelection } from '../../../../platform/agentHost/common/agentModels.js';
-import type { ModelRef, ModelProviderCredentialStatus } from '../../../../workbench/services/chat/common/chatService.js';
+import type {
+	ModelRef,
+	ModelProviderCredentialStatus,
+} from '../../../../workbench/services/chat/common/chatService.js';
 import type { ModelCatalogEntry } from '../../../../workbench/services/chat/common/modelCatalog.js';
-import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import {
+	Extensions,
+	type IConfigurationRegistry,
+} from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { localize } from '../../../../nls.js';
 
@@ -14,14 +23,25 @@ export const CoworkModelPreferences = Object.freeze({
 		key: 'cowork.defaultmodel',
 		defaultValue: '',
 		parse(value: unknown): string {
-			if (typeof value !== 'string') { throw new TypeError(localize('cowork.defaultmodel.invalid', 'Default Cowork model must be a string.')); }
+			if (typeof value !== 'string') {
+				throw new TypeError(localize('cowork.defaultmodel.invalid', 'Default Cowork model must be a string.'));
+			}
 			return value.trim();
 		},
 		setting: {
-			get title() { return localize('cowork.defaultmodel.title', 'Default Cowork model'); },
-			get description() { return localize('cowork.defaultmodel.description', 'The model for new Cowork conversations. Enter auto or a provider/model ID.'); },
+			get title() {
+				return localize('cowork.defaultmodel.title', 'Default Cowork model');
+			},
+			get description() {
+				return localize(
+					'cowork.defaultmodel.description',
+					'The model for new Cowork conversations. Enter auto or a provider/model ID.',
+				);
+			},
 			valueType: 'text',
-			get placeholder() { return localize('cowork.defaultmodel.placeholder', 'auto or provider/model'); },
+			get placeholder() {
+				return localize('cowork.defaultmodel.placeholder', 'auto or provider/model');
+			},
 		},
 	}),
 	selectedModelStorageKey: 'cowork.currentLanguageModel',
@@ -51,4 +71,3 @@ export interface ILanguageModelsService {
 }
 
 export const ILanguageModelsService = createServiceIdentifier<ILanguageModelsService>('languageModelsService');
-

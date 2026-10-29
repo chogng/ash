@@ -14,7 +14,7 @@ export class EditorSettingMigration {
 	constructor(
 		public readonly key: string,
 		public readonly migrate: (value: unknown, read: ISettingsReader, write: ISettingsWriter) => void,
-	) { }
+	) {}
 
 	apply(options: unknown): void {
 		const value = EditorSettingMigration._read(options, this.key);
@@ -46,7 +46,10 @@ export class EditorSettingMigration {
 	}
 }
 
-function registerEditorSettingMigration(key: string, migrate: (value: unknown, read: ISettingsReader, write: ISettingsWriter) => void): void {
+function registerEditorSettingMigration(
+	key: string,
+	migrate: (value: unknown, read: ISettingsReader, write: ISettingsWriter) => void,
+): void {
 	EditorSettingMigration.items.push(new EditorSettingMigration(key, migrate));
 }
 
@@ -66,23 +69,71 @@ export function migrateOptions(options: IEditorOptions): void {
 	EditorSettingMigration.items.forEach(migration => migration.apply(options));
 }
 
-registerSimpleEditorSettingMigration('wordWrap', [[true, 'on'], [false, 'off']]);
-registerSimpleEditorSettingMigration('lineNumbers', [[true, 'on'], [false, 'off']]);
+registerSimpleEditorSettingMigration('wordWrap', [
+	[true, 'on'],
+	[false, 'off'],
+]);
+registerSimpleEditorSettingMigration('lineNumbers', [
+	[true, 'on'],
+	[false, 'off'],
+]);
 registerSimpleEditorSettingMigration('cursorBlinking', [['visible', 'solid']]);
-registerSimpleEditorSettingMigration('renderWhitespace', [[true, 'boundary'], [false, 'none']]);
-registerSimpleEditorSettingMigration('renderLineHighlight', [[true, 'line'], [false, 'none']]);
-registerSimpleEditorSettingMigration('acceptSuggestionOnEnter', [[true, 'on'], [false, 'off']]);
-registerSimpleEditorSettingMigration('tabCompletion', [[false, 'off'], [true, 'onlySnippets']]);
-registerSimpleEditorSettingMigration('hover', [[true, { enabled: true }], [false, { enabled: false }]]);
-registerSimpleEditorSettingMigration('parameterHints', [[true, { enabled: true }], [false, { enabled: false }]]);
-registerSimpleEditorSettingMigration('autoIndent', [[false, 'advanced'], [true, 'full']]);
-registerSimpleEditorSettingMigration('matchBrackets', [[true, 'always'], [false, 'never']]);
-registerSimpleEditorSettingMigration('renderFinalNewline', [[true, 'on'], [false, 'off']]);
-registerSimpleEditorSettingMigration('cursorSmoothCaretAnimation', [[true, 'on'], [false, 'off']]);
-registerSimpleEditorSettingMigration('occurrencesHighlight', [[true, 'singleFile'], [false, 'off']]);
-registerSimpleEditorSettingMigration('wordBasedSuggestions', [[true, 'matchingDocuments'], [false, 'off']]);
-registerSimpleEditorSettingMigration('defaultColorDecorators', [[true, 'auto'], [false, 'never']]);
-registerSimpleEditorSettingMigration('minimap.autohide', [[true, 'mouseover'], [false, 'none']]);
+registerSimpleEditorSettingMigration('renderWhitespace', [
+	[true, 'boundary'],
+	[false, 'none'],
+]);
+registerSimpleEditorSettingMigration('renderLineHighlight', [
+	[true, 'line'],
+	[false, 'none'],
+]);
+registerSimpleEditorSettingMigration('acceptSuggestionOnEnter', [
+	[true, 'on'],
+	[false, 'off'],
+]);
+registerSimpleEditorSettingMigration('tabCompletion', [
+	[false, 'off'],
+	[true, 'onlySnippets'],
+]);
+registerSimpleEditorSettingMigration('hover', [
+	[true, { enabled: true }],
+	[false, { enabled: false }],
+]);
+registerSimpleEditorSettingMigration('parameterHints', [
+	[true, { enabled: true }],
+	[false, { enabled: false }],
+]);
+registerSimpleEditorSettingMigration('autoIndent', [
+	[false, 'advanced'],
+	[true, 'full'],
+]);
+registerSimpleEditorSettingMigration('matchBrackets', [
+	[true, 'always'],
+	[false, 'never'],
+]);
+registerSimpleEditorSettingMigration('renderFinalNewline', [
+	[true, 'on'],
+	[false, 'off'],
+]);
+registerSimpleEditorSettingMigration('cursorSmoothCaretAnimation', [
+	[true, 'on'],
+	[false, 'off'],
+]);
+registerSimpleEditorSettingMigration('occurrencesHighlight', [
+	[true, 'singleFile'],
+	[false, 'off'],
+]);
+registerSimpleEditorSettingMigration('wordBasedSuggestions', [
+	[true, 'matchingDocuments'],
+	[false, 'off'],
+]);
+registerSimpleEditorSettingMigration('defaultColorDecorators', [
+	[true, 'auto'],
+	[false, 'never'],
+]);
+registerSimpleEditorSettingMigration('minimap.autohide', [
+	[true, 'mouseover'],
+	[false, 'none'],
+]);
 
 registerEditorSettingMigration('autoClosingBrackets', (value, read, write) => {
 	if (value !== false) return;
@@ -106,7 +157,8 @@ registerEditorSettingMigration('renderIndentGuides', (value, read, write) => {
 registerEditorSettingMigration('highlightActiveIndentGuide', (value, read, write) => {
 	if (value === undefined) return;
 	write('highlightActiveIndentGuide', undefined);
-	if (read('guides.highlightActiveIndentation') === undefined) write('guides.highlightActiveIndentation', Boolean(value));
+	if (read('guides.highlightActiveIndentation') === undefined)
+		write('guides.highlightActiveIndentation', Boolean(value));
 });
 
 const filteredSuggestionSettings: Readonly<Record<string, string>> = Object.freeze({
@@ -157,18 +209,28 @@ function moveLegacySetting(key: string, target: string, accepts: (value: unknown
 }
 
 moveLegacySetting('experimental.stickyScroll.enabled', 'stickyScroll.enabled', value => typeof value === 'boolean');
-moveLegacySetting('experimental.stickyScroll.maxLineCount', 'stickyScroll.maxLineCount', value => typeof value === 'number');
+moveLegacySetting(
+	'experimental.stickyScroll.maxLineCount',
+	'stickyScroll.maxLineCount',
+	value => typeof value === 'number',
+);
 moveLegacySetting('editor.experimentalEditContextEnabled', 'editor.editContext', value => typeof value === 'boolean');
-moveLegacySetting('codeActionWidget.includeNearbyQuickfixes', 'codeActionWidget.includeNearbyQuickFixes', value => typeof value === 'boolean');
+moveLegacySetting(
+	'codeActionWidget.includeNearbyQuickfixes',
+	'codeActionWidget.includeNearbyQuickFixes',
+	value => typeof value === 'boolean',
+);
 
 registerEditorSettingMigration('codeActionsOnSave', (value, _read, write) => {
 	if (typeof value !== 'object' || value === null) return;
 	let changed = false;
-	const actions = Object.fromEntries(Object.entries(value).map(([kind, mode]) => {
-		if (typeof mode !== 'boolean') return [kind, mode];
-		changed = true;
-		return [kind, mode ? 'explicit' : 'never'];
-	}));
+	const actions = Object.fromEntries(
+		Object.entries(value).map(([kind, mode]) => {
+			if (typeof mode !== 'boolean') return [kind, mode];
+			changed = true;
+			return [kind, mode ? 'explicit' : 'never'];
+		}),
+	);
 	if (changed) write('codeActionsOnSave', actions);
 });
 

@@ -1,4 +1,4 @@
-import type { JsonValue } from "../../../base/common/jsonValue.js";
+import type { JsonValue } from '../../../base/common/jsonValue.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export interface LanguageServerConfiguration {
@@ -13,10 +13,10 @@ export interface LanguageServerConfiguration {
 
 /** Connection-local process state; discovery alone never starts a server. */
 export type LanguageServerState =
-	| { readonly type: 'starting' | 'ready' | 'stopped' | 'idle'; }
-	| { readonly type: 'backingOff'; readonly attempt: number; readonly retryAfterMillis: number; }
-	| { readonly type: 'crashLoop'; readonly restartAttempts: number; readonly message: string; }
-	| { readonly type: 'failed'; readonly message: string; };
+	| { readonly type: 'starting' | 'ready' | 'stopped' | 'idle' }
+	| { readonly type: 'backingOff'; readonly attempt: number; readonly retryAfterMillis: number }
+	| { readonly type: 'crashLoop'; readonly restartAttempts: number; readonly message: string }
+	| { readonly type: 'failed'; readonly message: string };
 
 export interface LanguageServerControl {
 	readonly action: 'restart' | 'stop' | 'suspend' | 'resume';
@@ -28,7 +28,11 @@ export interface LanguageServerControl {
 export interface LanguageServerSnapshot {
 	readonly revision: number;
 	readonly configurations: Readonly<Record<string, LanguageServerConfiguration>>;
-	readonly servers: readonly { readonly id: string; readonly languageIds: readonly string[]; readonly state?: LanguageServerState; }[];
+	readonly servers: readonly {
+		readonly id: string;
+		readonly languageIds: readonly string[];
+		readonly state?: LanguageServerState;
+	}[];
 }
 
 export interface ILanguageServerService {

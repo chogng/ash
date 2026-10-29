@@ -1,45 +1,31 @@
-import { isMacintosh } from "../../../../base/common/platform.js";
-import { BrowserContextMenuService } from "../../../../platform/contextview/browser/contextMenuService.js";
+import { isMacintosh } from '../../../../base/common/platform.js';
+import { BrowserContextMenuService } from '../../../../platform/contextview/browser/contextMenuService.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { isNode } from "../../../../base/browser/dom.js";
-import { Emitter } from "../../../../base/common/event.js";
+import { isNode } from '../../../../base/browser/dom.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { toErrorMessage } from '../../../../base/common/errorMessage.js';
-import {
-	Disposable,
-	DisposableMap,
-	DisposableStore,
-	toDisposable,
-} from "../../../../base/common/lifecycle.js";
-import {
-	type IAction,
-	Separator,
-	SubmenuAction,
-} from "../../../../base/common/actions.js";
-import { toElectronAccelerator } from "../../../../platform/keybinding/common/electronAccelerator.js";
-import { getKeybindingLabel } from "../../../../base/common/keybindingLabels.js";
-import { IMenuService } from "../../../../platform/actions/common/actions.js";
-import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { hasSystemContextMenu, MenuSettings } from "../../../../platform/window/common/window.js";
-import {
-	IKeybindingService,
-} from "../../../../platform/keybinding/common/keybinding.js";
-import { INotificationService } from "../../../../platform/notification/common/notification.js";
+import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { type IAction, Separator, SubmenuAction } from '../../../../base/common/actions.js';
+import { toElectronAccelerator } from '../../../../platform/keybinding/common/electronAccelerator.js';
+import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
+import { IMenuService } from '../../../../platform/actions/common/actions.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { hasSystemContextMenu, MenuSettings } from '../../../../platform/window/common/window.js';
+import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import {
 	type INativeContextMenuApi,
 	type INativeContextMenuRequest,
 	type NativeContextMenuItem,
-} from "../../../../base/parts/contextmenu/common/contextmenu.js";
-import type {
-	ContextMenuAnchor,
-	IContextMenuDelegate,
-} from "../../../../base/browser/contextmenu.js";
-import { AnchorAlignment, AnchorAxisAlignment } from "../../../../base/browser/ui/contextview/contextview.js";
-import { transformContextMenuDelegate } from "../../../../platform/contextview/browser/contextMenuService.js";
+} from '../../../../base/parts/contextmenu/common/contextmenu.js';
+import type { ContextMenuAnchor, IContextMenuDelegate } from '../../../../base/browser/contextmenu.js';
+import { AnchorAlignment, AnchorAxisAlignment } from '../../../../base/browser/ui/contextview/contextview.js';
+import { transformContextMenuDelegate } from '../../../../platform/contextview/browser/contextMenuService.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
 import type {
 	IContextMenuMenuDelegate,
 	IContextMenuService,
-} from "../../../../platform/contextview/browser/contextView.js";
+} from '../../../../platform/contextview/browser/contextView.js';
 
 interface ISystemMenuPopup {
 	readonly delegate: IContextMenuDelegate;
@@ -50,8 +36,7 @@ interface ISystemMenuPopup {
 }
 
 /** Desktop implementation backed by Electron's system Menu. */
-export class NativeContextMenuService extends Disposable
-	implements IContextMenuService {
+export class NativeContextMenuService extends Disposable implements IContextMenuService {
 	readonly contextMenuStyle = 'system';
 	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
 	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
@@ -78,21 +63,23 @@ export class NativeContextMenuService extends Disposable
 		this._register(toDisposable(() => this.hideContextMenu()));
 	}
 
-	showContextMenu(
-		delegate: IContextMenuDelegate | IContextMenuMenuDelegate,
-	): void {
+	showContextMenu(delegate: IContextMenuDelegate | IContextMenuMenuDelegate): void {
 		if (this.isDisposed || delegate.cancellationToken?.isCancellationRequested || this.activePopup) {
 			delegate.onHide?.(true);
 			return;
 		}
-		const resolved = transformContextMenuDelegate(
-			delegate,
-			this.menuService,
-			this.contextKeyService,
-		);
+		const resolved = transformContextMenuDelegate(delegate, this.menuService, this.contextKeyService);
 		const actions = resolved.getActions();
-		const serialized = serializeActions(actions, resolved.getKeyBinding ?? (action => this.keybindingService.lookupKeybinding(action.id)));
-		if (serialized.items.length === 0 || this.activePopup || this.isDisposed || resolved.cancellationToken?.isCancellationRequested) {
+		const serialized = serializeActions(
+			actions,
+			resolved.getKeyBinding ?? (action => this.keybindingService.lookupKeybinding(action.id)),
+		);
+		if (
+			serialized.items.length === 0 ||
+			this.activePopup ||
+			this.isDisposed ||
+			resolved.cancellationToken?.isCancellationRequested
+		) {
 			resolved.onHide?.(true);
 			return;
 		}
@@ -107,11 +94,18 @@ export class NativeContextMenuService extends Disposable
 			resolved.onHide?.(true);
 			return;
 		}
-		const popup: ISystemMenuPopup = { delegate: resolved, actions: serialized.actions, closed: false, wasShown: false };
+		const popup: ISystemMenuPopup = {
+			delegate: resolved,
+			actions: serialized.actions,
+			closed: false,
+			wasShown: false,
+		};
 		this.activePopup = popup;
 		const lifetime = new DisposableStore();
 		this.popupLifetimes.set(popup, lifetime);
-		if (resolved.cancellationToken) { lifetime.add(resolved.cancellationToken.onCancellationRequested(() => this.requestClose(popup))); }
+		if (resolved.cancellationToken) {
+			lifetime.add(resolved.cancellationToken.onCancellationRequested(() => this.requestClose(popup)));
+		}
 		void this.popup(request, popup);
 		if (!popup.closed) {
 			popup.wasShown = true;
@@ -120,14 +114,20 @@ export class NativeContextMenuService extends Disposable
 	}
 
 	hideContextMenu(): void {
-		if (this.activePopup) { this.requestClose(this.activePopup); }
+		if (this.activePopup) {
+			this.requestClose(this.activePopup);
+		}
 	}
 
 	private requestClose(popup: ISystemMenuPopup): void {
-		if (this.activePopup !== popup || popup.closed) { return; }
-		const operation = popup.closeOperation ??= this.closePopup();
+		if (this.activePopup !== popup || popup.closed) {
+			return;
+		}
+		const operation = (popup.closeOperation ??= this.closePopup());
 		void operation.then(closed => {
-			if (!closed && popup.closeOperation === operation) { popup.closeOperation = undefined; }
+			if (!closed && popup.closeOperation === operation) {
+				popup.closeOperation = undefined;
+			}
 			// The IPC acknowledgment confirms only the request; the popup result releases its slot.
 		});
 	}
@@ -137,15 +137,12 @@ export class NativeContextMenuService extends Disposable
 			await this.api.close();
 			return true;
 		} catch (error) {
-			console.error("Failed to close native context menu", error);
+			console.error('Failed to close native context menu', error);
 			return false;
 		}
 	}
 
-	private async popup(
-		request: INativeContextMenuRequest,
-		popup: ISystemMenuPopup,
-	): Promise<void> {
+	private async popup(request: INativeContextMenuRequest, popup: ISystemMenuPopup): Promise<void> {
 		let selected: IAction | undefined;
 		try {
 			const result = await this.api.popup(request);
@@ -153,22 +150,30 @@ export class NativeContextMenuService extends Disposable
 				selected = result.selectedId ? popup.actions.get(result.selectedId) : undefined;
 			}
 		} catch (error) {
-			console.error("Failed to show native context menu", error);
+			console.error('Failed to show native context menu', error);
 		} finally {
 			this.finishPopup(popup, !selected);
 		}
-		if (selected && !this.isDisposed && !popup.delegate.cancellationToken?.isCancellationRequested) { this.runAction(selected, popup.delegate); }
+		if (selected && !this.isDisposed && !popup.delegate.cancellationToken?.isCancellationRequested) {
+			this.runAction(selected, popup.delegate);
+		}
 	}
 
 	private finishPopup(popup: ISystemMenuPopup, didCancel: boolean): void {
-		if (popup.closed) { return; }
+		if (popup.closed) {
+			return;
+		}
 		popup.closed = true;
-		if (this.activePopup === popup) { this.activePopup = undefined; }
+		if (this.activePopup === popup) {
+			this.activePopup = undefined;
+		}
 		this.popupLifetimes.deleteAndDispose(popup);
 		try {
 			popup.delegate.onHide?.(didCancel);
 		} finally {
-			if (popup.wasShown) { this._onDidHideContextMenu.fire(); }
+			if (popup.wasShown) {
+				this._onDidHideContextMenu.fire();
+			}
 		}
 	}
 
@@ -179,11 +184,15 @@ export class NativeContextMenuService extends Disposable
 				? delegate.actionRunner.run(action, delegate.getActionsContext?.())
 				: action.run(delegate.getActionsContext?.());
 		} catch (error) {
-			if (!this.isDisposed) { this.notificationService.error(toErrorMessage(error)); }
+			if (!this.isDisposed) {
+				this.notificationService.error(toErrorMessage(error));
+			}
 			return;
 		}
 		Promise.resolve(operation).catch((error: unknown) => {
-			if (!this.isDisposed) { this.notificationService.error(toErrorMessage(error)); }
+			if (!this.isDisposed) {
+				this.notificationService.error(toErrorMessage(error));
+			}
 		});
 	}
 }
@@ -200,24 +209,17 @@ function serializeActions(
 	const actionMap = new Map<string, IAction>();
 	let nextId = 1;
 
-	const serialize = (
-		source: readonly IAction[],
-	): readonly NativeContextMenuItem[] => {
+	const serialize = (source: readonly IAction[]): readonly NativeContextMenuItem[] => {
 		const items: NativeContextMenuItem[] = [];
 		for (const action of source) {
 			if (action instanceof Separator) {
-				items.push({ type: "separator" });
+				items.push({ type: 'separator' });
 				continue;
 			}
 			if (action instanceof SubmenuAction) {
 				const children = serialize(action.actions);
 				if (children.length > 0) {
-					items.push({
-						type: "submenu",
-						label: action.label,
-						enabled: action.enabled,
-						items: children,
-					});
+					items.push({ type: 'submenu', label: action.label, enabled: action.enabled, items: children });
 				}
 				continue;
 			}
@@ -229,67 +231,58 @@ function serializeActions(
 			// Electron cannot render chords in its accelerator column.
 			const shortcutLabel = keybinding && !accelerator ? getKeybindingLabel(keybinding) : undefined;
 			items.push({
-				type: "action",
+				type: 'action',
 				id,
 				label: shortcutLabel ? `${action.label} [${shortcutLabel}]` : action.label,
 				enabled: action.enabled,
 				...(accelerator ? { accelerator } : {}),
-				...(action.checked === undefined
-					? {}
-					: { checked: action.checked }),
+				...(action.checked === undefined ? {} : { checked: action.checked }),
 			});
 		}
 		return trimSerializedSeparators(items);
 	};
 
-	return {
-		items: serialize(actions),
-		actions: actionMap,
-	};
+	return { items: serialize(actions), actions: actionMap };
 }
 
-function trimSerializedSeparators(
-	items: readonly NativeContextMenuItem[],
-): readonly NativeContextMenuItem[] {
+function trimSerializedSeparators(items: readonly NativeContextMenuItem[]): readonly NativeContextMenuItem[] {
 	const result: NativeContextMenuItem[] = [];
 	for (const item of items) {
-		if (
-			item.type === "separator" &&
-			(result.length === 0 || result[result.length - 1]?.type === "separator")
-		) {
+		if (item.type === 'separator' && (result.length === 0 || result[result.length - 1]?.type === 'separator')) {
 			continue;
 		}
 		result.push(item);
 	}
-	if (result[result.length - 1]?.type === "separator") result.pop();
+	if (result[result.length - 1]?.type === 'separator') result.pop();
 	return result;
 }
 
 function anchorPoint(
 	anchor: ContextMenuAnchor,
 	delegate: IContextMenuDelegate,
-): { readonly x: number; readonly y: number; readonly elementAnchor?: boolean; } {
+): { readonly x: number; readonly y: number; readonly elementAnchor?: boolean } {
 	if (!isNode(anchor)) {
-		return {
-			x: normalizeCoordinate(anchor.x),
-			y: normalizeCoordinate(anchor.y),
-		};
+		return { x: normalizeCoordinate(anchor.x), y: normalizeCoordinate(anchor.y) };
 	}
 	const bounds = anchor.getBoundingClientRect();
 	const targetWindow = anchor.ownerDocument.defaultView;
-	if (!targetWindow) throw new Error("Context menu anchor has no window");
-	const isClipped = bounds.left < 0 || bounds.top < 0 || bounds.right > targetWindow.innerWidth || bounds.bottom > targetWindow.innerHeight;
+	if (!targetWindow) throw new Error('Context menu anchor has no window');
+	const isClipped =
+		bounds.left < 0 ||
+		bounds.top < 0 ||
+		bounds.right > targetWindow.innerWidth ||
+		bounds.bottom > targetWindow.innerHeight;
 	const x = isClipped
 		? Math.min(Math.max(bounds.right, 0), targetWindow.innerWidth)
-		: delegate.anchorAlignment === AnchorAlignment.Right ? bounds.right : bounds.left;
+		: delegate.anchorAlignment === AnchorAlignment.Right
+			? bounds.right
+			: bounds.left;
 	const y = isClipped
 		? Math.min(Math.max(bounds.bottom, 0), targetWindow.innerHeight)
-		: delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal ? bounds.top : bounds.bottom;
-	return {
-		x: normalizeCoordinate(x),
-		y: normalizeCoordinate(y),
-		elementAnchor: true,
-	};
+		: delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal
+			? bounds.top
+			: bounds.bottom;
+	return { x: normalizeCoordinate(x), y: normalizeCoordinate(y), elementAnchor: true };
 }
 
 function normalizeCoordinate(value: number): number {
@@ -298,7 +291,9 @@ function normalizeCoordinate(value: number): number {
 
 /** Uses the chosen menu style while keeping menus clear of right-hand triggers. */
 export class ElectronContextMenuService extends Disposable implements IContextMenuService {
-	get contextMenuStyle(): 'custom' | 'system' { return this.usesSystemMenu ? 'system' : 'custom'; }
+	get contextMenuStyle(): 'custom' | 'system' {
+		return this.usesSystemMenu ? 'system' : 'custom';
+	}
 	private readonly _onDidShowContextMenu = this._register(new Emitter<void>());
 	private readonly _onDidHideContextMenu = this._register(new Emitter<void>());
 	private readonly systemMenu: NativeContextMenuService;
@@ -321,39 +316,63 @@ export class ElectronContextMenuService extends Disposable implements IContextMe
 	) {
 		super();
 		this.usesSystemMenu = hasSystemContextMenu(configurationService);
-		this.systemMenu = this._register(new NativeContextMenuService(api, menuService, contextKeyService, keybindingService, notificationService));
-		this.browserMenu = this._register(new BrowserContextMenuService(menuService, contextKeyService, keybindingService, contextViewService, notificationService));
+		this.systemMenu = this._register(
+			new NativeContextMenuService(api, menuService, contextKeyService, keybindingService, notificationService),
+		);
+		this.browserMenu = this._register(
+			new BrowserContextMenuService(
+				menuService,
+				contextKeyService,
+				keybindingService,
+				contextViewService,
+				notificationService,
+			),
+		);
 		this._register(this.systemMenu.onDidShowContextMenu(() => this.setVisible('system', true)));
 		this._register(this.systemMenu.onDidHideContextMenu(() => this.setVisible('system', false)));
 		this._register(this.browserMenu.onDidShowContextMenu(() => this.setVisible('browser', true)));
 		this._register(this.browserMenu.onDidHideContextMenu(() => this.setVisible('browser', false)));
 		if (isMacintosh) {
-			this._register(configurationService.onDidChangeConfiguration(event => {
-				if (!event.affectsConfiguration(MenuSettings.MenuStyle)) return;
-				const useSystemMenu = hasSystemContextMenu(configurationService);
-				if (useSystemMenu === this.usesSystemMenu) return;
-				this.hideContextMenu();
-				this.usesSystemMenu = useSystemMenu;
-			}));
+			this._register(
+				configurationService.onDidChangeConfiguration(event => {
+					if (!event.affectsConfiguration(MenuSettings.MenuStyle)) return;
+					const useSystemMenu = hasSystemContextMenu(configurationService);
+					if (useSystemMenu === this.usesSystemMenu) return;
+					this.hideContextMenu();
+					this.usesSystemMenu = useSystemMenu;
+				}),
+			);
 		}
 	}
 
 	private setVisible(menu: 'system' | 'browser', visible: boolean): void {
 		// Hide callbacks can open a successor before the previous hide event arrives.
 		const wasVisible = this.systemVisible + this.browserVisible > 0;
-		if (menu === 'system') { this.systemVisible += visible ? 1 : -1; }
-		else { this.browserVisible += visible ? 1 : -1; }
+		if (menu === 'system') {
+			this.systemVisible += visible ? 1 : -1;
+		} else {
+			this.browserVisible += visible ? 1 : -1;
+		}
 		const isVisible = this.systemVisible + this.browserVisible > 0;
 		if (!wasVisible && isVisible) this._onDidShowContextMenu.fire();
 		else if (wasVisible && !isVisible) this._onDidHideContextMenu.fire();
 	}
 
 	showContextMenu(delegate: IContextMenuDelegate | IContextMenuMenuDelegate): void {
-		if (this.isDisposed || delegate.cancellationToken?.isCancellationRequested) { delegate.onHide?.(true); return; }
+		if (this.isDisposed || delegate.cancellationToken?.isCancellationRequested) {
+			delegate.onHide?.(true);
+			return;
+		}
 		const anchor = delegate.getAnchor();
-		if (this.isDisposed || delegate.cancellationToken?.isCancellationRequested) { delegate.onHide?.(true); return; }
+		if (this.isDisposed || delegate.cancellationToken?.isCancellationRequested) {
+			delegate.onHide?.(true);
+			return;
+		}
 		// Electron Menu.popup cannot align its right edge with an element on the right side of the window.
-		const rightHandTrigger = isNode(anchor) && delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal && delegate.anchorAlignment === AnchorAlignment.Left;
+		const rightHandTrigger =
+			isNode(anchor) &&
+			delegate.anchorAxisAlignment === AnchorAxisAlignment.Horizontal &&
+			delegate.anchorAlignment === AnchorAlignment.Left;
 		// Caller-owned styling needs the browser menu's DOM, including on macOS.
 		const styledMenu = !!delegate.getMenuClassName?.();
 		const menu = this.usesSystemMenu && !rightHandTrigger && !styledMenu ? this.systemMenu : this.browserMenu;

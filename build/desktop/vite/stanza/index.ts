@@ -1,7 +1,7 @@
-import { addDisposableListener } from "../../../../src/ash/base/browser/dom.js";
-import { DisposableStore, toDisposable } from "../../../../src/ash/base/common/lifecycle.js";
-import * as stanzaApi from "../../../../src/ash/editor/editor.main.js";
-import "./style.css";
+import { addDisposableListener } from '../../../../src/ash/base/browser/dom.js';
+import { DisposableStore, toDisposable } from '../../../../src/ash/base/common/lifecycle.js';
+import * as stanzaApi from '../../../../src/ash/editor/editor.main.js';
+import './style.css';
 
 declare global {
 	var stanza: typeof stanzaApi;
@@ -28,24 +28,26 @@ export function describe(sample: GeometrySample): string {
 console.log(describe(sample));
 ${createScrollSamples(96)}`;
 
-const container = requiredElement("editor-root");
-const resource = stanzaApi.URI.parse("inmemory://stanza/standalone.ts");
+const container = requiredElement('editor-root');
+const resource = stanzaApi.URI.parse('inmemory://stanza/standalone.ts');
 const disposables = new DisposableStore();
-const model = disposables.add(stanzaApi.editor.createModel(initialText, "typescript", resource));
-const editor = disposables.add(stanzaApi.editor.create(container, {
-	model,
-	lineWrapping: stanzaApi.EditorLineWrapping.On,
-	lineNumbers: "on",
-	guides: { indentation: true },
-	bracketPairColorization: { enabled: true },
-	stickyScroll: { enabled: true },
-	suggestions: true,
-	inlineCompletions: true,
-	parameterHints: { enabled: true },
-	inlayHints: { enabled: "on" },
-	codeLens: true,
-	placeholder: "Start typing…",
-}));
+const model = disposables.add(stanzaApi.editor.createModel(initialText, 'typescript', resource));
+const editor = disposables.add(
+	stanzaApi.editor.create(container, {
+		model,
+		lineWrapping: stanzaApi.EditorLineWrapping.On,
+		lineNumbers: 'on',
+		guides: { indentation: true },
+		bracketPairColorization: { enabled: true },
+		stickyScroll: { enabled: true },
+		suggestions: true,
+		inlineCompletions: true,
+		parameterHints: { enabled: true },
+		inlayHints: { enabled: 'on' },
+		codeLens: true,
+		placeholder: 'Start typing…',
+	}),
+);
 
 const resizeObserver = new ResizeObserver(() => layoutEditor());
 resizeObserver.observe(container);
@@ -58,20 +60,20 @@ function layoutEditor(): void {
 
 function createScrollSamples(count: number): string {
 	return Array.from({ length: count }, (_, index) => {
-		const ordinal = String(index + 1).padStart(3, "0");
+		const ordinal = String(index + 1).padStart(3, '0');
 		return `
 export function scrollSample${ordinal}(value: number): string {
 \tconst adjusted = value + ${index + 1};
 \treturn "sample-${ordinal}: " + String(adjusted);
 }
 `;
-	}).join("");
+	}).join('');
 }
 
 layoutEditor();
 editor.focus();
 
-disposables.add(addDisposableListener(window, "pagehide", () => disposables.dispose(), { once: true }));
+disposables.add(addDisposableListener(window, 'pagehide', () => disposables.dispose(), { once: true }));
 
 function requiredElement(id: string): HTMLElement {
 	const element = document.getElementById(id);

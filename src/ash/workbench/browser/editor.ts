@@ -42,7 +42,12 @@ export function getBuiltinEditorPaneFactory(extensionId: string, editorId: strin
 	return builtinEditorPaneFactories.get(`${extensionId}/${editorId}`);
 }
 
-export function registerBuiltinEditorPane(extensionId: string, editorId: string, create: BuiltinEditorPaneFactory, documentType?: Pick<DocumentType, 'id' | 'contentType'>): void {
+export function registerBuiltinEditorPane(
+	extensionId: string,
+	editorId: string,
+	create: BuiltinEditorPaneFactory,
+	documentType?: Pick<DocumentType, 'id' | 'contentType'>,
+): void {
 	const key = `${extensionId}/${editorId}`;
 	if (builtinEditorPaneFactories.has(key)) {
 		throw new Error(`Built-in editor factory is already registered: ${key}`);
@@ -61,7 +66,9 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 	}
 
 	/** Validate an entire package before changing the available editors. */
-	public registerEditorPanes(initial: readonly IEditorPaneDescriptor[]): IDisposable & { replace(descriptors: readonly IEditorPaneDescriptor[]): void; } {
+	public registerEditorPanes(
+		initial: readonly IEditorPaneDescriptor[],
+	): IDisposable & { replace(descriptors: readonly IEditorPaneDescriptor[]): void } {
 		let owned: readonly IEditorPaneDescriptor[] = [];
 		const documentTypes = DocumentTypes.registerTypes();
 		const replace = (descriptors: readonly IEditorPaneDescriptor[]): void => {
@@ -69,16 +76,24 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 			for (const descriptor of descriptors) {
 				validateDescriptor(descriptor);
 				const existing = this.descriptors.get(descriptor.id);
-				if (identifiers.has(descriptor.id) || existing && !owned.includes(existing)) {
+				if (identifiers.has(descriptor.id) || (existing && !owned.includes(existing))) {
 					throw new Error(`Editor pane is already registered: ${descriptor.id}`);
 				}
 				identifiers.add(descriptor.id);
 			}
-			if (owned.length === 0 && descriptors.length === 0) { return; }
-			documentTypes.replace(descriptors.flatMap(descriptor => descriptor.documentType ? [descriptor.documentType] : []));
-			for (const descriptor of owned) { this.descriptors.delete(descriptor.id); }
+			if (owned.length === 0 && descriptors.length === 0) {
+				return;
+			}
+			documentTypes.replace(
+				descriptors.flatMap(descriptor => (descriptor.documentType ? [descriptor.documentType] : [])),
+			);
+			for (const descriptor of owned) {
+				this.descriptors.delete(descriptor.id);
+			}
 			owned = [...descriptors];
-			for (const descriptor of owned) { this.descriptors.set(descriptor.id, descriptor); }
+			for (const descriptor of owned) {
+				this.descriptors.set(descriptor.id, descriptor);
+			}
 			this.changeEmitter.fire();
 		};
 		try {
@@ -112,7 +127,10 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 			.map(({ descriptor }) => descriptor);
 	}
 
-	public getEditorPane(input: IResourceEditorInput, options: EditorOpenOptions = {}): IEditorPaneDescriptor | undefined {
+	public getEditorPane(
+		input: IResourceEditorInput,
+		options: EditorOpenOptions = {},
+	): IEditorPaneDescriptor | undefined {
 		const preferredEditorId = options.preferredEditorId;
 		if (preferredEditorId !== undefined) {
 			const preferred = this.descriptors.get(preferredEditorId);
@@ -126,15 +144,19 @@ export class EditorPaneRegistry extends Disposable implements IEditorPaneRegistr
 		}
 		const pane = this.getEditorPanesForInput(input)[0];
 		if (!pane && DocumentTypes.requiresProvider(input)) {
-			throw new Error(localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'));
+			throw new Error(
+				localize('extensions.clientEditor.packageUnavailable', 'The editor extension package is unavailable.'),
+			);
 		}
 		return pane;
 	}
-
 }
 
 class EditorPaneRegistration extends AbstractDisposable {
-	constructor(private readonly update: (descriptors: readonly IEditorPaneDescriptor[]) => void, private readonly documentTypes: IDisposable) {
+	constructor(
+		private readonly update: (descriptors: readonly IEditorPaneDescriptor[]) => void,
+		private readonly documentTypes: IDisposable,
+	) {
 		super();
 	}
 
@@ -166,7 +188,12 @@ function validateDescriptor(descriptor: IEditorPaneDescriptor): void {
 }
 
 function validateMatch(match: EditorPaneMatch, editorId: string): void {
-	if (match !== EditorPaneMatch.None && match !== EditorPaneMatch.Optional && match !== EditorPaneMatch.Builtin && match !== EditorPaneMatch.Default) {
+	if (
+		match !== EditorPaneMatch.None &&
+		match !== EditorPaneMatch.Optional &&
+		match !== EditorPaneMatch.Builtin &&
+		match !== EditorPaneMatch.Default
+	) {
 		throw new TypeError(`Editor pane '${editorId}' returned an invalid match`);
 	}
 }

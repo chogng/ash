@@ -1,4 +1,8 @@
-import { EditorAction, registerEditorAction, type ServicesAccessor } from '../../../../browser/editorFeatureRegistration.js';
+import {
+	EditorAction,
+	registerEditorAction,
+	type ServicesAccessor,
+} from '../../../../browser/editorFeatureRegistration.js';
 import type { ICodeEditor } from '../../../../browser/editorBrowser.js';
 import { EditorContextKeys } from '../../../../common/editorContextKeys.js';
 import { KeybindingWeight } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
@@ -34,7 +38,10 @@ export class AcceptInlineCompletion extends EditorAction {
 		super({
 			id: 'editor.action.inlineSuggest.commit',
 			label: localize2('inlineSuggest.commit', 'Accept Inline Suggestion'),
-			precondition: ContextKeyExpr.and(EditorContextKeys.writable, InlineCompletionContextKeys.inlineSuggestionVisible.isEqualTo(true)),
+			precondition: ContextKeyExpr.and(
+				EditorContextKeys.writable,
+				InlineCompletionContextKeys.inlineSuggestionVisible.isEqualTo(true),
+			),
 			kbOpts: {
 				primary: KeyMod.Alt | KeyCode.Enter,
 				weight: KeybindingWeight.EditorContrib,

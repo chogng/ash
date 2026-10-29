@@ -15,7 +15,10 @@ import { TextModel } from '../../../../editor/common/model/textModel.js';
 import { localize } from '../../../../nls.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { IContextKeyService, type IScopedContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import {
+	IContextKeyService,
+	type IScopedContextKeyService,
+} from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IMenuService, MenuId, type IMenu } from '../../../../platform/actions/common/actions.js';
 import { ISCMViewService, type ISCMInput, type ISCMRepository } from '../common/scm.js';
@@ -56,59 +59,75 @@ export class SCMInputWidget extends Disposable {
 		const context = this._register(contextKeyService.createScoped(this.domNode));
 		this.inputContext = context;
 		this.inputMenu = this._register(menuService.createMenu(MenuId.SCMInputBox, context));
-		this.actionButton = this._register(new Button(this.domNode, {
-			...defaultButtonStyles,
-			label: localize('scm.input.generate', 'Generate commit message'),
-			icon: Lxicon.sparkle,
-			iconOnly: true,
-			size: 'small',
-			enabled: false,
-		}));
+		this.actionButton = this._register(
+			new Button(this.domNode, {
+				...defaultButtonStyles,
+				label: localize('scm.input.generate', 'Generate commit message'),
+				icon: Lxicon.sparkle,
+				iconOnly: true,
+				size: 'small',
+				enabled: false,
+			}),
+		);
 		this.actionButton.toggleClassName('ash-scm-input-action', true);
-		this._register(this.actionButton.onDidClick(() => { void this.runInputAction(); }));
+		this._register(
+			this.actionButton.onDidClick(() => {
+				void this.runInputAction();
+			}),
+		);
 		this._register(this.inputMenu.onDidChange(() => this.updateInputAction()));
 		this._register(toDisposable(() => this.cancelInputAction()));
 		const focused = context.createKey<boolean>('scmInputIsFocused', false);
-		this.editor = this._register(instantiationService.createInstance(CodeEditorWidget, {
-			container: this.editorDomNode,
-			model: this.model,
-			isSimpleWidget: true,
-			presentation: 'embedded',
-			fontFamily: DEFAULT_FONT_FAMILY,
-			fontSize: 13,
-			lineHeight: 20,
-			wordWrap: 'on',
-			padding: { top: 2, bottom: 2 },
-			lineDecorationsWidth: 0,
-			glyphMargin: false,
-			folding: false,
-			overviewRulerLanes: 0,
-			scrollBeyondLastLine: false,
-			tabFocusMode: true,
-			readOnly: true,
-			ariaLabel: localize('scm.input.label', 'Commit message'),
-			contributionIds: ['editor.contrib.placeholderText'],
-		}));
-		this._register(this.editor.onDidFocusEditorText(() => {
-			focused.set(true);
-			this.domNode.classList.add('focused');
-		}));
-		this._register(this.editor.onDidBlurEditorText(() => {
-			focused.set(false);
-			this.domNode.classList.remove('focused');
-		}));
+		this.editor = this._register(
+			instantiationService.createInstance(CodeEditorWidget, {
+				container: this.editorDomNode,
+				model: this.model,
+				isSimpleWidget: true,
+				presentation: 'embedded',
+				fontFamily: DEFAULT_FONT_FAMILY,
+				fontSize: 13,
+				lineHeight: 20,
+				wordWrap: 'on',
+				padding: { top: 2, bottom: 2 },
+				lineDecorationsWidth: 0,
+				glyphMargin: false,
+				folding: false,
+				overviewRulerLanes: 0,
+				scrollBeyondLastLine: false,
+				tabFocusMode: true,
+				readOnly: true,
+				ariaLabel: localize('scm.input.label', 'Commit message'),
+				contributionIds: ['editor.contrib.placeholderText'],
+			}),
+		);
+		this._register(
+			this.editor.onDidFocusEditorText(() => {
+				focused.set(true);
+				this.domNode.classList.add('focused');
+			}),
+		);
+		this._register(
+			this.editor.onDidBlurEditorText(() => {
+				focused.set(false);
+				this.domNode.classList.remove('focused');
+			}),
+		);
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
-		this._register(this.model.onDidChangeContent(() => {
-			if (this.boundInput) {
-				this.boundInput.value = this.model.getText();
-			}
-			layout.schedule();
-		}));
-		this._register(this.configurationService.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(AccessibilityVerbositySettingId.ScmInput)) {
-				this.updateAriaLabel();
-			}
-		}));
+		this._register(
+			this.model.onDidChangeContent(() => {
+				if (this.boundInput) {
+					this.boundInput.value = this.model.getText();
+				}
+				layout.schedule();
+			}),
+		);
+		this._register(
+			this.configurationService.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(AccessibilityVerbositySettingId.ScmInput)) {
+					this.updateAriaLabel();
+				}
+			}),
+		);
 		const observer = new ResizeObserver(() => layout.schedule());
 		this._register(toDisposable(() => observer.disconnect()));
 		observer.observe(this.editorDomNode);
@@ -117,7 +136,9 @@ export class SCMInputWidget extends Disposable {
 		layout.schedule();
 	}
 
-	public get input(): ISCMInput | undefined { return this.boundInput; }
+	public get input(): ISCMInput | undefined {
+		return this.boundInput;
+	}
 
 	public set input(input: ISCMInput | undefined) {
 		const repository = input ? this.scmViewService.activeRepository : undefined;
@@ -141,19 +162,26 @@ export class SCMInputWidget extends Disposable {
 		this.layout();
 	}
 
-	public focus(): void { this.editor.focus(); }
+	public focus(): void {
+		this.editor.focus();
+	}
 
 	public getContentHeight(): number {
 		const lineHeight = this.editor.getOption(EditorOption.lineHeight);
 		const padding = this.editor.getOption(EditorOption.padding);
 		// Content height includes the viewport; the last line's bottom also lets the input shrink after deletion.
 		const contentHeight = this.editor.getBottomForLineNumber(this.model.lineCount) + padding.bottom;
-		return Math.min(10 * lineHeight + padding.top + padding.bottom, Math.max(lineHeight + padding.top + padding.bottom, contentHeight));
+		return Math.min(
+			10 * lineHeight + padding.top + padding.bottom,
+			Math.max(lineHeight + padding.top + padding.bottom, contentHeight),
+		);
 	}
 
 	public layout(): void {
 		const width = this.editorDomNode.clientWidth;
-		if (width === 0) { return; }
+		if (width === 0) {
+			return;
+		}
 		this.editor.layout({ width, height: this.height });
 		const height = this.getContentHeight();
 		if (height !== this.height) {
@@ -181,12 +209,23 @@ export class SCMInputWidget extends Disposable {
 		const provider = this.boundRepository?.provider;
 		this.actionButton.label = running
 			? localize('scm.input.stop', 'Stop generating commit message')
-			: action?.label ?? localize('scm.input.generate', 'Generate commit message');
+			: (action?.label ?? localize('scm.input.generate', 'Generate commit message'));
 		this.actionButton.icon = running ? Lxicon.stopCircle : Lxicon.sparkle;
-		this.actionButton.enabled = running ? !this.runningAction!.token.isCancellationRequested
-			: !!action?.enabled && !!provider && this.boundInput?.enabled === true && !provider.isBusy && provider.groups.some(group => group.resources.length > 0);
-		this.actionButton.setTitle(running ? this.actionButton.label
-			: action?.tooltip || (action ? this.actionButton.label : localize('scm.input.generatorUnavailable', 'No commit message generator configured')));
+		this.actionButton.enabled = running
+			? !this.runningAction!.token.isCancellationRequested
+			: !!action?.enabled &&
+				!!provider &&
+				this.boundInput?.enabled === true &&
+				!provider.isBusy &&
+				provider.groups.some(group => group.resources.length > 0);
+		this.actionButton.setTitle(
+			running
+				? this.actionButton.label
+				: action?.tooltip ||
+						(action
+							? this.actionButton.label
+							: localize('scm.input.generatorUnavailable', 'No commit message generator configured')),
+		);
 		this.domNode.setAttribute('aria-busy', String(running));
 	}
 
@@ -197,17 +236,24 @@ export class SCMInputWidget extends Disposable {
 			status(localize('scm.input.stopping', 'Stopping commit message generation'));
 			return;
 		}
-		if (!this.actionButton.enabled) { return; }
+		if (!this.actionButton.enabled) {
+			return;
+		}
 		const action = this.getInputAction();
 		const repository = this.boundRepository;
-		if (!action || !repository) { return; }
+		if (!action || !repository) {
+			return;
+		}
 		const cancellation = new CancellationTokenSource();
 		this.runningAction = cancellation;
 		this.updateInputAction();
 		status(localize('scm.input.generating', 'Generating commit message'));
 		try {
 			// Capture the repository and resource scope at invocation; switching repositories cancels this request.
-			const resources = repository.provider.groups.map(group => ({ resourceGroupId: group.id, resources: group.resources.map(resource => resource.sourceUri) }));
+			const resources = repository.provider.groups.map(group => ({
+				resourceGroupId: group.id,
+				resources: group.resources.map(resource => resource.sourceUri),
+			}));
 			await action.run(repository.provider.rootUri, resources, cancellation.token);
 		} catch (error) {
 			if (!cancellation.token.isCancellationRequested && !isCancellationError(error)) {

@@ -11,14 +11,18 @@ export class SCMViewService extends Disposable implements ISCMViewService {
 	constructor(@ISCMService private readonly scmService: ISCMService) {
 		super();
 		this.selectedId = this.scmService.repositories[Symbol.iterator]().next().value?.id;
-		this._register(this.scmService.onDidAddRepository(repository => {
-			if (this.selectedId === undefined) this.selectRepository(repository.id);
-		}));
-		this._register(this.scmService.onDidRemoveRepository(repository => {
-			if (repository.id !== this.selectedId) return;
-			this.selectedId = this.scmService.repositories[Symbol.iterator]().next().value?.id;
-			this.changeEmitter.fire(this.activeRepository);
-		}));
+		this._register(
+			this.scmService.onDidAddRepository(repository => {
+				if (this.selectedId === undefined) this.selectRepository(repository.id);
+			}),
+		);
+		this._register(
+			this.scmService.onDidRemoveRepository(repository => {
+				if (repository.id !== this.selectedId) return;
+				this.selectedId = this.scmService.repositories[Symbol.iterator]().next().value?.id;
+				this.changeEmitter.fire(this.activeRepository);
+			}),
+		);
 	}
 
 	public get activeRepository(): ISCMRepository | undefined {
@@ -26,7 +30,8 @@ export class SCMViewService extends Disposable implements ISCMViewService {
 	}
 
 	public selectRepository(id: string | undefined): void {
-		if (id !== undefined && !this.scmService.getRepository(id)) throw new Error(`SCM repository '${id}' is not registered`);
+		if (id !== undefined && !this.scmService.getRepository(id))
+			throw new Error(`SCM repository '${id}' is not registered`);
 		if (id === this.selectedId) return;
 		this.selectedId = id;
 		this.changeEmitter.fire(this.activeRepository);

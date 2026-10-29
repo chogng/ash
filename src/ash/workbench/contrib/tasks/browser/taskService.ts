@@ -24,6 +24,19 @@ export class TaskService extends AbstractTaskService {
 
 registerWorkbenchServiceContribution({
 	service: ITaskService,
-	dependencies: [IFileService, IWorkspaceContextService, ITerminalService, ITerminalProfileResolverService, IOutputService, ILogService, IConfigurationService, IConfigurationResolverService, IMarkerService, IModelService, IPathService, IExtensionService],
+	dependencies: [
+		IFileService,
+		IWorkspaceContextService,
+		ITerminalService,
+		ITerminalProfileResolverService,
+		IOutputService,
+		ILogService,
+		IConfigurationService,
+		IConfigurationResolverService,
+		IMarkerService,
+		IModelService,
+		IPathService,
+		IExtensionService,
+	],
 	install: context => context.register(context.container.createInstance(TaskService)),
 });

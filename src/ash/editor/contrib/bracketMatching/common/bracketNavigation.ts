@@ -1,17 +1,22 @@
-import { Selection } from "../../../common/core/selection.js";
-import { type IBracketPairsTextModelPart } from "../../../common/textModelBracketPairs.js";
-import { type Range } from "../../../common/core/range.js";
-import { Position } from "../../../common/core/position.js";
+import { Selection } from '../../../common/core/selection.js';
+import { type IBracketPairsTextModelPart } from '../../../common/textModelBracketPairs.js';
+import { type Range } from '../../../common/core/range.js';
+import { Position } from '../../../common/core/position.js';
 
 /** Moves every active cursor to its lexically valid matching bracket when present. */
-export function jumpToMatchingBrackets(bracketPairs: IBracketPairsTextModelPart, selections: readonly Selection[]): readonly Selection[] {
+export function jumpToMatchingBrackets(
+	bracketPairs: IBracketPairsTextModelPart,
+	selections: readonly Selection[],
+): readonly Selection[] {
 	let changed = false;
 	const nextSelections = selections.map(selection => {
 		const match = matchAtOrAfter(bracketPairs, selection.getPosition());
 		if (!match) return selection;
-		const next = Selection.fromPositions(isAtOpening(match[0].getStartPosition(), match[0].getEndPosition(), selection.getPosition())
-			? match[1].getStartPosition()
-			: match[0].getStartPosition());
+		const next = Selection.fromPositions(
+			isAtOpening(match[0].getStartPosition(), match[0].getEndPosition(), selection.getPosition())
+				? match[1].getStartPosition()
+				: match[0].getStartPosition(),
+		);
 		changed ||= Position.compare(next.getPosition(), selection.getPosition()) !== 0 || !selection.isEmpty();
 		return next;
 	});
@@ -19,13 +24,18 @@ export function jumpToMatchingBrackets(bracketPairs: IBracketPairsTextModelPart,
 }
 
 /** Selects the full configured bracket pair around every active cursor when present. */
-export function selectToMatchingBrackets(bracketPairs: IBracketPairsTextModelPart, selections: readonly Selection[]): readonly Selection[] {
+export function selectToMatchingBrackets(
+	bracketPairs: IBracketPairsTextModelPart,
+	selections: readonly Selection[],
+): readonly Selection[] {
 	let changed = false;
 	const nextSelections = selections.map(selection => {
 		const match = matchAtOrAfter(bracketPairs, selection.getPosition());
 		if (!match) return selection;
 		const next = Selection.fromPositions(match[0].getStartPosition(), match[1].getEndPosition());
-		changed ||= Position.compare(next.getStartPosition(), selection.getStartPosition()) !== 0 || Position.compare(next.getEndPosition(), selection.getEndPosition()) !== 0;
+		changed ||=
+			Position.compare(next.getStartPosition(), selection.getStartPosition()) !== 0 ||
+			Position.compare(next.getEndPosition(), selection.getEndPosition()) !== 0;
 		return next;
 	});
 	return changed ? Object.freeze(nextSelections) : selections;

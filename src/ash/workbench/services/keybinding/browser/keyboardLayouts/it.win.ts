@@ -1,6 +1,5 @@
 import { KeyboardLayoutContribution } from './_.contribution.js';
 
-
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 	layout: { name: '00000410', id: '', text: 'Italian' },
 	secondaryLayouts: [],
@@ -48,7 +47,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		Backspace: [],
 		Tab: [],
 		Space: [' ', ' ', '', '', 0, 'VK_SPACE'],
-		Minus: ['\'', '?', '', '', 0, 'VK_OEM_4'],
+		Minus: ["'", '?', '', '', 0, 'VK_OEM_4'],
 		Equal: ['ì', '^', '', '', 0, 'VK_OEM_6'],
 		BracketLeft: ['è', 'é', '[', '{', 0, 'VK_OEM_1'],
 		BracketRight: ['+', '*', ']', '}', 0, 'VK_OEM_PLUS'],
@@ -159,6 +158,6 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		BrowserForward: [],
 		BrowserStop: [],
 		BrowserRefresh: [],
-		BrowserFavorites: []
-	}
+		BrowserFavorites: [],
+	},
 });

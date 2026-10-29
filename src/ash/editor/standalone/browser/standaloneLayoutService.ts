@@ -1,7 +1,11 @@
 import { getClientArea, type IDimension } from '../../../base/browser/dom.js';
 import { Emitter } from '../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore } from '../../../base/common/lifecycle.js';
-import { ILayoutService, type ILayoutContainerEvent, type ILayoutOffsetInfo } from '../../../platform/layout/browser/layoutService.js';
+import {
+	ILayoutService,
+	type ILayoutContainerEvent,
+	type ILayoutOffsetInfo,
+} from '../../../platform/layout/browser/layoutService.js';
 import type { ICodeEditor } from '../../browser/editorBrowser.js';
 import { ICodeEditorService } from '../../browser/services/codeEditorService.js';
 
@@ -26,17 +30,21 @@ export class StandaloneLayoutService extends Disposable implements ILayoutServic
 	constructor(@ICodeEditorService private readonly editors: ICodeEditorService) {
 		super();
 		this.lastActiveContainer = this.activeContainer;
-		this._register(editors.onCodeEditorAdd(editor => {
-			this.track(editor);
-			this.publishLayout(editor);
-			this.publishActiveContainer();
-		}));
-		this._register(editors.onCodeEditorRemove(editor => {
-			this.editorListeners.deleteAndDispose(editor);
-			this.publishActiveContainer();
-			this.layoutMain.fire(this.mainContainerDimension);
-			this.layoutActive.fire(this.activeContainerDimension);
-		}));
+		this._register(
+			editors.onCodeEditorAdd(editor => {
+				this.track(editor);
+				this.publishLayout(editor);
+				this.publishActiveContainer();
+			}),
+		);
+		this._register(
+			editors.onCodeEditorRemove(editor => {
+				this.editorListeners.deleteAndDispose(editor);
+				this.publishActiveContainer();
+				this.layoutMain.fire(this.mainContainerDimension);
+				this.layoutActive.fire(this.activeContainerDimension);
+			}),
+		);
 		for (const editor of editors.listCodeEditors()) {
 			this.track(editor);
 		}

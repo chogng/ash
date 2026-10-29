@@ -5,9 +5,7 @@ import { localize } from '../../../nls.js';
 
 /** The source callbacks bind one renderer's browser snapshot or backend connection; this service owns no transport. */
 export class ExtensionResourceLoaderService implements IExtensionResourceLoaderService {
-	constructor(
-		private readonly readInstalled: (request: ExtensionResourceRequest) => Promise<Uint8Array>,
-	) { }
+	constructor(private readonly readInstalled: (request: ExtensionResourceRequest) => Promise<Uint8Array>) {}
 
 	public async readExtensionResource(uri: URI): Promise<string> {
 		return new TextDecoder('utf-8', { fatal: true }).decode(await this.readExtensionResourceBytes(uri));
@@ -22,12 +20,19 @@ export class ExtensionResourceLoaderService implements IExtensionResourceLoaderS
 			}
 			return this.readInstalled(request);
 		}
-		throw new Error(localize('extensions.resources.unsupported', 'The resource is not an installed extension resource.'));
+		throw new Error(
+			localize('extensions.resources.unsupported', 'The resource is not an installed extension resource.'),
+		);
 	}
 }
 
 function validatePath(path: string): void {
-	if (!path || path.length > 1024 || /[\\:\0]/u.test(path) || path.split('/').some(part => !part || part === '.' || part === '..')) {
+	if (
+		!path ||
+		path.length > 1024 ||
+		/[\\:\0]/u.test(path) ||
+		path.split('/').some(part => !part || part === '.' || part === '..')
+	) {
 		throw new TypeError('Invalid extension resource path');
 	}
 }

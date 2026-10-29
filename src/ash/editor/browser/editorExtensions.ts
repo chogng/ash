@@ -14,9 +14,13 @@ import { IModelService } from '../common/services/model.js';
 import { ITextModelService } from '../common/services/resolverService.js';
 import { MenuId, MenusRegistry, Action2 } from '../../platform/actions/common/actions.js';
 import { CommandsRegistry, ICommandMetadata } from '../../platform/commands/common/commands.js';
-import { ContextKeyExpr, ContextKeyExpression } from "../../platform/contextkey/common/contextkey.js";
-import { IContextKeyService } from "../../platform/contextkey/browser/contextKeyService.js";
-import { ServicesAccessor as InstantiationServicesAccessor, IInstantiationService, type ServiceIdentifier } from '../../platform/instantiation/common/instantiation.js';
+import { ContextKeyExpr, ContextKeyExpression } from '../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../platform/contextkey/browser/contextKeyService.js';
+import {
+	ServicesAccessor as InstantiationServicesAccessor,
+	IInstantiationService,
+	type ServiceIdentifier,
+} from '../../platform/instantiation/common/instantiation.js';
 import { KeybindingsRegistry, KeybindingWeight } from '../../platform/keybinding/common/keybindingsRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
 import { assertType } from '../../base/common/types.js';
@@ -46,9 +50,9 @@ type EditorService = object;
 interface IKeybindings {
 	readonly primary?: number;
 	readonly secondary?: readonly number[];
-	readonly win?: { readonly primary: number; readonly secondary?: readonly number[]; };
-	readonly linux?: { readonly primary: number; readonly secondary?: readonly number[]; };
-	readonly mac?: { readonly primary: number; readonly secondary?: readonly number[]; };
+	readonly win?: { readonly primary: number; readonly secondary?: readonly number[] };
+	readonly linux?: { readonly primary: number; readonly secondary?: readonly number[] };
+	readonly mac?: { readonly primary: number; readonly secondary?: readonly number[] };
 }
 
 export const enum EditorContributionInstantiation {
@@ -141,7 +145,6 @@ export abstract class Command {
 	public register(): IDisposable {
 		const lifetime = new DisposableStore();
 		try {
-
 			if (Array.isArray(this._menuOpts)) {
 				this._menuOpts.forEach(item => lifetime.add(this._registerMenuItem(item)));
 			} else if (this._menuOpts) {
@@ -151,11 +154,12 @@ export abstract class Command {
 			if (this._kbOpts) {
 				const kbOptsArr = Array.isArray(this._kbOpts) ? this._kbOpts : [this._kbOpts];
 				for (const kbOpts of kbOptsArr) {
-					const platformKeybindings = operatingSystem === OperatingSystem.Macintosh
-						? kbOpts.mac
-						: operatingSystem === OperatingSystem.Windows
-							? kbOpts.win
-							: kbOpts.linux;
+					const platformKeybindings =
+						operatingSystem === OperatingSystem.Macintosh
+							? kbOpts.mac
+							: operatingSystem === OperatingSystem.Windows
+								? kbOpts.win
+								: kbOpts.linux;
 					let kbWhen = kbOpts.kbExpr;
 					if (this.precondition) {
 						if (kbWhen) {
@@ -166,44 +170,51 @@ export abstract class Command {
 					}
 
 					// Equal-weight rules prefer the latest entry; menus should display the primary shortcut.
-					for (const keybinding of [...(platformKeybindings?.secondary ?? kbOpts.secondary ?? []).slice().reverse(), platformKeybindings?.primary ?? kbOpts.primary]) {
+					for (const keybinding of [
+						...(platformKeybindings?.secondary ?? kbOpts.secondary ?? []).slice().reverse(),
+						platformKeybindings?.primary ?? kbOpts.primary,
+					]) {
 						if (keybinding !== undefined && keybinding !== 0) {
-							lifetime.add(KeybindingsRegistry.registerKeybindingRule({
-								command: this.id,
-								keybinding,
-								when: kbWhen ?? undefined,
-								args: kbOpts.args === undefined ? undefined : [kbOpts.args],
-								priority: kbOpts.weight,
-							}));
+							lifetime.add(
+								KeybindingsRegistry.registerKeybindingRule({
+									command: this.id,
+									keybinding,
+									when: kbWhen ?? undefined,
+									args: kbOpts.args === undefined ? undefined : [kbOpts.args],
+									priority: kbOpts.weight,
+								}),
+							);
 						}
 					}
 				}
 			}
 
-			lifetime.add(CommandsRegistry.registerMany([{
-				id: this.id,
-				handler: (accessor, args) => this.runCommand(accessor, args),
-				metadata: this.metadata,
-			}]));
+			lifetime.add(
+				CommandsRegistry.registerMany([
+					{
+						id: this.id,
+						handler: (accessor, args) => this.runCommand(accessor, args),
+						metadata: this.metadata,
+					},
+				]),
+			);
 
 			if (this.canTriggerInlineEdits) {
 				lifetime.add(TriggerInlineEditCommandsRegistry.registerScopedCommand(this.id));
 			}
 			return lifetime;
-		} catch (error) { lifetime.dispose(); throw error; }
+		} catch (error) {
+			lifetime.dispose();
+			throw error;
+		}
 	}
 
 	private _registerMenuItem(item: ICommandMenuOptions): IDisposable {
 		return MenusRegistry.appendMenuItem(item.menuId, {
 			group: item.group,
-			command: {
-				id: this.id,
-				title: item.title,
-				icon: item.icon,
-				precondition: this.precondition
-			},
+			command: { id: this.id, title: item.title, icon: item.icon, precondition: this.precondition },
 			when: item.when,
-			order: item.order
+			order: item.order,
 		});
 	}
 
@@ -229,13 +240,17 @@ interface ICommandImplementationRegistration {
 }
 
 export class MultiCommand extends Command {
-
 	private readonly _implementations: ICommandImplementationRegistration[] = [];
 
 	/**
 	 * A higher priority gets to be looked at first
 	 */
-	public addImplementation(priority: number, name: string, implementation: CommandImplementation, when?: ContextKeyExpression): IDisposable {
+	public addImplementation(
+		priority: number,
+		name: string,
+		implementation: CommandImplementation,
+		when?: ContextKeyExpression,
+	): IDisposable {
 		this._implementations.push({ priority, name, implementation, when });
 		this._implementations.sort((a, b) => b.priority - a.priority);
 		return toDisposable(() => {
@@ -283,7 +298,7 @@ export class MultiCommand extends Command {
 export class ProxyCommand extends Command {
 	constructor(
 		private readonly command: Command,
-		opts: ICommandOptions
+		opts: ICommandOptions,
 	) {
 		super(opts);
 	}
@@ -299,14 +314,15 @@ export interface IContributionCommandOptions<T> extends ICommandOptions {
 	handler: (controller: T, args: unknown) => void;
 }
 export interface EditorControllerCommand<T extends IEditorContribution> {
-	new(opts: IContributionCommandOptions<T>): EditorCommand;
+	new (opts: IContributionCommandOptions<T>): EditorCommand;
 }
 export abstract class EditorCommand extends Command {
-
 	/**
 	 * Create a command class that is bound to a certain editor contribution.
 	 */
-	public static bindToContribution<T extends IEditorContribution>(controllerGetter: (editor: ICodeEditor) => T | null): EditorControllerCommand<T> {
+	public static bindToContribution<T extends IEditorContribution>(
+		controllerGetter: (editor: ICodeEditor) => T | null,
+	): EditorControllerCommand<T> {
 		return class EditorControllerCommandImpl extends EditorCommand {
 			private readonly _callback: (controller: T, args: unknown) => void;
 
@@ -329,7 +345,7 @@ export abstract class EditorCommand extends Command {
 		accessor: ServicesAccessor,
 		args: T,
 		precondition: ContextKeyExpression | undefined,
-		runner: (accessor: ServicesAccessor, editor: ICodeEditor, args: T) => void | Promise<void>
+		runner: (accessor: ServicesAccessor, editor: ICodeEditor, args: T) => void | Promise<void>,
 	): void | Promise<void> {
 		const codeEditorService = accessor.get(ICodeEditorService);
 
@@ -340,7 +356,7 @@ export abstract class EditorCommand extends Command {
 			return;
 		}
 
-		return editor.invokeWithinContext((editorAccessor) => {
+		return editor.invokeWithinContext(editorAccessor => {
 			const kbService = editorAccessor.get(IContextKeyService);
 			if (!kbService.contextMatchesRules(precondition ?? undefined)) {
 				// precondition does not hold
@@ -352,10 +368,16 @@ export abstract class EditorCommand extends Command {
 	}
 
 	public runCommand(accessor: ServicesAccessor, args: unknown): void | Promise<void> {
-		return EditorCommand.runEditorCommand(accessor, args, this.precondition, (accessor, editor, args) => this.runEditorCommand(accessor, editor, args));
+		return EditorCommand.runEditorCommand(accessor, args, this.precondition, (accessor, editor, args) =>
+			this.runEditorCommand(accessor, editor, args),
+		);
 	}
 
-	public abstract runEditorCommand(accessor: ServicesAccessor, editor: ICodeEditor, args: unknown): void | Promise<void>;
+	public abstract runEditorCommand(
+		accessor: ServicesAccessor,
+		editor: ICodeEditor,
+		args: unknown,
+	): void | Promise<void>;
 }
 
 //#endregion EditorCommand
@@ -370,18 +392,10 @@ export interface IEditorActionContextMenuOptions {
 }
 export type IActionOptions = ICommandOptions & {
 	contextMenuOpts?: IEditorActionContextMenuOptions | IEditorActionContextMenuOptions[];
-} & ({
-	label: nls.ILocalizedString;
-	alias?: string;
-} | {
-	label: string;
-	alias: string;
-});
+} & ({ label: nls.ILocalizedString; alias?: string } | { label: string; alias: string });
 
 export abstract class EditorAction extends EditorCommand {
-
 	private static convertOptions(opts: IActionOptions): ICommandOptions {
-
 		let menuOpts: ICommandMenuOptions[];
 		if (Array.isArray(opts.menuOpts)) {
 			menuOpts = opts.menuOpts;
@@ -438,10 +452,13 @@ export abstract class EditorAction extends EditorCommand {
 	public abstract run(accessor: ServicesAccessor, editor: ICodeEditor, args: unknown): void | Promise<void>;
 }
 
-export type EditorActionImplementation = (accessor: ServicesAccessor, editor: ICodeEditor, args: unknown) => boolean | Promise<void>;
+export type EditorActionImplementation = (
+	accessor: ServicesAccessor,
+	editor: ICodeEditor,
+	args: unknown,
+) => boolean | Promise<void>;
 
 export class MultiEditorAction extends EditorAction {
-
 	private readonly _implementations: [number, EditorActionImplementation][] = [];
 
 	/**
@@ -471,7 +488,6 @@ export class MultiEditorAction extends EditorAction {
 			}
 		}
 	}
-
 }
 
 //#endregion EditorAction
@@ -479,7 +495,6 @@ export class MultiEditorAction extends EditorAction {
 //#region EditorAction2
 
 export abstract class EditorAction2 extends Action2 {
-
 	run(accessor: ServicesAccessor, ...args: unknown[]) {
 		// Find the editor with text focus or active
 		const codeEditorService = accessor.get(ICodeEditorService);
@@ -489,7 +504,7 @@ export abstract class EditorAction2 extends Action2 {
 			return;
 		}
 		// precondition does hold
-		return editor.invokeWithinContext((editorAccessor) => {
+		return editor.invokeWithinContext(editorAccessor => {
 			const kbService = editorAccessor.get(IContextKeyService);
 			const logService = editorAccessor.get(ILogService);
 			const enabled = kbService.contextMatchesRules(this.desc.precondition ?? undefined);
@@ -530,12 +545,9 @@ interface SharedTextContext {
 }
 
 export interface TextEditorContributionConfigurationContext extends SharedTextContext {
-	readonly options: Pick<CodeEditorWidgetOptions,
-		| 'bracketPairColorization'
-		| 'folding'
-		| 'guides'
-		| 'indentation'
-		| 'languageDiagnosticsService'
+	readonly options: Pick<
+		CodeEditorWidgetOptions,
+		'bracketPairColorization' | 'folding' | 'guides' | 'indentation' | 'languageDiagnosticsService'
 	>;
 	readonly renderDiagnosticDecorations: boolean;
 	readonly viewModel: IViewModel;
@@ -543,7 +555,8 @@ export interface TextEditorContributionConfigurationContext extends SharedTextCo
 }
 
 export interface TextEditorContributionContext extends SharedTextContext {
-	readonly options: Pick<CodeEditorWidgetOptions,
+	readonly options: Pick<
+		CodeEditorWidgetOptions,
 		| 'codeLens'
 		| 'colorDecorators'
 		| 'colorDecoratorsActivatedOn'
@@ -613,10 +626,11 @@ export interface EditorFeatureSet {
 
 // --- Registration of commands and actions
 
-
-export function registerModelAndPositionCommand(id: string, handler: (accessor: ServicesAccessor, model: ITextModel, position: Position, ...args: unknown[]) => unknown): IDisposable {
+export function registerModelAndPositionCommand(
+	id: string,
+	handler: (accessor: ServicesAccessor, model: ITextModel, position: Position, ...args: unknown[]) => unknown,
+): IDisposable {
 	return CommandsRegistry.register(id, function (accessor, ...args) {
-
 		const instaService = accessor.get(IInstantiationService);
 
 		const [resource, position] = args;
@@ -629,18 +643,26 @@ export function registerModelAndPositionCommand(id: string, handler: (accessor: 
 			return instaService.invokeFunction(handler, model, editorPosition, ...args.slice(2));
 		}
 
-		return accessor.get(ITextModelService).createModelReference(resource).then(reference => {
-			return new Promise((resolve, reject) => {
-				try {
-					const result = instaService.invokeFunction(handler, reference.object.textEditorModel, Position.lift(position), args.slice(2));
-					resolve(result);
-				} catch (err) {
-					reject(err);
-				}
-			}).finally(() => {
-				reference.dispose();
+		return accessor
+			.get(ITextModelService)
+			.createModelReference(resource)
+			.then(reference => {
+				return new Promise((resolve, reject) => {
+					try {
+						const result = instaService.invokeFunction(
+							handler,
+							reference.object.textEditorModel,
+							Position.lift(position),
+							args.slice(2),
+						);
+						resolve(result);
+					} catch (err) {
+						reject(err);
+					}
+				}).finally(() => {
+					reference.dispose();
+				});
 			});
-		});
 	});
 }
 
@@ -649,7 +671,7 @@ export function registerEditorCommand<T extends EditorCommand>(editorCommand: T)
 	return editorCommand;
 }
 
-export function registerEditorAction<T extends EditorAction>(ctor: { new(): T; }): T {
+export function registerEditorAction<T extends EditorAction>(ctor: { new (): T }): T {
 	const action = new ctor();
 	EditorContributionRegistry.INSTANCE.registerEditorAction(action);
 	return action;
@@ -669,11 +691,20 @@ export function registerInstantiatedEditorAction(editorAction: EditorAction): vo
  * to a specific code editor instance.
  */
 export function registerEditorContribution(contribution: EditorContributionHooks): void;
-export function registerEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: ICodeEditor, ...services: Services): IEditorContribution; }, instantiation: EditorContributionInstantiation): void;
-export function registerEditorContribution(idOrContribution: string | EditorContributionHooks, ctor?: EditorContributionCtor, instantiation?: EditorContributionInstantiation): void {
-	const contribution = typeof idOrContribution === 'string'
-		? { id: idOrContribution, ctor: ctor!, instantiation: instantiation! }
-		: idOrContribution;
+export function registerEditorContribution<Services extends EditorService[]>(
+	id: string,
+	ctor: { new (editor: ICodeEditor, ...services: Services): IEditorContribution },
+	instantiation: EditorContributionInstantiation,
+): void;
+export function registerEditorContribution(
+	idOrContribution: string | EditorContributionHooks,
+	ctor?: EditorContributionCtor,
+	instantiation?: EditorContributionInstantiation,
+): void {
+	const contribution =
+		typeof idOrContribution === 'string'
+			? { id: idOrContribution, ctor: ctor!, instantiation: instantiation! }
+			: idOrContribution;
 	EditorContributionRegistry.INSTANCE.registerEditorContribution(contribution);
 }
 
@@ -681,12 +712,16 @@ export function registerEditorContribution(idOrContribution: string | EditorCont
  * Registers a diff editor contribution. Diff editor contributions have a lifecycle which
  * is bound to a specific diff editor instance.
  */
-export function registerDiffEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: IDiffEditor, ...services: Services): IEditorContribution; }): void {
+export function registerDiffEditorContribution<Services extends EditorService[]>(
+	id: string,
+	ctor: { new (editor: IDiffEditor, ...services: Services): IEditorContribution },
+): void {
 	EditorContributionRegistry.INSTANCE.registerDiffEditorContribution(id, ctor);
 }
 
 export namespace EditorExtensionsRegistry {
-	export const onDidChangeEditorContributions: Event<void> = (listener, thisArgs, disposables) => EditorContributionRegistry.INSTANCE.onDidChange(listener, thisArgs, disposables);
+	export const onDidChangeEditorContributions: Event<void> = (listener, thisArgs, disposables) =>
+		EditorContributionRegistry.INSTANCE.onDidChange(listener, thisArgs, disposables);
 	/** Installs a complete admitted provider batch; withdrawing it also retires existing instances. */
 	export function registerEditorContributions(contributions: readonly EditorContributionRegistration[]): IDisposable {
 		return EditorContributionRegistry.INSTANCE.registerEditorContributions(contributions);
@@ -699,11 +734,15 @@ export namespace EditorExtensionsRegistry {
 				lifetime.add(action.register());
 				lifetime.add(EditorContributionRegistry.INSTANCE.registerDynamicEditorAction(action));
 			}
-			for (const command of features.commands) lifetime.add(EditorContributionRegistry.INSTANCE.registerScopedEditorCommand(command));
+			for (const command of features.commands)
+				lifetime.add(EditorContributionRegistry.INSTANCE.registerScopedEditorCommand(command));
 			for (const register of features.registrations) lifetime.add(register());
 			lifetime.add(registerEditorContributions(features.contributions));
 			return lifetime;
-		} catch (error) { lifetime.dispose(); throw error; }
+		} catch (error) {
+			lifetime.dispose();
+			throw error;
+		}
 	}
 
 	export function registerDynamicEditorAction(action: EditorAction): IDisposable {
@@ -732,12 +771,9 @@ export namespace EditorExtensionsRegistry {
 }
 
 // Editor extension points
-const Extensions = {
-	EditorCommonContributions: 'editor.contributions'
-};
+const Extensions = { EditorCommonContributions: 'editor.contributions' };
 
 class EditorContributionRegistry {
-
 	public static readonly INSTANCE = new EditorContributionRegistry();
 
 	private readonly editorContributions: EditorContributionRegistration[] = [];
@@ -746,10 +782,9 @@ class EditorContributionRegistry {
 	public readonly onDidChange = this.changeEmitter.event;
 	private readonly diffEditorContributions: IDiffEditorContributionDescription[] = [];
 	private readonly editorActions: EditorAction[] = [];
-	private readonly editorCommands: { [commandId: string]: EditorCommand; } = Object.create(null);
+	private readonly editorCommands: { [commandId: string]: EditorCommand } = Object.create(null);
 
-	constructor() {
-	}
+	constructor() {}
 
 	public registerEditorContributions(contributions: readonly EditorContributionRegistration[]): IDisposable {
 		const ids = new Set<string>();
@@ -772,13 +807,20 @@ class EditorContributionRegistry {
 		this.changeEmitter.fire();
 		return toDisposable(() => {
 			// New views must stop selecting this batch before callbacks dispose old instances.
-			try { lifetime.dispose(); }
-			finally { controller.abort(); this.changeEmitter.fire(); }
+			try {
+				lifetime.dispose();
+			} finally {
+				controller.abort();
+				this.changeEmitter.fire();
+			}
 		});
 	}
 
 	private validateContribution(contribution: EditorContributionRegistration): void {
-		if (!contribution?.id?.trim() || !('ctor' in contribution ? contribution.ctor : contribution.configure || contribution.install)) {
+		if (
+			!contribution?.id?.trim() ||
+			!('ctor' in contribution ? contribution.ctor : contribution.configure || contribution.install)
+		) {
 			throw new TypeError('Editor contribution is invalid');
 		}
 		if (this.editorContributions.some(value => value.id === contribution.id)) {
@@ -801,16 +843,19 @@ class EditorContributionRegistry {
 		if (!('ctor' in contribution)) {
 			for (const command of contribution.commands ?? []) {
 				if (!command.canTriggerInlineEdits) continue;
-				if (contribution.providerSignal) lifetime.add(TriggerInlineEditCommandsRegistry.registerScopedCommand(command.id));
+				if (contribution.providerSignal)
+					lifetime.add(TriggerInlineEditCommandsRegistry.registerScopedCommand(command.id));
 				else TriggerInlineEditCommandsRegistry.registerCommand(command.id);
 			}
 		}
 		const registered = Object.freeze({ ...contribution });
 		this.editorContributions.push(registered);
-		lifetime.add(toDisposable(() => {
-			const index = this.editorContributions.indexOf(registered);
-			if (index >= 0) this.editorContributions.splice(index, 1);
-		}));
+		lifetime.add(
+			toDisposable(() => {
+				const index = this.editorContributions.indexOf(registered);
+				if (index >= 0) this.editorContributions.splice(index, 1);
+			}),
+		);
 		return lifetime;
 	}
 
@@ -818,7 +863,10 @@ class EditorContributionRegistry {
 		return this.editorContributions.slice(0);
 	}
 
-	public registerDiffEditorContribution<Services extends EditorService[]>(id: string, ctor: { new(editor: IDiffEditor, ...services: Services): IEditorContribution; }): void {
+	public registerDiffEditorContribution<Services extends EditorService[]>(
+		id: string,
+		ctor: { new (editor: IDiffEditor, ...services: Services): IEditorContribution },
+	): void {
 		this.diffEditorContributions.push({ id, ctor: ctor as DiffEditorContributionCtor });
 	}
 
@@ -859,15 +907,18 @@ class EditorContributionRegistry {
 		lifetime.add(command.register());
 		if (command instanceof EditorCommand) {
 			this.editorCommands[command.id] = command;
-			lifetime.add(toDisposable(() => { if (this.editorCommands[command.id] === command) delete this.editorCommands[command.id]; }));
+			lifetime.add(
+				toDisposable(() => {
+					if (this.editorCommands[command.id] === command) delete this.editorCommands[command.id];
+				}),
+			);
 		}
 		return lifetime;
 	}
 
 	public getEditorCommand(commandId: string): EditorCommand {
-		return (this.editorCommands[commandId] || null);
+		return this.editorCommands[commandId] || null;
 	}
-
 }
 Registry.add(Extensions.EditorCommonContributions, EditorContributionRegistry.INSTANCE);
 
@@ -877,84 +928,60 @@ function registerCommand<T extends Command>(command: T): T {
 	return command;
 }
 
-export const UndoCommand = registerCommand(new MultiCommand({
-	id: 'undo',
-	precondition: undefined,
-	kbOpts: {
-		weight: KeybindingWeight.EditorCore,
-		primary: KeyMod.CtrlCmd | KeyCode.KeyZ
-	},
-	menuOpts: [{
-		menuId: MenuId.MenubarEditMenu,
-		group: '1_do',
-		title: nls.localize('miUndo', "Undo"),
-		order: 1
-	}, {
-		menuId: MenuId.CommandPalette,
-		group: '',
-		title: nls.localize('undo', "Undo"),
-		order: 1
-	}, {
-		menuId: MenuId.for('SimpleEditorContext'),
-		group: '1_do',
-		title: nls.localize('undo', "Undo"),
-		order: 1
-	}]
-}));
+export const UndoCommand = registerCommand(
+	new MultiCommand({
+		id: 'undo',
+		precondition: undefined,
+		kbOpts: { weight: KeybindingWeight.EditorCore, primary: KeyMod.CtrlCmd | KeyCode.KeyZ },
+		menuOpts: [
+			{ menuId: MenuId.MenubarEditMenu, group: '1_do', title: nls.localize('miUndo', 'Undo'), order: 1 },
+			{ menuId: MenuId.CommandPalette, group: '', title: nls.localize('undo', 'Undo'), order: 1 },
+			{ menuId: MenuId.for('SimpleEditorContext'), group: '1_do', title: nls.localize('undo', 'Undo'), order: 1 },
+		],
+	}),
+);
 
 registerCommand(new ProxyCommand(UndoCommand, { id: 'default:undo', precondition: undefined }));
 
-export const RedoCommand = registerCommand(new MultiCommand({
-	id: 'redo',
-	precondition: undefined,
-	kbOpts: {
-		weight: KeybindingWeight.EditorCore,
-		primary: KeyMod.CtrlCmd | KeyCode.KeyY,
-		secondary: [KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyZ],
-		mac: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyZ }
-	},
-	menuOpts: [{
-		menuId: MenuId.MenubarEditMenu,
-		group: '1_do',
-		title: nls.localize('miRedo', "Redo"),
-		order: 2
-	}, {
-		menuId: MenuId.CommandPalette,
-		group: '',
-		title: nls.localize('redo', "Redo"),
-		order: 1
-	}, {
-		menuId: MenuId.for('SimpleEditorContext'),
-		group: '1_do',
-		title: nls.localize('redo', "Redo"),
-		order: 2
-	}]
-}));
+export const RedoCommand = registerCommand(
+	new MultiCommand({
+		id: 'redo',
+		precondition: undefined,
+		kbOpts: {
+			weight: KeybindingWeight.EditorCore,
+			primary: KeyMod.CtrlCmd | KeyCode.KeyY,
+			secondary: [KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyZ],
+			mac: { primary: KeyMod.CtrlCmd | KeyMod.Shift | KeyCode.KeyZ },
+		},
+		menuOpts: [
+			{ menuId: MenuId.MenubarEditMenu, group: '1_do', title: nls.localize('miRedo', 'Redo'), order: 2 },
+			{ menuId: MenuId.CommandPalette, group: '', title: nls.localize('redo', 'Redo'), order: 1 },
+			{ menuId: MenuId.for('SimpleEditorContext'), group: '1_do', title: nls.localize('redo', 'Redo'), order: 2 },
+		],
+	}),
+);
 
 registerCommand(new ProxyCommand(RedoCommand, { id: 'default:redo', precondition: undefined }));
 
-export const SelectAllCommand = registerCommand(new MultiCommand({
-	id: 'editor.action.selectAll',
-	precondition: undefined,
-	kbOpts: {
-		weight: KeybindingWeight.EditorCore,
-		kbExpr: null,
-		primary: KeyMod.CtrlCmd | KeyCode.KeyA
-	},
-	menuOpts: [{
-		menuId: MenuId.MenubarSelectionMenu,
-		group: '1_basic',
-		title: nls.localize('miSelectAll', "Select All"),
-		order: 1
-	}, {
-		menuId: MenuId.CommandPalette,
-		group: '',
-		title: nls.localize('selectAll', "Select All"),
-		order: 1
-	}, {
-		menuId: MenuId.for('SimpleEditorContext'),
-		group: '9_select',
-		title: nls.localize('selectAll', "Select All"),
-		order: 1
-	}]
-}));
+export const SelectAllCommand = registerCommand(
+	new MultiCommand({
+		id: 'editor.action.selectAll',
+		precondition: undefined,
+		kbOpts: { weight: KeybindingWeight.EditorCore, kbExpr: null, primary: KeyMod.CtrlCmd | KeyCode.KeyA },
+		menuOpts: [
+			{
+				menuId: MenuId.MenubarSelectionMenu,
+				group: '1_basic',
+				title: nls.localize('miSelectAll', 'Select All'),
+				order: 1,
+			},
+			{ menuId: MenuId.CommandPalette, group: '', title: nls.localize('selectAll', 'Select All'), order: 1 },
+			{
+				menuId: MenuId.for('SimpleEditorContext'),
+				group: '9_select',
+				title: nls.localize('selectAll', 'Select All'),
+				order: 1,
+			},
+		],
+	}),
+);

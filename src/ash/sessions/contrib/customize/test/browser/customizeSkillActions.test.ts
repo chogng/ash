@@ -13,13 +13,17 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { IPathService } from '../../../../../platform/path/common/pathService.js';
 import { IChatSessionNavigationService } from '../../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../../workbench/services/editor/common/editorService.js';
-import { ISessionPrimaryProviderServices, type SessionProviderServices } from '../../../../browser/agentHost/sessionProviderScopeService.js';
+import {
+	ISessionPrimaryProviderServices,
+	type SessionProviderServices,
+} from '../../../../browser/agentHost/sessionProviderScopeService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { CustomizeSkillActions } from '../../browser/customizeSkillActions.js';
 
 const home = URI.file('/fixture-home');
 const target = URI.from({ scheme: Schemas.vscodeUserData, path: '/user/skills/meeting-notes/SKILL.md' });
-const instructions = '---\nname: meeting-notes\ndescription: Summarize meeting notes.\n---\n\nKeep decisions and action items.\n';
+const instructions =
+	'---\nname: meeting-notes\ndescription: Summarize meeting notes.\n---\n\nKeep decisions and action items.\n';
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
@@ -28,34 +32,62 @@ function fixture() {
 	const files = resources.add(new FileService());
 	const provider = resources.add(new InMemoryFileSystemProvider());
 	resources.add(files.registerProvider('file', provider));
-	resources.add(files.registerProvider(Schemas.vscodeUserData, resources.add(new FileUserDataProvider(provider, home))));
+	resources.add(
+		files.registerProvider(Schemas.vscodeUserData, resources.add(new FileUserDataProvider(provider, home))),
+	);
 	const state = {
-		input: { confirmed: true, values: ['meeting-notes', 'Summarize meeting notes.', 'Keep decisions and action items.'] } as IInputDialogResult,
-		roots: [] as string[], opened: [] as string[], drafts: [] as string[], sessions: [] as string[],
+		input: {
+			confirmed: true,
+			values: ['meeting-notes', 'Summarize meeting notes.', 'Keep decisions and action items.'],
+		} as IInputDialogResult,
+		roots: [] as string[],
+		opened: [] as string[],
+		drafts: [] as string[],
+		sessions: [] as string[],
 		registrationError: undefined as Error | undefined,
 	};
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(IFileService, files);
-	services.registerInstance(IDialogService, { input: async () => state.input, prompt: async () => ({}) } as unknown as IDialogService);
-	services.registerInstance(IPathService, { userHome: async () => home, getHostPath: async (resource: URI) => resource.path } as IPathService);
+	services.registerInstance(IDialogService, {
+		input: async () => state.input,
+		prompt: async () => ({}),
+	} as unknown as IDialogService);
+	services.registerInstance(IPathService, {
+		userHome: async () => home,
+		getHostPath: async (resource: URI) => resource.path,
+	} as IPathService);
 	services.registerInstance(ISessionPrimaryProviderServices, {
 		host: { userDataHome: home },
 		prompts: {
 			registerSkillSource: async (root: string) => {
 				if (state.registrationError) throw state.registrationError;
 				state.roots.push(root);
-			}
-		}
+			},
+		},
 	} as unknown as SessionProviderServices);
-	services.registerInstance(IEditorService, { openEditor: async (input: { resource: URI; }) => { state.opened.push(input.resource.toString()); } } as unknown as IEditorService);
-	services.registerInstance(ISessionsService, { openNewSession: (title: string) => { state.sessions.push(title); } } as unknown as ISessionsService);
+	services.registerInstance(IEditorService, {
+		openEditor: async (input: { resource: URI }) => {
+			state.opened.push(input.resource.toString());
+		},
+	} as unknown as IEditorService);
+	services.registerInstance(ISessionsService, {
+		openNewSession: (title: string) => {
+			state.sessions.push(title);
+		},
+	} as unknown as ISessionsService);
 	services.registerInstance(IChatSessionNavigationService, {
 		appendToActiveDraft: (text: string) => {
 			assert.equal(state.sessions.length, 1);
 			state.drafts.push(text);
-		}
+		},
 	} as IChatSessionNavigationService);
-	const actions = resources.add(services.createInstance(CustomizeSkillActions, { createElement() { throw new Error('Unexpected file picker'); } } as unknown as Document));
+	const actions = resources.add(
+		services.createInstance(CustomizeSkillActions, {
+			createElement() {
+				throw new Error('Unexpected file picker');
+			},
+		} as unknown as Document),
+	);
 	return { resources, files, state, actions };
 }
 
@@ -63,7 +95,10 @@ test('Create skill publishes valid instructions, registers their source, and ope
 	const { resources, files, state, actions } = fixture();
 	using lifetime = resources;
 	assert.equal(await actions.create(), true);
-	assert.equal((await files.readFile(target)).content, '---\nname: "meeting-notes"\ndescription: "Summarize meeting notes."\n---\n\nKeep decisions and action items.\n');
+	assert.equal(
+		(await files.readFile(target)).content,
+		'---\nname: "meeting-notes"\ndescription: "Summarize meeting notes."\n---\n\nKeep decisions and action items.\n',
+	);
 	assert.deepEqual(state.roots, ['/fixture-home/skills']);
 	assert.deepEqual(state.opened, [target.toString()]);
 	await assert.rejects(actions.create());
@@ -79,7 +114,10 @@ test('Upload skill retains package resources and exact manifest bytes', async ()
 	Object.defineProperty(reference, 'webkitRelativePath', { value: 'meeting-notes/references/notes.bin' });
 	assert.equal(await actions.uploadFiles([manifest, reference]), true);
 	assert.equal((await files.readFile(target)).content, instructions);
-	assert.deepEqual((await files.readFileBytes(URI.joinPath(target, '../references/notes.bin'))).bytes, new Uint8Array([0, 255, 4]));
+	assert.deepEqual(
+		(await files.readFileBytes(URI.joinPath(target, '../references/notes.bin'))).bytes,
+		new Uint8Array([0, 255, 4]),
+	);
 	assert.deepEqual(state.roots, ['/fixture-home/skills']);
 	assert.deepEqual(state.opened, []);
 });
@@ -102,7 +140,10 @@ test('Failed source registration cleans staged files and leaves the destination 
 	state.registrationError = new Error('Configuration changed in another window');
 	await assert.rejects(actions.create(), /Configuration changed/);
 	await assert.rejects(files.stat(target));
-	assert.deepEqual((await files.readDirectory(home)).map(entry => entry.name), ['skills']);
+	assert.deepEqual(
+		(await files.readDirectory(home)).map(entry => entry.name),
+		['skills'],
+	);
 	assert.deepEqual(state.opened, []);
 });
 

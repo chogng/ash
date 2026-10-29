@@ -29,7 +29,20 @@ test('core language services do not install JSON features before an extension re
 	using jsonModel = new TextModel('{}', { languageId: 'json' });
 	assert.equal(languageFeatures.hoverProvider.ordered(jsonModel).length, 0);
 	assert.equal(languageFeatures.documentFormattingEditProvider.ordered(jsonModel).length, 0);
-	assert.equal((await syntax.run({ requestId: 1, lane: 'tokens', payload: { languageId: 'typescript' }, snapshot: model.createVersionedSnapshot() }, new AbortController().signal)).lane, 'tokens');
+	assert.equal(
+		(
+			await syntax.run(
+				{
+					requestId: 1,
+					lane: 'tokens',
+					payload: { languageId: 'typescript' },
+					snapshot: model.createVersionedSnapshot(),
+				},
+				new AbortController().signal,
+			)
+		).lane,
+		'tokens',
+	);
 	assert.equal(completions.textModel, model);
 });
 
@@ -38,12 +51,23 @@ test('Language features service atomically owns a replaceable cross-kind provide
 	using languageFeatures = new LanguageFeaturesService();
 	using model = new TextModel('answer', { languageId: 'typescript' });
 	const signal = new AbortController().signal;
-	const request = { ...createLanguageFeatureRequest(model, model.getLanguageId(), signal), position: new Position(1, 2) };
-	const registration = languageFeatures.registerProviderBatch({ hovers: [{ selector: 'typescript', provider: { provideHover: () => ({ contents: ['first'] }) } }] });
+	const request = {
+		...createLanguageFeatureRequest(model, model.getLanguageId(), signal),
+		position: new Position(1, 2),
+	};
+	const registration = languageFeatures.registerProviderBatch({
+		hovers: [{ selector: 'typescript', provider: { provideHover: () => ({ contents: ['first'] }) } }],
+	});
 
-	assert.deepEqual(await languageFeatures.hoverProvider.ordered(model)[0]?.provideHover(request, signal), { contents: ['first'] });
-	registration.replace({ hovers: [{ selector: 'typescript', provider: { provideHover: () => ({ contents: ['second'] }) } }] });
-	assert.deepEqual(await languageFeatures.hoverProvider.ordered(model)[0]?.provideHover(request, signal), { contents: ['second'] });
+	assert.deepEqual(await languageFeatures.hoverProvider.ordered(model)[0]?.provideHover(request, signal), {
+		contents: ['first'],
+	});
+	registration.replace({
+		hovers: [{ selector: 'typescript', provider: { provideHover: () => ({ contents: ['second'] }) } }],
+	});
+	assert.deepEqual(await languageFeatures.hoverProvider.ordered(model)[0]?.provideHover(request, signal), {
+		contents: ['second'],
+	});
 
 	registration.dispose();
 	assert.equal(await languageFeatures.hoverProvider.ordered(model)[0]?.provideHover(request, signal), undefined);
@@ -57,69 +81,100 @@ test('Language features service keeps document, range, and on-type formatting re
 	const formattingOptions = { tabSize: 4, insertSpaces: true };
 	const range = new Range(1, 1, 1, 7);
 	const registration = languageFeatures.registerProviderBatch({
-		formatting: [{
-			selector: 'typescript',
-			provider: {
-				provideDocumentFormattingEdits: () => [{ range, text: 'document' }],
-				provideDocumentRangeFormattingEdits: () => [{ range, text: 'range' }],
-				autoFormatTriggerCharacters: [';'],
-				provideOnTypeFormattingEdits(receivedModel, position, ch, options, token) {
-					assert.equal(receivedModel, model);
-					assert.deepEqual(position, new Position(1, 7));
-					assert.equal(ch, ';');
-					assert.deepEqual(options, formattingOptions);
-					assert.equal(token, CancellationToken.None);
-					return [{ range, text: 'onType' }];
+		formatting: [
+			{
+				selector: 'typescript',
+				provider: {
+					provideDocumentFormattingEdits: () => [{ range, text: 'document' }],
+					provideDocumentRangeFormattingEdits: () => [{ range, text: 'range' }],
+					autoFormatTriggerCharacters: [';'],
+					provideOnTypeFormattingEdits(receivedModel, position, ch, options, token) {
+						assert.equal(receivedModel, model);
+						assert.deepEqual(position, new Position(1, 7));
+						assert.equal(ch, ';');
+						assert.deepEqual(options, formattingOptions);
+						assert.equal(token, CancellationToken.None);
+						return [{ range, text: 'onType' }];
+					},
 				},
 			},
-		}],
+		],
 	});
 
 	assert.equal(
-		(await languageFeatures.documentFormattingEditProvider.ordered(model)[0]?.provideDocumentFormattingEdits(model, formattingOptions, CancellationToken.None))?.[0]?.text,
+		(
+			await languageFeatures.documentFormattingEditProvider
+				.ordered(model)[0]
+				?.provideDocumentFormattingEdits(model, formattingOptions, CancellationToken.None)
+		)?.[0]?.text,
 		'document',
 	);
 	assert.equal(
-		(await languageFeatures.documentRangeFormattingEditProvider.ordered(model)[0]?.provideDocumentRangeFormattingEdits(model, range, formattingOptions, CancellationToken.None))?.[0]?.text,
+		(
+			await languageFeatures.documentRangeFormattingEditProvider
+				.ordered(model)[0]
+				?.provideDocumentRangeFormattingEdits(model, range, formattingOptions, CancellationToken.None)
+		)?.[0]?.text,
 		'range',
 	);
 	assert.equal(
-		(await languageFeatures.onTypeFormattingEditProvider.ordered(model)[0]?.provideOnTypeFormattingEdits(model, new Position(1, 7), ';', formattingOptions, CancellationToken.None))?.[0]?.text,
+		(
+			await languageFeatures.onTypeFormattingEditProvider
+				.ordered(model)[0]
+				?.provideOnTypeFormattingEdits(
+					model,
+					new Position(1, 7),
+					';',
+					formattingOptions,
+					CancellationToken.None,
+				)
+		)?.[0]?.text,
 		'onType',
 	);
 
 	registration.replace({
-		formatting: [{
-			selector: 'typescript',
-			provider: {
-				provideDocumentFormattingEdits: () => [{ range, text: 'replacement' }],
+		formatting: [
+			{
+				selector: 'typescript',
+				provider: { provideDocumentFormattingEdits: () => [{ range, text: 'replacement' }] },
 			},
-		}],
+		],
 	});
 	assert.equal(
-		(await languageFeatures.documentFormattingEditProvider.ordered(model)[0]?.provideDocumentFormattingEdits(model, formattingOptions, CancellationToken.None))?.[0]?.text,
+		(
+			await languageFeatures.documentFormattingEditProvider
+				.ordered(model)[0]
+				?.provideDocumentFormattingEdits(model, formattingOptions, CancellationToken.None)
+		)?.[0]?.text,
 		'replacement',
 	);
 	assert.deepEqual(languageFeatures.documentRangeFormattingEditProvider.ordered(model), []);
 	assert.deepEqual(languageFeatures.onTypeFormattingEditProvider.ordered(model), []);
 
 	registration.replace({
-		formatting: [{
-			selector: 'typescript',
-			provider: {
-				provideDocumentRangeFormattingEdits(receivedModel, receivedRange, options, token) {
-					assert.equal(receivedModel, model);
-					assert.equal(receivedRange, range);
-					assert.deepEqual(options, formattingOptions);
-					assert.equal(token, CancellationToken.None);
-					return [{ range, text: 'range only' }];
+		formatting: [
+			{
+				selector: 'typescript',
+				provider: {
+					provideDocumentRangeFormattingEdits(receivedModel, receivedRange, options, token) {
+						assert.equal(receivedModel, model);
+						assert.equal(receivedRange, range);
+						assert.deepEqual(options, formattingOptions);
+						assert.equal(token, CancellationToken.None);
+						return [{ range, text: 'range only' }];
+					},
 				},
 			},
-		}],
+		],
 	});
 	assert.deepEqual(languageFeatures.documentFormattingEditProvider.ordered(model), []);
 	assert.deepEqual(languageFeatures.onTypeFormattingEditProvider.ordered(model), []);
-	assert.deepEqual(await languageFeatures.documentRangeFormattingEditProvider.ordered(model)[0]!.provideDocumentRangeFormattingEdits(model, range, formattingOptions, CancellationToken.None), [{ range, text: 'range only' }]);
+	assert.deepEqual(
+		await languageFeatures.documentRangeFormattingEditProvider
+			.ordered(model)[0]!
+			.provideDocumentRangeFormattingEdits(model, range, formattingOptions, CancellationToken.None),
+		[{ range, text: 'range only' }],
+	);
 
 	registration.dispose();
 	assert.deepEqual(languageFeatures.documentFormattingEditProvider.ordered(model), []);

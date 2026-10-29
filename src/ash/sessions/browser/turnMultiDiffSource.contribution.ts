@@ -24,7 +24,10 @@ CommandsRegistry.register(OPEN_CHAT_CHANGES_COMMAND_ID, async (accessor, session
 	const untitled = sessions.activeUntitledSession;
 	let switched = false;
 	using selectionListener = sessions.onDidChange(() => {
-		switched ||= sessions.active?.session.sessionId !== active?.session.sessionId || sessions.active?.threadId !== active?.threadId || sessions.activeUntitledSession !== untitled;
+		switched ||=
+			sessions.active?.session.sessionId !== active?.session.sessionId ||
+			sessions.active?.threadId !== active?.threadId ||
+			sessions.activeUntitledSession !== untitled;
 	});
 	const chat = accessor.get(IChatService);
 	const input = await createThreadMultiDiffEditorInput(chat, sessionId, threadId, revision).catch(error => {

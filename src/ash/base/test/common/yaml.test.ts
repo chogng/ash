@@ -3,14 +3,18 @@ import { test } from 'mocha';
 import { parse, type YamlNode, type YamlParseError } from '../../common/yaml.js';
 
 test('YAML syntax keeps string scalars, collection styles and original UTF-16 offsets', () => {
-	const source = 'name: "🌲: tree"\r\nvalues: [true, 12, null, "", ~]\r\nbody: >-\r\n  first\r\n  next\r\nnested:\r\n  item: {a: one}\r\n';
+	const source =
+		'name: "🌲: tree"\r\nvalues: [true, 12, null, "", ~]\r\nbody: >-\r\n  first\r\n  next\r\nnested:\r\n  item: {a: one}\r\n';
 	const errors: YamlParseError[] = [];
 	const root = parse(source, errors);
 	assert.deepEqual(errors, []);
 	assert.equal(root?.type, 'map');
 	if (root?.type !== 'map') throw new Error('Expected map');
 	assert.equal(root.style, 'block');
-	assert.deepEqual(root.properties.map(property => property.key.value), ['name', 'values', 'body', 'nested']);
+	assert.deepEqual(
+		root.properties.map(property => property.key.value),
+		['name', 'values', 'body', 'nested'],
+	);
 	const name = root.properties[0]!.value;
 	assert.equal(name.type, 'scalar');
 	if (name.type !== 'scalar') throw new Error('Expected scalar');
@@ -21,9 +25,16 @@ test('YAML syntax keeps string scalars, collection styles and original UTF-16 of
 	assert.equal(values.type, 'sequence');
 	if (values.type !== 'sequence') throw new Error('Expected sequence');
 	assert.equal(values.style, 'flow');
-	assert.deepEqual(values.items.map(item => item.type === 'scalar' ? [item.value, item.format] : undefined), [
-		['true', 'none'], ['12', 'none'], ['null', 'none'], ['', 'double'], ['~', 'none'],
-	]);
+	assert.deepEqual(
+		values.items.map(item => (item.type === 'scalar' ? [item.value, item.format] : undefined)),
+		[
+			['true', 'none'],
+			['12', 'none'],
+			['null', 'none'],
+			['', 'double'],
+			['~', 'none'],
+		],
+	);
 	const body = root.properties[2]!.value;
 	assert.equal(body.type === 'scalar' && body.value, 'first next');
 	assert.equal(body.type === 'scalar' && body.format, 'folded');
@@ -45,7 +56,10 @@ test('YAML duplicate-key policy reports offsets and preserves every property in 
 		const root = parse(source, errors, { allowDuplicateKeys });
 		assert.equal(root?.type, 'map');
 		if (root?.type !== 'map') throw new Error('Expected map');
-		assert.deepEqual(root.properties.map(property => property.value.type === 'scalar' && property.value.value), ['one', 'two']);
+		assert.deepEqual(
+			root.properties.map(property => property.value.type === 'scalar' && property.value.value),
+			['one', 'two'],
+		);
 		const duplicate = errors.find(error => error.code === 'DUPLICATE_KEY');
 		assert.equal(duplicate === undefined, allowDuplicateKeys);
 		if (duplicate) {
@@ -62,7 +76,10 @@ test('YAML unsupported references and tags produce isolated scalar placeholders'
 	assert.equal(root?.type, 'map');
 	if (root?.type !== 'map') throw new Error('Expected map');
 	const unsupported = errors.filter(error => error.code.startsWith('YAML_'));
-	assert.deepEqual(unsupported.map(error => error.code), ['YAML_ANCHOR', 'YAML_ALIAS', 'YAML_TAG']);
+	assert.deepEqual(
+		unsupported.map(error => error.code),
+		['YAML_ANCHOR', 'YAML_ALIAS', 'YAML_TAG'],
+	);
 	for (let index = 0; index < unsupported.length; index++) {
 		const value: YamlNode = root.properties[index]!.value;
 		assert.equal(value.type, 'scalar');

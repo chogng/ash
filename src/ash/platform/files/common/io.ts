@@ -17,16 +17,31 @@ export interface ICreateReadStreamOptions extends IFileReadStreamOptions {
 }
 
 /** Reads independent chunks while retaining a single descriptor until completion or cancellation. */
-export async function readFileIntoStream<T>(provider: IFileSystemProviderWithOpenReadWriteCloseCapability, resource: URI, target: WriteableStream<T>, transformer: IDataTransformer<VSBuffer, T>, options: ICreateReadStreamOptions, token: CancellationToken): Promise<void> {
+export async function readFileIntoStream<T>(
+	provider: IFileSystemProviderWithOpenReadWriteCloseCapability,
+	resource: URI,
+	target: WriteableStream<T>,
+	transformer: IDataTransformer<VSBuffer, T>,
+	options: ICreateReadStreamOptions,
+	token: CancellationToken,
+): Promise<void> {
 	let descriptor: number | undefined;
 	let failure: Error | undefined;
-	const checkCancellation = (): void => { if (token.isCancellationRequested) { throw canceled(); } };
+	const checkCancellation = (): void => {
+		if (token.isCancellationRequested) {
+			throw canceled();
+		}
+	};
 	try {
 		checkCancellation();
 		for (const value of [options.bufferSize, options.position ?? 0, options.length, options.limits?.size]) {
-			if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) { throw new RangeError('Invalid file read range or size'); }
+			if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
+				throw new RangeError('Invalid file read range or size');
+			}
 		}
-		if (options.bufferSize === 0) { throw new RangeError('File read buffer must not be empty'); }
+		if (options.bufferSize === 0) {
+			throw new RangeError('File read buffer must not be empty');
+		}
 		descriptor = await provider.open(resource, { create: false });
 		let position = options.position ?? 0;
 		let remaining = options.length ?? Infinity;
@@ -36,23 +51,39 @@ export async function readFileIntoStream<T>(provider: IFileSystemProviderWithOpe
 			const chunk = VSBuffer.alloc(Math.min(options.bufferSize, remaining));
 			const count = await provider.read(descriptor, position, chunk.buffer, 0, chunk.byteLength);
 			checkCancellation();
-			if (count === 0) { break; }
-			if (!Number.isInteger(count) || count < 0 || count > chunk.byteLength) { throw new Error('Invalid file read count'); }
+			if (count === 0) {
+				break;
+			}
+			if (!Number.isInteger(count) || count < 0 || count > chunk.byteLength) {
+				throw new Error('Invalid file read count');
+			}
 			total += count;
 			if (options.limits?.size !== undefined && total > options.limits.size) {
-				throw createFileSystemProviderError('File exceeds the read size limit', FileSystemProviderErrorCode.FileTooLarge);
+				throw createFileSystemProviderError(
+					'File exceeds the read size limit',
+					FileSystemProviderErrorCode.FileTooLarge,
+				);
 			}
 			position += count;
 			remaining -= count;
-			await raceCancellationError(Promise.resolve(target.write(transformer(count === chunk.byteLength ? chunk : chunk.slice(0, count)))), token);
+			await raceCancellationError(
+				Promise.resolve(target.write(transformer(count === chunk.byteLength ? chunk : chunk.slice(0, count)))),
+				token,
+			);
 		}
 	} catch (error) {
 		failure = error instanceof Error ? error : new Error(String(error));
 	} finally {
 		if (descriptor !== undefined) {
-			try { await provider.close(descriptor); } catch (error) { failure ??= error instanceof Error ? error : new Error(String(error)); }
+			try {
+				await provider.close(descriptor);
+			} catch (error) {
+				failure ??= error instanceof Error ? error : new Error(String(error));
+			}
 		}
-		if (failure) { target.error(options.errorTransformer?.(failure) ?? failure); }
+		if (failure) {
+			target.error(options.errorTransformer?.(failure) ?? failure);
+		}
 		target.end();
 	}
 }

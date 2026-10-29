@@ -4,7 +4,13 @@ import { IContextKeyService } from '../../../../platform/contextkey/browser/cont
 import type { IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
 import type { IPaneComposite } from '../../../common/panecomposite.js';
-import { IViewDescriptorService, type IView, type IViewContainerDescriptor, type IViewDescriptor, type ViewContainerLocation } from '../../../common/views.js';
+import {
+	IViewDescriptorService,
+	type IView,
+	type IViewContainerDescriptor,
+	type IViewDescriptor,
+	type ViewContainerLocation,
+} from '../../../common/views.js';
 import { IPaneCompositePartService } from '../../panecomposite/browser/panecomposite.js';
 import { IViewsService } from '../common/viewsService.js';
 import type { IProgressIndicator } from '../../../../platform/progress/common/progress.js';
@@ -16,8 +22,10 @@ export class ViewsService extends Disposable implements IViewsService {
 	private readonly visibleViews = new Set<string>();
 	private focusedViewId: string | undefined;
 	private readonly focusedViewContext: IContextKey<string>;
-	private readonly containerVisibility = this._register(new Emitter<{ id: string; visible: boolean; location: ViewContainerLocation; }>());
-	private readonly viewVisibility = this._register(new Emitter<{ id: string; visible: boolean; }>());
+	private readonly containerVisibility = this._register(
+		new Emitter<{ id: string; visible: boolean; location: ViewContainerLocation }>(),
+	);
+	private readonly viewVisibility = this._register(new Emitter<{ id: string; visible: boolean }>());
 	private readonly focusedView = this._register(new Emitter<void>());
 	public readonly onDidChangeViewContainerVisibility = this.containerVisibility.event;
 	public readonly onDidChangeViewVisibility = this.viewVisibility.event;
@@ -30,29 +38,39 @@ export class ViewsService extends Disposable implements IViewsService {
 	) {
 		super();
 		this.focusedViewContext = FocusedViewContext.bindTo(contextKeys);
-		this._register(toDisposable(() => {
-			this.containerListeners.clearAndDisposeAll();
-			this.focusedViewId = undefined;
-			this.focusedViewContext.reset();
-			this.containers.clear();
-			this.visibleViews.clear();
-		}));
-		this._register(this.panes.onDidPaneCompositeOpen(({ composite, viewContainerLocation }) => {
-			this.observeContainer(composite);
-			this.containerVisibility.fire({ id: composite.id, visible: true, location: viewContainerLocation });
-		}));
-		this._register(this.panes.onDidPaneCompositeClose(({ composite, viewContainerLocation }) => {
-			this.containerVisibility.fire({ id: composite.id, visible: false, location: viewContainerLocation });
-		}));
-		this._register(this.descriptors.onDidChangeViewContainers(({ removed }) => {
-			for (const container of removed) {
-				this.containerListeners.deleteAndDispose(container.id);
-				this.containers.delete(container.id);
-			}
-		}));
+		this._register(
+			toDisposable(() => {
+				this.containerListeners.clearAndDisposeAll();
+				this.focusedViewId = undefined;
+				this.focusedViewContext.reset();
+				this.containers.clear();
+				this.visibleViews.clear();
+			}),
+		);
+		this._register(
+			this.panes.onDidPaneCompositeOpen(({ composite, viewContainerLocation }) => {
+				this.observeContainer(composite);
+				this.containerVisibility.fire({ id: composite.id, visible: true, location: viewContainerLocation });
+			}),
+		);
+		this._register(
+			this.panes.onDidPaneCompositeClose(({ composite, viewContainerLocation }) => {
+				this.containerVisibility.fire({ id: composite.id, visible: false, location: viewContainerLocation });
+			}),
+		);
+		this._register(
+			this.descriptors.onDidChangeViewContainers(({ removed }) => {
+				for (const container of removed) {
+					this.containerListeners.deleteAndDispose(container.id);
+					this.containers.delete(container.id);
+				}
+			}),
+		);
 		for (const location of new Set(this.descriptors.viewContainers.map(container => container.location))) {
 			const composite = this.panes.getActivePaneComposite(location);
-			if (composite) { this.observeContainer(composite); }
+			if (composite) {
+				this.observeContainer(composite);
+			}
 		}
 	}
 
@@ -68,8 +86,10 @@ export class ViewsService extends Disposable implements IViewsService {
 	public async openViewContainer(id: string, focus = false): Promise<IPaneComposite | null> {
 		const container = this.descriptors.getViewContainerById(id);
 		const location = container && this.descriptors.getViewContainerLocation(container);
-		if (!location) { return null; }
-		return await this.panes.openPaneComposite(id, location, focus) ?? null;
+		if (!location) {
+			return null;
+		}
+		return (await this.panes.openPaneComposite(id, location, focus)) ?? null;
 	}
 
 	public closeViewContainer(id: string): void {
@@ -97,17 +117,23 @@ export class ViewsService extends Disposable implements IViewsService {
 	public getFocusedViewName(): string {
 		const view = this.focusedViewId && this.getViewWithId(this.focusedViewId);
 		const container = view && this.descriptors.getViewContainerForView(view.id);
-		return container ? this.containers.get(container.id)?.getView(view.id)?.paneTitle ?? '' : '';
+		return container ? (this.containers.get(container.id)?.getView(view.id)?.paneTitle ?? '') : '';
 	}
 
 	public isViewVisible(id: string): boolean {
 		const container = this.descriptors.getViewContainerForView(id);
-		return container !== undefined && this.getActiveViewPaneContainerWithId(container.id)?.getView(id)?.isBodyVisible() === true;
+		return (
+			container !== undefined &&
+			this.getActiveViewPaneContainerWithId(container.id)?.getView(id)?.isBodyVisible() === true
+		);
 	}
 
 	public async openView<T extends IView>(id: string, focus = false): Promise<T | null> {
 		const container = this.descriptors.getViewContainerForView(id);
-		if (!container || !this.descriptors.getViewContainerModel(container.id).activeViewDescriptors.some(view => view.id === id)) {
+		if (
+			!container ||
+			!this.descriptors.getViewContainerModel(container.id).activeViewDescriptors.some(view => view.id === id)
+		) {
 			return null;
 		}
 		const composite = await this.openViewContainer(container.id);
@@ -115,14 +141,16 @@ export class ViewsService extends Disposable implements IViewsService {
 		if (focus && view?.hasFocus()) {
 			this.setFocus(id);
 		}
-		return view as T | undefined ?? null;
+		return (view as T | undefined) ?? null;
 	}
 
 	public closeView(id: string): void {
 		const container = this.descriptors.getViewContainerForView(id);
 		const composite = container && this.getActiveViewPaneContainerWithId(container.id);
 		const view = composite?.getView(id);
-		if (!view) { return; }
+		if (!view) {
+			return;
+		}
 		if (composite!.panes.length === 1) {
 			this.closeViewContainer(container!.id);
 		} else {
@@ -131,17 +159,19 @@ export class ViewsService extends Disposable implements IViewsService {
 	}
 
 	public async focusView(id: string): Promise<boolean> {
-		return await this.openView(id, true) !== null;
+		return (await this.openView(id, true)) !== null;
 	}
 
 	public getActiveViewWithId<T extends IView>(id: string): T | null {
 		const container = this.descriptors.getViewContainerForView(id);
-		return (container && this.getActiveViewPaneContainerWithId(container.id)?.getView(id)) as T | undefined ?? null;
+		return (
+			((container && this.getActiveViewPaneContainerWithId(container.id)?.getView(id)) as T | undefined) ?? null
+		);
 	}
 
 	public getViewWithId<T extends IView>(id: string): T | null {
 		const container = this.descriptors.getViewContainerForView(id);
-		return (container && this.containers.get(container.id)?.getView(id)) as T | undefined ?? null;
+		return ((container && this.containers.get(container.id)?.getView(id)) as T | undefined) ?? null;
 	}
 
 	public getViewProgressIndicator(id: string): IProgressIndicator | undefined {
@@ -149,43 +179,65 @@ export class ViewsService extends Disposable implements IViewsService {
 	}
 
 	private observeContainer(composite: IPaneComposite): void {
-		if (this.containers.get(composite.id) === composite) { return; }
+		if (this.containers.get(composite.id) === composite) {
+			return;
+		}
 		this.containers.set(composite.id, composite);
 		const listeners = this.containerListeners.set(composite.id, new DisposableStore());
 		const updateVisibility = (id: string, visible: boolean): void => {
-			if (this.visibleViews.has(id) === visible) { return; }
-			if (visible) { this.visibleViews.add(id); } else { this.visibleViews.delete(id); }
+			if (this.visibleViews.has(id) === visible) {
+				return;
+			}
+			if (visible) {
+				this.visibleViews.add(id);
+			} else {
+				this.visibleViews.delete(id);
+			}
 			this.viewVisibility.fire({ id, visible });
 		};
 		listeners.add(composite.onDidChangeViewVisibility(({ view, visible }) => updateVisibility(view.id, visible)));
-		listeners.add(composite.onDidAddViews(views => {
-			for (const view of views) { updateVisibility(view.id, view.isBodyVisible()); }
-		}));
-		listeners.add(composite.onDidRemoveViews(views => {
-			for (const view of views) {
-				updateVisibility(view.id, false);
-				this.clearFocus(view.id);
-			}
-		}));
-		listeners.add(composite.onDidFocusView(view => {
-			this.setFocus(view.id);
-		}));
+		listeners.add(
+			composite.onDidAddViews(views => {
+				for (const view of views) {
+					updateVisibility(view.id, view.isBodyVisible());
+				}
+			}),
+		);
+		listeners.add(
+			composite.onDidRemoveViews(views => {
+				for (const view of views) {
+					updateVisibility(view.id, false);
+					this.clearFocus(view.id);
+				}
+			}),
+		);
+		listeners.add(
+			composite.onDidFocusView(view => {
+				this.setFocus(view.id);
+			}),
+		);
 		listeners.add(composite.onDidBlurView(view => this.clearFocus(view.id)));
 		for (const view of composite.panes) {
 			updateVisibility(view.id, view.isBodyVisible());
-			if (view.hasFocus()) { this.setFocus(view.id); }
+			if (view.hasFocus()) {
+				this.setFocus(view.id);
+			}
 		}
 	}
 
 	private setFocus(id: string): void {
-		if (this.focusedViewId === id) { return; }
+		if (this.focusedViewId === id) {
+			return;
+		}
 		this.focusedViewId = id;
 		this.focusedViewContext.set(id);
 		this.focusedView.fire();
 	}
 
 	private clearFocus(id: string): void {
-		if (this.focusedViewId !== id) { return; }
+		if (this.focusedViewId !== id) {
+			return;
+		}
 		this.focusedViewId = undefined;
 		this.focusedViewContext.reset();
 		this.focusedView.fire();

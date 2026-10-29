@@ -1,10 +1,10 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { h } from "../../../../base/browser/dom.js";
-import type { IAction } from "../../../../base/common/actions.js";
-import { type IMenuActionOptions, IMenuService, MenuId } from "../../../actions/common/actions.js";
-import { ContextKeyService, IContextKeyService } from "../../../contextkey/browser/contextKeyService.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { h } from '../../../../base/browser/dom.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import { type IMenuActionOptions, IMenuService, MenuId } from '../../../actions/common/actions.js';
+import { ContextKeyService, IContextKeyService } from '../../../contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../instantiation/common/instantiationService.js';
 import { ActionRunner } from '../../../../base/common/actions.js';
 import { CancellationToken, CancellationTokenSource } from '../../../../base/common/cancellation.js';
@@ -21,54 +21,43 @@ import { promiseWithResolvers } from '../../../../base/common/async.js';
 import { ButtonActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { errorHandler } from '../../../../base/common/errors.js';
 
-test("menu delegates prepend explicit actions and use their context-key scope", async () => {
-	const environment = new JSDOM("<!doctype html><body></body>");
-	Object.defineProperty(globalThis, "window", {
-		configurable: true,
-		value: environment.window,
-	});
-	const { transformContextMenuDelegate } = await import(
-		"../../browser/contextMenuService.js"
-	);
-	const explicit = action("explicit");
-	const contributed = action("contributed");
+test('menu delegates prepend explicit actions and use their context-key scope', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: environment.window });
+	const { transformContextMenuDelegate } = await import('../../browser/contextMenuService.js');
+	const explicit = action('explicit');
+	const contributed = action('contributed');
 	using globalContext = new ContextKeyService();
-	using scopedContext = globalContext.createScoped(h(environment.window.document, "div"));
+	using scopedContext = globalContext.createScoped(h(environment.window.document, 'div'));
 	let receivedContext: unknown;
 	const menuService = {
-		getMenuActions(
-			_id: MenuId,
-			_options?: IMenuActionOptions,
-			contextKeyService?: IContextKeyService,
-		) {
+		getMenuActions(_id: MenuId, _options?: IMenuActionOptions, contextKeyService?: IContextKeyService) {
 			receivedContext = contextKeyService;
-			return [["navigation", [contributed]]];
+			return [['navigation', [contributed]]];
 		},
 	} as unknown as IMenuService;
-	const delegate = transformContextMenuDelegate({
-		menuId: MenuId.for("test.contextMenu"),
-		contextKeyService: scopedContext,
-		getAnchor: () => environment.window.document.body,
-		getActions: () => [explicit],
-	}, menuService, globalContext);
+	const delegate = transformContextMenuDelegate(
+		{
+			menuId: MenuId.for('test.contextMenu'),
+			contextKeyService: scopedContext,
+			getAnchor: () => environment.window.document.body,
+			getActions: () => [explicit],
+		},
+		menuService,
+		globalContext,
+	);
 
 	assert.deepEqual(
-		delegate.getActions().filter((item) => item.id !== "ash.actions.separator"),
+		delegate.getActions().filter(item => item.id !== 'ash.actions.separator'),
 		[explicit, contributed],
 	);
 	assert.equal(receivedContext, scopedContext);
 	environment.window.close();
-	Reflect.deleteProperty(globalThis, "window");
+	Reflect.deleteProperty(globalThis, 'window');
 });
 
 function action(id: string): IAction {
-	return {
-		id,
-		label: id,
-		tooltip: id,
-		enabled: true,
-		run() { },
-	};
+	return { id, label: id, tooltip: id, enabled: true, run() {} };
 }
 
 test('browser context menus reject missing services during creation', async () => {
@@ -88,38 +77,58 @@ class BrowserMenuFixture extends Disposable {
 
 	constructor() {
 		super();
-		const browser = new JSDOM('<!doctype html><body><button id="origin">Origin</button><button id="outside">Outside</button></body>');
+		const browser = new JSDOM(
+			'<!doctype html><body><button id="origin">Origin</button><button id="outside">Outside</button></body>',
+		);
 		this._register(toDisposable(() => browser.window.close()));
-		Object.defineProperty(browser.window.Element.prototype, 'scrollTo', { value: () => { } });
+		Object.defineProperty(browser.window.Element.prototype, 'scrollTo', { value: () => {} });
 		this.document = browser.window.document;
 		this.origin = this.document.querySelector<HTMLButtonElement>('#origin')!;
 		// jsdom has no layout; focus restoration requires a painted origin.
-		Object.defineProperty(this.origin, 'getClientRects', { value: () => [new browser.window.DOMRect(0, 0, 100, 20)] });
+		Object.defineProperty(this.origin, 'getClientRects', {
+			value: () => [new browser.window.DOMRect(0, 0, 100, 20)],
+		});
 		this.outside = this.document.querySelector<HTMLButtonElement>('#outside')!;
 		this.services = this._register(new InstantiationService());
 		const contextKeys = this._register(new ContextKeyService());
 		this.services.registerInstance(IContextKeyService, contextKeys);
 		const commands: ICommandService = {
-			onWillExecuteCommand: Event.None, onDidExecuteCommand: Event.None,
-			async executeCommand() { throw new Error('No command in this fixture'); },
+			onWillExecuteCommand: Event.None,
+			onDidExecuteCommand: Event.None,
+			async executeCommand() {
+				throw new Error('No command in this fixture');
+			},
 		};
 		this.services.registerInstance(ICommandService, commands);
 		this.services.registerInstance(IMenuService, this.services.createInstance(MenuService));
 		this.views = this._register(new BrowserContextViewService(this.document.body));
 		this.services.registerInstance(IContextViewService, this.views);
 		this.services.registerInstance(IKeybindingService, {
-			inChordMode: false, onDidUpdateKeybindings: Event.None,
+			inChordMode: false,
+			onDidUpdateKeybindings: Event.None,
 			getKeybindings: () => [],
-			enableKeybindingHoldMode: () => undefined, registerSchemaContribution: () => Disposable.None,
-			resolveKeybinding() { throw new Error('No binding in this fixture'); },
-			resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
+			enableKeybindingHoldMode: () => undefined,
+			registerSchemaContribution: () => Disposable.None,
+			resolveKeybinding() {
+				throw new Error('No binding in this fixture');
+			},
+			resolveUserBinding: () => undefined,
+			lookupKeybindings: () => [],
+			lookupKeybinding: () => undefined,
 		});
-		this.services.registerInstance(INotificationService, { error: (message: string) => this.errors.push(message) } as unknown as INotificationService);
+		this.services.registerInstance(INotificationService, {
+			error: (message: string) => this.errors.push(message),
+		} as unknown as INotificationService);
 		this.menus = this._register(this.services.createInstance(BrowserContextMenuService));
 	}
 
 	show(label: string, token?: CancellationToken, onHide?: (cancelled: boolean) => void): void {
-		this.menus.showContextMenu({ getAnchor: () => this.origin, getActions: () => [action(label)], cancellationToken: token, onHide });
+		this.menus.showContextMenu({
+			getAnchor: () => this.origin,
+			getActions: () => [action(label)],
+			cancellationToken: token,
+			onHide,
+		});
 	}
 
 	get visibleLabel(): string | undefined {
@@ -141,8 +150,12 @@ test('browser cancellation closes once and returns focus to its valid origin', (
 	const hidden: boolean[] = [];
 	fixture.origin.focus();
 	fixture.show('Cancel', source.token, cancelled => hidden.push(cancelled));
-	source.cancel(); source.cancel();
-	assert.deepEqual({ label: fixture.visibleLabel, hidden, focus: fixture.document.activeElement }, { label: undefined, hidden: [true], focus: fixture.origin });
+	source.cancel();
+	source.cancel();
+	assert.deepEqual(
+		{ label: fixture.visibleLabel, hidden, focus: fixture.document.activeElement },
+		{ label: undefined, hidden: [true], focus: fixture.origin },
+	);
 });
 
 test('canceling a replaced browser request preserves the successor', () => {
@@ -173,10 +186,16 @@ test('browser cancellation during request preparation never replaces an outside 
 	dialog.focus();
 	const hidden: boolean[] = [];
 	fixture.menus.showContextMenu({
-		getAnchor: () => fixture.origin, getActions: () => [action('Canceled')], cancellationToken: source.token,
-		getActionsContext: () => source.cancel(), onHide: cancelled => hidden.push(cancelled),
+		getAnchor: () => fixture.origin,
+		getActions: () => [action('Canceled')],
+		cancellationToken: source.token,
+		getActionsContext: () => source.cancel(),
+		onHide: cancelled => hidden.push(cancelled),
 	});
-	assert.deepEqual({ connected: dialog.isConnected, focus: fixture.document.activeElement, hidden }, { connected: true, focus: dialog, hidden: [true] });
+	assert.deepEqual(
+		{ connected: dialog.isConnected, focus: fixture.document.activeElement, hidden },
+		{ connected: true, focus: dialog, hidden: [true] },
+	);
 });
 
 test('browser cancellation after a dialog takes over preserves its focus and content', () => {
@@ -187,14 +206,21 @@ test('browser cancellation after a dialog takes over preserves its focus and con
 	fixture.views.show({ anchor: fixture.origin, content: dialog, presentation: 'dialog' });
 	dialog.focus();
 	source.cancel();
-	assert.deepEqual({ connected: dialog.isConnected, focus: fixture.document.activeElement }, { connected: true, focus: dialog });
+	assert.deepEqual(
+		{ connected: dialog.isConnected, focus: fixture.document.activeElement },
+		{ connected: true, focus: dialog },
+	);
 });
 
 test('cancellation from a replaced view callback prevents the prepared browser menu from mounting', () => {
 	using fixture = new BrowserMenuFixture();
 	using source = new CancellationTokenSource();
 	const hidden: boolean[] = [];
-	fixture.views.show({ anchor: fixture.origin, content: h(fixture.document, 'input'), onHide: () => source.cancel() });
+	fixture.views.show({
+		anchor: fixture.origin,
+		content: h(fixture.document, 'input'),
+		onHide: () => source.cancel(),
+	});
 	fixture.show('Canceled', source.token, cancelled => hidden.push(cancelled));
 	assert.deepEqual({ label: fixture.visibleLabel, hidden }, { label: undefined, hidden: [true] });
 });
@@ -205,7 +231,10 @@ test('browser cancellation by a show listener closes before any focus is transfe
 	using listener = fixture.menus.onDidShowContextMenu(() => source.cancel());
 	fixture.outside.focus();
 	fixture.show('Canceled', source.token);
-	assert.deepEqual({ label: fixture.visibleLabel, focus: fixture.document.activeElement }, { label: undefined, focus: fixture.outside });
+	assert.deepEqual(
+		{ label: fixture.visibleLabel, focus: fixture.document.activeElement },
+		{ label: undefined, focus: fixture.outside },
+	);
 });
 
 for (const successor of [false, true]) {
@@ -218,18 +247,28 @@ for (const successor of [false, true]) {
 		let measured = false;
 		Object.defineProperty(fixture.origin, 'getBoundingClientRect', {
 			value: () => {
-				if (!measured) { measured = true; source.cancel(); }
+				if (!measured) {
+					measured = true;
+					source.cancel();
+				}
 				return new fixture.document.defaultView!.DOMRect(0, 0, 100, 20);
-			}
+			},
 		});
 		fixture.show('Canceled', source.token, cancelled => {
 			events.push(`cancel:${cancelled}`);
-			if (successor) { fixture.show('Successor'); }
+			if (successor) {
+				fixture.show('Successor');
+			}
 		});
 		const view = fixture.document.querySelector<HTMLElement>('.ash-context-view')!;
-		assert.deepEqual({ events, label: fixture.visibleLabel, hostHidden: view.hidden }, {
-			events: successor ? ['cancel:true', 'show'] : ['cancel:true'], label: successor ? 'Successor' : undefined, hostHidden: !successor,
-		});
+		assert.deepEqual(
+			{ events, label: fixture.visibleLabel, hostHidden: view.hidden },
+			{
+				events: successor ? ['cancel:true', 'show'] : ['cancel:true'],
+				label: successor ? 'Successor' : undefined,
+				hostHidden: !successor,
+			},
+		);
 		fixture.menus.hideContextMenu();
 		assert.deepEqual(events, successor ? ['cancel:true', 'show', 'hide'] : ['cancel:true']);
 	});
@@ -244,14 +283,20 @@ test('layout cancellation finishes mounting before its hide callback mounts a su
 			source.cancel();
 			order.push('layout returned');
 			return new fixture.document.defaultView!.DOMRect(0, 0, 100, 20);
-		}
+		},
 	});
 	fixture.show('Canceled', source.token, () => {
 		order.push('hide');
-		fixture.menus.showContextMenu({ getAnchor: () => ({ x: 120, y: 200, targetWindow: fixture.document.defaultView! }), getActions: () => [action('Successor')] });
+		fixture.menus.showContextMenu({
+			getAnchor: () => ({ x: 120, y: 200, targetWindow: fixture.document.defaultView! }),
+			getActions: () => [action('Successor')],
+		});
 	});
 	const view = fixture.document.querySelector<HTMLElement>('.ash-context-view')!;
-	assert.deepEqual({ order, label: fixture.visibleLabel, left: view.style.left, top: view.style.top }, { order: ['layout returned', 'hide'], label: 'Successor', left: '120px', top: '200px' });
+	assert.deepEqual(
+		{ order, label: fixture.visibleLabel, left: view.style.left, top: view.style.top },
+		{ order: ['layout returned', 'hide'], label: 'Successor', left: '120px', top: '200px' },
+	);
 	fixture.menus.hideContextMenu();
 	assert.equal(view.hidden, true);
 });
@@ -272,23 +317,44 @@ for (const mounting of [false, true]) {
 				value: () => {
 					source.cancel();
 					return new fixture.document.defaultView!.DOMRect(0, 0, 100, 20);
-				}
+				},
 			});
 		}
 		fixture.menus.showContextMenu({
-			getAnchor: () => fixture.origin, getActions: () => [action('Fault')], cancellationToken: source.token,
-			getActionViewItem: selected => new class extends ButtonActionViewItem {
-				protected override disposeCore(): void { super.disposeCore(); disposed++; throw failure; }
-			}(selected),
+			getAnchor: () => fixture.origin,
+			getActions: () => [action('Fault')],
+			cancellationToken: source.token,
+			getActionViewItem: selected =>
+				new (class extends ButtonActionViewItem {
+					protected override disposeCore(): void {
+						super.disposeCore();
+						disposed++;
+						throw failure;
+					}
+				})(selected),
 			onHide: cancelled => {
 				hidden.push(cancelled);
-				fixture.menus.showContextMenu({ getAnchor: () => ({ x: 120, y: 200, targetWindow: fixture.document.defaultView! }), getActions: () => [action('Successor')] });
+				fixture.menus.showContextMenu({
+					getAnchor: () => ({ x: 120, y: 200, targetWindow: fixture.document.defaultView! }),
+					getActions: () => [action('Successor')],
+				});
 			},
 		});
-		if (!mounting) { assert.throws(() => fixture.menus.hideContextMenu(), error => error === failure); }
-		assert.deepEqual({ disposed, hidden, reported, label: fixture.visibleLabel }, { disposed: 1, hidden: [true], reported: mounting ? [failure] : [], label: 'Successor' });
+		if (!mounting) {
+			assert.throws(
+				() => fixture.menus.hideContextMenu(),
+				error => error === failure,
+			);
+		}
+		assert.deepEqual(
+			{ disposed, hidden, reported, label: fixture.visibleLabel },
+			{ disposed: 1, hidden: [true], reported: mounting ? [failure] : [], label: 'Successor' },
+		);
 		fixture.menus.hideContextMenu();
-		assert.deepEqual({ disposed, hidden, label: fixture.visibleLabel }, { disposed: 1, hidden: [true], label: undefined });
+		assert.deepEqual(
+			{ disposed, hidden, label: fixture.visibleLabel },
+			{ disposed: 1, hidden: [true], label: undefined },
+		);
 	});
 }
 
@@ -300,7 +366,10 @@ test('browser requests in different documents keep independent cancellation and 
 	second.show('Second');
 	const secondFocus = second.document.activeElement;
 	source.cancel();
-	assert.deepEqual({ first: first.visibleLabel, second: second.visibleLabel, focus: second.document.activeElement }, { first: undefined, second: 'Second', focus: secondFocus });
+	assert.deepEqual(
+		{ first: first.visibleLabel, second: second.visibleLabel, focus: second.document.activeElement },
+		{ first: undefined, second: 'Second', focus: secondFocus },
+	);
 });
 
 for (const ending of ['cancel', 'replace', 'dispose'] as const) {
@@ -310,7 +379,13 @@ for (const ending of ['cancel', 'replace', 'dispose'] as const) {
 		let released = 0;
 		const token: CancellationToken = {
 			isCancellationRequested: false,
-			onCancellationRequested(callback) { listener = () => callback(undefined); return toDisposable(() => { listener = undefined; released++; }); },
+			onCancellationRequested(callback) {
+				listener = () => callback(undefined);
+				return toDisposable(() => {
+					listener = undefined;
+					released++;
+				});
+			},
 		};
 		fixture.show('Old', token);
 		if (ending === 'cancel') listener!();
@@ -327,8 +402,19 @@ for (const disposed of [false, true]) {
 		using runner = new ActionRunner();
 		const pending = promiseWithResolvers<void>();
 		const started = promiseWithResolvers<void>();
-		const copy = { ...action('Copy'), run: () => { started.resolve(); return pending.promise; } };
-		fixture.menus.showContextMenu({ getAnchor: () => fixture.origin, getActions: () => [copy], cancellationToken: source.token, actionRunner: runner });
+		const copy = {
+			...action('Copy'),
+			run: () => {
+				started.resolve();
+				return pending.promise;
+			},
+		};
+		fixture.menus.showContextMenu({
+			getAnchor: () => fixture.origin,
+			getActions: () => [copy],
+			cancellationToken: source.token,
+			actionRunner: runner,
+		});
 		const operation = runner.run(copy);
 		await started.promise;
 		source.cancel();
@@ -344,7 +430,9 @@ test('browser context menu action failures retain structured error messages', as
 	using runner = new ActionRunner();
 	const selected = {
 		...action('Copy'),
-		run() { throw { detail: { exception: { message: 'Clipboard unavailable' } } }; },
+		run() {
+			throw { detail: { exception: { message: 'Clipboard unavailable' } } };
+		},
 	};
 	fixture.menus.showContextMenu({
 		getAnchor: () => fixture.origin,
@@ -373,11 +461,24 @@ test('browser menus without a token retain window hide and selected action behav
 	using fixture = new BrowserMenuFixture();
 	using runner = new ActionRunner();
 	let runs = 0;
-	const selected = { ...action('Selected'), run: () => { runs++; } };
+	const selected = {
+		...action('Selected'),
+		run: () => {
+			runs++;
+		},
+	};
 	const hidden: boolean[] = [];
-	fixture.menus.showContextMenu({ getAnchor: () => fixture.origin, getActions: () => [selected], actionRunner: runner, onHide: cancelled => hidden.push(cancelled) });
+	fixture.menus.showContextMenu({
+		getAnchor: () => fixture.origin,
+		getActions: () => [selected],
+		actionRunner: runner,
+		onHide: cancelled => hidden.push(cancelled),
+	});
 	await runner.run(selected);
 	fixture.show('Window close', undefined, cancelled => hidden.push(cancelled));
 	fixture.menus.hideContextMenu();
-	assert.deepEqual({ runs, hidden, label: fixture.visibleLabel }, { runs: 1, hidden: [false, true], label: undefined });
+	assert.deepEqual(
+		{ runs, hidden, label: fixture.visibleLabel },
+		{ runs: 1, hidden: [false, true], label: undefined },
+	);
 });

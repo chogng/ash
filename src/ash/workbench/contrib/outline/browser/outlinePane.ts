@@ -7,7 +7,10 @@ import { isCancellationError } from '../../../../base/common/errors.js';
 import { DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	AccessibilityVerbositySettingId,
+	IAccessibleViewService,
+} from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -57,18 +60,31 @@ export class OutlinePane extends ViewPane {
 		this.contentElement.append(this.emptyDomNode);
 		ctxFocused.bindTo(this._register(context.createScoped(this.contentElement))).set(true);
 		this.outlineViewState = this._register(instantiation.createInstance(OutlineViewState));
-		this.toolbar = this._register(new WorkbenchToolBar(this.headerActionsElement, menus, { ariaLabel: localize('outline.actions', 'Outline Actions') }));
+		this.toolbar = this._register(
+			new WorkbenchToolBar(this.headerActionsElement, menus, {
+				ariaLabel: localize('outline.actions', 'Outline Actions'),
+			}),
+		);
 		this.updateActions();
-		this._register(this.outlineViewState.onDidChange(() => {
-			this.updateActions();
-			this.render();
-		}));
+		this._register(
+			this.outlineViewState.onDidChange(() => {
+				this.updateActions();
+				this.render();
+			}),
+		);
 		this._register(this.onDidChangeBodyVisibility(() => void this.update()));
 		this._register(editorPart.onDidChangeEditors(() => void this.update()));
-		this._register(outlines.onDidChange(() => { this.editor = undefined; void this.update(); }));
-		this._register(configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(AccessibilityVerbositySettingId.Outline)) this.updateAriaLabel();
-		}));
+		this._register(
+			outlines.onDidChange(() => {
+				this.editor = undefined;
+				void this.update();
+			}),
+		);
+		this._register(
+			configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(AccessibilityVerbositySettingId.Outline)) this.updateAriaLabel();
+			}),
+		);
 		this.updateAriaLabel();
 	}
 
@@ -77,15 +93,20 @@ export class OutlinePane extends ViewPane {
 		else this.emptyDomNode.focus();
 	}
 
-	public collapseAll(): void { for (const node of this.tree?.model.rootNodes ?? []) this.tree!.collapseRecursive(node.id); }
-	public expandAll(): void { for (const node of this.tree?.model.rootNodes ?? []) this.tree!.expandRecursive(node.id); }
+	public collapseAll(): void {
+		for (const node of this.tree?.model.rootNodes ?? []) this.tree!.collapseRecursive(node.id);
+	}
+	public expandAll(): void {
+		for (const node of this.tree?.model.rootNodes ?? []) this.tree!.expandRecursive(node.id);
+	}
 
 	public getAccessibleContent(): string {
 		const lines: string[] = [];
 		const visit = (parent: unknown, depth: number): void => {
 			for (const element of this.outline?.config.treeDataSource.getChildren(parent) ?? []) {
-				const label = this.outline!.config.options.keyboardNavigationLabelProvider?.getKeyboardNavigationLabel(element);
-				lines.push(`${'  '.repeat(depth)}${typeof label === 'string' ? label : label?.join(', ') ?? ''}`);
+				const label =
+					this.outline!.config.options.keyboardNavigationLabelProvider?.getKeyboardNavigationLabel(element);
+				lines.push(`${'  '.repeat(depth)}${typeof label === 'string' ? label : (label?.join(', ') ?? '')}`);
 				visit(element, depth + 1);
 			}
 		};
@@ -104,7 +125,10 @@ export class OutlinePane extends ViewPane {
 		this.editor = editor;
 		if (!this.isBodyVisible()) return;
 		this.emptyDomNode.hidden = false;
-		this.emptyDomNode.textContent = localize('outline.noEditor', 'The active editor cannot provide outline information.');
+		this.emptyDomNode.textContent = localize(
+			'outline.noEditor',
+			'The active editor cannot provide outline information.',
+		);
 		if (!editor || !this.outlines.canCreateOutline(editor)) return;
 		const generation = this.generation;
 		const lifetime = new DisposableStore();
@@ -116,39 +140,67 @@ export class OutlinePane extends ViewPane {
 		lifetime.add(toDisposable(() => progress.done()));
 		try {
 			const outline = await this.outlines.createOutline(editor, OutlineTarget.OutlinePane, token.token);
-			if (this.isDisposed || generation !== this.generation || token.token.isCancellationRequested) { outline?.dispose(); return; }
-			if (!outline) { this.emptyDomNode.textContent = localize('outline.noEditor', 'The active editor cannot provide outline information.'); return; }
+			if (this.isDisposed || generation !== this.generation || token.token.isCancellationRequested) {
+				outline?.dispose();
+				return;
+			}
+			if (!outline) {
+				this.emptyDomNode.textContent = localize(
+					'outline.noEditor',
+					'The active editor cannot provide outline information.',
+				);
+				return;
+			}
 			lifetime.add(outline);
 			this.outline = outline;
-			const tree = lifetime.add(new WorkbenchObjectTree<unknown>(this.contentElement, {
-				getHeight: () => 22,
-				...outline.config.options,
-				configurationService: this.configuration,
-				openOnSingleClick: true,
-				onWillRender: () => this.rowResources.clear(),
-				renderElement: (element, node) => {
-					const row = outline.config.options.renderElement(element, node);
-					this.rowResources.add(this.hover.setupDelayedHover(row, { content: row.textContent ?? '' }));
-					return row;
-				},
-			}));
+			const tree = lifetime.add(
+				new WorkbenchObjectTree<unknown>(this.contentElement, {
+					getHeight: () => 22,
+					...outline.config.options,
+					configurationService: this.configuration,
+					openOnSingleClick: true,
+					onWillRender: () => this.rowResources.clear(),
+					renderElement: (element, node) => {
+						const row = outline.config.options.renderElement(element, node);
+						this.rowResources.add(this.hover.setupDelayedHover(row, { content: row.textContent ?? '' }));
+						return row;
+					},
+				}),
+			);
 			this.tree = tree;
 			tree.element.classList.add('ash-outline-tree');
-			lifetime.add(addDisposableListener(tree.element, 'keydown', (event: KeyboardEvent) => {
-				if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f') { stopEvent(event); tree.openFind(); }
-			}));
+			lifetime.add(
+				addDisposableListener(tree.element, 'keydown', (event: KeyboardEvent) => {
+					if (
+						(event.ctrlKey || event.metaKey) &&
+						!event.altKey &&
+						!event.shiftKey &&
+						event.key.toLowerCase() === 'f'
+					) {
+						stopEvent(event);
+						tree.openFind();
+					}
+				}),
+			);
 			lifetime.add(toDisposable(() => tree.element.remove()));
-			lifetime.add(tree.onDidOpen(event => {
-				void Promise.resolve(outline.reveal(event.element, event.editorOptions, event.sideBySide, true)).catch(error => this.log.error('outline', 'Could not reveal symbol', error));
-			}));
-			lifetime.add(outline.onDidChange(event => {
-				if (event.affectOnlyActiveElement) this.followCursor();
-				else this.render();
-			}));
+			lifetime.add(
+				tree.onDidOpen(event => {
+					void Promise.resolve(
+						outline.reveal(event.element, event.editorOptions, event.sideBySide, true),
+					).catch(error => this.log.error('outline', 'Could not reveal symbol', error));
+				}),
+			);
+			lifetime.add(
+				outline.onDidChange(event => {
+					if (event.affectOnlyActiveElement) this.followCursor();
+					else this.render();
+				}),
+			);
 			this.updateAriaLabel();
 			this.render();
 		} catch (error) {
-			if (generation !== this.generation || token.token.isCancellationRequested || isCancellationError(error)) return;
+			if (generation !== this.generation || token.token.isCancellationRequested || isCancellationError(error))
+				return;
 			this.emptyDomNode.textContent = localize('outline.failed', 'Could not load document symbols.');
 			this.log.error('outline', 'Could not load outline', error);
 		} finally {
@@ -163,7 +215,10 @@ export class OutlinePane extends ViewPane {
 		let compare = comparator.compareByPosition;
 		if (this.outlineViewState.sortBy === OutlineSortOrder.ByName) compare = comparator.compareByName;
 		else if (this.outlineViewState.sortBy === OutlineSortOrder.ByKind) compare = comparator.compareByType;
-		const children = (parent: IOutline<unknown> | unknown): TreeElement<unknown>[] => [...treeDataSource.getChildren(parent)].sort(compare).map(element => ({ element, children: children(element) }));
+		const children = (parent: IOutline<unknown> | unknown): TreeElement<unknown>[] =>
+			[...treeDataSource.getChildren(parent)]
+				.sort(compare)
+				.map(element => ({ element, children: children(element) }));
 		const focused = tree.focus;
 		const selected = tree.selection;
 		tree.setChildren(children(outline));
@@ -198,17 +253,58 @@ export class OutlinePane extends ViewPane {
 		const collapse = localize('outline.collapseAll', 'Collapse All');
 		const expand = localize('outline.expandAll', 'Expand All');
 		const filter = localize('outline.filterOnType', 'Filter on Type');
-		this.toolbar.setActions([
-			{ id: 'outline.collapse', label: collapse, tooltip: collapse, icon: Lxicon.chevronUp, enabled: true, run: () => this.collapseAll() },
-		], [
-			{ id: 'outline.expand', label: expand, tooltip: expand, enabled: true, run: () => this.expandAll() },
-			{ id: 'outline.followCursor', label: follow, tooltip: follow, enabled: true, checked: this.outlineViewState.followCursor, run: () => { this.outlineViewState.followCursor = !this.outlineViewState.followCursor; } },
-			{ id: 'outline.filterOnType', label: filter, tooltip: filter, enabled: true, checked: this.outlineViewState.filterOnType, run: () => { this.outlineViewState.filterOnType = !this.outlineViewState.filterOnType; } },
-			...[OutlineSortOrder.ByPosition, OutlineSortOrder.ByName, OutlineSortOrder.ByKind].map(sort => {
-				const labels = [localize('outline.sortPosition', 'Sort by Position'), localize('outline.sortName', 'Sort by Name'), localize('outline.sortKind', 'Sort by Type')];
-				const label = labels[sort]!;
-				return { id: `outline.sort.${sort}`, label, tooltip: label, enabled: true, checked: this.outlineViewState.sortBy === sort, run: () => { this.outlineViewState.sortBy = sort; } };
-			}),
-		]);
+		this.toolbar.setActions(
+			[
+				{
+					id: 'outline.collapse',
+					label: collapse,
+					tooltip: collapse,
+					icon: Lxicon.chevronUp,
+					enabled: true,
+					run: () => this.collapseAll(),
+				},
+			],
+			[
+				{ id: 'outline.expand', label: expand, tooltip: expand, enabled: true, run: () => this.expandAll() },
+				{
+					id: 'outline.followCursor',
+					label: follow,
+					tooltip: follow,
+					enabled: true,
+					checked: this.outlineViewState.followCursor,
+					run: () => {
+						this.outlineViewState.followCursor = !this.outlineViewState.followCursor;
+					},
+				},
+				{
+					id: 'outline.filterOnType',
+					label: filter,
+					tooltip: filter,
+					enabled: true,
+					checked: this.outlineViewState.filterOnType,
+					run: () => {
+						this.outlineViewState.filterOnType = !this.outlineViewState.filterOnType;
+					},
+				},
+				...[OutlineSortOrder.ByPosition, OutlineSortOrder.ByName, OutlineSortOrder.ByKind].map(sort => {
+					const labels = [
+						localize('outline.sortPosition', 'Sort by Position'),
+						localize('outline.sortName', 'Sort by Name'),
+						localize('outline.sortKind', 'Sort by Type'),
+					];
+					const label = labels[sort]!;
+					return {
+						id: `outline.sort.${sort}`,
+						label,
+						tooltip: label,
+						enabled: true,
+						checked: this.outlineViewState.sortBy === sort,
+						run: () => {
+							this.outlineViewState.sortBy = sort;
+						},
+					};
+				}),
+			],
+		);
 	}
 }

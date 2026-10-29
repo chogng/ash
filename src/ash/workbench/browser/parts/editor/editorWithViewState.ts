@@ -9,6 +9,10 @@ export interface IEditorPaneWithViewState extends IEditorPane {
 
 export function isEditorPaneWithViewState(pane: IEditorPane): pane is IEditorPaneWithViewState {
 	const candidate = pane as Partial<IEditorPaneWithViewState>;
-	return typeof candidate.viewStateTypeId === "string" && candidate.viewStateTypeId.length > 0 &&
-		typeof candidate.saveViewState === "function" && typeof candidate.restoreViewState === "function";
+	return (
+		typeof candidate.viewStateTypeId === 'string' &&
+		candidate.viewStateTypeId.length > 0 &&
+		typeof candidate.saveViewState === 'function' &&
+		typeof candidate.restoreViewState === 'function'
+	);
 }

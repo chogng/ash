@@ -16,9 +16,22 @@ test('ViewLine clips spanning inline decorations to each visible row', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		using configuration = createTestConfiguration(dom.window.document.body, { renderWhitespace: 'none' });
-		const decoration = new InlineDecoration(new Range(1, 2, 3, 2), 'spanning-reference', InlineDecorationType.Regular);
-		for (const [index, text, marked] of [[0, 'first', 'irst'], [1, 'middle', 'middle'], [2, 'last', 'l']] as const) {
-			const line = new ViewLine(dom.window.document.body, index, new ViewLineOptions(configuration, ColorScheme.Dark), 4);
+		const decoration = new InlineDecoration(
+			new Range(1, 2, 3, 2),
+			'spanning-reference',
+			InlineDecorationType.Regular,
+		);
+		for (const [index, text, marked] of [
+			[0, 'first', 'irst'],
+			[1, 'middle', 'middle'],
+			[2, 'last', 'l'],
+		] as const) {
+			const line = new ViewLine(
+				dom.window.document.body,
+				index,
+				new ViewLineOptions(configuration, ColorScheme.Dark),
+				4,
+			);
 			line.renderLine(text, [], 0, [decoration], index + 1);
 			assert.equal(line.getDomNode().textContent, text);
 			assert.equal(line.getDomNode().querySelector('.spanning-reference')?.textContent, marked);
@@ -35,14 +48,23 @@ test('ViewLine owns rendering, character mapping, geometry, and width state', ()
 	const row = line.getDomNode();
 	const textElement = row.firstElementChild as HTMLElement;
 	assert.equal(row.children.length, 1);
-	assert.equal(line.renderLine('ab😊cd', [{ startColumn: 2, endColumn: 4, presentation: SemanticTokenPresentation.String }]), true);
+	assert.equal(
+		line.renderLine('ab😊cd', [{ startColumn: 2, endColumn: 4, presentation: SemanticTokenPresentation.String }]),
+		true,
+	);
 	assert.equal(textElement.textContent, 'ab😊cd');
-	assert.deepEqual([...textElement.children].map(child => child.textContent), ['ab', '😊', 'cd']);
+	assert.deepEqual(
+		[...textElement.children].map(child => child.textContent),
+		['ab', '😊', 'cd'],
+	);
 	assert.equal(line.getColumnOfNodeOffset(textElement.children[2] as HTMLElement, 1), 6);
 
 	Object.defineProperty(row, 'getBoundingClientRect', { configurable: true, value: () => rectangle(100, 0, 100) });
 	Object.defineProperty(row, 'offsetWidth', { configurable: true, value: 100 });
-	Object.defineProperty(textElement, 'getBoundingClientRect', { configurable: true, value: () => rectangle(100, 0, 50) });
+	Object.defineProperty(textElement, 'getBoundingClientRect', {
+		configurable: true,
+		value: () => rectangle(100, 0, 50),
+	});
 	const createRange = dom.window.document.createRange.bind(dom.window.document);
 	Object.defineProperty(dom.window.document, 'createRange', {
 		configurable: true,
@@ -73,23 +95,41 @@ test('ViewLine owns rendering, character mapping, geometry, and width state', ()
 test('Unchanged token and decoration notifications retain spans and measured widths', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
-		using configuration = createTestConfiguration(dom.window.document.body, { renderWhitespace: 'none', disableMonospaceOptimizations: true });
+		using configuration = createTestConfiguration(dom.window.document.body, {
+			renderWhitespace: 'none',
+			disableMonospaceOptimizations: true,
+		});
 		const line = new ViewLine(dom.window.document.body, 0, new ViewLineOptions(configuration, ColorScheme.Dark), 4);
 		line.renderLine('sample', [{ startColumn: 0, endColumn: 6, presentation: SemanticTokenPresentation.Keyword }]);
 		const textElement = line.getDomNode().firstElementChild as HTMLElement;
 		const span = textElement.firstElementChild;
 		let measurements = 0;
-		Object.defineProperty(textElement, 'offsetWidth', { get: () => { measurements += 1; return 60; } });
+		Object.defineProperty(textElement, 'offsetWidth', {
+			get: () => {
+				measurements += 1;
+				return 60;
+			},
+		});
 		assert.equal(line.getWidth(null), 60);
 		line.onTokensChanged();
 		line.onDecorationsChanged();
-		assert.equal(line.renderLine('sample', [{ startColumn: 0, endColumn: 6, presentation: SemanticTokenPresentation.Keyword }]), false);
+		assert.equal(
+			line.renderLine('sample', [
+				{ startColumn: 0, endColumn: 6, presentation: SemanticTokenPresentation.Keyword },
+			]),
+			false,
+		);
 		assert.strictEqual(textElement.firstElementChild, span);
 		assert.equal(line.getWidth(null), 60);
 		assert.equal(measurements, 1);
 		assert.equal(line.getColumnOfNodeOffset(span as HTMLElement, 3), 4);
 		line.onTokensChanged();
-		assert.equal(line.renderLine('sample', [{ startColumn: 0, endColumn: 6, presentation: SemanticTokenPresentation.String }]), true);
+		assert.equal(
+			line.renderLine('sample', [
+				{ startColumn: 0, endColumn: 6, presentation: SemanticTokenPresentation.String },
+			]),
+			true,
+		);
 		assert.notStrictEqual(textElement.firstElementChild, span);
 		assert.equal(line.getWidth(null), 60);
 		assert.equal(measurements, 2);
@@ -102,7 +142,10 @@ test('Unchanged token and decoration notifications retain spans and measured wid
 test('Indent and font options invalidate geometry even when text spans are unchanged', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
-		using configuration = createTestConfiguration(dom.window.document.body, { renderWhitespace: 'none', disableMonospaceOptimizations: true });
+		using configuration = createTestConfiguration(dom.window.document.body, {
+			renderWhitespace: 'none',
+			disableMonospaceOptimizations: true,
+		});
 		const line = new ViewLine(dom.window.document.body, 0, new ViewLineOptions(configuration, ColorScheme.Dark), 4);
 		line.renderLine('sample', []);
 		const textElement = line.getDomNode().firstElementChild as HTMLElement;
@@ -127,12 +170,21 @@ test('Plain ASCII widths reuse measured font advances and reset eligibility with
 		const line = new ViewLine(dom.window.document.body, 0, options, 4);
 		const text = line.getDomNode().firstElementChild as HTMLElement;
 		let reads = 0;
-		Object.defineProperty(text, 'offsetWidth', { get: () => { reads++; return 91; } });
+		Object.defineProperty(text, 'offsetWidth', {
+			get: () => {
+				reads++;
+				return 91;
+			},
+		});
 		line.renderLine('abc', [{ startColumn: 0, endColumn: 3, presentation: SemanticTokenPresentation.Keyword }], 10);
 		assert.equal(line.getWidthIsFast(), true);
 		assert.equal(line.getWidth(null), 10 + 3 * options.spaceWidth);
 		assert.equal(reads, 0);
-		assert.equal(line.needsMonospaceFontCheck(), false, 'Trusted font measurements do not need a check against the derived width');
+		assert.equal(
+			line.needsMonospaceFontCheck(),
+			false,
+			'Trusted font measurements do not need a check against the derived width',
+		);
 		line.onTokensChanged();
 		line.renderLine('longer', []);
 		assert.equal(line.getWidth(null), 6 * options.spaceWidth);
@@ -161,13 +213,20 @@ test('Complex text, decorations, font styles, ligatures and clipped markers reta
 		const line = new ViewLine(dom.window.document.body, 0, new ViewLineOptions(configuration, ColorScheme.Dark), 4);
 		const text = line.getDomNode().firstElementChild as HTMLElement;
 		let reads = 0;
-		Object.defineProperty(text, 'offsetWidth', { get: () => { reads++; return 91; } });
+		Object.defineProperty(text, 'offsetWidth', {
+			get: () => {
+				reads++;
+				return 91;
+			},
+		});
 		for (const value of ['\ttext', '中文', 'ab🙂', 'a\u0000b']) {
 			line.renderLine(value, []);
 			assert.equal(line.getWidthIsFast(), false);
 			assert.equal(line.getWidth(null), 91);
 		}
-		line.renderLine('abc', [], 0, [new InlineDecoration(new Range(1, 1, 1, 2), 'custom-width', InlineDecorationType.Regular)]);
+		line.renderLine('abc', [], 0, [
+			new InlineDecoration(new Range(1, 1, 1, 2), 'custom-width', InlineDecorationType.Regular),
+		]);
 		assert.equal(line.getWidth(null), 91);
 		line.renderLine('abc', [{ startColumn: 0, endColumn: 3, syntaxPresentation: { fontStyle: ['bold'] } }]);
 		assert.equal(line.getWidth(null), 91);
@@ -197,7 +256,12 @@ test('Neutral token styles reuse only a declared normal editor font weight', () 
 		host.append(line.getDomNode());
 		const text = line.getDomNode().firstElementChild as HTMLElement;
 		let reads = 0;
-		Object.defineProperty(text, 'offsetWidth', { get: () => { reads++; return 91; } });
+		Object.defineProperty(text, 'offsetWidth', {
+			get: () => {
+				reads++;
+				return 91;
+			},
+		});
 		const tokens = [{ startColumn: 0, endColumn: 3, syntaxPresentation: { fontStyle: [] } }];
 		line.renderLine('abc', tokens);
 		assert.equal(line.getWidthIsFast(), true);
@@ -215,5 +279,15 @@ test('Neutral token styles reuse only a declared normal editor font weight', () 
 });
 
 function rectangle(left: number, top: number, width: number): DOMRect {
-	return { left, top, width, height: 20, right: left + width, bottom: top + 20, x: left, y: top, toJSON: () => ({}) } as DOMRect;
+	return {
+		left,
+		top,
+		width,
+		height: 20,
+		right: left + width,
+		bottom: top + 20,
+		x: left,
+		y: top,
+		toJSON: () => ({}),
+	} as DOMRect;
 }

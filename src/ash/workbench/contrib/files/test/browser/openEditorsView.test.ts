@@ -41,32 +41,59 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 	let activated: string | undefined;
 	let closed: string | undefined;
 	const editorPart = {
-		get groups() { return groups; },
-		get activeGroup() { return groups[0]!; },
+		get groups() {
+			return groups;
+		},
+		get activeGroup() {
+			return groups[0]!;
+		},
 		onDidChangeEditors: changes.event,
-		activateEditorIdentifier: (entry: EditorInstanceState) => { activated = entry.instanceId; },
+		activateEditorIdentifier: (entry: EditorInstanceState) => {
+			activated = entry.instanceId;
+		},
 		closeEditorIdentifier: async (entry: EditorInstanceState) => {
 			closed = entry.instanceId;
-			groups = groups.map(candidate => group(candidate.id, candidate.editors.filter(editor => editor.instanceId !== entry.instanceId)));
-			changes.fire({ kind: 'groupChanged', groupId: entry.groupId, event: { kind: 'editorClosed', editor: entry, reason: 'close' } });
+			groups = groups.map(candidate =>
+				group(
+					candidate.id,
+					candidate.editors.filter(editor => editor.instanceId !== entry.instanceId),
+				),
+			);
+			changes.fire({
+				kind: 'groupChanged',
+				groupId: entry.groupId,
+				event: { kind: 'editorClosed', editor: entry, reason: 'close' },
+			});
 			return true;
 		},
 	} as unknown as IEditorPart;
 	const accessibility: IAccessibleViewService = {
 		show: () => false,
-		getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.', disableHint: async () => { }, showAccessibleViewHelp: () => { },
-		dispose() { },
-		[Symbol.dispose]() { },
+		getOpenAriaHint: () => 'Press Alt+F1 for accessibility help.',
+		disableHint: async () => {},
+		showAccessibleViewHelp: () => {},
+		dispose() {},
+		[Symbol.dispose]() {},
 	};
 	using services = createTestEditorServices(configuration);
 	services.registerInstance(IEditorPart, editorPart);
 	services.registerInstance(IAccessibleViewService, accessibility);
 	using decorationChanges = new Emitter<readonly URI[]>();
 	let decoration: IDecorationData | undefined;
-	using decorationProvider = services.get(IDecorationsService).registerDecorationsProvider({ label: 'Test', onDidChange: decorationChanges.event, provideDecorations: resource => resource.toString() === first.input.resource.toString() ? decoration : undefined });
+	using decorationProvider = services
+		.get(IDecorationsService)
+		.registerDecorationsProvider({
+			label: 'Test',
+			onDidChange: decorationChanges.event,
+			provideDecorations: resource =>
+				resource.toString() === first.input.resource.toString() ? decoration : undefined,
+		});
 
 	try {
-		using view = services.createInstance(OpenEditorsView, browser.window.document.body, { id: OpenEditorsView.ID, title: 'Open Editors' });
+		using view = services.createInstance(OpenEditorsView, browser.window.document.body, {
+			id: OpenEditorsView.ID,
+			title: 'Open Editors',
+		});
 		browser.window.document.body.append(view.element);
 		assert.match(view.getAccessibleContent(), /first\.ts/);
 		const label = view.element.querySelector('.ash-open-editors-label')!;
@@ -79,12 +106,18 @@ test('Open Editors follows editor groups, dirty state, activation, and close', a
 		assert.equal(label.getAttribute('aria-label'), 'first.ts');
 		const dirtyFirst = { ...first, isDirty: true };
 		groups = [group(1, [dirtyFirst]), group(2, [second])];
-		changes.fire({ kind: 'groupAdded', group: { id: 2, editors: [second], activeEditorInstanceId: second.instanceId } });
-		assert.deepEqual([...view.element.querySelectorAll('.ash-open-editors-row')].map(row => row.textContent?.trim()), [
-			'Group 1', 'first.tsUnsaved changes', 'Group 2', 'second.ts',
-		]);
+		changes.fire({
+			kind: 'groupAdded',
+			group: { id: 2, editors: [second], activeEditorInstanceId: second.instanceId },
+		});
+		assert.deepEqual(
+			[...view.element.querySelectorAll('.ash-open-editors-row')].map(row => row.textContent?.trim()),
+			['Group 1', 'first.tsUnsaved changes', 'Group 2', 'second.ts'],
+		);
 		assert.match(view.getAccessibleContent(), /first\.ts, Unsaved changes/);
-		const firstRow = [...view.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row => row.textContent?.includes('first.ts'));
+		const firstRow = [...view.element.querySelectorAll<HTMLElement>('.ash-tree-row')].find(row =>
+			row.textContent?.includes('first.ts'),
+		);
 		assert.ok(firstRow);
 		firstRow.click();
 		assert.equal(activated, 'first');
@@ -107,7 +140,9 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 	const activity: IActivityService = {
 		onDidChangeActivity: Event.None,
 		getViewContainerActivities: () => [],
-		showViewActivity: () => { throw new Error('Unexpected view activity'); },
+		showViewActivity: () => {
+			throw new Error('Unexpected view activity');
+		},
 		showViewContainerActivity(_containerId, badge) {
 			activeBadge = badge.badge as NumberBadge;
 			return toDisposable(() => {
@@ -119,18 +154,20 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 	const first: IWorkingCopy = {
 		resource: URI.file('/project/main.ts'),
 		backupKind: 'text',
-		get isDirty() { return isDirty; },
+		get isDirty() {
+			return isDirty;
+		},
 		hasExternalChange: false,
 		onDidChangeDirty: dirtyChanges.event,
 		onDidChangeExternalChange: Event.None,
 		onDidChangeContent: Event.None,
 		backup: () => '',
-		restoreBackup() { },
-		save: async () => { },
-		saveAs: async () => { },
-		revert: async () => { },
-		dispose() { },
-		[Symbol.dispose]() { },
+		restoreBackup() {},
+		save: async () => {},
+		saveAs: async () => {},
+		revert: async () => {},
+		dispose() {},
+		[Symbol.dispose]() {},
 	};
 	using registration = workingCopies.register(first);
 	assert.equal(activeBadge?.number, 1);
@@ -139,7 +176,9 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 	using secondRegistration = workingCopies.register({
 		...first,
 		resource: URI.file('/project/second.ts'),
-		get isDirty() { return secondIsDirty; },
+		get isDirty() {
+			return secondIsDirty;
+		},
 		onDidChangeDirty: secondDirtyChanges.event,
 	});
 	secondIsDirty = true;
@@ -147,7 +186,9 @@ test('Dirty file activity follows working copy registration and dirty state', ()
 	assert.equal(activeBadge?.number, 2);
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
-		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		setNlsResolver((bundle, key, fallback, parameters) =>
+			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
+		);
 		assert.equal(activeBadge?.getDescription(), '2 unsaved files');
 		using translated = new DirtyFilesIndicator(activity, workingCopies);
 		assert.equal(activeBadge?.getDescription(), '2 个未保存的文件');
@@ -196,6 +237,7 @@ function installDomGlobals(browser: JSDOM): readonly string[] {
 		KeyboardEvent: browser.window.KeyboardEvent,
 		navigator: browser.window.navigator,
 	};
-	for (const [name, value] of Object.entries(globals)) Object.defineProperty(globalThis, name, { configurable: true, value });
+	for (const [name, value] of Object.entries(globals))
+		Object.defineProperty(globalThis, name, { configurable: true, value });
 	return Object.keys(globals);
 }

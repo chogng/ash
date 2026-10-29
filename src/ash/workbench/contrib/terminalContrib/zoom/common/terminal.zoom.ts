@@ -13,9 +13,13 @@ export const enum TerminalZoomSettingId {
 
 export const terminalZoomConfiguration: Readonly<Record<string, IConfigurationPropertySchema>> = {
 	[TerminalZoomSettingId.MouseWheelZoom]: {
-		type: 'boolean', default: false,
+		type: 'boolean',
+		default: false,
 		get description() {
-			return localize('terminal.zoom.mouseWheelZoom', 'Change the terminal font size with the mouse wheel while holding Ctrl, or Command on macOS. Pinch gestures also zoom on macOS.');
+			return localize(
+				'terminal.zoom.mouseWheelZoom',
+				'Change the terminal font size with the mouse wheel while holding Ctrl, or Command on macOS. Pinch gestures also zoom on macOS.',
+			);
 		},
 	},
 };

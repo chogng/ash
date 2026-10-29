@@ -1,10 +1,10 @@
-import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
-import { Emitter, type Event } from "../../../../../../base/common/event.js";
-import { Disposable, type IDisposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
+import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
+import { Emitter, type Event } from '../../../../../../base/common/event.js';
+import { Disposable, type IDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
 import { RunOnceScheduler } from '../../../../../../base/common/async.js';
 import type { ITextModel } from '../../../../../../editor/common/model.js';
 import type { ICodeEditor } from '../../../../../../editor/browser/editorBrowser.js';
-import type { SlashCommandCatalog } from "../../../common/slashCommands.js";
+import type { SlashCommandCatalog } from '../../../common/slashCommands.js';
 import type { SkillSelectorCatalog } from '../../../common/skillSelectors.js';
 import type { ChatContextAttachment } from '../../../../../services/chat/common/chatContextService.js';
 
@@ -15,7 +15,7 @@ export interface ChatInputEditorOptions {
 	readonly ariaLabel: string;
 	readonly slashCommands: SlashCommandCatalog;
 	readonly skills: SkillSelectorCatalog;
-	readonly height?: { readonly minimum: number; readonly maximum: number; };
+	readonly height?: { readonly minimum: number; readonly maximum: number };
 	/** Move to the next control with Tab instead of inserting indentation. */
 	readonly tabFocusMode?: boolean;
 }
@@ -72,7 +72,7 @@ export class ChatInputEditorRegistry {
 	}
 
 	get activeProviderId(): string {
-		return this.provider?.id ?? "textarea";
+		return this.provider?.id ?? 'textarea';
 	}
 
 	private add(provider: IChatInputEditorProvider): void {
@@ -100,24 +100,28 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 		super();
 		this.minimumHeight = options.height?.minimum ?? 40;
 		this.maximumHeight = options.height?.maximum ?? 314;
-		this.element = h(options.container.ownerDocument, "textarea");
-		this.element.className = "ash-chat-textarea-input";
+		this.element = h(options.container.ownerDocument, 'textarea');
+		this.element.className = 'ash-chat-textarea-input';
 		this.element.rows = 2;
 		this.element.style.minHeight = `${this.minimumHeight}px`;
 		this.element.style.height = `${this.minimumHeight}px`;
 		this.element.placeholder = options.placeholder;
-		this.element.setAttribute("aria-label", options.ariaLabel);
+		this.element.setAttribute('aria-label', options.ariaLabel);
 		options.container.append(this.element);
-		this._register(addDisposableListener(this.element, "input", () => {
-			this.layout();
-			this._onDidChange.fire(this.value);
-		}));
-		this._register(addDisposableListener(this.element, "keydown", (event) => {
-			if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
-			event.preventDefault();
-			event.stopPropagation();
-			this._onDidSubmit.fire();
-		}));
+		this._register(
+			addDisposableListener(this.element, 'input', () => {
+				this.layout();
+				this._onDidChange.fire(this.value);
+			}),
+		);
+		this._register(
+			addDisposableListener(this.element, 'keydown', event => {
+				if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+				event.preventDefault();
+				event.stopPropagation();
+				this._onDidSubmit.fire();
+			}),
+		);
 		this._register(toDisposable(() => this.element.remove()));
 		const layout = this._register(new RunOnceScheduler(() => this.layout(), 0));
 		const observer = new ResizeObserver(() => layout.schedule());
@@ -143,7 +147,11 @@ class TextareaChatInputEditor extends Disposable implements IChatInputEditor {
 	}
 
 	setSelection(selection: ChatInputEditorSelection): void {
-		this.element.setSelectionRange(Math.min(selection.anchor, selection.active), Math.max(selection.anchor, selection.active), selection.anchor > selection.active ? 'backward' : 'forward');
+		this.element.setSelectionRange(
+			Math.min(selection.anchor, selection.active),
+			Math.max(selection.anchor, selection.active),
+			selection.anchor > selection.active ? 'backward' : 'forward',
+		);
 	}
 
 	isAtHistoryBoundary(direction: 'previous' | 'next'): boolean {

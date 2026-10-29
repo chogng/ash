@@ -30,7 +30,11 @@ import { CODE_EDITOR_ID, type TextResourceEditor } from '../../../browser/parts/
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { SearchResultImpl } from '../../search/browser/searchTreeModel/searchResult.js';
 import { SearchEditorID, InSearchEditor } from './constants.js';
-import { parseSearchEditor, searchEditorLocation, serializeSearchResultForEditor } from './searchEditorSerialization.js';
+import {
+	parseSearchEditor,
+	searchEditorLocation,
+	serializeSearchResultForEditor,
+} from './searchEditorSerialization.js';
 
 /** Query controls own transient input; the shared text editor owns the editable, saved search document. */
 export class SearchEditor extends EditorPane implements IEditorPane {
@@ -65,10 +69,18 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		this._register(textEditor);
 	}
 
-	public override getControl(): ReturnType<TextResourceEditor['getControl']> { return this.textEditor.getControl(); }
-	public get workingCopy(): TextResourceEditor['workingCopy'] { return this.textEditor.workingCopy; }
-	public save(): Promise<void> { return this.textEditor.save(); }
-	public saveAs(resource: URI): Promise<void> { return this.textEditor.saveAs(resource); }
+	public override getControl(): ReturnType<TextResourceEditor['getControl']> {
+		return this.textEditor.getControl();
+	}
+	public get workingCopy(): TextResourceEditor['workingCopy'] {
+		return this.textEditor.workingCopy;
+	}
+	public save(): Promise<void> {
+		return this.textEditor.save();
+	}
+	public saveAs(resource: URI): Promise<void> {
+		return this.textEditor.saveAs(resource);
+	}
 
 	public override create(parent: HTMLElement): void {
 		const document = parent.ownerDocument;
@@ -76,13 +88,22 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		this.domNode.className = 'ash-search-editor';
 		parent.append(this.domNode);
 		super.create(this.domNode);
-		this._register(toDisposable(() => { this.controller?.abort(); this.domNode.remove(); }));
+		this._register(
+			toDisposable(() => {
+				this.controller?.abort();
+				this.domNode.remove();
+			}),
+		);
 		const scope = this._register(this.contextKeys.createScoped(this.domNode));
 		const focused = InSearchEditor.bindTo(scope);
 		this._register(addDisposableListener(this.domNode, 'focusin', () => focused.set(true)));
-		this._register(addDisposableListener(this.domNode, 'focusout', event => {
-			if (!this.domNode.contains(event.relatedTarget as Node | null)) { focused.set(false); }
-		}));
+		this._register(
+			addDisposableListener(this.domNode, 'focusout', event => {
+				if (!this.domNode.contains(event.relatedTarget as Node | null)) {
+					focused.set(false);
+				}
+			}),
+		);
 		const form = h(document, 'form');
 		form.className = 'ash-search-editor-form';
 		const field = h(document, 'div');
@@ -94,41 +115,51 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		this.queryInput.setAttribute('aria-label', localize('searchEditor.query', 'Search editor query'));
 		field.append(this.queryInput);
 		const optionLabels: Readonly<Record<string, string>> = { case: 'Aa', word: 'ab', regex: '.*' };
-		this.options = this._register(new ActionBar(field, {
-			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-			ariaLabel: localize('search.options', 'Search options'),
-			highlightToggledItems: true,
-			actionViewItemProvider: action => new LabelActionViewItem(action, {
-				label: optionLabels[action.id]!,
-				ariaLabel: action.label,
+		this.options = this._register(
+			new ActionBar(field, {
+				actionViewItemOptions: { buttonStyles: defaultButtonStyles },
+				ariaLabel: localize('search.options', 'Search options'),
+				highlightToggledItems: true,
+				actionViewItemProvider: action =>
+					new LabelActionViewItem(action, { label: optionLabels[action.id]!, ariaLabel: action.label }),
 			}),
-		}));
+		);
 		form.append(field);
-		this.include = this._register(new InputBox(form, {
-			inputBoxStyles: defaultInputBoxStyles,
-			presentation: 'compact',
-			ariaLabel: localize('search.includesLabel', 'Files to include'),
-			placeholder: localize('search.includes', 'files to include'),
-		}));
-		this.exclude = this._register(new InputBox(form, {
-			inputBoxStyles: defaultInputBoxStyles,
-			presentation: 'compact',
-			ariaLabel: localize('search.excludesLabel', 'Files to exclude'),
-			placeholder: localize('search.excludes', 'files to exclude'),
-		}));
+		this.include = this._register(
+			new InputBox(form, {
+				inputBoxStyles: defaultInputBoxStyles,
+				presentation: 'compact',
+				ariaLabel: localize('search.includesLabel', 'Files to include'),
+				placeholder: localize('search.includes', 'files to include'),
+			}),
+		);
+		this.exclude = this._register(
+			new InputBox(form, {
+				inputBoxStyles: defaultInputBoxStyles,
+				presentation: 'compact',
+				ariaLabel: localize('search.excludesLabel', 'Files to exclude'),
+				placeholder: localize('search.excludes', 'files to exclude'),
+			}),
+		);
 		const buttons = h(document, 'div');
 		buttons.className = 'ash-search-editor-buttons';
-		this.runButton = this._register(new Button(buttons, {
-			...defaultButtonStyles,
-			label: localize('searchEditor.run', 'Search again'),
-			onClick: () => { void this.runSearch(); },
-		}));
-		this.stopButton = this._register(new Button(buttons, {
-			...defaultButtonStyles,
-			label: localize('search.stop', 'Stop search'),
-			presentation: 'secondary',
-			onClick: () => this.controller?.abort(),
-		}));
+		this.runButton = this._register(
+			new Button(buttons, {
+				...defaultButtonStyles,
+				label: localize('searchEditor.run', 'Search again'),
+				onClick: () => {
+					void this.runSearch();
+				},
+			}),
+		);
+		this.stopButton = this._register(
+			new Button(buttons, {
+				...defaultButtonStyles,
+				label: localize('search.stop', 'Stop search'),
+				presentation: 'secondary',
+				onClick: () => this.controller?.abort(),
+			}),
+		);
 		this.stopButton.enabled = false;
 		form.append(buttons);
 		this.status = h(document, 'div');
@@ -139,37 +170,70 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		this.domNode.append(form, this.status, this.body);
 		this.textEditor.create(this.body);
 		this._register(observeElementSize(this.body, size => this.textEditor.layout(size)));
-		const updateHint = () => this.queryInput.setAttribute('aria-description', this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.Find)
-			? localize('search.helpHint', 'Press Alt+F1 for search accessibility help.') : '');
+		const updateHint = () =>
+			this.queryInput.setAttribute(
+				'aria-description',
+				this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.Find)
+					? localize('search.helpHint', 'Press Alt+F1 for search accessibility help.')
+					: '',
+			);
 		updateHint();
-		this._register(this.configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(AccessibilityVerbositySettingId.Find)) { updateHint(); }
-		}));
+		this._register(
+			this.configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(AccessibilityVerbositySettingId.Find)) {
+					updateHint();
+				}
+			}),
+		);
 		for (const input of [this.queryInput, this.include.inputElement, this.exclude.inputElement]) {
 			this._register(addDisposableListener(input, 'input', () => this.writeQuery()));
 		}
-		this._register(addDisposableListener(form, 'submit', event => {
-			event.preventDefault();
-			void this.runSearch();
-		}));
-		this._register(addDisposableListener(this.domNode, 'keydown', event => {
-			if (event.isComposing) { return; }
-			if (event.key === 'Escape' && this.controller) { event.preventDefault(); this.controller.abort(); }
-			if (event.key !== 'Enter' || (!event.ctrlKey && !event.metaKey)) { return; }
-			event.preventDefault();
-			event.stopPropagation();
-			if (form.contains(event.target as Node)) { void this.runSearch(); }
-			else { void this.openResult(); }
-		}, true));
+		this._register(
+			addDisposableListener(form, 'submit', event => {
+				event.preventDefault();
+				void this.runSearch();
+			}),
+		);
+		this._register(
+			addDisposableListener(
+				this.domNode,
+				'keydown',
+				event => {
+					if (event.isComposing) {
+						return;
+					}
+					if (event.key === 'Escape' && this.controller) {
+						event.preventDefault();
+						this.controller.abort();
+					}
+					if (event.key !== 'Enter' || (!event.ctrlKey && !event.metaKey)) {
+						return;
+					}
+					event.preventDefault();
+					event.stopPropagation();
+					if (form.contains(event.target as Node)) {
+						void this.runSearch();
+					} else {
+						void this.openResult();
+					}
+				},
+				true,
+			),
+		);
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		this.clearInput();
-		await this.textEditor.setInput({ ...input, editorId: CODE_EDITOR_ID, languageId: 'plaintext', showBreadcrumbs: false }, signal);
+		await this.textEditor.setInput(
+			{ ...input, editorId: CODE_EDITOR_ID, languageId: 'plaintext', showBreadcrumbs: false },
+			signal,
+		);
 		this.readQuery();
 		this.inputListeners.add(this.getControl()!.onDidChangeModelContent(() => this.readQuery()));
 		this.inputListeners.add(this.workspace.onDidChangeWorkspace(() => this.controller?.abort()));
-		if (this.dimension) { this.layout(this.dimension); }
+		if (this.dimension) {
+			this.layout(this.dimension);
+		}
 	}
 
 	public override clearInput(): void {
@@ -181,12 +245,16 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		this.stopButton.enabled = false;
 		this.status.textContent = '';
 	}
-	public override focus(): void { this.queryInput.focus(); }
+	public override focus(): void {
+		this.queryInput.focus();
+	}
 	public override setVisible(visibility: boolean): void {
 		super.setVisible(visibility);
 		// Editor hosts become visible after their initial layout; measurements taken
 		// while the tab is hidden cannot size the results editor.
-		if (visibility && this.dimension) { this.layout(this.dimension); }
+		if (visibility && this.dimension) {
+			this.layout(this.dimension);
+		}
 		this.textEditor.setVisible(visibility);
 	}
 	public override layout(dimension: IDimension): void {
@@ -199,27 +267,45 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 	private readQuery(): void {
 		try {
 			this.query = parseSearchEditor(this.getControl()!.getValue());
-			if (this.queryInput.value !== this.query.text) { this.queryInput.value = this.query.text; }
-			if (this.domNode.ownerDocument.activeElement !== this.include.inputElement) { this.include.value = this.query.includePatterns.join(', '); }
-			if (this.domNode.ownerDocument.activeElement !== this.exclude.inputElement) { this.exclude.value = this.query.excludePatterns.join(', '); }
+			if (this.queryInput.value !== this.query.text) {
+				this.queryInput.value = this.query.text;
+			}
+			if (this.domNode.ownerDocument.activeElement !== this.include.inputElement) {
+				this.include.value = this.query.includePatterns.join(', ');
+			}
+			if (this.domNode.ownerDocument.activeElement !== this.exclude.inputElement) {
+				this.exclude.value = this.query.excludePatterns.join(', ');
+			}
 			this.updateOptions();
 		} catch {
-			this.status.textContent = localize('searchEditor.invalid', 'Invalid search document. Restore its Search header before searching again.');
+			this.status.textContent = localize(
+				'searchEditor.invalid',
+				'Invalid search document. Restore its Search header before searching again.',
+			);
 		}
 	}
 
 	private updateOptions(): void {
 		this.options.setActions([
 			{
-				id: 'case', label: localize('search.matchCase', 'Match Case'), tooltip: '', enabled: true,
+				id: 'case',
+				label: localize('search.matchCase', 'Match Case'),
+				tooltip: '',
+				enabled: true,
 				checked: this.query.caseSensitivity === 'sensitive',
 				run: () => {
-					this.query = { ...this.query, caseSensitivity: this.query.caseSensitivity === 'sensitive' ? 'insensitive' : 'sensitive' };
+					this.query = {
+						...this.query,
+						caseSensitivity: this.query.caseSensitivity === 'sensitive' ? 'insensitive' : 'sensitive',
+					};
 					this.writeQuery();
 				},
 			},
 			{
-				id: 'word', label: localize('search.wholeWord', 'Match Whole Word'), tooltip: '', enabled: true,
+				id: 'word',
+				label: localize('search.wholeWord', 'Match Whole Word'),
+				tooltip: '',
+				enabled: true,
 				checked: Boolean(this.query.wholeWord),
 				run: () => {
 					this.query = { ...this.query, wholeWord: !this.query.wholeWord };
@@ -227,10 +313,16 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 				},
 			},
 			{
-				id: 'regex', label: localize('search.useRegex', 'Use Regular Expression'), tooltip: '', enabled: true,
+				id: 'regex',
+				label: localize('search.useRegex', 'Use Regular Expression'),
+				tooltip: '',
+				enabled: true,
 				checked: this.query.patternKind === 'regex',
 				run: () => {
-					this.query = { ...this.query, patternKind: this.query.patternKind === 'regex' ? 'literal' : 'regex' };
+					this.query = {
+						...this.query,
+						patternKind: this.query.patternKind === 'regex' ? 'literal' : 'regex',
+					};
 					this.writeQuery();
 				},
 			},
@@ -240,15 +332,25 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 	private writeQuery(): void {
 		const control = this.getControl();
 		const model = control?.getModel();
-		if (!model) { return; }
+		if (!model) {
+			return;
+		}
 		this.query = {
 			...this.query,
 			text: this.queryInput.value,
-			includePatterns: this.include.value.split(',').map(value => value.trim()).filter(Boolean),
-			excludePatterns: this.exclude.value.split(',').map(value => value.trim()).filter(Boolean),
+			includePatterns: this.include.value
+				.split(',')
+				.map(value => value.trim())
+				.filter(Boolean),
+			excludePatterns: this.exclude.value
+				.split(',')
+				.map(value => value.trim())
+				.filter(Boolean),
 		};
 		const header = serializeSearchResultForEditor(this.query).split('\n', 1)[0]!;
-		control!.executeEdits('searchEditor.query', [{ range: new Range(1, 1, 1, model.getLineMaxColumn(1)), text: header }]);
+		control!.executeEdits('searchEditor.query', [
+			{ range: new Range(1, 1, 1, model.getLineMaxColumn(1)), text: header },
+		]);
 	}
 
 	private async runSearch(): Promise<void> {
@@ -258,10 +360,16 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 		try {
 			query = parseSearchEditor(model.getText());
 		} catch {
-			this.status.textContent = localize('searchEditor.invalid', 'Invalid search document. Restore its Search header before searching again.');
+			this.status.textContent = localize(
+				'searchEditor.invalid',
+				'Invalid search document. Restore its Search header before searching again.',
+			);
 			return;
 		}
-		if (!query.text) { this.status.textContent = localize('search.enterQuery', 'Enter text to search.'); return; }
+		if (!query.text) {
+			this.status.textContent = localize('search.enterQuery', 'Enter text to search.');
+			return;
+		}
 		this.controller?.abort();
 		const controller = new AbortController();
 		this.controller = controller;
@@ -275,28 +383,57 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 			const cancel = (): void => cancellation.cancel();
 			controller.signal.addEventListener('abort', cancel, { once: true });
 			using listener = toDisposable(() => controller.signal.removeEventListener('abort', cancel));
-			const textQuery = new QueryBuilder().text({
-				pattern: query.text, isRegExp: query.patternKind === 'regex', isWordMatch: query.wholeWord,
-				isCaseSensitive: query.caseSensitivity === 'sensitive' || query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text),
-			}, this.workspace.getWorkspace().folders.map(folder => folder.uri), {
-				includePattern: query.includePatterns.join(','), excludePattern: query.excludePatterns.join(','), maxResults: query.maxResults,
-				// Generated search drafts contain the query in their header and must not search themselves.
-				extraFileResources: this.textModels.getModels().filter(model => model.uri.scheme !== Schemas.untitled || !model.uri.path.endsWith('.code-search')).map(model => model.uri),
-			});
+			const textQuery = new QueryBuilder().text(
+				{
+					pattern: query.text,
+					isRegExp: query.patternKind === 'regex',
+					isWordMatch: query.wholeWord,
+					isCaseSensitive:
+						query.caseSensitivity === 'sensitive' ||
+						(query.caseSensitivity === 'smart' && /\p{Lu}/u.test(query.text)),
+				},
+				this.workspace.getWorkspace().folders.map(folder => folder.uri),
+				{
+					includePattern: query.includePatterns.join(','),
+					excludePattern: query.excludePatterns.join(','),
+					maxResults: query.maxResults,
+					// Generated search drafts contain the query in their header and must not search themselves.
+					extraFileResources: this.textModels
+						.getModels()
+						.filter(
+							model => model.uri.scheme !== Schemas.untitled || !model.uri.path.endsWith('.code-search'),
+						)
+						.map(model => model.uri),
+				},
+			);
 			const complete = await this.search.textSearch(textQuery, cancellation.token, progress => {
-				if (!controller.signal.aborted && !this.isDisposed && 'resource' in progress) { result.addFileMatch(progress); }
+				if (!controller.signal.aborted && !this.isDisposed && 'resource' in progress) {
+					result.addFileMatch(progress);
+				}
 			});
-			if (this.isDisposed || controller.signal.aborted || this.controller !== controller) { return; }
-			if (complete.messages.length) { this.status.textContent = complete.messages.map(message => message.text).join('\n'); return; }
+			if (this.isDisposed || controller.signal.aborted || this.controller !== controller) {
+				return;
+			}
+			if (complete.messages.length) {
+				this.status.textContent = complete.messages.map(message => message.text).join('\n');
+				return;
+			}
 			// Keep edits made while the search was running until the user accepts replacing them.
 			if (model.version !== version) {
 				const confirmed = await this.dialogs.confirm({
-					message: localize('searchEditor.changed', 'This search document changed while searching. Replace it with the new results?'),
+					message: localize(
+						'searchEditor.changed',
+						'This search document changed while searching. Replace it with the new results?',
+					),
 					primaryButton: localize('searchEditor.update', 'Update results'),
 				});
-				if (!confirmed.confirmed || controller.signal.aborted || this.isDisposed) { return; }
+				if (!confirmed.confirmed || controller.signal.aborted || this.isDisposed) {
+					return;
+				}
 			}
-			control.executeEdits('searchEditor.results', [{ range: model.getFullModelRange(), text: serializeSearchResultForEditor(query, result) }]);
+			control.executeEdits('searchEditor.results', [
+				{ range: model.getFullModelRange(), text: serializeSearchResultForEditor(query, result) },
+			]);
 			this.status.textContent = complete.limitHit
 				? localize('search.limitReached', '{0} results (result limit reached)', result.count)
 				: localize('search.results', '{0} results', result.count);
@@ -320,16 +457,21 @@ export class SearchEditor extends EditorPane implements IEditorPane {
 	private async openResult(): Promise<void> {
 		const control = this.getControl()!;
 		const selection = control.getSelections()?.[0];
-		if (!selection) { return; }
+		if (!selection) {
+			return;
+		}
 		try {
 			const location = searchEditorLocation(control.getValue(), selection.startLineNumber);
 			if (location) {
-				await this.editors.openEditor({ resource: location.resource }, {
-					source: EditorOpenSource.USER,
-					selection: location.range,
-					selectionSource: TextEditorSelectionSource.NAVIGATION,
-					pinned: true,
-				});
+				await this.editors.openEditor(
+					{ resource: location.resource },
+					{
+						source: EditorOpenSource.USER,
+						selection: location.range,
+						selectionSource: TextEditorSelectionSource.NAVIGATION,
+						pinned: true,
+					},
+				);
 			}
 		} catch (error) {
 			this.status.textContent = error instanceof Error ? error.message : String(error);

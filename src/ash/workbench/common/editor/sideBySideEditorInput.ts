@@ -17,10 +17,16 @@ export abstract class SideBySideEditorInput extends EditorInput {
 	) {
 		super();
 		// Event.any subscribes only while a view listens, so closing the last view releases both subscriptions.
-		this.onDidChangeLabel = Event.any(secondary.onDidChangeLabel ?? Event.None, primary.onDidChangeLabel ?? Event.None);
+		this.onDidChangeLabel = Event.any(
+			secondary.onDidChangeLabel ?? Event.None,
+			primary.onDidChangeLabel ?? Event.None,
+		);
 	}
 
 	public getName(): string {
-		return this.preferredName ?? `${this.secondary.label ?? basename(this.secondary.resource)} ↔ ${this.primary.label ?? basename(this.primary.resource)}`;
+		return (
+			this.preferredName ??
+			`${this.secondary.label ?? basename(this.secondary.resource)} ↔ ${this.primary.label ?? basename(this.primary.resource)}`
+		);
 	}
 }

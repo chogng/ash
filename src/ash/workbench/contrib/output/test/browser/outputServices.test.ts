@@ -3,12 +3,12 @@ import { ITextModelService } from '../../../../../editor/common/services/resolve
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { IOutputService } from '../../../../services/output/common/output.js';
 import { StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
-import assert from "node:assert/strict";
-import { suite, test } from "mocha";
+import assert from 'node:assert/strict';
+import { suite, test } from 'mocha';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { JSDOM } from "jsdom";
+import { JSDOM } from 'jsdom';
 import { windowLogId } from '../../../../services/log/common/logConstants.js';
-import { BrowserStorageService } from "../../../../services/storage/browser/storageService.js";
+import { BrowserStorageService } from '../../../../services/storage/browser/storageService.js';
 
 suite('Output shutdown', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -30,74 +30,100 @@ suite('Output shutdown', () => {
 	});
 });
 
-test("OutputService registers, updates, reveals, and removes independent channels", () => {
+test('OutputService registers, updates, reveals, and removes independent channels', () => {
 	using outputResources = new DisposableStore();
 	const output = workbenchInstantiationService(outputResources).get(IOutputService);
-	using first = output.createChannel({ id: "tasks", label: "Tasks" });
-	using second = output.createChannel({ id: "rust-analyzer", label: "rust-analyzer" });
+	using first = output.createChannel({ id: 'tasks', label: 'Tasks' });
+	using second = output.createChannel({ id: 'rust-analyzer', label: 'rust-analyzer' });
 	const selections: Array<string | undefined> = [];
 	using selectionListener = output.onDidChangeActiveChannel(channel => selections.push(channel?.id));
 
 	assert.equal(output.activeChannel, first);
 	const reveals: Array<[string, string]> = [];
 	using revealListener = output.onDidRequestShowChannel(request => reveals.push([request.channel.id, request.focus]));
-	first.appendLine({ severity: "log", text: "task started" });
-	second.append({ severity: "warning", text: "check failed" });
-	assert.deepEqual(first.entries.map(entry => [entry.sequence, entry.severity, entry.text]), [[1, "log", "task started\n"]]);
-	assert.deepEqual(second.entries.map(entry => [entry.sequence, entry.severity, entry.text]), [[1, "warning", "check failed"]]);
+	first.appendLine({ severity: 'log', text: 'task started' });
+	second.append({ severity: 'warning', text: 'check failed' });
+	assert.deepEqual(
+		first.entries.map(entry => [entry.sequence, entry.severity, entry.text]),
+		[[1, 'log', 'task started\n']],
+	);
+	assert.deepEqual(
+		second.entries.map(entry => [entry.sequence, entry.severity, entry.text]),
+		[[1, 'warning', 'check failed']],
+	);
 
 	output.selectChannel(second.id);
 	assert.equal(output.activeChannel, second);
 	assert.deepEqual(selections, [second.id]);
-	first.show({ focus: "preserve" });
+	first.show({ focus: 'preserve' });
 	assert.equal(output.activeChannel, first);
-	assert.deepEqual(reveals, [[first.id, "preserve"]]);
-	first.replace([{ severity: "information", category: "lifecycle", timestamp: 1, text: "ready" }]);
-	assert.equal(first.getText(), "ready");
-	assert.deepEqual(first.entries.map(entry => [entry.timestamp, entry.severity, entry.category, entry.text]), [[1, "information", "lifecycle", "ready"]]);
+	assert.deepEqual(reveals, [[first.id, 'preserve']]);
+	first.replace([{ severity: 'information', category: 'lifecycle', timestamp: 1, text: 'ready' }]);
+	assert.equal(first.getText(), 'ready');
+	assert.deepEqual(
+		first.entries.map(entry => [entry.timestamp, entry.severity, entry.category, entry.text]),
+		[[1, 'information', 'lifecycle', 'ready']],
+	);
 	output.selectChannel(second.id);
 	second.clear();
 	assert.deepEqual(second.entries, []);
 	second.dispose();
 	assert.equal(output.activeChannel, first);
-	assert.deepEqual(output.channels.map(channel => channel.id), [first.id]);
-	assert.deepEqual(selections, ["rust-analyzer", "tasks", "rust-analyzer", "tasks"]);
+	assert.deepEqual(
+		output.channels.map(channel => channel.id),
+		[first.id],
+	);
+	assert.deepEqual(selections, ['rust-analyzer', 'tasks', 'rust-analyzer', 'tasks']);
 });
 
-test("OutputService rejects ambiguous channel ownership and invalid entries", () => {
+test('OutputService rejects ambiguous channel ownership and invalid entries', () => {
 	using outputResources = new DisposableStore();
 	const output = workbenchInstantiationService(outputResources).get(IOutputService);
-	using channel = output.createChannel({ id: "server", label: "Server" });
-	assert.throws(() => output.createChannel({ id: "server", label: "Duplicate" }), /already registered/);
-	assert.throws(() => output.createChannel({ id: "invalid id", label: "Invalid" }), /cannot contain whitespace/);
-	assert.throws(() => output.selectChannel("missing"), /Unknown Output channel/);
-	assert.throws(() => channel.append({ severity: "fatal" as never, text: "unsupported" }), /Unsupported Output entry severity/);
-	channel.append({ severity: "log", text: "  " });
-	assert.equal(channel.getText(), "  ");
+	using channel = output.createChannel({ id: 'server', label: 'Server' });
+	assert.throws(() => output.createChannel({ id: 'server', label: 'Duplicate' }), /already registered/);
+	assert.throws(() => output.createChannel({ id: 'invalid id', label: 'Invalid' }), /cannot contain whitespace/);
+	assert.throws(() => output.selectChannel('missing'), /Unknown Output channel/);
+	assert.throws(
+		() => channel.append({ severity: 'fatal' as never, text: 'unsupported' }),
+		/Unsupported Output entry severity/,
+	);
+	channel.append({ severity: 'log', text: '  ' });
+	assert.equal(channel.getText(), '  ');
 });
 
-test("OutputService restores the workspace active channel when its producer returns", () => {
-	const browser = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
-	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: "workspace", backend: browser.window.localStorage, flushInterval: 0 });
+test('OutputService restores the workspace active channel when its producer returns', () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using storage = new BrowserStorageService({
+		ownerWindow: browser.window as unknown as Window,
+		workspaceId: 'workspace',
+		backend: browser.window.localStorage,
+		flushInterval: 0,
+	});
 	{
 		using outputResources = new DisposableStore();
 		const output = workbenchInstantiationService(outputResources, storage).get(IOutputService);
-		using first = output.createChannel({ id: "first", label: "First" });
-		using second = output.createChannel({ id: "second", label: "Second" });
+		using first = output.createChannel({ id: 'first', label: 'First' });
+		using second = output.createChannel({ id: 'second', label: 'Second' });
 		output.selectChannel(second.id);
 	}
 	{
 		using outputResources = new DisposableStore();
 		const output = workbenchInstantiationService(outputResources, storage).get(IOutputService);
-		using first = output.createChannel({ id: "first", label: "First" });
+		using first = output.createChannel({ id: 'first', label: 'First' });
 		assert.equal(output.activeChannel, first);
-		using second = output.createChannel({ id: "second", label: "Second" });
+		using second = output.createChannel({ id: 'second', label: 'Second' });
 		assert.equal(output.activeChannel, second);
 	}
 	browser.window.close();
 });
 
-const entry = { sequence: 1, timestamp: 1, severity: "warning", category: "lifecycle", text: "Server restart scheduled" } as const;
+const entry = {
+	sequence: 1,
+	timestamp: 1,
+	severity: 'warning',
+	category: 'lifecycle',
+	text: 'Server restart scheduled',
+} as const;
 
 test('Output keeps panel and editor references live, and recreates a released model from retained content', async () => {
 	using resources = new DisposableStore();
@@ -151,69 +177,98 @@ test('Output normalizes CRLF once when producers split it between writes', async
 	assert.equal(reference.object.textEditorModel.getValue().replaceAll('\r\n', '\n'), 'first\nsecond\n');
 });
 
-test("OutputFilterState combines include, exclude, severity, and category filters", () => {
+test('OutputFilterState combines include, exclude, severity, and category filters', () => {
 	using filterResources = new DisposableStore();
 	const filters = workbenchInstantiationService(filterResources).get(IOutputService).filters;
 	filters.setText('server restart,!failed');
 	assert.equal(filters.matches(entry, windowLogId), true);
-	filters.setText("server,!scheduled");
+	filters.setText('server,!scheduled');
 	assert.equal(filters.matches(entry, windowLogId), false);
-	filters.setText("");
-	filters.setSeverityVisible("warning", false);
+	filters.setText('');
+	filters.setSeverityVisible('warning', false);
 	assert.equal(filters.matches(entry, windowLogId), false);
-	filters.setSeverityVisible("warning", true);
-	filters.setCategoryVisible("lifecycle", false, windowLogId);
+	filters.setSeverityVisible('warning', true);
+	filters.setCategoryVisible('lifecycle', false, windowLogId);
 	assert.equal(filters.matches(entry, windowLogId), false);
 	filters.reset();
 	assert.equal(filters.matches(entry, windowLogId), true);
-	filters.setMinimumSeverity("error");
+	filters.setMinimumSeverity('error');
 	assert.equal(filters.matches(entry, windowLogId), false);
-	assert.equal(filters.matches({ ...entry, severity: "error" }, windowLogId), true);
+	assert.equal(filters.matches({ ...entry, severity: 'error' }, windowLogId), true);
 });
 
-test("OutputFilterState restores workspace-local filter choices", () => {
-	const browser = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
-	using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: "workspace", backend: browser.window.localStorage, flushInterval: 0 });
+test('OutputFilterState restores workspace-local filter choices', () => {
+	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	using storage = new BrowserStorageService({
+		ownerWindow: browser.window as unknown as Window,
+		workspaceId: 'workspace',
+		backend: browser.window.localStorage,
+		flushInterval: 0,
+	});
 	{
 		using filterResources = new DisposableStore();
 		const filters = workbenchInstantiationService(filterResources, storage).get(IOutputService).filters;
-		filters.setText("server");
-		filters.setSeverityVisible("trace", false);
+		filters.setText('server');
+		filters.setSeverityVisible('trace', false);
 	}
 	{
 		using filterResources = new DisposableStore();
 		const filters = workbenchInstantiationService(filterResources, storage).get(IOutputService).filters;
-		assert.equal(filters.text, "server");
-		assert.equal(filters.isSeverityVisible("trace"), false);
+		assert.equal(filters.text, 'server');
+		assert.equal(filters.isSeverityVisible('trace'), false);
 	}
 	browser.window.close();
 });
 
-
 function filterStorage(resources: DisposableStore, raw?: string): BrowserStorageService {
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
-	const storage = resources.add(new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'output-query', backend: browser.window.localStorage, flushInterval: 0 }));
+	const storage = resources.add(
+		new BrowserStorageService({
+			ownerWindow: browser.window as unknown as Window,
+			workspaceId: 'output-query',
+			backend: browser.window.localStorage,
+			flushInterval: 0,
+		}),
+	);
 	resources.add(toDisposable(() => browser.window.close()));
-	if (raw !== undefined) { storage.store('output.filterState', raw, StorageScope.WORKSPACE, StorageTarget.MACHINE); }
+	if (raw !== undefined) {
+		storage.store('output.filterState', raw, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+	}
 	return storage;
 }
 
 for (const syntaxVersion of [undefined, 1, 2]) {
 	test(`Output category restoration keeps legacy choices global without assigning a channel (${syntaxVersion ?? 'unversioned'})`, () => {
 		using resources = new DisposableStore();
-		const raw = JSON.stringify({ ...(syntaxVersion === undefined ? {} : { syntaxVersion }), text: '', hiddenSeverities: [], hiddenCategories: ['lifecycle', 'build'] });
+		const raw = JSON.stringify({
+			...(syntaxVersion === undefined ? {} : { syntaxVersion }),
+			text: '',
+			hiddenSeverities: [],
+			hiddenCategories: ['lifecycle', 'build'],
+		});
 		const storage = filterStorage(resources, raw);
 		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-		assert.deepEqual({ first: filters.matches(entry, windowLogId), second: filters.matches(entry, 'extension-host'), build: filters.matches({ ...entry, category: 'build' }, 'extension-host'), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, {
-			first: false, second: false, build: false, stored: raw,
-		});
+		assert.deepEqual(
+			{
+				first: filters.matches(entry, windowLogId),
+				second: filters.matches(entry, 'extension-host'),
+				build: filters.matches({ ...entry, category: 'build' }, 'extension-host'),
+				stored: storage.get('output.filterState', StorageScope.WORKSPACE),
+			},
+			{ first: false, second: false, build: false, stored: raw },
+		);
 	});
 }
 
 for (const visible of [false, true]) {
 	test(`Output first explicit category choice migrates only that category to the current channel (${visible ? 'show' : 'hide'})`, () => {
 		using storageResources = new DisposableStore();
-		const raw = JSON.stringify({ syntaxVersion: 2, text: '', hiddenSeverities: [], hiddenCategories: ['lifecycle', 'build'] });
+		const raw = JSON.stringify({
+			syntaxVersion: 2,
+			text: '',
+			hiddenSeverities: [],
+			hiddenCategories: ['lifecycle', 'build'],
+		});
 		const storage = filterStorage(storageResources, raw);
 		{
 			using resources = new DisposableStore();
@@ -221,9 +276,16 @@ for (const visible of [false, true]) {
 			let changes = 0;
 			using migrationListener = filters.onDidChange(() => changes++);
 			filters.setCategoryVisible('lifecycle', visible, windowLogId);
-			assert.deepEqual({ first: filters.matches(entry, windowLogId), second: filters.matches(entry, 'extension-host'), firstBuild: filters.matches({ ...entry, category: 'build' }, windowLogId), secondBuild: filters.matches({ ...entry, category: 'build' }, 'extension-host'), changes }, {
-				first: visible, second: true, firstBuild: false, secondBuild: false, changes: 1,
-			});
+			assert.deepEqual(
+				{
+					first: filters.matches(entry, windowLogId),
+					second: filters.matches(entry, 'extension-host'),
+					firstBuild: filters.matches({ ...entry, category: 'build' }, windowLogId),
+					secondBuild: filters.matches({ ...entry, category: 'build' }, 'extension-host'),
+					changes,
+				},
+				{ first: visible, second: true, firstBuild: false, secondBuild: false, changes: 1 },
+			);
 			const stored = JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!);
 			assert.equal(stored.hiddenCategories.includes('lifecycle'), false);
 			assert.equal(stored.hiddenCategories.includes('build'), true);
@@ -231,9 +293,23 @@ for (const visible of [false, true]) {
 		{
 			using resources = new DisposableStore();
 			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-			assert.deepEqual({ first: filters.matches(entry, windowLogId), second: filters.matches(entry, 'extension-host'), build: filters.matches({ ...entry, category: 'build' }, 'extension-host') }, { first: visible, second: true, build: false });
+			assert.deepEqual(
+				{
+					first: filters.matches(entry, windowLogId),
+					second: filters.matches(entry, 'extension-host'),
+					build: filters.matches({ ...entry, category: 'build' }, 'extension-host'),
+				},
+				{ first: visible, second: true, build: false },
+			);
 			filters.setCategoryVisible('lifecycle', !visible, 'extension-host');
-			assert.deepEqual({ first: filters.matches(entry, windowLogId), second: filters.matches(entry, 'extension-host'), build: filters.matches({ ...entry, category: 'build' }, windowLogId) }, { first: visible, second: !visible, build: false });
+			assert.deepEqual(
+				{
+					first: filters.matches(entry, windowLogId),
+					second: filters.matches(entry, 'extension-host'),
+					build: filters.matches({ ...entry, category: 'build' }, windowLogId),
+				},
+				{ first: visible, second: !visible, build: false },
+			);
 		}
 	});
 }
@@ -243,12 +319,23 @@ test('Output category identities keep channel and category separators distinct',
 	const filters = workbenchInstantiationService(resources).get(IOutputService).filters;
 	filters.setCategoryVisible('c', false, 'a:b');
 	filters.setCategoryVisible('b:c', false, 'a');
-	assert.deepEqual({ first: filters.matches({ ...entry, category: 'c' }, 'a:b'), other: filters.matches({ ...entry, category: 'c' }, 'a'), second: filters.matches({ ...entry, category: 'b:c' }, 'a') }, { first: false, other: true, second: false });
+	assert.deepEqual(
+		{
+			first: filters.matches({ ...entry, category: 'c' }, 'a:b'),
+			other: filters.matches({ ...entry, category: 'c' }, 'a'),
+			second: filters.matches({ ...entry, category: 'b:c' }, 'a'),
+		},
+		{ first: false, other: true, second: false },
+	);
 	filters.setCategoryVisible('c', true, 'a:b');
 	assert.equal(filters.matches({ ...entry, category: 'b:c' }, 'a'), false);
 });
 
-for (const category of ['["window","lifecycle"]', String.raw`\0["window","lifecycle"]`, String.raw`\u0000["window","lifecycle"]`]) {
+for (const category of [
+	'["window","lifecycle"]',
+	String.raw`\0["window","lifecycle"]`,
+	String.raw`\u0000["window","lifecycle"]`,
+]) {
 	test(`Output restores literal legacy category text without treating serialized-looking names as channel identities (${category})`, () => {
 		using storageResources = new DisposableStore();
 		const raw = JSON.stringify({ syntaxVersion: 2, text: '', hiddenSeverities: [], hiddenCategories: [category] });
@@ -263,20 +350,36 @@ for (const category of ['["window","lifecycle"]', String.raw`\0["window","lifecy
 				channel.appendLine({ category: 'lifecycle', text: 'Actual lifecycle' });
 			}
 			const filters = output.filters;
-			assert.deepEqual({ firstLiteral: filters.matches(first.entries[0]!, first.id), secondLiteral: filters.matches(second.entries[0]!, second.id), actualLifecycle: filters.matches(first.entries[1]!, first.id), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, {
-				firstLiteral: false, secondLiteral: false, actualLifecycle: true, stored: raw,
-			});
+			assert.deepEqual(
+				{
+					firstLiteral: filters.matches(first.entries[0]!, first.id),
+					secondLiteral: filters.matches(second.entries[0]!, second.id),
+					actualLifecycle: filters.matches(first.entries[1]!, first.id),
+					stored: storage.get('output.filterState', StorageScope.WORKSPACE),
+				},
+				{ firstLiteral: false, secondLiteral: false, actualLifecycle: true, stored: raw },
+			);
 			filters.setCategoryVisible(category, false, first.id);
-			assert.deepEqual({ firstLiteral: filters.matches(first.entries[0]!, first.id), secondLiteral: filters.matches(second.entries[0]!, second.id), actualLifecycle: filters.matches(first.entries[1]!, first.id) }, {
-				firstLiteral: false, secondLiteral: true, actualLifecycle: true,
-			});
+			assert.deepEqual(
+				{
+					firstLiteral: filters.matches(first.entries[0]!, first.id),
+					secondLiteral: filters.matches(second.entries[0]!, second.id),
+					actualLifecycle: filters.matches(first.entries[1]!, first.id),
+				},
+				{ firstLiteral: false, secondLiteral: true, actualLifecycle: true },
+			);
 		}
 		{
 			using resources = new DisposableStore();
 			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-			assert.deepEqual({ firstLiteral: filters.matches({ ...entry, category }, windowLogId), secondLiteral: filters.matches({ ...entry, category }, 'extension-host'), actualLifecycle: filters.matches(entry, windowLogId) }, {
-				firstLiteral: false, secondLiteral: true, actualLifecycle: true,
-			});
+			assert.deepEqual(
+				{
+					firstLiteral: filters.matches({ ...entry, category }, windowLogId),
+					secondLiteral: filters.matches({ ...entry, category }, 'extension-host'),
+					actualLifecycle: filters.matches(entry, windowLogId),
+				},
+				{ firstLiteral: false, secondLiteral: true, actualLifecycle: true },
+			);
 		}
 	});
 }
@@ -296,21 +399,47 @@ test('Output category identities reject null bytes and survive unrelated saved-f
 	{
 		using resources = new DisposableStore();
 		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-		assert.deepEqual({ selected: filters.matches({ ...entry, category: '["window","lifecycle"]' }, 'a:b'), other: filters.matches({ ...entry, category: '["window","lifecycle"]' }, 'a'), original: filters.matches(entry, windowLogId), severity: filters.isSeverityVisible('trace'), text: filters.text }, {
-			selected: false, other: true, original: true, severity: false, text: 'server',
-		});
+		assert.deepEqual(
+			{
+				selected: filters.matches({ ...entry, category: '["window","lifecycle"]' }, 'a:b'),
+				other: filters.matches({ ...entry, category: '["window","lifecycle"]' }, 'a'),
+				original: filters.matches(entry, windowLogId),
+				severity: filters.isSeverityVisible('trace'),
+				text: filters.text,
+			},
+			{ selected: false, other: true, original: true, severity: false, text: 'server' },
+		);
 	}
 });
 
 test('Output channel category changes remain unsaved when a future schema owns storage', () => {
 	using resources = new DisposableStore();
-	const raw = JSON.stringify({ syntaxVersion: 3, text: 'future', hiddenCategories: ['lifecycle'], future: { retained: true } });
+	const raw = JSON.stringify({
+		syntaxVersion: 3,
+		text: 'future',
+		hiddenCategories: ['lifecycle'],
+		future: { retained: true },
+	});
 	const storage = filterStorage(resources, raw);
 	const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
 	filters.setCategoryVisible('lifecycle', false, windowLogId);
-	assert.deepEqual({ first: filters.matches(entry, windowLogId), second: filters.matches(entry, 'extension-host'), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { first: false, second: true, stored: raw });
+	assert.deepEqual(
+		{
+			first: filters.matches(entry, windowLogId),
+			second: filters.matches(entry, 'extension-host'),
+			stored: storage.get('output.filterState', StorageScope.WORKSPACE),
+		},
+		{ first: false, second: true, stored: raw },
+	);
 	filters.reset();
-	assert.deepEqual({ first: filters.matches(entry, windowLogId), second: filters.matches(entry, 'extension-host'), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { first: true, second: true, stored: raw });
+	assert.deepEqual(
+		{
+			first: filters.matches(entry, windowLogId),
+			second: filters.matches(entry, 'extension-host'),
+			stored: storage.get('output.filterState', StorageScope.WORKSPACE),
+		},
+		{ first: true, second: true, stored: raw },
+	);
 });
 
 test('Output text queries match comma alternatives with exclusions taking precedence', () => {
@@ -325,7 +454,11 @@ test('Output text queries match comma alternatives with exclusions taking preced
 	];
 	for (const scenario of scenarios) {
 		filters.setText(scenario.query);
-		assert.deepEqual(lines.filter(text => filters.matches({ ...entry, text }, windowLogId)), scenario.expected, scenario.query);
+		assert.deepEqual(
+			lines.filter(text => filters.matches({ ...entry, text }, windowLogId)),
+			scenario.expected,
+			scenario.query,
+		);
 	}
 });
 
@@ -342,7 +475,11 @@ test('Output text queries keep spaces, minus and protected quotes literal', () =
 	];
 	for (const scenario of scenarios) {
 		filters.setText(scenario.query);
-		assert.deepEqual(scenario.lines.filter(text => filters.matches({ ...entry, text }, windowLogId)), scenario.expected, scenario.query);
+		assert.deepEqual(
+			scenario.lines.filter(text => filters.matches({ ...entry, text }, windowLogId)),
+			scenario.expected,
+			scenario.query,
+		);
 	}
 });
 
@@ -370,20 +507,43 @@ test('Output restores saved queries unchanged and adopts current syntax on ident
 	];
 	for (const scenario of scenarios) {
 		using resources = new DisposableStore();
-		const raw = JSON.stringify({ text: scenario.query, hiddenSeverities: [], hiddenCategories: [], ignored: 'not owned' });
+		const raw = JSON.stringify({
+			text: scenario.query,
+			hiddenSeverities: [],
+			hiddenCategories: [],
+			ignored: 'not owned',
+		});
 		const storage = filterStorage(resources, raw);
 		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
 		const matches = (): string[] => lines.filter(text => filters.matches({ ...entry, text }, windowLogId));
-		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: matches(), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, {
-			text: scenario.query, notice: 'restored', matches: scenario.restored, stored: raw,
-		});
+		assert.deepEqual(
+			{
+				text: filters.text,
+				notice: filters.textFilterNotice,
+				matches: matches(),
+				stored: storage.get('output.filterState', StorageScope.WORKSPACE),
+			},
+			{ text: scenario.query, notice: 'restored', matches: scenario.restored, stored: raw },
+		);
 		let changes = 0;
 		resources.add(filters.onDidChange(() => changes++));
 		filters.setText(scenario.query);
-		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: matches(), changes, stored: JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!) }, {
-			text: scenario.query, notice: undefined, matches: scenario.current, changes: 1,
-			stored: { syntaxVersion: 2, text: scenario.query, hiddenSeverities: [], hiddenCategories: [] },
-		});
+		assert.deepEqual(
+			{
+				text: filters.text,
+				notice: filters.textFilterNotice,
+				matches: matches(),
+				changes,
+				stored: JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!),
+			},
+			{
+				text: scenario.query,
+				notice: undefined,
+				matches: scenario.current,
+				changes: 1,
+				stored: { syntaxVersion: 2, text: scenario.query, hiddenSeverities: [], hiddenCategories: [] },
+			},
+		);
 	}
 });
 
@@ -391,29 +551,60 @@ test('Output metadata changes preserve restored syntax through reload until clea
 	for (const action of ['clear', 'reset']) {
 		using storageResources = new DisposableStore();
 		const query = '"server restart" !failed';
-		const storage = filterStorage(storageResources, JSON.stringify({ text: query, hiddenSeverities: [], hiddenCategories: [] }));
+		const storage = filterStorage(
+			storageResources,
+			JSON.stringify({ text: query, hiddenSeverities: [], hiddenCategories: [] }),
+		);
 		{
 			using resources = new DisposableStore();
 			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
 			filters.setMinimumSeverity('debug');
 			filters.setCategoryVisible('hidden', false, windowLogId);
-			assert.deepEqual({ notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId), stored: JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!) }, {
-				notice: 'restored', matches: true, stored: { syntaxVersion: 1, text: query, hiddenSeverities: ['trace'], hiddenCategories: ['\0' + JSON.stringify([windowLogId, 'hidden'])] },
+			assert.deepEqual(
+				{
+					notice: filters.textFilterNotice,
+					matches: filters.matches(entry, windowLogId),
+					stored: JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!),
+				},
+				{
+					notice: 'restored',
+					matches: true,
+					stored: {
+						syntaxVersion: 1,
+						text: query,
+						hiddenSeverities: ['trace'],
+						hiddenCategories: ['\0' + JSON.stringify([windowLogId, 'hidden'])],
+					},
+				},
+			);
+		}
+		{
+			using resources = new DisposableStore();
+			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
+			assert.deepEqual(
+				{ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) },
+				{ text: query, notice: 'restored', matches: true },
+			);
+			if (action === 'clear') {
+				filters.setText('');
+			} else {
+				filters.reset();
+			}
+			const stored = JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!);
+			assert.deepEqual(stored, {
+				syntaxVersion: 2,
+				text: '',
+				hiddenSeverities: action === 'clear' ? ['trace'] : [],
+				hiddenCategories: action === 'clear' ? ['\0' + JSON.stringify([windowLogId, 'hidden'])] : [],
 			});
 		}
 		{
 			using resources = new DisposableStore();
 			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-			assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) }, { text: query, notice: 'restored', matches: true });
-			if (action === 'clear') { filters.setText(''); }
-			else { filters.reset(); }
-			const stored = JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!);
-			assert.deepEqual(stored, { syntaxVersion: 2, text: '', hiddenSeverities: action === 'clear' ? ['trace'] : [], hiddenCategories: action === 'clear' ? ['\0' + JSON.stringify([windowLogId, 'hidden'])] : [] });
-		}
-		{
-			using resources = new DisposableStore();
-			const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-			assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) }, { text: '', notice: undefined, matches: true });
+			assert.deepEqual(
+				{ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) },
+				{ text: '', notice: undefined, matches: true },
+			);
 		}
 	}
 });
@@ -434,16 +625,33 @@ test('Output does not show a migration notice for empty or current-version saved
 test('Output preserves unknown saved versions and applies only unsaved current-window filters', () => {
 	for (const syntaxVersion of [3, 'future', null]) {
 		using resources = new DisposableStore();
-		const raw = JSON.stringify({ syntaxVersion, text: 'unknown', hiddenSeverities: ['warning'], hiddenCategories: ['lifecycle'], future: { query: 'untouched' } });
+		const raw = JSON.stringify({
+			syntaxVersion,
+			text: 'unknown',
+			hiddenSeverities: ['warning'],
+			hiddenCategories: ['lifecycle'],
+			future: { query: 'untouched' },
+		});
 		const storage = filterStorage(resources, raw);
 		const filters = workbenchInstantiationService(resources, storage).get(IOutputService).filters;
-		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) }, { text: '', notice: 'unsupported', matches: true });
+		assert.deepEqual(
+			{ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId) },
+			{ text: '', notice: 'unsupported', matches: true },
+		);
 		filters.setText('server,restart');
 		filters.setSeverityVisible('warning', false);
 		assert.equal(filters.matches(entry, windowLogId), false);
 		filters.setCategoryVisible('lifecycle', false, windowLogId);
 		filters.reset();
-		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { text: '', notice: 'unsupported', matches: true, stored: raw });
+		assert.deepEqual(
+			{
+				text: filters.text,
+				notice: filters.textFilterNotice,
+				matches: filters.matches(entry, windowLogId),
+				stored: storage.get('output.filterState', StorageScope.WORKSPACE),
+			},
+			{ text: '', notice: 'unsupported', matches: true, stored: raw },
+		);
 	}
 });
 
@@ -456,9 +664,16 @@ test('Output does not overwrite a newer saved schema published after the window 
 	storage.store('output.filterState', raw, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 	filters.setSeverityVisible('trace', false);
 	filters.setText('restart');
-	assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId), stored: storage.get('output.filterState', StorageScope.WORKSPACE) }, { text: 'restart', notice: 'unsupported', matches: true, stored: raw });
+	assert.deepEqual(
+		{
+			text: filters.text,
+			notice: filters.textFilterNotice,
+			matches: filters.matches(entry, windowLogId),
+			stored: storage.get('output.filterState', StorageScope.WORKSPACE),
+		},
+		{ text: 'restart', notice: 'unsupported', matches: true, stored: raw },
+	);
 });
-
 
 for (const action of ['empty-input', 'same-input', 'empty-reset']) {
 	test(`Output discovers a later future schema on unchanged text and an already-empty reset (${action})`, () => {
@@ -471,11 +686,18 @@ for (const action of ['empty-input', 'same-input', 'empty-reset']) {
 		storage.store('output.filterState', raw, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		let changes = 0;
 		using listener = filters.onDidChange(() => changes++);
-		const apply = (): void => action === 'empty-reset' ? filters.reset() : filters.setText(query);
+		const apply = (): void => (action === 'empty-reset' ? filters.reset() : filters.setText(query));
 		apply();
-		assert.deepEqual({ text: filters.text, notice: filters.textFilterNotice, matches: filters.matches(entry, windowLogId), stored: storage.get('output.filterState', StorageScope.WORKSPACE), changes }, {
-			text: query, notice: 'unsupported', matches: true, stored: raw, changes: 1,
-		});
+		assert.deepEqual(
+			{
+				text: filters.text,
+				notice: filters.textFilterNotice,
+				matches: filters.matches(entry, windowLogId),
+				stored: storage.get('output.filterState', StorageScope.WORKSPACE),
+				changes,
+			},
+			{ text: query, notice: 'unsupported', matches: true, stored: raw, changes: 1 },
+		);
 		apply();
 		assert.equal(changes, 1);
 		assert.equal(storage.get('output.filterState', StorageScope.WORKSPACE), raw);
@@ -486,9 +708,18 @@ for (const syntaxVersion of [undefined, 1, 2, 999]) {
 	test(`Window log identity migrates saved selection and supported category state (syntax ${syntaxVersion})`, () => {
 		const browser = new JSDOM('', { url: 'http://localhost' });
 		try {
-			using storage = new BrowserStorageService({ ownerWindow: browser.window as unknown as Window, workspaceId: 'window-log-migration', flushInterval: 0 });
+			using storage = new BrowserStorageService({
+				ownerWindow: browser.window as unknown as Window,
+				workspaceId: 'window-log-migration',
+				flushInterval: 0,
+			});
 			storage.store('output.activeChannel', 'window', StorageScope.WORKSPACE, StorageTarget.USER);
-			const original = JSON.stringify({ syntaxVersion, text: 'restart', hiddenSeverities: ['trace'], hiddenCategories: ['\0' + JSON.stringify(['window', 'lifecycle']), 'global', '\0["tasks","build"]'] });
+			const original = JSON.stringify({
+				syntaxVersion,
+				text: 'restart',
+				hiddenSeverities: ['trace'],
+				hiddenCategories: ['\0' + JSON.stringify(['window', 'lifecycle']), 'global', '\0["tasks","build"]'],
+			});
 			storage.store('output.filterState', original, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 			for (let reopen = 0; reopen < 2; reopen++) {
 				using resources = new DisposableStore();
@@ -504,18 +735,31 @@ for (const syntaxVersion of [undefined, 1, 2, 999]) {
 					assert.equal(output.filters.isCategoryVisible('lifecycle', windowLogId), false);
 					assert.equal(output.filters.isCategoryVisible('lifecycle', 'tasks'), true);
 					assert.deepEqual(JSON.parse(storage.get('output.filterState', StorageScope.WORKSPACE)!), {
-						...(syntaxVersion === undefined ? {} : { syntaxVersion }), text: 'restart', hiddenSeverities: ['trace'],
-						hiddenCategories: ['\0' + JSON.stringify([windowLogId, 'lifecycle']), 'global', '\0["tasks","build"]'],
+						...(syntaxVersion === undefined ? {} : { syntaxVersion }),
+						text: 'restart',
+						hiddenSeverities: ['trace'],
+						hiddenCategories: [
+							'\0' + JSON.stringify([windowLogId, 'lifecycle']),
+							'global',
+							'\0["tasks","build"]',
+						],
 					});
 				}
 			}
-		} finally { browser.window.close(); }
+		} finally {
+			browser.window.close();
+		}
 	});
 }
 
 test('Window filter migration leaves the saved source intact when persistence fails', () => {
 	using resources = new DisposableStore();
-	const raw = JSON.stringify({ syntaxVersion: 2, text: '', hiddenSeverities: [], hiddenCategories: ['\0["window","build"]'] });
+	const raw = JSON.stringify({
+		syntaxVersion: 2,
+		text: '',
+		hiddenSeverities: [],
+		hiddenCategories: ['\0["window","build"]'],
+	});
 	const storage = filterStorage(resources, raw);
 	const store = storage.store.bind(storage);
 	storage.store = (key, ...args) => {

@@ -1,6 +1,9 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('Ports resolves the runtime tunnel service and disables forwarding in a local workspace', async ({ application, workbench }) => {
+test('Ports resolves the runtime tunnel service and disables forwarding in a local workspace', async ({
+	application,
+	workbench,
+}) => {
 	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.focusPanel');
 	const ports = page.getByRole('tab', { name: 'Ports', exact: true });

@@ -2,13 +2,9 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
 import { type IModelDecorationOptions } from '../../../common/model.js';
 
-const diffInsertIcon = registerIcon('diff-insert', Lxicon.diffLineAdd,
-	'Inserted diff line',
-);
+const diffInsertIcon = registerIcon('diff-insert', Lxicon.diffLineAdd, 'Inserted diff line');
 
-export const diffRemoveIcon = registerIcon('diff-remove', Lxicon.diffLineDelete,
-	'Removed diff line',
-);
+export const diffRemoveIcon = registerIcon('diff-remove', Lxicon.diffLineDelete, 'Removed diff line');
 
 export const diffLineAddDecorationBackground: IModelDecorationOptions = Object.freeze({
 	description: 'diff-modified-line',

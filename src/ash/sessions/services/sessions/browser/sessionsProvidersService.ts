@@ -36,9 +36,13 @@ export class SessionsProvidersService extends Disposable implements ISessionsPro
 		});
 	}
 
-	getProviders(): ISessionsProvider[] { return [...this.providers.values()].sort((a, b) => a.order - b.order); }
+	getProviders(): ISessionsProvider[] {
+		return [...this.providers.values()].sort((a, b) => a.order - b.order);
+	}
 
-	getProvider(providerId: string): ISessionsProvider | undefined { return this.providers.get(providerId); }
+	getProvider(providerId: string): ISessionsProvider | undefined {
+		return this.providers.get(providerId);
+	}
 
 	override dispose(): void {
 		super.dispose();

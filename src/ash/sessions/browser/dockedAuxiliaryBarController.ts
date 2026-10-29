@@ -25,13 +25,19 @@ export class DockedAuxiliaryBarController extends Disposable {
 		editor.domNode.append(this.dockDomNode);
 		this.sash = this._register(new Sash(editor.domNode, 'vertical'));
 		this.sash.element.setAttribute('aria-label', localize('sessions.layout.resizeDetails', 'Resize details'));
-		this._register(this.sash.onDidStart(() => { this.dragWidth = getWidth(); }));
+		this._register(
+			this.sash.onDidStart(() => {
+				this.dragWidth = getWidth();
+			}),
+		);
 		this._register(this.sash.onDidChange(event => setWidth(this.dragWidth - event.delta)));
 		this._register(this.sash.onDidReset(() => setWidth(300)));
-		this._register(toDisposable(() => {
-			this.originalParent.append(details.frame);
-			this.dockDomNode.remove();
-		}));
+		this._register(
+			toDisposable(() => {
+				this.originalParent.append(details.frame);
+				this.dockDomNode.remove();
+			}),
+		);
 	}
 
 	public layout(dimension: IDimension, docked: boolean, editorVisible: boolean, detailsVisible: boolean): void {

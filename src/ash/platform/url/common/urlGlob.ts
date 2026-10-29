@@ -27,7 +27,9 @@ export function testUrlMatchesGlob(uri: string | URI, globUrl: string): boolean 
 	const targetAuthority = anyPort ? (effective?.hostname ?? authority.replace(/:\d+$/u, '')) : authority;
 	const authorityPattern = patternHost.startsWith('*.') ? patternHost.slice(2) : patternHost;
 	const labels = targetAuthority.split('.');
-	const authorities = patternHost.startsWith('*.') ? labels.map((_label, index) => labels.slice(index).join('.')) : [targetAuthority];
+	const authorities = patternHost.startsWith('*.')
+		? labels.map((_label, index) => labels.slice(index).join('.'))
+		: [targetAuthority];
 	if (!authorities.some(candidate => matchPart(candidate.toLowerCase(), authorityPattern.toLowerCase()))) {
 		return false;
 	}
@@ -40,10 +42,13 @@ export function testUrlMatchesGlob(uri: string | URI, globUrl: string): boolean 
 }
 
 function matchingPath(path: string): string {
-	return encodeURI(path).replace(/%25([\da-f]{2})/giu, '%$1').replace(/%[\da-f]{2}/giu, escape => {
-		const character = String.fromCharCode(parseInt(escape.slice(1), 16));
-		return /^[\w.~-]$/u.test(character) ? character : escape.toUpperCase();
-	}).replace(/\/+$/u, '');
+	return encodeURI(path)
+		.replace(/%25([\da-f]{2})/giu, '%$1')
+		.replace(/%[\da-f]{2}/giu, escape => {
+			const character = String.fromCharCode(parseInt(escape.slice(1), 16));
+			return /^[\w.~-]$/u.test(character) ? character : escape.toUpperCase();
+		})
+		.replace(/\/+$/u, '');
 }
 
 /** A trailing star consumes at least one character; completed paths include descendants. */

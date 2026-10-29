@@ -9,7 +9,7 @@ import { IDebugService, type IDebugSession, type IDebugVariable } from './debug.
 export interface IDebugVisualization {
 	readonly id: string;
 	readonly name: string;
-	visualize(signal: AbortSignal): Promise<{ content: string; languageId: string; }>;
+	visualize(signal: AbortSignal): Promise<{ content: string; languageId: string }>;
 }
 
 export interface IDebugVisualizerService {
@@ -24,7 +24,7 @@ export class DebugVisualizerService implements IDebugVisualizerService {
 		@IDebugService private readonly debug: IDebugService,
 		@IExtensionService private readonly extensions: IExtensionService,
 		@ICommandService private readonly commands: ICommandService,
-	) { }
+	) {}
 
 	getVisualizers(session: IDebugSession, variable: IDebugVariable): readonly IDebugVisualization[] {
 		const revision = session.inspectionRevision;
@@ -41,7 +41,7 @@ export class DebugVisualizerService implements IDebugVisualizerService {
 			{
 				id: 'ash.debug.variableTree',
 				name: localize('debug.variableTree', 'Variable tree'),
-				visualize: async (signal) => {
+				visualize: async signal => {
 					let remaining = 256;
 					const visit = async (
 						value: IDebugVariable,
@@ -83,14 +83,14 @@ export class DebugVisualizerService implements IDebugVisualizerService {
 			},
 		];
 		for (const { description, value } of this.extensions.getExtensionPointContributions<
-			readonly { id: string; title: string; command: string; type?: string; }[]
+			readonly { id: string; title: string; command: string; type?: string }[]
 		>('debugVisualizers')) {
 			for (const entry of value) {
 				if (entry.type !== undefined && entry.type !== variable.type) continue;
 				visualizers.push({
 					id: `${description.id}:${entry.id}`,
 					name: entry.title,
-					visualize: async (signal) => {
+					visualize: async signal => {
 						check(signal);
 						const generation = this.extensions.currentCatalog.generation;
 						const result: unknown = await this.commands.executeCommand(entry.command, {

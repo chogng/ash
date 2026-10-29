@@ -28,9 +28,19 @@ test('DragScrolling reuses one operation for pointer updates and stops its frame
 	}
 
 	class TestDragScrolling extends DragScrolling {
-		protected override _createDragScrollingOperation(position: IMouseTargetOutsideEditor, mouseEvent: EditorMouseEvent): DragScrollingOperation {
+		protected override _createDragScrollingOperation(
+			position: IMouseTargetOutsideEditor,
+			mouseEvent: EditorMouseEvent,
+		): DragScrollingOperation {
 			operationCount += 1;
-			return new TestOperation(this._context, this._viewHelper, this._mouseTargetFactory, this._dispatchMouse, position, mouseEvent);
+			return new TestOperation(
+				this._context,
+				this._viewHelper,
+				this._mouseTargetFactory,
+				this._dispatchMouse,
+				position,
+				mouseEvent,
+			);
 		}
 	}
 
@@ -38,9 +48,13 @@ test('DragScrolling reuses one operation for pointer updates and stops its frame
 		{} as ViewContext,
 		{} as IPointerHandlerHelper,
 		{} as MouseTargetFactory,
-		(_target: IMouseTarget, _inSelectionMode: boolean, _revealType: NavigationCommandRevealType) => { },
+		(_target: IMouseTarget, _inSelectionMode: boolean, _revealType: NavigationCommandRevealType) => {},
 	);
-	const event = new EditorMouseEvent(new dom.window.MouseEvent('pointermove', { clientX: 10, clientY: 10, view: dom.window as unknown as Window }), true, element);
+	const event = new EditorMouseEvent(
+		new dom.window.MouseEvent('pointermove', { clientX: 10, clientY: 10, view: dom.window as unknown as Window }),
+		true,
+		element,
+	);
 	const above = MouseTarget.createOutsideEditor(1, new Position(1, 1), 'above', 10);
 	const below = MouseTarget.createOutsideEditor(1, new Position(2, 1), 'below', 20);
 	scrolling.start(above, event);

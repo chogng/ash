@@ -13,7 +13,10 @@ test('deleted file identity matches both comparison sides but never another capt
 	const resource = getChangesEditorFileResource(normalized);
 	assert.equal(resource.toString(), 'ash-turn-diff:/turn/src/deleted.ts?session=session&thread=thread&revision=7');
 	for (const side of ['', '&side=before', '&side=after']) {
-		assert.equal(findChangesEditorFileChange(resource.with({ query: resource.query + side }), [normalized]), normalized);
+		assert.equal(
+			findChangesEditorFileChange(resource.with({ query: resource.query + side }), [normalized]),
+			normalized,
+		);
 	}
 	for (const query of [
 		'session=session&thread=thread&revision=6',

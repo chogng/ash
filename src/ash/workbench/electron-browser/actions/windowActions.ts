@@ -46,17 +46,21 @@ async function switchWindow(accessor: ServicesAccessor): Promise<void> {
 	picker.items = windows.map(window => ({
 		windowId: window.id,
 		label: window.title || localize({ bundle: 'ash', key: 'workbench.untitledWindow' }, 'Untitled Window'),
-		description: window.current ? localize({ bundle: 'ash', key: 'workbench.currentWindow' }, 'Current window') : undefined,
+		description: window.current
+			? localize({ bundle: 'ash', key: 'workbench.currentWindow' }, 'Current window')
+			: undefined,
 		className: window.current ? 'ash-window-switch-current' : undefined,
 	}));
 	picker.placeholder = localize({ bundle: 'ash', key: 'workbench.switchWindowPlaceholder' }, 'Select a window');
 	picker.ariaLabel = picker.placeholder;
 	const selected = new Promise<number | undefined>(resolve => {
-		listeners.add(picker.onDidAccept(() => {
-			const item = picker.selectedItems[0];
-			if (!item) return;
-			return resolve(item.windowId);
-		}));
+		listeners.add(
+			picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				return resolve(item.windowId);
+			}),
+		);
 		listeners.add(picker.onDidHide(() => resolve(undefined)));
 	});
 	picker.show();
@@ -83,7 +87,11 @@ export class CloseWindowAction extends Action2 {
 
 export class CloseOtherWindowsAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.closeOtherWindows', title: localize2({ bundle: 'ash', key: 'workbench.closeOtherWindows' }, 'Close Other Windows'), f1: true });
+		super({
+			id: 'workbench.action.closeOtherWindows',
+			title: localize2({ bundle: 'ash', key: 'workbench.closeOtherWindows' }, 'Close Other Windows'),
+			f1: true,
+		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
@@ -93,7 +101,11 @@ export class CloseOtherWindowsAction extends Action2 {
 
 export class FocusWindowAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.focusWindow', title: localize2({ bundle: 'ash', key: 'workbench.focusWindow' }, 'Focus Window'), f1: true });
+		super({
+			id: 'workbench.action.focusWindow',
+			title: localize2({ bundle: 'ash', key: 'workbench.focusWindow' }, 'Focus Window'),
+			f1: true,
+		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
@@ -104,7 +116,13 @@ export class FocusWindowAction extends Action2 {
 
 export class ZoomInAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.zoomIn', title: localize2({ bundle: 'ash', key: 'workbench.zoomIn' }, 'Zoom In'), f1: true, menu: { id: MenuId.MenubarViewMenu, group: '5_zoom', order: 1 }, keybinding: { primary: Keybinding.single(logicalKey('=', { primaryKey: true })) } });
+		super({
+			id: 'workbench.action.zoomIn',
+			title: localize2({ bundle: 'ash', key: 'workbench.zoomIn' }, 'Zoom In'),
+			f1: true,
+			menu: { id: MenuId.MenubarViewMenu, group: '5_zoom', order: 1 },
+			keybinding: { primary: Keybinding.single(logicalKey('=', { primaryKey: true })) },
+		});
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
@@ -118,7 +136,13 @@ export class ZoomInAction extends Action2 {
 
 export class ZoomOutAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.zoomOut', title: localize2({ bundle: 'ash', key: 'workbench.zoomOut' }, 'Zoom Out'), f1: true, menu: { id: MenuId.MenubarViewMenu, group: '5_zoom', order: 2 }, keybinding: { primary: Keybinding.single(logicalKey('-', { primaryKey: true })) } });
+		super({
+			id: 'workbench.action.zoomOut',
+			title: localize2({ bundle: 'ash', key: 'workbench.zoomOut' }, 'Zoom Out'),
+			f1: true,
+			menu: { id: MenuId.MenubarViewMenu, group: '5_zoom', order: 2 },
+			keybinding: { primary: Keybinding.single(logicalKey('-', { primaryKey: true })) },
+		});
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
@@ -132,19 +156,35 @@ export class ZoomOutAction extends Action2 {
 
 export class ZoomResetAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.zoomReset', title: localize2({ bundle: 'ash', key: 'workbench.zoomReset' }, 'Reset Zoom'), f1: true, menu: { id: MenuId.MenubarViewMenu, group: '5_zoom', order: 3 }, keybinding: { primary: Keybinding.single(logicalKey('0', { primaryKey: true })) } });
+		super({
+			id: 'workbench.action.zoomReset',
+			title: localize2({ bundle: 'ash', key: 'workbench.zoomReset' }, 'Reset Zoom'),
+			f1: true,
+			menu: { id: MenuId.MenubarViewMenu, group: '5_zoom', order: 3 },
+			keybinding: { primary: Keybinding.single(logicalKey('0', { primaryKey: true })) },
+		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
 		const target = getWindowCommandTarget(accessor);
 		const configuration = accessor.get(IConfigurationService);
-		return applyWindowZoom(accessor, configuration.getValue<boolean>(WINDOW_ZOOM_PER_WINDOW_SETTING) === false ? 0 : configuration.getValue<number>(WINDOW_ZOOM_LEVEL_SETTING) ?? 0, target === mainWindow ? undefined : target.name);
+		return applyWindowZoom(
+			accessor,
+			configuration.getValue<boolean>(WINDOW_ZOOM_PER_WINDOW_SETTING) === false
+				? 0
+				: (configuration.getValue<number>(WINDOW_ZOOM_LEVEL_SETTING) ?? 0),
+			target === mainWindow ? undefined : target.name,
+		);
 	}
 }
 
 export class SwitchWindowAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.switchWindow', title: localize2({ bundle: 'ash', key: 'workbench.switchWindow' }, 'Switch Window...'), f1: true });
+		super({
+			id: 'workbench.action.switchWindow',
+			title: localize2({ bundle: 'ash', key: 'workbench.switchWindow' }, 'Switch Window...'),
+			f1: true,
+		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
@@ -154,7 +194,12 @@ export class SwitchWindowAction extends Action2 {
 
 export class QuickSwitchWindowAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.quickSwitchWindow', title: localize2({ bundle: 'ash', key: 'workbench.quickSwitchWindow' }, 'Quick Switch Window'), f1: false, keybinding: { primary: Keybinding.single(logicalKey('w', { primaryKey: true, altKey: true })) } });
+		super({
+			id: 'workbench.action.quickSwitchWindow',
+			title: localize2({ bundle: 'ash', key: 'workbench.quickSwitchWindow' }, 'Quick Switch Window'),
+			f1: false,
+			keybinding: { primary: Keybinding.single(logicalKey('w', { primaryKey: true, altKey: true })) },
+		});
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
@@ -169,14 +214,21 @@ export class QuickSwitchWindowAction extends Action2 {
 
 export class ToggleWindowAlwaysOnTopAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.toggleWindowAlwaysOnTop', title: localize2({ bundle: 'ash', key: 'workbench.toggleWindowAlwaysOnTop' }, 'Toggle Window Always on Top'), f1: true });
+		super({
+			id: 'workbench.action.toggleWindowAlwaysOnTop',
+			title: localize2(
+				{ bundle: 'ash', key: 'workbench.toggleWindowAlwaysOnTop' },
+				'Toggle Window Always on Top',
+			),
+			f1: true,
+		});
 	}
 
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		const host = accessor.get(INativeHostService);
 		const target = getWindowCommandTarget(accessor);
 		const windowName = target === mainWindow ? undefined : target.name;
-		await host.setAlwaysOnTop(!await host.isAlwaysOnTop(windowName), windowName);
+		await host.setAlwaysOnTop(!(await host.isAlwaysOnTop(windowName)), windowName);
 	}
 }
 
@@ -189,7 +241,10 @@ export class EnableWindowAlwaysOnTopAction extends Action2 {
 			icon: Lxicon.pinned,
 			menu: {
 				id: MenuId.LayoutControlMenu,
-				when: ContextKeyExpr.and(IsAuxiliaryWindowContext.isEqualTo(true), IsWindowAlwaysOnTopContext.isEqualTo(false)),
+				when: ContextKeyExpr.and(
+					IsAuxiliaryWindowContext.isEqualTo(true),
+					IsWindowAlwaysOnTopContext.isEqualTo(false),
+				),
 				group: 'navigation',
 				order: 1,
 			},
@@ -211,7 +266,10 @@ export class DisableWindowAlwaysOnTopAction extends Action2 {
 			icon: Lxicon.unpin,
 			menu: {
 				id: MenuId.LayoutControlMenu,
-				when: ContextKeyExpr.and(IsAuxiliaryWindowContext.isEqualTo(true), IsWindowAlwaysOnTopContext.isEqualTo(true)),
+				when: ContextKeyExpr.and(
+					IsAuxiliaryWindowContext.isEqualTo(true),
+					IsWindowAlwaysOnTopContext.isEqualTo(true),
+				),
 				group: 'navigation',
 				order: 1,
 			},
@@ -226,7 +284,11 @@ export class DisableWindowAlwaysOnTopAction extends Action2 {
 
 export class ToggleWindowTabsBarAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.toggleWindowTabsBar', title: localize2({ bundle: 'ash', key: 'workbench.toggleWindowTabsBar' }, 'Toggle Window Tabs Bar'), f1: isMacintosh });
+		super({
+			id: 'workbench.action.toggleWindowTabsBar',
+			title: localize2({ bundle: 'ash', key: 'workbench.toggleWindowTabsBar' }, 'Toggle Window Tabs Bar'),
+			f1: isMacintosh,
+		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
@@ -236,7 +298,11 @@ export class ToggleWindowTabsBarAction extends Action2 {
 
 export class ShowNextWindowTabAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.showNextWindowTab', title: localize2({ bundle: 'ash', key: 'workbench.showNextWindowTab' }, 'Show Next Window Tab'), f1: isMacintosh });
+		super({
+			id: 'workbench.action.showNextWindowTab',
+			title: localize2({ bundle: 'ash', key: 'workbench.showNextWindowTab' }, 'Show Next Window Tab'),
+			f1: isMacintosh,
+		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
@@ -246,7 +312,11 @@ export class ShowNextWindowTabAction extends Action2 {
 
 export class NewWindowTabAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.newWindowTab', title: localize2({ bundle: 'ash', key: 'workbench.newWindowTab' }, 'New Window Tab'), f1: isMacintosh });
+		super({
+			id: 'workbench.action.newWindowTab',
+			title: localize2({ bundle: 'ash', key: 'workbench.newWindowTab' }, 'New Window Tab'),
+			f1: isMacintosh,
+		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
@@ -256,7 +326,11 @@ export class NewWindowTabAction extends Action2 {
 
 export class ShowPreviousWindowTabAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.showPreviousWindowTab', title: localize2({ bundle: 'ash', key: 'workbench.showPreviousWindowTab' }, 'Show Previous Window Tab'), f1: isMacintosh });
+		super({
+			id: 'workbench.action.showPreviousWindowTab',
+			title: localize2({ bundle: 'ash', key: 'workbench.showPreviousWindowTab' }, 'Show Previous Window Tab'),
+			f1: isMacintosh,
+		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
@@ -266,7 +340,14 @@ export class ShowPreviousWindowTabAction extends Action2 {
 
 export class MoveWindowTabToNewWindowAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.moveWindowTabToNewWindow', title: localize2({ bundle: 'ash', key: 'workbench.moveWindowTabToNewWindow' }, 'Move Window Tab to New Window'), f1: isMacintosh });
+		super({
+			id: 'workbench.action.moveWindowTabToNewWindow',
+			title: localize2(
+				{ bundle: 'ash', key: 'workbench.moveWindowTabToNewWindow' },
+				'Move Window Tab to New Window',
+			),
+			f1: isMacintosh,
+		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {
@@ -276,7 +357,11 @@ export class MoveWindowTabToNewWindowAction extends Action2 {
 
 export class MergeWindowTabsAction extends Action2 {
 	constructor() {
-		super({ id: 'workbench.action.mergeWindowTabs', title: localize2({ bundle: 'ash', key: 'workbench.mergeWindowTabs' }, 'Merge All Window Tabs'), f1: isMacintosh });
+		super({
+			id: 'workbench.action.mergeWindowTabs',
+			title: localize2({ bundle: 'ash', key: 'workbench.mergeWindowTabs' }, 'Merge All Window Tabs'),
+			f1: isMacintosh,
+		});
 	}
 
 	override run(accessor: ServicesAccessor): Promise<void> {

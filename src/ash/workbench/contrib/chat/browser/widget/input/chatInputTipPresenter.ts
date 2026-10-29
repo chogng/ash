@@ -1,4 +1,9 @@
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import {
+	Disposable,
+	DisposableStore,
+	MutableDisposable,
+	toDisposable,
+} from '../../../../../../base/common/lifecycle.js';
 import { IChatTipService } from '../../chatTipService.js';
 import { ChatTipContentPart } from '../chatContentParts/chatTipContentPart.js';
 import { IInstantiationService } from '../../../../../../platform/instantiation/common/instantiation.js';
@@ -14,7 +19,11 @@ export class ChatInputTipPresenter extends Disposable {
 	private readonly part = this._register(new MutableDisposable<DisposableStore>());
 	private currentPart: ChatTipContentPart | undefined;
 
-	constructor(private readonly options: IChatInputTipPresenterOptions, @IChatTipService private readonly tips: IChatTipService, @IInstantiationService private readonly instantiation: IInstantiationService) {
+	constructor(
+		private readonly options: IChatInputTipPresenterOptions,
+		@IChatTipService private readonly tips: IChatTipService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+	) {
 		super();
 		this._register(tips.onDidDismissTip(() => this.update()));
 		this.update();
@@ -33,10 +42,16 @@ export class ChatInputTipPresenter extends Disposable {
 		if (this.part.value) return;
 		const scope = new DisposableStore();
 		this.part.value = scope;
-		const parts = ChatTipContentPart.instantiateObservable(this.instantiation, scope, this.options.container.ownerDocument, tip, () => {
-			this.options.focusInput();
-			this.tips.dismissTip();
-		});
+		const parts = ChatTipContentPart.instantiateObservable(
+			this.instantiation,
+			scope,
+			this.options.container.ownerDocument,
+			tip,
+			() => {
+				this.options.focusInput();
+				this.tips.dismissTip();
+			},
+		);
 		const render = (part: ChatTipContentPart): void => {
 			const previous = this.currentPart;
 			const hadFocus = previous?.domNode.contains(this.options.container.ownerDocument.activeElement);
@@ -52,6 +67,10 @@ export class ChatInputTipPresenter extends Disposable {
 		};
 		scope.add(parts.onDidChange(render));
 		render(parts.get());
-		scope.add(toDisposable(() => { this.currentPart = undefined; }));
+		scope.add(
+			toDisposable(() => {
+				this.currentPart = undefined;
+			}),
+		);
 	}
 }

@@ -1,5 +1,15 @@
 import { withProcessRun } from '../../build/processes.ts';
-import { constants, copyFileSync, cpSync, existsSync, globSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import {
+	constants,
+	copyFileSync,
+	cpSync,
+	existsSync,
+	globSync,
+	mkdirSync,
+	mkdtempSync,
+	readFileSync,
+	rmSync,
+} from 'node:fs';
 import { availableParallelism, tmpdir } from 'node:os';
 import { dirname, resolve, sep } from 'node:path';
 import { startBrowserUnitServer } from './browser/server.ts';
@@ -15,16 +25,24 @@ interface Selection {
 }
 
 const desktopDirectory = resolve(import.meta.dirname, '../..');
-const compiledDirectory = resolve(process.env.ASH_UNIT_TEST_OUTPUT_DIRECTORY ?? resolve(desktopDirectory, '.build/desktop/test'));
+const compiledDirectory = resolve(
+	process.env.ASH_UNIT_TEST_OUTPUT_DIRECTORY ?? resolve(desktopDirectory, '.build/desktop/test'),
+);
 
 export async function runUnitTests(patterns: readonly string[], editorEnvironment: boolean): Promise<void> {
 	const requiredVersion = readFileSync(resolve(desktopDirectory, '.nvmrc'), 'utf8').trim();
 	if (process.versions.node.split('.')[0] !== requiredVersion.split('.')[0]) {
-		throw new Error(`Unit tests require the Node major version specified in .nvmrc (${requiredVersion}); found ${process.version}.`);
+		throw new Error(
+			`Unit tests require the Node major version specified in .nvmrc (${requiredVersion}); found ${process.version}.`,
+		);
 	}
 	// Reject invalid filters before creating a snapshot of the complete compiler output.
 	const selection = parseSelection(process.argv.slice(process.argv[2] === '--' ? 3 : 2));
-	const preloads = ['test/unit/ignore-css-imports.ts', 'test/unit/theme-resources.ts', ...(editorEnvironment ? ['test/unit/editor-environment.ts'] : [])];
+	const preloads = [
+		'test/unit/ignore-css-imports.ts',
+		'test/unit/theme-resources.ts',
+		...(editorEnvironment ? ['test/unit/editor-environment.ts'] : []),
+	];
 	// Keep this run's modules alive when another invocation cleans the compiler output.
 	const outputDirectory = mkdtempSync(resolve(desktopDirectory, '.build/desktop/test-run-'));
 	try {
@@ -52,7 +70,12 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 			});
 		}
 		if (selection.affected) {
-			const plan = planAffectedTests(desktopDirectory, selection.affected, [...new Set(names.map(name => name.replaceAll('\\', '/')))].sort(), { preloads });
+			const plan = planAffectedTests(
+				desktopDirectory,
+				selection.affected,
+				[...new Set(names.map(name => name.replaceAll('\\', '/')))].sort(),
+				{ preloads },
+			);
 			process.stdout.write(`Unit test impact: ${plan.full ? 'full suite' : 'selected files'}; ${plan.reason}\n`);
 			names = [...plan.files];
 		}
@@ -72,8 +95,15 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 		try {
 			await withProcessRun(desktopDirectory, async (run, environment) => {
 				const browserServer = files.some(file => /unit\/browser\/context\.js/u.test(readFileSync(file, 'utf8')))
-					? await startBrowserUnitServer(run, environment) : undefined;
-				const testEnvironment = browserServer ? { ...environment, ASH_BROWSER_UNIT_BASE_URL: browserServer.url, ASH_BROWSER_UNIT_RESULTS: browserServer.results } : environment;
+					? await startBrowserUnitServer(run, environment)
+					: undefined;
+				const testEnvironment = browserServer
+					? {
+							...environment,
+							ASH_BROWSER_UNIT_BASE_URL: browserServer.url,
+							ASH_BROWSER_UNIT_RESULTS: browserServer.results,
+						}
+					: environment;
 				try {
 					let nextFile = 0;
 					const worker = async (): Promise<void> => {
@@ -81,17 +111,26 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 							const index = nextFile++;
 							const file = files[index];
 							const countFile = resolve(resultDirectory, `${index}.txt`);
-							const result = await run.command(process.execPath, [
-								...preloads.flatMap(path => ['--import', `./${path}`]),
-								'node_modules/mocha/bin/mocha.js',
-								'--ui', 'tdd',
-								'--forbid-only',
-								'--reporter', './test/unit/reporter.ts',
-								'--reporter-option', `countFile=${countFile}`,
-								'--timeout', String(selection.timeout),
-								...(selection.grep ? ['--grep', selection.grep] : []),
-								file,
-							], { ...testEnvironment, ASH_UNIT_TEST_OUTPUT_DIRECTORY: outputDirectory }, true);
+							const result = await run.command(
+								process.execPath,
+								[
+									...preloads.flatMap(path => ['--import', `./${path}`]),
+									'node_modules/mocha/bin/mocha.js',
+									'--ui',
+									'tdd',
+									'--forbid-only',
+									'--reporter',
+									'./test/unit/reporter.ts',
+									'--reporter-option',
+									`countFile=${countFile}`,
+									'--timeout',
+									String(selection.timeout),
+									...(selection.grep ? ['--grep', selection.grep] : []),
+									file,
+								],
+								{ ...testEnvironment, ASH_UNIT_TEST_OUTPUT_DIRECTORY: outputDirectory },
+								true,
+							);
 							// Print one completed file at a time so concurrent reporters stay readable.
 							process.stdout.write(result.output);
 							if (run.stopped || result.code === 130 || result.code === 143) {
@@ -105,21 +144,31 @@ export async function runUnitTests(patterns: readonly string[], editorEnvironmen
 							if (existsSync(countFile)) executedTests += Number(readFileSync(countFile, 'utf8'));
 						}
 					};
-					const results = await Promise.allSettled(Array.from({ length: Math.min(selection.workers, files.length) }, async () => {
-						try { await worker(); }
-						catch (error) { await run.close(); throw error; }
-					}));
+					const results = await Promise.allSettled(
+						Array.from({ length: Math.min(selection.workers, files.length) }, async () => {
+							try {
+								await worker();
+							} catch (error) {
+								await run.close();
+								throw error;
+							}
+						}),
+					);
 					for (const result of results) {
 						if (result.status === 'rejected') throw result.reason;
 					}
-				} finally { await browserServer?.dispose(); }
+				} finally {
+					await browserServer?.dispose();
+				}
 			});
 		} finally {
 			rmSync(resultDirectory, { recursive: true, force: true });
 		}
 
 		if (process.exitCode === 130 || process.exitCode === 143) return;
-		process.stdout.write(`Mocha: ${executedTests} tests executed across ${files.length} files; ${failed.length} failed files\n`);
+		process.stdout.write(
+			`Mocha: ${executedTests} tests executed across ${files.length} files; ${failed.length} failed files\n`,
+		);
 		if (failed.length > 0) {
 			process.stderr.write(`Failed test files:\n${failed.join('\n')}\n`);
 			process.exitCode = 1;
@@ -152,10 +201,15 @@ function parseSelection(args: readonly string[]): Selection {
 		const value = args[index + 1];
 		if (!value) throw new Error(`Missing value for ${option}`);
 		switch (option) {
-			case '--run': runs.push(value); break;
-			case '--runGlob': runGlob = value; break;
+			case '--run':
+				runs.push(value);
+				break;
+			case '--runGlob':
+				runGlob = value;
+				break;
 			case '--affected': {
-				if (affected || !value.trim() || value.startsWith('--')) throw new Error('--affected requires one base revision.');
+				if (affected || !value.trim() || value.startsWith('--'))
+					throw new Error('--affected requires one base revision.');
 				affected = value;
 				break;
 			}
@@ -174,11 +228,13 @@ function parseSelection(args: readonly string[]): Selection {
 				if (!Number.isSafeInteger(workers) || workers <= 0) throw new Error(`Invalid worker count: ${value}`);
 				break;
 			}
-			default: throw new Error(`Unsupported unit test option: ${option}`);
+			default:
+				throw new Error(`Unsupported unit test option: ${option}`);
 		}
 		index += 1;
 	}
 	if (runs.length > 0 && runGlob) throw new Error('--run and --runGlob cannot be combined');
-	if (affected && (runs.length > 0 || runGlob)) throw new Error('--affected cannot be combined with --run or --runGlob');
+	if (affected && (runs.length > 0 || runGlob))
+		throw new Error('--affected cannot be combined with --run or --runGlob');
 	return { runs, runGlob, affected, grep, timeout, workers };
 }

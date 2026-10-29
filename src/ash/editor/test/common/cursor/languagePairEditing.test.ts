@@ -1,22 +1,34 @@
 import { createTextModelFeatures } from '../../../common/model/modelFeatures.js';
 import { registerTextModelFeatures } from '../../../common/model/textModelFeatures.js';
 import { after as afterModelFeatures } from 'mocha';
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
-import { CursorsController } from "../../../common/cursor/cursor.js";
-import { DeleteOperations } from "../../../common/cursor/cursorDeleteOperations.js";
-import { EditOperationType } from "../../../common/cursorCommon.js";
-import { TestLanguageConfigurationService, registerTestLanguageConfigurations } from '../modes/testLanguageConfigurationService.js';
-import { Selection } from "../../../common/core/selection.js";
-import { Position } from "../../../common/core/position.js";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
+import { CursorsController } from '../../../common/cursor/cursor.js';
+import { DeleteOperations } from '../../../common/cursor/cursorDeleteOperations.js';
+import { EditOperationType } from '../../../common/cursorCommon.js';
+import {
+	TestLanguageConfigurationService,
+	registerTestLanguageConfigurations,
+} from '../modes/testLanguageConfigurationService.js';
+import { Selection } from '../../../common/core/selection.js';
+import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
-import { TextModel } from "../../../common/model/textModel.js";
-import { createTestCursorConfiguration, createTestCursorsController, executeTestDeleteOperation } from '../testCursorConfiguration.js';
+import { TextModel } from '../../../common/model/textModel.js';
+import {
+	createTestCursorConfiguration,
+	createTestCursorsController,
+	executeTestDeleteOperation,
+} from '../testCursorConfiguration.js';
 import { ViewModelEventsCollector } from '../../../common/viewModelEventDispatcher.js';
 
 for (const mode of ['none', 'keep', 'brackets', 'advanced', 'full'] as const) {
 	test(`Language typing ${mode} controls closing-bracket indentation in one undo step`, () => {
-		using model = new TextModel('block {\n  ', { languageId: 'demo', tabSize: 2, indentSize: 2, insertSpaces: true });
+		using model = new TextModel('block {\n  ', {
+			languageId: 'demo',
+			tabSize: 2,
+			indentSize: 2,
+			insertSpaces: true,
+		});
 		using configurations = new TestLanguageConfigurationService();
 		using rules = configurations.register('demo', {
 			brackets: [['{', '}']],
@@ -27,30 +39,52 @@ for (const mode of ['none', 'keep', 'brackets', 'advanced', 'full'] as const) {
 
 		typeText(selections, '}');
 
-		assert.deepEqual({ text: model.getText(), position: selections.getSelections()[0]!.getPosition() }, {
-			text: mode === 'full' ? 'block {\n}' : 'block {\n  }',
-			position: new Position(2, mode === 'full' ? 2 : 4),
-		});
+		assert.deepEqual(
+			{ text: model.getText(), position: selections.getSelections()[0]!.getPosition() },
+			{
+				text: mode === 'full' ? 'block {\n}' : 'block {\n  }',
+				position: new Position(2, mode === 'full' ? 2 : 4),
+			},
+		);
 		model.undo();
-		assert.deepEqual({ text: model.getText(), selection: selections.getSelections()[0] }, { text: 'block {\n  ', selection: original });
+		assert.deepEqual(
+			{ text: model.getText(), selection: selections.getSelections()[0] },
+			{ text: 'block {\n  ', selection: original },
+		);
 	});
 }
 
 test('Full typing adjusts each cursor indentation in one transaction', () => {
-	using model = new TextModel('block {\n  \nblock {\n  ', { languageId: 'demo', tabSize: 2, indentSize: 2, insertSpaces: true });
+	using model = new TextModel('block {\n  \nblock {\n  ', {
+		languageId: 'demo',
+		tabSize: 2,
+		indentSize: 2,
+		insertSpaces: true,
+	});
 	using configurations = new TestLanguageConfigurationService();
-	using rules = configurations.register('demo', { brackets: [['{', '}']], indentationRules: { increaseIndentPattern: /\{\s*$/, decreaseIndentPattern: /^\s*\}/ } });
+	using rules = configurations.register('demo', {
+		brackets: [['{', '}']],
+		indentationRules: { increaseIndentPattern: /\{\s*$/, decreaseIndentPattern: /^\s*\}/ },
+	});
 	const original = [Selection.fromPositions(new Position(2, 3)), Selection.fromPositions(new Position(4, 3))];
 	using selections = createTestCursorsController(model, original, { autoIndent: 'full' }, configurations);
 	const version = model.version;
 
 	typeText(selections, '}');
 
-	assert.deepEqual({ text: model.getText(), positions: selections.getSelections().map(selection => selection.getPosition()), version: model.version }, {
-		text: 'block {\n}\nblock {\n}', positions: [new Position(2, 2), new Position(4, 2)], version: version + 1,
-	});
+	assert.deepEqual(
+		{
+			text: model.getText(),
+			positions: selections.getSelections().map(selection => selection.getPosition()),
+			version: model.version,
+		},
+		{ text: 'block {\n}\nblock {\n}', positions: [new Position(2, 2), new Position(4, 2)], version: version + 1 },
+	);
 	model.undo();
-	assert.deepEqual({ text: model.getText(), selections: selections.getSelections() }, { text: 'block {\n  \nblock {\n  ', selections: original });
+	assert.deepEqual(
+		{ text: model.getText(), selections: selections.getSelections() },
+		{ text: 'block {\n  \nblock {\n  ', selections: original },
+	);
 });
 
 test('Full typing retains auto-closing ownership when a temporary indent is removed', () => {
@@ -58,107 +92,122 @@ test('Full typing retains auto-closing ownership when a temporary indent is remo
 	using configurations = new TestLanguageConfigurationService();
 	using rules = configurations.register('demo', {
 		brackets: [['{', '}']],
-		indentationRules: { increaseIndentPattern: /\{\s*$/, decreaseIndentPattern: /^\s*\}/, indentNextLinePattern: /^if/ },
+		indentationRules: {
+			increaseIndentPattern: /\{\s*$/,
+			decreaseIndentPattern: /^\s*\}/,
+			indentNextLinePattern: /^if/,
+		},
 	});
 	const original = Selection.fromPositions(new Position(2, 3));
 	using selections = createTestCursorsController(model, [original], { autoIndent: 'full' }, configurations);
 
 	typeText(selections, '{');
-	assert.deepEqual({ text: model.getText(), position: selections.getSelections()[0]!.getPosition(), closers: selections.getAutoClosedCharacters() }, {
-		text: 'if (ok)\n{}', position: new Position(2, 2), closers: [new Range(2, 2, 2, 3)],
-	});
+	assert.deepEqual(
+		{
+			text: model.getText(),
+			position: selections.getSelections()[0]!.getPosition(),
+			closers: selections.getAutoClosedCharacters(),
+		},
+		{ text: 'if (ok)\n{}', position: new Position(2, 2), closers: [new Range(2, 2, 2, 3)] },
+	);
 	const version = model.version;
 	typeText(selections, '}');
-	assert.deepEqual({ text: model.getText(), position: selections.getSelections()[0]!.getPosition(), version: model.version }, { text: 'if (ok)\n{}', position: new Position(2, 3), version });
+	assert.deepEqual(
+		{ text: model.getText(), position: selections.getSelections()[0]!.getPosition(), version: model.version },
+		{ text: 'if (ok)\n{}', position: new Position(2, 3), version },
+	);
 	model.undo();
-	assert.deepEqual({ text: model.getText(), selection: selections.getSelections()[0] }, { text: 'if (ok)\n  ', selection: original });
+	assert.deepEqual(
+		{ text: model.getText(), selection: selections.getSelections()[0] },
+		{ text: 'if (ok)\n  ', selection: original },
+	);
 });
 
-test("Language pair typing auto-closes and overtypes one existing closer", () => {
+test('Language pair typing auto-closes and overtypes one existing closer', () => {
 	using model = new TextModel('call', { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerTestLanguageConfigurations(configurations);
 	using selections = createTestCursorsController(model, [caret(4)], {}, configurations);
 
 	typeText(selections, '(');
-	assert.equal(model.getText(), "call()");
+	assert.equal(model.getText(), 'call()');
 	assert.deepEqual(selections.getSelections()[0]!, caret(5));
 	const version = model.version;
 
 	typeText(selections, ')');
-	assert.equal(model.getText(), "call()");
+	assert.equal(model.getText(), 'call()');
 	assert.equal(model.version, version);
 	assert.deepEqual(selections.getSelections()[0]!, caret(6));
 
 	selections.context.model.undo();
-	assert.equal(model.getText(), "call");
+	assert.equal(model.getText(), 'call');
 	assert.deepEqual(selections.getSelections()[0]!, caret(4));
 });
 
-test("Language pair backspace removes both empty sides and remains one undo step", () => {
-	using model = new TextModel("", { languageId: 'typescript' });
+test('Language pair backspace removes both empty sides and remains one undo step', () => {
+	using model = new TextModel('', { languageId: 'typescript' });
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerTestLanguageConfigurations(configurations);
 	using selections = createTestCursorsController(model, [caret(0)], {}, configurations);
 	typeText(selections, '[');
 
 	executeBackspace(model, selections, configurations);
-	assert.equal(model.getText(), "");
+	assert.equal(model.getText(), '');
 	assert.deepEqual(selections.getSelections()[0]!, caret(0));
 
 	selections.context.model.undo();
-	assert.equal(model.getText(), "[]");
+	assert.equal(model.getText(), '[]');
 	assert.deepEqual(selections.getSelections()[0]!, caret(1));
 });
 
-test("Language pair typing surrounds directional selections and auto-closes collapsed cursors", () => {
+test('Language pair typing surrounds directional selections and auto-closes collapsed cursors', () => {
 	using model = new TextModel('alpha beta', { languageId: 'typescript' });
-	const backward = Selection.fromPositions(new Position((0) + 1, (5) + 1), new Position((0) + 1, (0) + 1));
+	const backward = Selection.fromPositions(new Position(0 + 1, 5 + 1), new Position(0 + 1, 0 + 1));
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerTestLanguageConfigurations(configurations);
 	using selections = createTestCursorsController(model, primaryFirst([backward, caret(10)], 1), {}, configurations);
 	typeText(selections, '"');
-	assert.equal(model.getText(), "\"alpha\" beta\"\"");
-	assert.deepEqual(selections.getSelections(), primaryFirst([
-		Selection.fromPositions(new Position((0) + 1, (6) + 1), new Position((0) + 1, (1) + 1)),
-		caret(13),
-	], 1));
+	assert.equal(model.getText(), '"alpha" beta""');
+	assert.deepEqual(
+		selections.getSelections(),
+		primaryFirst([Selection.fromPositions(new Position(0 + 1, 6 + 1), new Position(0 + 1, 1 + 1)), caret(13)], 1),
+	);
 
 	selections.context.model.undo();
-	assert.equal(model.getText(), "alpha beta");
+	assert.equal(model.getText(), 'alpha beta');
 	assert.deepEqual(selections.getSelections(), primaryFirst([backward, caret(10)], 1));
 });
 
-test("Auto-closing respects following text and supports multi-token pairs", () => {
-	using model = new TextModel("name", { languageId: 'template' });
+test('Auto-closing respects following text and supports multi-token pairs', () => {
+	using model = new TextModel('name', { languageId: 'template' });
 	using configurations = new TestLanguageConfigurationService();
-	using custom = configurations.register("template", {
-		autoClosingPairs: [{ open: "<%", close: "%>" }],
-		surroundingPairs: [{ open: "<%", close: "%>" }],
-		autoCloseBefore: " ",
+	using custom = configurations.register('template', {
+		autoClosingPairs: [{ open: '<%', close: '%>' }],
+		surroundingPairs: [{ open: '<%', close: '%>' }],
+		autoCloseBefore: ' ',
 	});
 	using selections = createTestCursorsController(model, [caret(0)], {}, configurations);
 
 	typeText(selections, '<%');
-	assert.equal(model.getText(), "<%name");
+	assert.equal(model.getText(), '<%name');
 	assert.deepEqual(selections.getSelections()[0]!, caret(2));
 
 	selections.setSelections([caret(6)]);
 	typeText(selections, '<%');
-	assert.equal(model.getText(), "<%name<%%>");
+	assert.equal(model.getText(), '<%name<%%>');
 	assert.deepEqual(selections.getSelections()[0]!, caret(8));
 	executeBackspace(model, selections, configurations);
-	assert.equal(model.getText(), "<%name");
+	assert.equal(model.getText(), '<%name');
 });
 
-test("Auto-closing notIn keeps string and comment input single while code still pairs", () => {
+test('Auto-closing notIn keeps string and comment input single while code still pairs', () => {
 	using configurations = new TestLanguageConfigurationService();
 	using builtins = registerTestLanguageConfigurations(configurations);
 
 	using stringModel = new TextModel('"value "', { languageId: 'typescript' });
 	using stringSelections = createTestCursorsController(stringModel, [caret(7)], {}, configurations);
 	typeText(stringSelections, "'");
-	assert.equal(stringModel.getText(), "\"value '\"");
+	assert.equal(stringModel.getText(), '"value \'"');
 	assert.deepEqual(stringSelections.getAutoClosedCharacters(), []);
 
 	using commentModel = new TextModel('// note ', { languageId: 'typescript' });
@@ -175,18 +224,16 @@ test("Auto-closing notIn keeps string and comment input single while code still 
 
 test('Each cursor uses the language configuration at its own position', () => {
 	using model = new TextModel('first\nsecond');
-	model.getLanguageIdAtPosition = lineNumber => lineNumber === 1 ? 'angle' : 'template';
+	model.getLanguageIdAtPosition = lineNumber => (lineNumber === 1 ? 'angle' : 'template');
 	using configurations = new TestLanguageConfigurationService();
-	using angle = configurations.register('angle', {
-		autoClosingPairs: [{ open: '<', close: '>' }],
-	});
-	using template = configurations.register('template', {
-		autoClosingPairs: [{ open: '<', close: '%>' }],
-	});
-	using selections = createTestCursorsController(model, [
-		Selection.fromPositions(new Position(1, 6)),
-		Selection.fromPositions(new Position(2, 7)),
-	], {}, configurations);
+	using angle = configurations.register('angle', { autoClosingPairs: [{ open: '<', close: '>' }] });
+	using template = configurations.register('template', { autoClosingPairs: [{ open: '<', close: '%>' }] });
+	using selections = createTestCursorsController(
+		model,
+		[Selection.fromPositions(new Position(1, 6)), Selection.fromPositions(new Position(2, 7))],
+		{},
+		configurations,
+	);
 
 	typeText(selections, '<');
 
@@ -220,7 +267,11 @@ function typeText(selections: CursorsController, text: string): void {
 	selections.type(new ViewModelEventsCollector(), text, 'keyboard');
 }
 
-function executeBackspace(model: TextModel, selections: CursorsController, configurations: TestLanguageConfigurationService): void {
+function executeBackspace(
+	model: TextModel,
+	selections: CursorsController,
+	configurations: TestLanguageConfigurationService,
+): void {
 	const operation = DeleteOperations.deleteLeft(
 		selections.getPrevEditOperationType(),
 		createTestCursorConfiguration(model, configurations),
@@ -232,7 +283,7 @@ function executeBackspace(model: TextModel, selections: CursorsController, confi
 }
 
 function caret(columnIndex: number): Selection {
-	return Selection.fromPositions(new Position((0) + 1, (columnIndex) + 1));
+	return Selection.fromPositions(new Position(0 + 1, columnIndex + 1));
 }
 
 function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {

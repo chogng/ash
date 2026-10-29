@@ -21,7 +21,10 @@ export class StartVoiceChatAction extends Action2 {
 	public override async run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
 		const widgets = accessor.get(IChatWidgetService);
 		const explicit = context && typeof context === 'object' && 'widget' in context ? context.widget : undefined;
-		const widget = explicit === undefined ? widgets.lastFocusedWidget : widgets.getAllWidgets().find(widget => widget === explicit);
+		const widget =
+			explicit === undefined
+				? widgets.lastFocusedWidget
+				: widgets.getAllWidgets().find(widget => widget === explicit);
 		if (!widget?.visible || widget.isTranscriptProgressActive) return;
 		// The existing widget owns the real-time model, source identity and Core task dispatcher.
 		await widget.startVoiceConversation();
@@ -82,21 +85,40 @@ export class StopReadAloud extends Action2 {
 			precondition: TextToSpeechInProgress.isEqualTo(true),
 		});
 	}
-	public override run(accessor: ServicesAccessor): void { readingWindows.get(accessor.get(ISpeechService))?.cancel(); }
+	public override run(accessor: ServicesAccessor): void {
+		readingWindows.get(accessor.get(ISpeechService))?.cancel();
+	}
 }
 
 export class StopReadChatItemAloud extends Action2 {
 	public static readonly ID = 'workbench.action.chat.stopReadChatItemAloud';
-	constructor() { super({ id: StopReadChatItemAloud.ID, title: localize2('chat.message.stopReadAloud', 'Stop reading aloud') }); }
+	constructor() {
+		super({ id: StopReadChatItemAloud.ID, title: localize2('chat.message.stopReadAloud', 'Stop reading aloud') });
+	}
 	public override run(_accessor: ServicesAccessor, context: unknown): void {
-		if (context && typeof context === 'object' && 'source' in context && context.source instanceof CancellationTokenSource) context.source.cancel();
+		if (
+			context &&
+			typeof context === 'object' &&
+			'source' in context &&
+			context.source instanceof CancellationTokenSource
+		)
+			context.source.cancel();
 	}
 }
 
-function isResponse(value: unknown): value is { readonly type: 'agentMessage'; readonly text: string; readonly source: CancellationTokenSource; } {
-	return !!value && typeof value === 'object' && 'type' in value && value.type === 'agentMessage'
-		&& 'text' in value && typeof value.text === 'string'
-		&& 'source' in value && value.source instanceof CancellationTokenSource;
+function isResponse(
+	value: unknown,
+): value is { readonly type: 'agentMessage'; readonly text: string; readonly source: CancellationTokenSource } {
+	return (
+		!!value &&
+		typeof value === 'object' &&
+		'type' in value &&
+		value.type === 'agentMessage' &&
+		'text' in value &&
+		typeof value.text === 'string' &&
+		'source' in value &&
+		value.source instanceof CancellationTokenSource
+	);
 }
 
 registerAction2(ReadChatResponseAloud);

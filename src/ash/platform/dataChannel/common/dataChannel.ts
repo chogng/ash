@@ -21,8 +21,10 @@ export interface IDataChannelEvent<T = unknown> {
 	data: T;
 }
 
-export type LinkPresentationKind = 'resource' | 'issue' | 'pullRequest' | 'commit' | 'file' | 'folder' | 'session' | 'chat' | 'repository' | 'branch';
-export type LinkPresentationStatusKind = 'neutral' | 'pending' | 'success' | 'warning' | 'error' | 'open' | 'closed' | 'merged' | 'draft' | 'notPlanned';
+export type LinkPresentationKind =
+	'resource' | 'issue' | 'pullRequest' | 'commit' | 'file' | 'folder' | 'session' | 'chat' | 'repository' | 'branch';
+export type LinkPresentationStatusKind =
+	'neutral' | 'pending' | 'success' | 'warning' | 'error' | 'open' | 'closed' | 'merged' | 'draft' | 'notPlanned';
 
 export interface ILinkPresentationStatus {
 	readonly kind: LinkPresentationStatusKind;
@@ -36,7 +38,7 @@ export interface ILinkPresentation {
 	readonly reference?: string;
 	readonly status?: ILinkPresentationStatus;
 	readonly secondaryStatus?: ILinkPresentationStatus;
-	readonly changes?: { readonly insertions: number; readonly deletions: number; };
+	readonly changes?: { readonly insertions: number; readonly deletions: number };
 	readonly tooltip?: string;
 	readonly ariaLabel?: string;
 	readonly isLoading?: boolean;
@@ -48,11 +50,24 @@ export function parseLinkPresentation(value: unknown): ILinkPresentation {
 		throw new TypeError('Link presentation must be an object');
 	}
 	const input = value as Record<string, unknown>;
-	const kinds: readonly string[] = ['resource', 'issue', 'pullRequest', 'commit', 'file', 'folder', 'session', 'chat', 'repository', 'branch'];
+	const kinds: readonly string[] = [
+		'resource',
+		'issue',
+		'pullRequest',
+		'commit',
+		'file',
+		'folder',
+		'session',
+		'chat',
+		'repository',
+		'branch',
+	];
 	if (typeof input.kind !== 'string' || !kinds.includes(input.kind)) {
 		throw new TypeError('Link presentation kind is invalid');
 	}
-	const result: { -readonly [K in keyof ILinkPresentation]: ILinkPresentation[K] } = { kind: input.kind as LinkPresentationKind };
+	const result: { -readonly [K in keyof ILinkPresentation]: ILinkPresentation[K] } = {
+		kind: input.kind as LinkPresentationKind,
+	};
 	for (const key of ['title', 'detail', 'reference', 'tooltip', 'ariaLabel'] as const) {
 		if (input[key] !== undefined) {
 			if (typeof input[key] !== 'string' || input[key].length > 4096) {
@@ -64,8 +79,25 @@ export function parseLinkPresentation(value: unknown): ILinkPresentation {
 	for (const key of ['status', 'secondaryStatus'] as const) {
 		if (input[key] !== undefined) {
 			const status = input[key] as Partial<ILinkPresentationStatus> | null;
-			const statusKinds: readonly string[] = ['neutral', 'pending', 'success', 'warning', 'error', 'open', 'closed', 'merged', 'draft', 'notPlanned'];
-			if (typeof status !== 'object' || status === null || !statusKinds.includes(status.kind!) || typeof status.label !== 'string' || status.label.length > 4096) {
+			const statusKinds: readonly string[] = [
+				'neutral',
+				'pending',
+				'success',
+				'warning',
+				'error',
+				'open',
+				'closed',
+				'merged',
+				'draft',
+				'notPlanned',
+			];
+			if (
+				typeof status !== 'object' ||
+				status === null ||
+				!statusKinds.includes(status.kind!) ||
+				typeof status.label !== 'string' ||
+				status.label.length > 4096
+			) {
 				throw new TypeError(`Link presentation ${key} is invalid`);
 			}
 			result[key] = Object.freeze({ kind: status.kind!, label: status.label });
@@ -73,7 +105,13 @@ export function parseLinkPresentation(value: unknown): ILinkPresentation {
 	}
 	if (input.changes !== undefined) {
 		const changes = input.changes as ILinkPresentation['changes'];
-		if (!changes || !Number.isSafeInteger(changes.insertions) || changes.insertions < 0 || !Number.isSafeInteger(changes.deletions) || changes.deletions < 0) {
+		if (
+			!changes ||
+			!Number.isSafeInteger(changes.insertions) ||
+			changes.insertions < 0 ||
+			!Number.isSafeInteger(changes.deletions) ||
+			changes.deletions < 0
+		) {
 			throw new TypeError('Link presentation changes are invalid');
 		}
 		result.changes = Object.freeze({ insertions: changes.insertions, deletions: changes.deletions });
@@ -114,7 +152,10 @@ export interface ILinkPresentationService {
 	readonly _serviceBrand: undefined;
 	readonly onDidChangeLinkPresentationRules: Event<void>;
 	readonly linkPresentationRules: readonly ILinkPresentationRule[];
-	registerLinkPresentationProvider(registration: ILinkPresentationProviderRegistration, provider: ILinkPresentationProvider): IDisposable;
+	registerLinkPresentationProvider(
+		registration: ILinkPresentationProviderRegistration,
+		provider: ILinkPresentationProvider,
+	): IDisposable;
 	getLinkPresentationRule(resource: URI): ILinkPresentationRule | undefined;
 	createLinkPresentationWatcher(providerId: string, resource: URI): ILinkPresentationWatcher | undefined;
 }
@@ -124,6 +165,6 @@ export class NullDataChannelService implements IDataChannelService {
 	public readonly _serviceBrand = undefined;
 	public readonly onDidSendData = Event.None;
 	public getDataChannel<T>(_channelId: string): CoreDataChannel<T> {
-		return { sendData: () => { } };
+		return { sendData: () => {} };
 	}
 }

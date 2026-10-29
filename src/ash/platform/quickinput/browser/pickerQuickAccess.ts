@@ -2,11 +2,28 @@ import { CancellationToken, CancellationTokenSource } from '../../../base/common
 import { Emitter } from '../../../base/common/event.js';
 import { RunOnceScheduler } from '../../../base/common/async.js';
 import { onUnexpectedError } from '../../../base/common/errors.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import {
+	Disposable,
+	DisposableStore,
+	MutableDisposable,
+	toDisposable,
+	type IDisposable,
+} from '../../../base/common/lifecycle.js';
 import type { IQuickAccessProvider, IQuickAccessProviderRunOptions } from '../common/quickAccess.js';
-import type { IKeyMods, IQuickPick, IQuickPickDidAcceptEvent, IQuickPickItem, IQuickPickSeparator } from '../common/quickInput.js';
+import type {
+	IKeyMods,
+	IQuickPick,
+	IQuickPickDidAcceptEvent,
+	IQuickPickItem,
+	IQuickPickSeparator,
+} from '../common/quickInput.js';
 
-export enum TriggerAction { NO_ACTION, CLOSE_PICKER, REFRESH_PICKER, REMOVE_ITEM }
+export enum TriggerAction {
+	NO_ACTION,
+	CLOSE_PICKER,
+	REFRESH_PICKER,
+	REMOVE_ITEM,
+}
 
 export interface IPickerQuickAccessItem extends IQuickPickItem {
 	accept?(keyMods: IKeyMods, event: IQuickPickDidAcceptEvent): void;
@@ -29,7 +46,7 @@ export interface IPickerQuickAccessProviderOptions<T extends IPickerQuickAccessI
 }
 
 export type Pick<T> = T | IQuickPickSeparator;
-export type PicksWithActive<T> = { items: readonly Pick<T>[]; active?: T; };
+export type PicksWithActive<T> = { items: readonly Pick<T>[]; active?: T };
 export type Picks<T> = readonly Pick<T>[] | PicksWithActive<T>;
 export type FastAndSlowPicks<T> = {
 	readonly picks: Picks<T>;
@@ -38,20 +55,34 @@ export type FastAndSlowPicks<T> = {
 };
 
 /** Owns query cancellation, result publication and acceptance for existing picker providers. */
-export abstract class PickerQuickAccessProvider<T extends IPickerQuickAccessItem> extends Disposable implements IQuickAccessProvider {
+export abstract class PickerQuickAccessProvider<T extends IPickerQuickAccessItem>
+	extends Disposable
+	implements IQuickAccessProvider
+{
 	private readonly changed = this._register(new Emitter<void>());
-	private current: { token: CancellationToken; publish: (picks: Picks<T>) => void; } | undefined;
+	private current: { token: CancellationToken; publish: (picks: Picks<T>) => void } | undefined;
 
-	constructor(private readonly prefix: string, protected readonly options: IPickerQuickAccessProviderOptions<T> = {}) { super(); }
+	constructor(
+		private readonly prefix: string,
+		protected readonly options: IPickerQuickAccessProviderOptions<T> = {},
+	) {
+		super();
+	}
 
-	protected refresh(): void { this.changed.fire(); }
+	protected refresh(): void {
+		this.changed.fire();
+	}
 
 	/** Progressive domain searches publish through the same query identity check as promises. */
 	protected updatePicks(picks: Picks<T>, token: CancellationToken): void {
 		if (this.current?.token === token && !token.isCancellationRequested) this.current.publish(picks);
 	}
 
-	public provide(rawPicker: IQuickPick<IQuickPickItem>, token: CancellationToken = CancellationToken.None, runOptions?: IQuickAccessProviderRunOptions): IDisposable {
+	public provide(
+		rawPicker: IQuickPick<IQuickPickItem>,
+		token: CancellationToken = CancellationToken.None,
+		runOptions?: IQuickAccessProviderRunOptions,
+	): IDisposable {
 		const picker = rawPicker as IQuickPick<T>;
 		const lifetime = new DisposableStore();
 		const request = lifetime.add(new MutableDisposable<DisposableStore>());
@@ -69,10 +100,16 @@ export abstract class PickerQuickAccessProvider<T extends IPickerQuickAccessItem
 			const filter = this.options.shouldSkipTrimPickFilter ? raw : raw.trim();
 			const publish = (picks: Picks<T>): void => {
 				if (query.token.isCancellationRequested || request.value !== resources) return;
-				const result: PicksWithActive<T> = Array.isArray(picks) ? { items: picks } : picks as PicksWithActive<T>;
+				const result: PicksWithActive<T> = Array.isArray(picks)
+					? { items: picks }
+					: (picks as PicksWithActive<T>);
 				let items = result.items;
 				if (!items.some(item => !('type' in item)) && this.options.noResultsPick) {
-					items = [typeof this.options.noResultsPick === 'function' ? this.options.noResultsPick(filter) : this.options.noResultsPick];
+					items = [
+						typeof this.options.noResultsPick === 'function'
+							? this.options.noResultsPick(filter)
+							: this.options.noResultsPick,
+					];
 				}
 				picker.items = items;
 				if (result.active) picker.activeItems = [result.active];
@@ -86,12 +123,19 @@ export abstract class PickerQuickAccessProvider<T extends IPickerQuickAccessItem
 				if ('additionalPicks' in result) {
 					picker.busy = true;
 					const merge = (additional: Picks<T>): void => {
-						const first: PicksWithActive<T> = Array.isArray(result.picks) ? { items: result.picks } : result.picks as PicksWithActive<T>;
-						const second: PicksWithActive<T> = Array.isArray(additional) ? { items: additional } : additional as PicksWithActive<T>;
+						const first: PicksWithActive<T> = Array.isArray(result.picks)
+							? { items: result.picks }
+							: (result.picks as PicksWithActive<T>);
+						const second: PicksWithActive<T> = Array.isArray(additional)
+							? { items: additional }
+							: (additional as PicksWithActive<T>);
 						publish({ items: [...first.items, ...second.items], active: second.active ?? first.active });
 					};
-					const delayed = resources.add(new RunOnceScheduler(() => publish(result.picks), result.mergeDelay ?? 0));
-					if (result.mergeDelay) delayed.schedule(); else publish(result.picks);
+					const delayed = resources.add(
+						new RunOnceScheduler(() => publish(result.picks), result.mergeDelay ?? 0),
+					);
+					if (result.mergeDelay) delayed.schedule();
+					else publish(result.picks);
 					const additional = await result.additionalPicks;
 					delayed.cancel();
 					merge(additional);
@@ -102,39 +146,89 @@ export abstract class PickerQuickAccessProvider<T extends IPickerQuickAccessItem
 				if (!query.token.isCancellationRequested && request.value === resources) picker.busy = false;
 			}
 		};
-		const scheduler = lifetime.add(new RunOnceScheduler(() => { void update(); }, this.options.debounce ?? 0));
-		lifetime.add(picker.onDidChangeValue(() => {
-			request.clear();
-			if (this.options.debounce) { picker.items = []; picker.busy = true; scheduler.schedule(); }
-			else void update();
-		}));
-		lifetime.add(this.changed.event(() => { scheduler.cancel(); void update(); }));
-		lifetime.add(picker.onDidAccept(event => {
-			const item = picker.selectedItems[0];
-			if (!item) return;
-			const mods = picker.keyMods ?? { ctrlCmd: false, alt: false, shift: false };
-			if (runOptions?.handleAccept) { runOptions.handleAccept(item, event.inBackground); return; }
-			if (item.attach && (mods.ctrlCmd || mods.alt)) { item.attach(mods, event); return; }
-			if (!event.inBackground && !item.keepOpen) picker.hide();
-			item.accept?.(mods, event);
-		}));
-		lifetime.add(picker.onDidTriggerItemButton(({ item, button }) => {
-			const index = item.buttons?.indexOf(button) ?? -1;
-			if (index < 0 || !item.trigger) return;
-			void Promise.resolve(item.trigger(index, picker.keyMods ?? { ctrlCmd: false, alt: false, shift: false })).then(action => {
-				if (token.isCancellationRequested) return;
-				if (action === TriggerAction.CLOSE_PICKER) picker.hide();
-				else if (action === TriggerAction.REFRESH_PICKER) { this.refresh(); picker.show(); }
-				else if (action === TriggerAction.REMOVE_ITEM) picker.items = picker.items.filter(candidate => candidate !== item);
-			}).catch(error => { if (!token.isCancellationRequested) onUnexpectedError(error); });
-		}));
-		lifetime.add(token.onCancellationRequested(() => { scheduler.cancel(); request.clear(); this.current = undefined; picker.busy = false; }));
-		lifetime.add(toDisposable(() => { this.current = undefined; picker.busy = false; }));
+		const scheduler = lifetime.add(
+			new RunOnceScheduler(() => {
+				void update();
+			}, this.options.debounce ?? 0),
+		);
+		lifetime.add(
+			picker.onDidChangeValue(() => {
+				request.clear();
+				if (this.options.debounce) {
+					picker.items = [];
+					picker.busy = true;
+					scheduler.schedule();
+				} else void update();
+			}),
+		);
+		lifetime.add(
+			this.changed.event(() => {
+				scheduler.cancel();
+				void update();
+			}),
+		);
+		lifetime.add(
+			picker.onDidAccept(event => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				const mods = picker.keyMods ?? { ctrlCmd: false, alt: false, shift: false };
+				if (runOptions?.handleAccept) {
+					runOptions.handleAccept(item, event.inBackground);
+					return;
+				}
+				if (item.attach && (mods.ctrlCmd || mods.alt)) {
+					item.attach(mods, event);
+					return;
+				}
+				if (!event.inBackground && !item.keepOpen) picker.hide();
+				item.accept?.(mods, event);
+			}),
+		);
+		lifetime.add(
+			picker.onDidTriggerItemButton(({ item, button }) => {
+				const index = item.buttons?.indexOf(button) ?? -1;
+				if (index < 0 || !item.trigger) return;
+				void Promise.resolve(
+					item.trigger(index, picker.keyMods ?? { ctrlCmd: false, alt: false, shift: false }),
+				)
+					.then(action => {
+						if (token.isCancellationRequested) return;
+						if (action === TriggerAction.CLOSE_PICKER) picker.hide();
+						else if (action === TriggerAction.REFRESH_PICKER) {
+							this.refresh();
+							picker.show();
+						} else if (action === TriggerAction.REMOVE_ITEM)
+							picker.items = picker.items.filter(candidate => candidate !== item);
+					})
+					.catch(error => {
+						if (!token.isCancellationRequested) onUnexpectedError(error);
+					});
+			}),
+		);
+		lifetime.add(
+			token.onCancellationRequested(() => {
+				scheduler.cancel();
+				request.clear();
+				this.current = undefined;
+				picker.busy = false;
+			}),
+		);
+		lifetime.add(
+			toDisposable(() => {
+				this.current = undefined;
+				picker.busy = false;
+			}),
+		);
 		void update();
 		return lifetime;
 	}
 
-	protected abstract _getPicks(filter: string, disposables: DisposableStore, token: CancellationToken, runOptions?: IQuickAccessProviderRunOptions): Picks<T> | Promise<Picks<T> | FastAndSlowPicks<T>> | FastAndSlowPicks<T> | null;
+	protected abstract _getPicks(
+		filter: string,
+		disposables: DisposableStore,
+		token: CancellationToken,
+		runOptions?: IQuickAccessProviderRunOptions,
+	): Picks<T> | Promise<Picks<T> | FastAndSlowPicks<T>> | FastAndSlowPicks<T> | null;
 }
 
 function isPromise<T>(value: T | Promise<T>): value is Promise<T> {

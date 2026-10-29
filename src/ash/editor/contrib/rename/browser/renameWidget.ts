@@ -13,7 +13,10 @@ import { Range } from '../../../common/core/range.js';
 export const CONTEXT_RENAME_INPUT_VISIBLE = new RawContextKey<boolean>('renameInputVisible', false);
 export const CONTEXT_RENAME_INPUT_FOCUSED = new RawContextKey<boolean>('renameInputFocused', false);
 
-export interface RenameWidgetResult { readonly newName: string; readonly wantsPreview: boolean; }
+export interface RenameWidgetResult {
+	readonly newName: string;
+	readonly wantsPreview: boolean;
+}
 
 /** Owns input completion and focus; provider requests and edit submission belong to RenameController. */
 export class RenameWidget extends Disposable {
@@ -26,45 +29,75 @@ export class RenameWidget extends Disposable {
 	private complete: ((value: RenameWidgetResult | undefined) => void) | undefined;
 	private supportsPreview = false;
 
-	constructor(private readonly editor: ICodeEditor, private readonly viewport: View, @IContextKeyService contextKeys: IContextKeyService) {
+	constructor(
+		private readonly editor: ICodeEditor,
+		private readonly viewport: View,
+		@IContextKeyService contextKeys: IContextKeyService,
+	) {
 		super();
 		this.visible = CONTEXT_RENAME_INPUT_VISIBLE.bindTo(contextKeys);
 		this.focused = CONTEXT_RENAME_INPUT_FOCUSED.bindTo(contextKeys);
 		this.domNode = h(viewport.domNode.domNode.ownerDocument, 'div');
 		this.domNode.className = 'stanza-editor-rename';
 		this.domNode.hidden = true;
-		this.input = this._register(new InputBox(this.domNode, {
-			inputBoxStyles: defaultInputBoxStyles,
-			ariaLabel: localize('rename.newName', 'New symbol name'),
-		}));
+		this.input = this._register(
+			new InputBox(this.domNode, {
+				inputBoxStyles: defaultInputBoxStyles,
+				ariaLabel: localize('rename.newName', 'New symbol name'),
+			}),
+		);
 		this.input.inputElement.classList.add('stanza-editor-rename-input');
 		this.status = h(this.domNode.ownerDocument, 'span');
 		this.status.className = 'stanza-editor-rename-status';
 		this.status.setAttribute('aria-live', 'polite');
 		this.domNode.append(this.status);
 		viewport.domNode.domNode.append(this.domNode);
-		this._register(toDisposable(() => { this.cancelInput(false, 'dispose'); this.domNode.remove(); }));
+		this._register(
+			toDisposable(() => {
+				this.cancelInput(false, 'dispose');
+				this.domNode.remove();
+			}),
+		);
 		this._register(addDisposableListener(this.domNode, 'pointerdown', event => event.stopPropagation()));
 		this._register(addDisposableListener(this.domNode, 'mousedown', event => event.stopPropagation()));
 		this._register(this.input.onDidFocus(() => this.focused.set(true)));
 		this._register(this.input.onDidBlur(() => this.focused.set(false)));
-		this._register(this.input.onDidChange(() => {
-			this.input.inputElement.removeAttribute('aria-invalid');
-			this.status.textContent = this.inputHint;
-		}));
-		this._register(addDisposableListener(this.domNode, 'keydown', event => {
-			if (event.defaultPrevented || event.isComposing) { return; }
-			if (event.key === 'Escape') {
-				stopEvent(event);
-				editor.trigger('keyboard', 'cancelRenameInput', {});
-			} else if (event.key === 'Enter' && !event.altKey && (!event.ctrlKey && !event.metaKey || this.supportsPreview)) {
-				stopEvent(event);
-				editor.trigger('keyboard', event.ctrlKey || event.metaKey ? 'acceptRenameInputWithPreview' : 'acceptRenameInput', {});
-			}
-		}));
+		this._register(
+			this.input.onDidChange(() => {
+				this.input.inputElement.removeAttribute('aria-invalid');
+				this.status.textContent = this.inputHint;
+			}),
+		);
+		this._register(
+			addDisposableListener(this.domNode, 'keydown', event => {
+				if (event.defaultPrevented || event.isComposing) {
+					return;
+				}
+				if (event.key === 'Escape') {
+					stopEvent(event);
+					editor.trigger('keyboard', 'cancelRenameInput', {});
+				} else if (
+					event.key === 'Enter' &&
+					!event.altKey &&
+					((!event.ctrlKey && !event.metaKey) || this.supportsPreview)
+				) {
+					stopEvent(event);
+					editor.trigger(
+						'keyboard',
+						event.ctrlKey || event.metaKey ? 'acceptRenameInputWithPreview' : 'acceptRenameInput',
+						{},
+					);
+				}
+			}),
+		);
 	}
 
-	public getInput(where: Range, currentName: string, signal: AbortSignal, supportsPreview: boolean): Promise<RenameWidgetResult | undefined> {
+	public getInput(
+		where: Range,
+		currentName: string,
+		signal: AbortSignal,
+		supportsPreview: boolean,
+	): Promise<RenameWidgetResult | undefined> {
 		this.cancelInput(false, 'new input');
 		this.supportsPreview = supportsPreview;
 		this.input.value = currentName;
@@ -72,8 +105,12 @@ export class RenameWidget extends Disposable {
 		const coordinates = this.viewport.getPositionContentCoordinates(where.getStartPosition());
 		this.domNode.style.left = `${Math.max(8, coordinates.left - this.viewport.viewportLayout.scrollPosition.left)}px`;
 		this.domNode.style.top = `${Math.max(8, coordinates.top - this.viewport.viewportLayout.scrollPosition.top + coordinates.height + 4)}px`;
-		const result = new Promise<RenameWidgetResult | undefined>(resolve => { this.complete = resolve; });
-		this.cancellation.value = addDisposableListener(signal, 'abort', () => this.cancelInput(true, 'request cancelled'));
+		const result = new Promise<RenameWidgetResult | undefined>(resolve => {
+			this.complete = resolve;
+		});
+		this.cancellation.value = addDisposableListener(signal, 'abort', () =>
+			this.cancelInput(true, 'request cancelled'),
+		);
 		this.domNode.hidden = false;
 		this.visible.set(true);
 		this.input.focus();
@@ -83,7 +120,9 @@ export class RenameWidget extends Disposable {
 
 	public acceptInput(wantsPreview: boolean): void {
 		const newName = this.input.value.trim();
-		if (!this.complete) { return; }
+		if (!this.complete) {
+			return;
+		}
 		if (!newName) {
 			this.input.inputElement.setAttribute('aria-invalid', 'true');
 			this.status.textContent = localize('rename.emptyName', 'Name cannot be empty');
@@ -97,7 +136,10 @@ export class RenameWidget extends Disposable {
 	}
 	private get inputHint(): string {
 		return this.supportsPreview
-			? localize('rename.inputPreviewHint', 'Enter to rename, Ctrl+Enter or Command+Enter to preview, Escape to cancel')
+			? localize(
+					'rename.inputPreviewHint',
+					'Enter to rename, Ctrl+Enter or Command+Enter to preview, Escape to cancel',
+				)
 			: localize('rename.inputHint', 'Enter to rename, Escape to cancel');
 	}
 	public cancelInput(focusEditor: boolean, _caller: string): void {
@@ -114,6 +156,8 @@ export class RenameWidget extends Disposable {
 		this.input.value = '';
 		this.status.textContent = '';
 		complete?.(undefined);
-		if (restore && !this.isDisposed) { this.editor.focus(); }
+		if (restore && !this.isDisposed) {
+			this.editor.focus();
+		}
 	}
 }

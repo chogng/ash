@@ -9,16 +9,12 @@ test('Lazy evaluates once and exposes initialized values', () => {
 		return { calls };
 	});
 
-	assert.deepEqual({ hasValue: value.hasValue, rawValue: value.rawValue }, {
-		hasValue: false,
-		rawValue: undefined,
-	});
+	assert.deepEqual({ hasValue: value.hasValue, rawValue: value.rawValue }, { hasValue: false, rawValue: undefined });
 	assert.equal(value.value, value.value);
-	assert.deepEqual({ calls, hasValue: value.hasValue, rawValue: value.rawValue }, {
-		calls: 1,
-		hasValue: true,
-		rawValue: { calls: 1 },
-	});
+	assert.deepEqual(
+		{ calls, hasValue: value.hasValue, rawValue: value.rawValue },
+		{ calls: 1, hasValue: true, rawValue: { calls: 1 } },
+	);
 });
 
 test('Lazy retains failures and rejects recursive initialization', () => {
@@ -29,11 +25,22 @@ test('Lazy retains failures and rejects recursive initialization', () => {
 		throw failure;
 	});
 
-	assert.throws(() => broken.value, error => error === failure);
-	assert.throws(() => broken.value, error => error === failure);
+	assert.throws(
+		() => broken.value,
+		error => error === failure,
+	);
+	assert.throws(
+		() => broken.value,
+		error => error === failure,
+	);
 	assert.equal(calls, 1);
-	const undefinedFailure = new Lazy<never>(() => { throw undefined; });
-	assert.throws(() => undefinedFailure.value, error => error === undefined);
+	const undefinedFailure = new Lazy<never>(() => {
+		throw undefined;
+	});
+	assert.throws(
+		() => undefinedFailure.value,
+		error => error === undefined,
+	);
 
 	let recursive!: Lazy<number>;
 	recursive = new Lazy(() => recursive.value);

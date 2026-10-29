@@ -13,7 +13,10 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IChatSpeechToTextService } from '../../../../workbench/contrib/chat/browser/speechToText/chatSpeechToTextService.js';
 import { IDictationOnboardingService } from '../../../../workbench/contrib/chat/browser/speechToText/dictationOnboarding.js';
 import type { ICoworkWidgetModel } from './widget/coworkWidget.js';
-import type { ChatInputDelegate, ChatInputState } from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
+import type {
+	ChatInputDelegate,
+	ChatInputState,
+} from '../../../../workbench/contrib/chat/browser/widget/input/chatInput.js';
 import { ChatInputPart } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputPart.js';
 import { ChatInputEditor } from '../../../../workbench/contrib/chat/browser/widget/input/chatInputEditor.js';
 import { IChatAttachmentResolveService } from '../../../../workbench/contrib/chat/browser/attachments/chatAttachmentResolveService.js';
@@ -61,58 +64,100 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		@IMenuService menuService: IMenuService,
 		@IChatAttachmentResolveService attachmentResolver: IChatAttachmentResolveService,
 	) {
-		super(container, {
-			...delegate,
-			send: async (text, mode, skills, contexts, signal) => {
-				this.submittedMessage = true;
-				this.updateConversation();
-				try {
-					await delegate.send(text, mode, skills, contexts, signal);
-				} catch (error) {
-					if (this.model.items.length === 0) {
-						this.submittedMessage = false;
-					}
+		super(
+			container,
+			{
+				...delegate,
+				send: async (text, mode, skills, contexts, signal) => {
+					this.submittedMessage = true;
 					this.updateConversation();
-					throw error;
-				}
+					try {
+						await delegate.send(text, mode, skills, contexts, signal);
+					} catch (error) {
+						if (this.model.items.length === 0) {
+							this.submittedMessage = false;
+						}
+						this.updateConversation();
+						throw error;
+					}
+				},
 			},
-		}, contextMenus, contextViews, accessibleViews, notifications, {
-			create: options => instantiationService.createInstance(ChatInputEditor, {
-				...options,
-				placeholder: '',
-				height: { minimum: 32, maximum: 240 },
-			}),
-		}, [{
-			id: 'ash.chat.input.attach',
-			get label() { return localize('chat.attach.files', 'Attach files'); },
-			get tooltip() { return localize('chat.attach.files', 'Attach files'); },
-			icon: Lxicon.add,
-			enabled: true,
-			run: () => this.contextAttachments.showPicker(),
-		}], { modePicker: 'hidden', modelPickerPosition: 'trailing', renderSecondaryToolbar: false, fileEvents: 'host', draftStorage: 'host' }, instantiationService, speechToText, onboarding, quickInput, menuService, attachmentResolver);
+			contextMenus,
+			contextViews,
+			accessibleViews,
+			notifications,
+			{
+				create: options =>
+					instantiationService.createInstance(ChatInputEditor, {
+						...options,
+						placeholder: '',
+						height: { minimum: 32, maximum: 240 },
+					}),
+			},
+			[
+				{
+					id: 'ash.chat.input.attach',
+					get label() {
+						return localize('chat.attach.files', 'Attach files');
+					},
+					get tooltip() {
+						return localize('chat.attach.files', 'Attach files');
+					},
+					icon: Lxicon.add,
+					enabled: true,
+					run: () => this.contextAttachments.showPicker(),
+				},
+			],
+			{
+				modePicker: 'hidden',
+				modelPickerPosition: 'trailing',
+				renderSecondaryToolbar: false,
+				fileEvents: 'host',
+				draftStorage: 'host',
+			},
+			instantiationService,
+			speechToText,
+			onboarding,
+			quickInput,
+			menuService,
+			attachmentResolver,
+		);
 		this.draftNotifications = notifications;
 		this.element.classList.add('ash-sessions-cowork-input', 'floating-card');
 		this.element.classList.add('cowork-composer');
-		this.contextAttachments = this._register(new NewChatContextAttachments(this.inputContainer, files => this.attachFiles(files)));
+		this.contextAttachments = this._register(
+			new NewChatContextAttachments(this.inputContainer, files => this.attachFiles(files)),
+		);
 		this._register(new NewChatInputPasteTarget(this.inputContainer, this.contextAttachments));
-		const dragAndDrop = this._register(instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages()));
+		const dragAndDrop = this._register(
+			instantiationService.createInstance(ChatDragAndDrop, this, () => this.supportsImages()),
+		);
 		dragAndDrop.addOverlay(this.inputContainer, this.inputContainer);
 		const tipContainer = h(container.ownerDocument, 'div');
 		tipContainer.className = 'ash-sessions-cowork-tip-slot';
 		this.element.append(tipContainer);
-		this.tips = this._register(instantiationService.createInstance(ChatInputTipPresenter, {
-			container: tipContainer,
-			isEligible: () => !this.submittedMessage && this.model.items.length === 0
-				&& (this.model.inputState.phase === 'ready' || (this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading'))
-				&& !this.model.inputState.interaction,
-			focusInput: () => this.focus(),
-		}));
-		this._register(AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())));
-		this._register(addDisposableListener(this.inputContainer, 'focusin', event => {
-			if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
-			const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Chat);
-			if (hint) announceStatus(hint);
-		}));
+		this.tips = this._register(
+			instantiationService.createInstance(ChatInputTipPresenter, {
+				container: tipContainer,
+				isEligible: () =>
+					!this.submittedMessage &&
+					this.model.items.length === 0 &&
+					(this.model.inputState.phase === 'ready' ||
+						(this.model.untitledSessionId !== undefined && this.model.inputState.phase === 'loading')) &&
+					!this.model.inputState.interaction,
+				focusInput: () => this.focus(),
+			}),
+		);
+		this._register(
+			AccessibleViewRegistry.register(new SessionsChatAccessibilityHelp(this.element, () => this.focus())),
+		);
+		this._register(
+			addDisposableListener(this.inputContainer, 'focusin', event => {
+				if (this.inputContainer.contains(event.relatedTarget as Node | null)) return;
+				const hint = accessibleViews.getOpenAriaHint(AccessibilityVerbositySettingId.Chat);
+				if (hint) announceStatus(hint);
+			}),
+		);
 		this.heading = h(container.ownerDocument, 'h2');
 		this.heading.className = 'ash-sessions-cowork-welcome-heading';
 		this.heading.textContent = localize('sessions.chat.welcome', 'What can we work on?');
@@ -121,43 +166,60 @@ export class NewCoworkInputWidget extends ChatInputPart {
 		this.displayedDraftId = model.threadId ?? `untitled:${model.untitledSessionId!}`;
 		const storedDraft = readNewChatDraftState(storage, this.displayedDraftId);
 		if (storedDraft) this.restoreDraft(storedDraft);
-		this._register(this.onDidChangeInput(() => {
-			if (!this.restoringDraft) {
-				this.saveDraft();
-			}
-		}));
-		this._register(lifecycle.onWillShutdown(event => {
-			event.join(Promise.all([...this.draftWrites]).then(() => storage.flush()), 'Sessions composer draft');
-		}));
-		this._register(toDisposable(() => {
-			// A pane can close while attachment resolution is still running; it must not recreate its draft.
-			for (const [identity, revision] of this.draftWriteRevisions) {
-				this.draftWriteRevisions.set(identity, revision + 1);
-			}
-		}));
-		this._register(model.onDidChange(() => {
-			if (this.displayedThreadId !== model.threadId) {
-				// Materializing the draft does not start another conversation; switching an existing Thread does.
-				if (this.displayedThreadId !== undefined) {
+		this._register(
+			this.onDidChangeInput(() => {
+				if (!this.restoringDraft) {
 					this.saveDraft();
-					this.submittedMessage = false;
-					this.restoringDraft = true;
-					this.input.value = '';
-					this.attachmentModel.clear();
-					const draft = readNewChatDraftState(storage, model.threadId ?? `untitled:${model.untitledSessionId!}`);
-					if (draft) this.restoreDraft(draft);
-					this.restoringDraft = false;
-				} else {
-					// A successful materialization consumes the new-session identity and its persisted draft.
-					this.draftWriteRevisions.set(this.displayedDraftId, (this.draftWriteRevisions.get(this.displayedDraftId) ?? 0) + 1);
-					writeNewChatDraftState(storage, undefined, this.displayedDraftId);
 				}
-				this.displayedThreadId = model.threadId;
-				this.displayedDraftId = model.threadId ?? `untitled:${model.untitledSessionId!}`;
-				this.saveDraft();
-			}
-			this.updateConversation();
-		}));
+			}),
+		);
+		this._register(
+			lifecycle.onWillShutdown(event => {
+				event.join(
+					Promise.all([...this.draftWrites]).then(() => storage.flush()),
+					'Sessions composer draft',
+				);
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				// A pane can close while attachment resolution is still running; it must not recreate its draft.
+				for (const [identity, revision] of this.draftWriteRevisions) {
+					this.draftWriteRevisions.set(identity, revision + 1);
+				}
+			}),
+		);
+		this._register(
+			model.onDidChange(() => {
+				if (this.displayedThreadId !== model.threadId) {
+					// Materializing the draft does not start another conversation; switching an existing Thread does.
+					if (this.displayedThreadId !== undefined) {
+						this.saveDraft();
+						this.submittedMessage = false;
+						this.restoringDraft = true;
+						this.input.value = '';
+						this.attachmentModel.clear();
+						const draft = readNewChatDraftState(
+							storage,
+							model.threadId ?? `untitled:${model.untitledSessionId!}`,
+						);
+						if (draft) this.restoreDraft(draft);
+						this.restoringDraft = false;
+					} else {
+						// A successful materialization consumes the new-session identity and its persisted draft.
+						this.draftWriteRevisions.set(
+							this.displayedDraftId,
+							(this.draftWriteRevisions.get(this.displayedDraftId) ?? 0) + 1,
+						);
+						writeNewChatDraftState(storage, undefined, this.displayedDraftId);
+					}
+					this.displayedThreadId = model.threadId;
+					this.displayedDraftId = model.threadId ?? `untitled:${model.untitledSessionId!}`;
+					this.saveDraft();
+				}
+				this.updateConversation();
+			}),
+		);
 		this.updateConversation();
 	}
 
@@ -171,7 +233,12 @@ export class NewCoworkInputWidget extends ChatInputPart {
 
 	protected override statusText(state: ChatInputState): string {
 		// Catalog loading keeps the local draft's welcome content in place; aria-busy exposes readiness.
-		if (!state.aiDisabled && this.model.untitledSessionId !== undefined && state.phase === 'loading' && !state.error) {
+		if (
+			!state.aiDisabled &&
+			this.model.untitledSessionId !== undefined &&
+			state.phase === 'loading' &&
+			!state.error
+		) {
 			return '';
 		}
 		return super.statusText(state);
@@ -180,10 +247,15 @@ export class NewCoworkInputWidget extends ChatInputPart {
 	private saveDraft(): void {
 		const operation = this.writeDraft();
 		this.draftWrites.add(operation);
-		void operation.then(() => this.draftWrites.delete(operation), error => {
-			this.draftWrites.delete(operation);
-			this.draftNotifications.error(localize('sessions.chat.draftFailed', 'Could not save the Chat draft: {0}', String(error)));
-		});
+		void operation.then(
+			() => this.draftWrites.delete(operation),
+			error => {
+				this.draftWrites.delete(operation);
+				this.draftNotifications.error(
+					localize('sessions.chat.draftFailed', 'Could not save the Chat draft: {0}', String(error)),
+				);
+			},
+		);
 	}
 
 	private async writeDraft(): Promise<void> {
@@ -196,13 +268,17 @@ export class NewCoworkInputWidget extends ChatInputPart {
 			writeNewChatDraftState(this.storage, { mode, text, contexts: [] }, draftId);
 			return;
 		}
-		const contexts = await Promise.all(attachments.map(async attachment => ({
-			id: attachment.id, kind: attachment.kind, name: attachment.name,
-			content: (await attachment.resolve()).content,
-			...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
-			...(attachment.reference ? { reference: attachment.reference } : {}),
-			...(attachment.terminalSnapshot ? { terminalSnapshot: attachment.terminalSnapshot } : {}),
-		})));
+		const contexts = await Promise.all(
+			attachments.map(async attachment => ({
+				id: attachment.id,
+				kind: attachment.kind,
+				name: attachment.name,
+				content: (await attachment.resolve()).content,
+				...(attachment.resource ? { resource: attachment.resource.toString() } : {}),
+				...(attachment.reference ? { reference: attachment.reference } : {}),
+				...(attachment.terminalSnapshot ? { terminalSnapshot: attachment.terminalSnapshot } : {}),
+			})),
+		);
 		if (revision !== this.draftWriteRevisions.get(draftId)) return;
 		writeNewChatDraftState(this.storage, { mode, text, contexts }, draftId);
 	}

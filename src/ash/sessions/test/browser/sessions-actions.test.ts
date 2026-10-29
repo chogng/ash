@@ -1,18 +1,22 @@
 import { quickInputServiceTestControls } from '../../../platform/quickinput/test/browser/testQuickInputService.js';
 import { QuickInputType, type IQuickPickDidAcceptEvent } from '../../../platform/quickinput/common/quickInput.js';
 import { Event as QuickPickTestEvent } from '../../../base/common/event.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { Emitter, Event } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
-import { InstantiationService } from "../../../platform/instantiation/common/instantiationService.js";
-import { IQuickInputService, type IQuickPick, type IQuickPickItem } from "../../../platform/quickinput/common/quickInput.js";
-import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from "../../../workbench/contrib/chat/common/chat.js";
-import { CommandService } from "../../../workbench/services/commands/common/commandService.js";
-import "../../../sessions/browser/actions/sessionsChatActions.js";
-import { ISessionsService } from "../../../sessions/services/sessions/browser/sessionsService.js";
-import type { ISession } from "../../../sessions/services/sessions/common/session.js";
-import { ISessionsManagementService } from "../../../sessions/services/sessions/common/sessionsManagement.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { Emitter, Event } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
+import {
+	IQuickInputService,
+	type IQuickPick,
+	type IQuickPickItem,
+} from '../../../platform/quickinput/common/quickInput.js';
+import { NEW_CHAT_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID } from '../../../workbench/contrib/chat/common/chat.js';
+import { CommandService } from '../../../workbench/services/commands/common/commandService.js';
+import '../../../sessions/browser/actions/sessionsChatActions.js';
+import { ISessionsService } from '../../../sessions/services/sessions/browser/sessionsService.js';
+import type { ISession } from '../../../sessions/services/sessions/common/session.js';
+import { ISessionsManagementService } from '../../../sessions/services/sessions/common/sessionsManagement.js';
 import { ILanguageModelsService } from '../../../workbench/contrib/chat/common/languageModels.js';
 import type { ApprovalReviewModelSelection } from '../../../platform/agentHost/common/agentModels.js';
 import { productLanguagePackCatalogs } from '../../../workbench/services/localization/common/localizationCatalogs.js';
@@ -20,31 +24,47 @@ import { formatNlsMessage, localize, setNlsResolver, resetNlsResolver } from '..
 import { approvalModeDefinitions, type ApprovalMode } from '../../../platform/agentHost/common/approvalModes.js';
 import { IDialogService } from '../../../platform/dialogs/common/dialogs.js';
 import type { IChatWidgetModel } from '../../../workbench/contrib/chat/browser/widget/chatWidget.js';
-import { ISessionsProvidersService, SessionsProvidersService } from '../../services/sessions/browser/sessionsProvidersService.js';
+import {
+	ISessionsProvidersService,
+	SessionsProvidersService,
+} from '../../services/sessions/browser/sessionsProvidersService.js';
 import { IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { CommandsRegistry, ICommandService } from '../../../platform/commands/common/commands.js';
 import { ISessionsLayoutService } from '../../services/layout/common/sessionsLayoutService.js';
 
 test('permission commands use shared Chinese copy and require confirmation only for Bypass', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	setNlsResolver((bundle, key, fallback, parameters) =>
+		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
+	);
 	using services = new InstantiationService();
 	let confirmed = false;
 	const confirmations: string[] = [];
 	services.registerInstance(IDialogService, {
-		confirm: async (options: { primaryButton: string; }) => { confirmations.push(options.primaryButton); return { confirmed }; },
+		confirm: async (options: { primaryButton: string }) => {
+			confirmations.push(options.primaryButton);
+			return { confirmed };
+		},
 	} as unknown as IDialogService);
 	using commands = new CommandService(services);
 	const selections: ApprovalMode[] = [];
 	const otherSelections: ApprovalMode[] = [];
 	const model = { selectApprovalMode: (mode: ApprovalMode) => selections.push(mode) } as unknown as IChatWidgetModel;
-	const otherModel = { selectApprovalMode: (mode: ApprovalMode) => otherSelections.push(mode) } as unknown as IChatWidgetModel;
+	const otherModel = {
+		selectApprovalMode: (mode: ApprovalMode) => otherSelections.push(mode),
+	} as unknown as IChatWidgetModel;
 	try {
-		assert.deepEqual(approvalModeDefinitions.map(definition => [localize(definition.label.key, definition.label.text), localize(definition.description.key, definition.description.text)]), [
-			['自动', '自动审核操作，无法判断时询问你'],
-			['手动', '操作需要授权时由你确认'],
-			['跳过权限审批', '跳过大部分审批，访问范围限制仍然有效'],
-		]);
+		assert.deepEqual(
+			approvalModeDefinitions.map(definition => [
+				localize(definition.label.key, definition.label.text),
+				localize(definition.description.key, definition.description.text),
+			]),
+			[
+				['自动', '自动审核操作，无法判断时询问你'],
+				['手动', '操作需要授权时由你确认'],
+				['跳过权限审批', '跳过大部分审批，访问范围限制仍然有效'],
+			],
+		);
 		await commands.executeCommand('sessions.chat.permission.auto', model);
 		await commands.executeCommand('sessions.chat.permission.manual', otherModel);
 		await commands.executeCommand('sessions.chat.permission.bypassPermissions', model);
@@ -54,32 +74,42 @@ test('permission commands use shared Chinese copy and require confirmation only 
 		assert.deepEqual(selections, ['auto', 'bypassPermissions']);
 		assert.deepEqual(otherSelections, ['manual']);
 		assert.deepEqual(confirmations, ['跳过权限审批', '跳过权限审批']);
-	} finally { resetNlsResolver(); }
+	} finally {
+		resetNlsResolver();
+	}
 });
 
-test("Sessions owns the local New Chat command without requiring regular Workbench Views", async () => {
+test('Sessions owns the local New Chat command without requiring regular Workbench Views', async () => {
 	const onDidChange = new Emitter<void>();
 	let created = 0;
 	const viewService: ISessionsService = {
 		navigationRevision: 0,
-		getSelection() { return { visibleSelections: [], activeSelection: undefined }; },
-		async openThread() { },
+		getSelection() {
+			return { visibleSelections: [], activeSelection: undefined };
+		},
+		async openThread() {},
 		onDidChange: onDidChange.event,
 		visibleSelections: [],
 		activeSelection: undefined,
 		canNavigateBack: false,
 		canNavigateForward: false,
-		async initialize() { },
-		openSession() { },
-		openUntitledSession() { },
+		async initialize() {},
+		openSession() {},
+		openUntitledSession() {},
 		openNewSession() {
 			created += 1;
-			return { untitledSessionId: `untitled-${created}`, title: "New code session", model: undefined, agent: undefined, workspace: { type: 'current' } };
+			return {
+				untitledSessionId: `untitled-${created}`,
+				title: 'New code session',
+				model: undefined,
+				agent: undefined,
+				workspace: { type: 'current' },
+			};
 		},
-		activateSelection() { },
-		closeVisibleSelection() { },
-		navigateBack() { },
-		navigateForward() { },
+		activateSelection() {},
+		closeVisibleSelection() {},
+		navigateBack() {},
+		navigateForward() {},
 	};
 	const services = new InstantiationService();
 	services.registerInstance(ISessionsService, viewService);
@@ -98,9 +128,17 @@ test('navigation New uses the active entry owner before the default ChatGPT entr
 	const calls: string[] = [];
 	let entryCommand: string | undefined = 'test.entry.newChat';
 	services.registerInstance(IContextKeyService, { getValue: () => 'chat' } as unknown as IContextKeyService);
-	services.registerInstance(ISessionsLayoutService, { get newSessionCommand() { return entryCommand; } } as ISessionsLayoutService);
-	using native = CommandsRegistry.register('test.entry.newChat', () => { calls.push('native'); });
-	using chatgpt = CommandsRegistry.register('sessions.open.new', () => { calls.push('chatgpt'); });
+	services.registerInstance(ISessionsLayoutService, {
+		get newSessionCommand() {
+			return entryCommand;
+		},
+	} as ISessionsLayoutService);
+	using native = CommandsRegistry.register('test.entry.newChat', () => {
+		calls.push('native');
+	});
+	using chatgpt = CommandsRegistry.register('sessions.open.new', () => {
+		calls.push('chatgpt');
+	});
 	using commands = new CommandService(services);
 	services.registerInstance(ICommandService, commands);
 	await commands.executeCommand('sessions.newSession');
@@ -109,30 +147,33 @@ test('navigation New uses the active entry owner before the default ChatGPT entr
 	assert.deepEqual(calls, ['native', 'chatgpt']);
 });
 
-test("Sessions History opens the selected active chat", async () => {
-	const opened: Array<{ sessionId: string; threadId: string; }> = [];
+test('Sessions History opens the selected active chat', async () => {
+	const opened: Array<{ sessionId: string; threadId: string }> = [];
 	const quickInput = new TestQuickInputService();
 	const sessions: readonly ISession[] = [
 		{
-			sessionId: "session-1",
-			title: "First Session",
-			status: "active",
-			nextApprovalMode: "manual",
+			sessionId: 'session-1',
+			title: 'First Session',
+			status: 'active',
+			nextApprovalMode: 'manual',
 			chats: [
-				{ threadId: "thread-1", origin: { type: "root" }, status: "active" },
-				{ threadId: "thread-2", origin: { type: "root" }, status: "archived" },
+				{ threadId: 'thread-1', origin: { type: 'root' }, status: 'active' },
+				{ threadId: 'thread-2', origin: { type: 'root' }, status: 'archived' },
 			],
 		},
 		{
-			sessionId: "session-2",
-			title: "Archived Session",
-			status: "archived",
-			nextApprovalMode: "manual",
-			chats: [{ threadId: "thread-3", origin: { type: "root" }, status: "active" }],
+			sessionId: 'session-2',
+			title: 'Archived Session',
+			status: 'archived',
+			nextApprovalMode: 'manual',
+			chats: [{ threadId: 'thread-3', origin: { type: 'root' }, status: 'active' }],
 		},
 	];
 	const services = new InstantiationService();
-	services.registerInstance(ISessionsManagementService, { sessions, onDidChange: Event.None } as ISessionsManagementService);
+	services.registerInstance(ISessionsManagementService, {
+		sessions,
+		onDidChange: Event.None,
+	} as ISessionsManagementService);
 	services.registerInstance(ISessionsService, {
 		openSession: (sessionId: string, threadId: string) => opened.push({ sessionId, threadId }),
 	} as unknown as ISessionsService);
@@ -141,39 +182,76 @@ test("Sessions History opens the selected active chat", async () => {
 
 	await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
 
-	assert.equal(quickInput.picker?.placeholder, "Select a session");
-	assert.deepEqual(quickInput.picker?.items.map(item => item.label), ["First Session"]);
+	assert.equal(quickInput.picker?.placeholder, 'Select a session');
+	assert.deepEqual(
+		quickInput.picker?.items.map(item => item.label),
+		['First Session'],
+	);
 	quickInput.picker?.acceptFirst();
-	assert.deepEqual(opened, [{ sessionId: "session-1", threadId: "thread-1" }]);
+	assert.deepEqual(opened, [{ sessionId: 'session-1', threadId: 'thread-1' }]);
 });
 
 test('Session History shows each branch management state in Chinese before opening details', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	setNlsResolver((bundle, key, fallback, parameters) =>
+		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
+	);
 	using services = new InstantiationService();
 	const quickInput = new TestQuickInputService();
 	const opened: string[] = [];
 	services.registerInstance(ISessionsManagementService, {
-		sessions: [{
-			sessionId: 'branch-session', title: 'Branch session', status: 'active', nextApprovalMode: 'manual',
-			chats: [
-				{ threadId: 'root', origin: { type: 'root' }, status: 'active', management: { status: 'readyForReview', statusChangedAtUnixMs: 10 } },
-				{ threadId: 'fork', title: '独立分支名称', origin: { type: 'fork', parentThreadId: 'root', parentSequence: 1 }, status: 'active', management: { status: 'needsInput', statusChangedAtUnixMs: 20, activity: { type: 'question', text: 'Choose a path' } } },
-			],
-		}], onDidChange: Event.None
+		sessions: [
+			{
+				sessionId: 'branch-session',
+				title: 'Branch session',
+				status: 'active',
+				nextApprovalMode: 'manual',
+				chats: [
+					{
+						threadId: 'root',
+						origin: { type: 'root' },
+						status: 'active',
+						management: { status: 'readyForReview', statusChangedAtUnixMs: 10 },
+					},
+					{
+						threadId: 'fork',
+						title: '独立分支名称',
+						origin: { type: 'fork', parentThreadId: 'root', parentSequence: 1 },
+						status: 'active',
+						management: {
+							status: 'needsInput',
+							statusChangedAtUnixMs: 20,
+							activity: { type: 'question', text: 'Choose a path' },
+						},
+					},
+				],
+			},
+		],
+		onDidChange: Event.None,
 	} as unknown as ISessionsManagementService);
-	services.registerInstance(ISessionsService, { openSession: (_sessionId: string, threadId: string) => opened.push(threadId) } as unknown as ISessionsService);
+	services.registerInstance(ISessionsService, {
+		openSession: (_sessionId: string, threadId: string) => opened.push(threadId),
+	} as unknown as ISessionsService);
 	services.registerInstance(IQuickInputService, quickInput);
 	using commands = new CommandService(services);
 	try {
 		await commands.executeCommand(SHOW_CHAT_HISTORY_COMMAND_ID);
-		assert.deepEqual(quickInput.picker?.items.map(item => ({ label: item.label, description: item.description, detail: item.detail })), [
-			{ label: 'Branch session', description: '分支 1 · 待审阅', detail: undefined },
-			{ label: 'Branch session', description: '分支 2 · 独立分支名称 · 需要回应', detail: 'Choose a path' },
-		]);
+		assert.deepEqual(
+			quickInput.picker?.items.map(item => ({
+				label: item.label,
+				description: item.description,
+				detail: item.detail,
+			})),
+			[
+				{ label: 'Branch session', description: '分支 1 · 待审阅', detail: undefined },
+				{ label: 'Branch session', description: '分支 2 · 独立分支名称 · 需要回应', detail: 'Choose a path' },
+			],
+		);
 		assert.deepEqual(opened, []);
 		quickInput.picker?.hide();
-	} finally { resetNlsResolver(); }
+	} finally {
+		resetNlsResolver();
+	}
 });
 
 class TestQuickInputService implements IQuickInputService {
@@ -189,7 +267,7 @@ class TestQuickInputService implements IQuickInputService {
 	cancel = quickInputServiceTestControls.cancel;
 
 	picker: TestQuickPick<IQuickPickItem> | undefined;
-	constructor(private readonly labels: string[] = []) { }
+	constructor(private readonly labels: string[] = []) {}
 
 	createQuickPick<TItem extends IQuickPickItem>(): IQuickPick<TItem> {
 		const picker = new TestQuickPick<TItem>(() => {
@@ -200,20 +278,27 @@ class TestQuickInputService implements IQuickInputService {
 		return picker;
 	}
 
-	async input(): Promise<string | undefined> { return undefined; }
+	async input(): Promise<string | undefined> {
+		return undefined;
+	}
 }
 
 class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements IQuickPick<TItem> {
 	readonly type = QuickInputType.QuickPick;
 	activeItems: readonly TItem[] = [];
-	focus(): void { }
-	toggle(): void { }
-	accept(inBackground = false): void { this.selectedItems = this.activeItems; this.acceptEmitter.fire({ inBackground }); }
+	focus(): void {}
+	toggle(): void {}
+	accept(inBackground = false): void {
+		this.selectedItems = this.activeItems;
+		this.acceptEmitter.fire({ inBackground });
+	}
 
 	canSelectMany = false;
 	selectedItems: readonly TItem[] = [];
 	readonly onDidChangeSelection = QuickPickTestEvent.None;
-	constructor(private readonly onShow: () => void) { super(); }
+	constructor(private readonly onShow: () => void) {
+		super();
+	}
 	private readonly acceptEmitter = this._register(new Emitter<IQuickPickDidAcceptEvent>());
 	private readonly hideEmitter = this._register(new Emitter<void>());
 	readonly onDidAccept = this.acceptEmitter.event;
@@ -223,36 +308,56 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 	readonly onDidTriggerItemButton = Event.None;
 	sortByLabel = true;
 	items: readonly TItem[] = [];
-	ariaLabel = "";
-	placeholder = "";
-	value = "";
+	ariaLabel = '';
+	placeholder = '';
+	value = '';
 	valueSelection = { start: 0, end: 0 };
 	filterValue = (value: string): string => value;
 
 	acceptFirst(): void {
 		const item = this.items[0];
-		if (item) { this.selectedItems = [item]; this.acceptEmitter.fire({ inBackground: false }); }
+		if (item) {
+			this.selectedItems = [item];
+			this.acceptEmitter.fire({ inBackground: false });
+		}
 	}
 
 	chooseItem(label: string): void {
 		const item = this.items.find(item => item.label === label);
 		assert.ok(item, `Expected review choice: ${label}`);
-		this.selectedItems = [item]; this.acceptEmitter.fire({ inBackground: false });
+		this.selectedItems = [item];
+		this.acceptEmitter.fire({ inBackground: false });
 	}
-	show(): void { this.onShow(); }
-	hide(): void { this.hideEmitter.fire(); }
+	show(): void {
+		this.onShow();
+	}
+	hide(): void {
+		this.hideEmitter.fire();
+	}
 }
 
 test('Review settings select an independent connection, model and effort through the Chinese picker', async () => {
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
-	setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+	setNlsResolver((bundle, key, fallback, parameters) =>
+		formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
+	);
 	using services = new InstantiationService();
 	const selections: ApprovalReviewModelSelection[] = [];
 	const models = {
 		readApprovalReviewModel: async () => ({ type: 'automatic' }),
-		listModelProviders: async () => [{ provider: 'openai', connection: 'openai', displayName: 'OpenAI API', configured: true }],
-		listModelCatalog: async () => [{ model: { provider: 'openai', model: 'gpt-6-luna' }, displayName: 'GPT-6 Luna', supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'medium' }] }],
-		setApprovalReviewModel: async (selection: ApprovalReviewModelSelection) => { selections.push(selection); },
+		listModelProviders: async () => [
+			{ provider: 'openai', connection: 'openai', displayName: 'OpenAI API', configured: true },
+		],
+		listModelCatalog: async () => [
+			{
+				model: { provider: 'openai', model: 'gpt-6-luna' },
+				displayName: 'GPT-6 Luna',
+				supportedReasoningEfforts: [{ effort: 'low' }, { effort: 'medium' }],
+			},
+		],
+		setApprovalReviewModel: async (selection: ApprovalReviewModelSelection) => {
+			selections.push(selection);
+		},
 	};
 	services.registerInstance(ILanguageModelsService, models as unknown as ILanguageModelsService);
 	const input = new TestQuickInputService(['OpenAI API', 'GPT-6 Luna', 'low', '自动（连接默认值）']);
@@ -261,8 +366,17 @@ test('Review settings select an independent connection, model and effort through
 	try {
 		await commands.executeCommand('sessions.chat.permission.reviewModel');
 		assert.equal(input.picker?.ariaLabel, '审核思考强度');
-		assert.deepEqual(selections, [{ type: 'explicit', connection: 'openai', model: { provider: 'openai', model: 'gpt-6-luna' }, reasoningEffort: 'low' }]);
+		assert.deepEqual(selections, [
+			{
+				type: 'explicit',
+				connection: 'openai',
+				model: { provider: 'openai', model: 'gpt-6-luna' },
+				reasoningEffort: 'low',
+			},
+		]);
 		await commands.executeCommand('sessions.chat.permission.reviewModel');
 		assert.deepEqual(selections[1], { type: 'automatic' });
-	} finally { resetNlsResolver(); }
+	} finally {
+		resetNlsResolver();
+	}
 });

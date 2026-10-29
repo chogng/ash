@@ -6,7 +6,11 @@ import { ICommandService } from '../../../../platform/commands/common/commands.j
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { INotificationService, Severity } from '../../../../platform/notification/common/notification.js';
-import { GLOBAL_KEYBINDING_UPDATE_CHANNEL, GLOBAL_KEYBINDING_TRIGGER_CHANNEL, validateGlobalKeybindingResult } from '../../../../platform/globalKeybindings/common/globalKeybindings.js';
+import {
+	GLOBAL_KEYBINDING_UPDATE_CHANNEL,
+	GLOBAL_KEYBINDING_TRIGGER_CHANNEL,
+	validateGlobalKeybindingResult,
+} from '../../../../platform/globalKeybindings/common/globalKeybindings.js';
 import { invoke, subscribe } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
 import { IPreferencesService } from '../../../services/preferences/common/preferences.js';
 import { IImageEditorService } from '../../../services/imageEditor/common/imageEditorService.js';
@@ -37,17 +41,47 @@ export class ChatScreenshotContribution extends Disposable {
 		@IPreferencesService private readonly preferences: IPreferencesService,
 	) {
 		super();
-		this._register(editors.onDidChange(() => { void this.checkShortcut(); }));
-		this._register(keybindings.onDidUpdateKeybindings(() => { void this.checkShortcut(); }));
-		this._register(configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(ScreenshotGlobalShortcutSetting)) void this.checkShortcut(); }));
+		this._register(
+			editors.onDidChange(() => {
+				void this.checkShortcut();
+			}),
+		);
+		this._register(
+			keybindings.onDidUpdateKeybindings(() => {
+				void this.checkShortcut();
+			}),
+		);
+		this._register(
+			configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(ScreenshotGlobalShortcutSetting)) void this.checkShortcut();
+			}),
+		);
 		const trigger = subscribe<unknown>(GLOBAL_KEYBINDING_TRIGGER_CHANNEL, value => {
-			if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).join(',') !== 'id' || typeof (value as { id?: unknown; }).id !== 'string') throw new TypeError('Invalid global keybinding trigger');
-			if ((value as { id: string; }).id === 'chat.screenshot') void commands.executeCommand(ScreenshotCommandId).catch(error => log.error('Could not start screenshot from global shortcut', error));
+			if (
+				!value ||
+				typeof value !== 'object' ||
+				Array.isArray(value) ||
+				Object.keys(value).join(',') !== 'id' ||
+				typeof (value as { id?: unknown }).id !== 'string'
+			)
+				throw new TypeError('Invalid global keybinding trigger');
+			if ((value as { id: string }).id === 'chat.screenshot')
+				void commands
+					.executeCommand(ScreenshotCommandId)
+					.catch(error => log.error('Could not start screenshot from global shortcut', error));
 		});
-		this._register(toDisposable(() => {
-			trigger.dispose();
-			void invoke(GLOBAL_KEYBINDING_UPDATE_CHANNEL, { id: 'chat.screenshot', commandId: ScreenshotCommandId, accelerator: '', label: '', global: false }).catch(() => { });
-		}));
+		this._register(
+			toDisposable(() => {
+				trigger.dispose();
+				void invoke(GLOBAL_KEYBINDING_UPDATE_CHANNEL, {
+					id: 'chat.screenshot',
+					commandId: ScreenshotCommandId,
+					accelerator: '',
+					label: '',
+					global: false,
+				}).catch(() => {});
+			}),
+		);
 		void this.checkShortcut();
 	}
 
@@ -57,14 +91,18 @@ export class ChatScreenshotContribution extends Disposable {
 			if (this.isDisposed || generation !== this.shortcutGeneration) return;
 			const binding = this.keybindings.lookupKeybinding(ScreenshotCommandId);
 			const accelerator = toElectronAccelerator(binding);
-			const global = this.configuration.getValue<boolean>(ScreenshotGlobalShortcutSetting) === true && this.editors.available;
+			const global =
+				this.configuration.getValue<boolean>(ScreenshotGlobalShortcutSetting) === true &&
+				this.editors.available;
 			try {
 				const result = validateGlobalKeybindingResult(
 					await invoke<unknown>(GLOBAL_KEYBINDING_UPDATE_CHANNEL, {
-						id: 'chat.screenshot', commandId: ScreenshotCommandId, accelerator: accelerator ?? '',
+						id: 'chat.screenshot',
+						commandId: ScreenshotCommandId,
+						accelerator: accelerator ?? '',
 						label: binding ? getKeybindingLabel(binding) : '',
-						global: global && !!binding
-					})
+						global: global && !!binding,
+					}),
 				);
 				if (this.isDisposed || generation !== this.shortcutGeneration) return;
 				this.shortcut = {
@@ -76,7 +114,7 @@ export class ChatScreenshotContribution extends Disposable {
 							: result.available
 								? 'available'
 								: 'unavailable',
-					activeLabel: result.activeLabel
+					activeLabel: result.activeLabel,
 				};
 			} catch (error) {
 				if (this.isDisposed || generation !== this.shortcutGeneration) return;
@@ -84,7 +122,7 @@ export class ChatScreenshotContribution extends Disposable {
 			}
 			this.updateWarning();
 		});
-		this.pendingShortcut = operation.catch(() => { });
+		this.pendingShortcut = operation.catch(() => {});
 		return operation;
 	}
 
@@ -94,21 +132,39 @@ export class ChatScreenshotContribution extends Disposable {
 		if (status.global) {
 			switch (status.availability) {
 				case 'unavailable':
-					message = localize('screenshot.shortcut.conflictNotice', 'The global screenshot shortcut could not be registered. Another application or the system may use it.');
+					message = localize(
+						'screenshot.shortcut.conflictNotice',
+						'The global screenshot shortcut could not be registered. Another application or the system may use it.',
+					);
 					break;
 				case 'unsupported':
-					message = localize('screenshot.shortcut.unsupportedNotice', 'This screenshot shortcut cannot be used globally. Choose another key combination.');
+					message = localize(
+						'screenshot.shortcut.unsupportedNotice',
+						'This screenshot shortcut cannot be used globally. Choose another key combination.',
+					);
 					break;
 				case 'unassigned':
-					message = localize('screenshot.shortcut.unassignedNotice', 'Assign a screenshot shortcut to use global screenshots.');
+					message = localize(
+						'screenshot.shortcut.unassignedNotice',
+						'Assign a screenshot shortcut to use global screenshots.',
+					);
 					break;
 				case 'unknown':
-					message = localize('screenshot.shortcut.failedNotice', 'Could not enable the global screenshot shortcut. Try changing the shortcut.');
+					message = localize(
+						'screenshot.shortcut.failedNotice',
+						'Could not enable the global screenshot shortcut. Try changing the shortcut.',
+					);
 					break;
 			}
 		}
 		if (message && status.activeLabel) {
-			message += ' ' + localize('screenshot.shortcut.previousActive', 'The previous shortcut still works: {0}.', status.activeLabel);
+			message +=
+				' ' +
+				localize(
+					'screenshot.shortcut.previousActive',
+					'The previous shortcut still works: {0}.',
+					status.activeLabel,
+				);
 		}
 		// Dismissed failures stay quiet until the state changes; a changed retained
 		// shortcut replaces the notice so it never describes an obsolete binding.
@@ -117,15 +173,22 @@ export class ChatScreenshotContribution extends Disposable {
 		this.warning.clear();
 		if (!message) return;
 		const warning = this.notifications.notify({
-			severity: Severity.Warning, message: message, actions: {
-				primary: [{
-					tooltip: '',
-					enabled: true,
-					id: 'screenshot.changeShortcut',
-					label: localize('screenshot.shortcut.changeKeybinding', 'Change Shortcut'),
-					run: () => this.preferences.openGlobalKeybindingSettings(false, { query: `@command:${ScreenshotCommandId}` })
-				}]
-			}
+			severity: Severity.Warning,
+			message: message,
+			actions: {
+				primary: [
+					{
+						tooltip: '',
+						enabled: true,
+						id: 'screenshot.changeShortcut',
+						label: localize('screenshot.shortcut.changeKeybinding', 'Change Shortcut'),
+						run: () =>
+							this.preferences.openGlobalKeybindingSettings(false, {
+								query: `@command:${ScreenshotCommandId}`,
+							}),
+					},
+				],
+			},
 		});
 		this.warning.value = toDisposable(() => warning.close());
 	}

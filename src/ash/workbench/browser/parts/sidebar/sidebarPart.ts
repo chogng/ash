@@ -1,20 +1,23 @@
 import '../activitybar/media/activityaction.css';
 import { IActivityService } from '../../../services/activity/common/activity.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import type { IActivityHoverOptions } from "../compositeBarActions.js";
-import "./media/sidebarpart.css";
-import { Dimension, h } from "../../../../base/browser/dom.js";
-import { MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import type { IActivityHoverOptions } from '../compositeBarActions.js';
+import './media/sidebarpart.css';
+import { Dimension, h } from '../../../../base/browser/dom.js';
+import { MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import type { IBoundarySashes } from '../../../../base/browser/ui/sash/sash.js';
 import { IWorkbenchLayoutService, Position } from '../../../services/layout/browser/layoutService.js';
 import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
-import { ViewContainerLocation, type IViewContainerDescriptor } from "../../../common/views.js";
-import { IStorageService } from "../../../../platform/storage/common/storage.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import type { ILocalizationService, LocalizationKey } from "../../../services/localization/common/localizationService.js";
+import { ViewContainerLocation, type IViewContainerDescriptor } from '../../../common/views.js';
+import { IStorageService } from '../../../../platform/storage/common/storage.js';
+import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import type {
+	ILocalizationService,
+	LocalizationKey,
+} from '../../../services/localization/common/localizationService.js';
 import { localize2 } from '../../../../nls.js';
-import type { IViewDescriptorService } from "../../../common/views.js";
-import { PaneCompositePart, type PaneCompositeTitleActions } from "../paneCompositePart.js";
+import type { IViewDescriptorService } from '../../../common/views.js';
+import { PaneCompositePart, type PaneCompositeTitleActions } from '../paneCompositePart.js';
 import { ActivityBarPosition, WorkbenchConfiguration } from '../../../common/configuration.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
@@ -51,8 +54,12 @@ export class SidebarPart extends PaneCompositePart {
 	private readonly boundarySashPresentation = this._register(new MutableDisposable());
 	private readonly visibleViewContainersTracker: VisibleViewContainersTracker | undefined;
 	private activityBarLocation = ActivityBarPosition.DEFAULT;
-	override get minimumWidth(): number { return 170; }
-	override get maximumWidth(): number { return Number.POSITIVE_INFINITY; }
+	override get minimumWidth(): number {
+		return 170;
+	}
+	override get maximumWidth(): number {
+		return Number.POSITIVE_INFINITY;
+	}
 	override get preferredWidth(): number | undefined {
 		const active = this.activeCompositeId;
 		const width = active ? this.getComposite(active)?.getOptimalWidth() : undefined;
@@ -70,25 +77,35 @@ export class SidebarPart extends PaneCompositePart {
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		const location = options.location ?? ViewContainerLocation.Sidebar;
-		super(container, {
-			openComposite: options.openComposite,
-			activityHoverOptions: options.activityHoverOptions,
-			viewDescriptorService: options.viewDescriptorService,
-			contextKeyService: options.contextKeyService,
-			localizationService: options.localizationService,
-			id: options.id ?? "sidebar",
-			location,
-			ariaLabel: options.ariaLabel ?? localize2({ bundle: 'ash.regions', key: 'primarySidebar' }, 'Primary sidebar').original,
-			ariaLabelKey: options.ariaLabelKey,
-			viewsAriaLabel: options.viewsAriaLabel ?? localize2({ bundle: 'ash.regions', key: 'primarySidebarViews' }, 'Primary side bar views').original,
-			viewsAriaLabelKey: options.viewsAriaLabelKey,
-			compositeBarContainerFilter: options.compositeBarContainerFilter,
-			compositeBarVisible: options.compositeBarVisible,
-			compositeBarContextMenuProvider: options.compositeBarContextMenuProvider,
-			compositeBarOrientation: location === ViewContainerLocation.Sidebar ? "vertical" : "horizontal",
-			titleActions: options.titleActions,
-		}, themeService, storageService, activityService);
-		this.domNode.classList.add("ash-sidebar-part");
+		super(
+			container,
+			{
+				openComposite: options.openComposite,
+				activityHoverOptions: options.activityHoverOptions,
+				viewDescriptorService: options.viewDescriptorService,
+				contextKeyService: options.contextKeyService,
+				localizationService: options.localizationService,
+				id: options.id ?? 'sidebar',
+				location,
+				ariaLabel:
+					options.ariaLabel ??
+					localize2({ bundle: 'ash.regions', key: 'primarySidebar' }, 'Primary sidebar').original,
+				ariaLabelKey: options.ariaLabelKey,
+				viewsAriaLabel:
+					options.viewsAriaLabel ??
+					localize2({ bundle: 'ash.regions', key: 'primarySidebarViews' }, 'Primary side bar views').original,
+				viewsAriaLabelKey: options.viewsAriaLabelKey,
+				compositeBarContainerFilter: options.compositeBarContainerFilter,
+				compositeBarVisible: options.compositeBarVisible,
+				compositeBarContextMenuProvider: options.compositeBarContextMenuProvider,
+				compositeBarOrientation: location === ViewContainerLocation.Sidebar ? 'vertical' : 'horizontal',
+				titleActions: options.titleActions,
+			},
+			themeService,
+			storageService,
+			activityService,
+		);
+		this.domNode.classList.add('ash-sidebar-part');
 		if (location === ViewContainerLocation.Sidebar) {
 			// In top and bottom mode the view selector belongs to the sidebar, so the sidebar keeps its full grid height.
 			this.topCompositeBarDomNode = h(container.ownerDocument, 'div');
@@ -99,23 +116,29 @@ export class SidebarPart extends PaneCompositePart {
 			this.bottomCompositeBarDomNode.className = 'ash-sidebar-composite-bar-bottom';
 			this.bottomCompositeBarDomNode.hidden = true;
 			this.domNode.append(this.bottomCompositeBarDomNode);
-			this.activeTitleDomNode = h(container.ownerDocument, "span");
-			this.activeTitleDomNode.className = "ash-sidebar-title-label";
+			this.activeTitleDomNode = h(container.ownerDocument, 'span');
+			this.activeTitleDomNode.className = 'ash-sidebar-title-label';
 			this.titleContentDomNode.replaceChildren(this.activeTitleDomNode);
 		}
 		// Sessions supplies its own navigation bar and deliberately disables this selector.
 		if (location === ViewContainerLocation.Sidebar && options.compositeBarVisible !== false) {
-			this.visibleViewContainersTracker = this._register(instantiationService.createInstance(VisibleViewContainersTracker, location));
-			this._register(this.visibleViewContainersTracker.onDidChange(({ before, after }) => {
-				if ((before > 1) !== (after > 1)) {
-					this.updateActivityBarVisibility();
-				}
-			}));
-			this._register(configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(WorkbenchConfiguration.activityBarAutoHide)) {
-					this.updateActivityBarVisibility();
-				}
-			}));
+			this.visibleViewContainersTracker = this._register(
+				instantiationService.createInstance(VisibleViewContainersTracker, location),
+			);
+			this._register(
+				this.visibleViewContainersTracker.onDidChange(({ before, after }) => {
+					if (before > 1 !== after > 1) {
+						this.updateActivityBarVisibility();
+					}
+				}),
+			);
+			this._register(
+				configurationService.onDidChangeConfiguration(event => {
+					if (event.affectsConfiguration(WorkbenchConfiguration.activityBarAutoHide)) {
+						this.updateActivityBarVisibility();
+					}
+				}),
+			);
 		}
 	}
 
@@ -126,7 +149,9 @@ export class SidebarPart extends PaneCompositePart {
 		const sash = this.layoutService.getSideBarPosition() === Position.LEFT ? sashes.right : sashes.left;
 		if (!sash) return;
 		sash.element.classList.add('ash-primary-sidebar-sash');
-		this.boundarySashPresentation.value = toDisposable(() => sash.element.classList.remove('ash-primary-sidebar-sash'));
+		this.boundarySashPresentation.value = toDisposable(() =>
+			sash.element.classList.remove('ash-primary-sidebar-sash'),
+		);
 	}
 
 	public setActivityBarLocation(location: ActivityBarPosition): void {
@@ -151,9 +176,10 @@ export class SidebarPart extends PaneCompositePart {
 		}
 		const isTop = this.activityBarLocation === ActivityBarPosition.TOP;
 		const isBottom = this.activityBarLocation === ActivityBarPosition.BOTTOM;
-		const hide = (isTop || isBottom)
-			&& this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide)
-			&& this.visibleViewContainersTracker.visibleCount <= 1;
+		const hide =
+			(isTop || isBottom) &&
+			this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarAutoHide) &&
+			this.visibleViewContainersTracker.visibleCount <= 1;
 		const restoreFocus = hide && this.compositeBar.domNode.contains(this.domNode.ownerDocument.activeElement);
 		this.topCompositeBarDomNode!.hidden = !isTop || hide;
 		this.bottomCompositeBarDomNode!.hidden = !isBottom || hide;
@@ -173,7 +199,9 @@ export class SidebarPart extends PaneCompositePart {
 
 	override showComposite(compositeId: string, focus = false): void {
 		super.showComposite(compositeId, focus);
-		this.activeTitleListener.value = this.getComposite(compositeId)?.onTitleAreaUpdate(() => this.updateActiveTitle());
+		this.activeTitleListener.value = this.getComposite(compositeId)?.onTitleAreaUpdate(() =>
+			this.updateActiveTitle(),
+		);
 		this.updateActiveTitle();
 	}
 

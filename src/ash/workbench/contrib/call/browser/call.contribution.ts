@@ -1,9 +1,17 @@
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	AccessibleContentProvider,
+	AccessibleViewProviderId,
+	AccessibleViewType,
+	AccessibilityVerbositySettingId,
+} from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { FocusedViewContext } from '../../../common/contextkeys.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import {
+	Extensions,
+	type IConfigurationRegistry,
+} from '../../../../platform/configuration/common/configurationRegistry.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { ICallService } from '../../../../platform/call/common/callService.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
@@ -18,40 +26,90 @@ import { CallViewPane } from './callViewPane.js';
 import './media/call.css';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
-	key: 'accessibility.verbosity.calls', defaultValue: true,
-	parse: value => { if (typeof value !== 'boolean') { throw new TypeError('Calls accessibility verbosity must be boolean'); } return value; },
-	setting: { valueType: 'boolean', title: 'Calls accessibility help', description: 'Announce keyboard help when the Calls view receives focus.' },
+	key: 'accessibility.verbosity.calls',
+	defaultValue: true,
+	parse: value => {
+		if (typeof value !== 'boolean') {
+			throw new TypeError('Calls accessibility verbosity must be boolean');
+		}
+		return value;
+	},
+	setting: {
+		valueType: 'boolean',
+		title: 'Calls accessibility help',
+		description: 'Announce keyboard help when the Calls view receives focus.',
+	},
 });
 
 export function registerCallView(registry: WorkbenchViewRegistry = ViewsRegistry): void {
 	registerWorkbenchContribution('workbench.contrib.call', WorkbenchPhase.BlockStartup, accessor => {
 		const registrations = new DisposableStore();
-		if (!accessor.getOptional(ICallService)) { return registrations; }
-		registrations.add(registry.registerViews(COLLAB_CONTAINER_ID, [{
-			id: 'ash.call.view', title: 'Calls', localizationKey: { bundle: 'ash', key: 'collaboration.calls' }, order: 1, canToggleVisibility: false,
-			ctorDescriptor: new SyncDescriptor(CallViewPane),
-		}]));
-		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
-			registrations.add(AccessibleViewRegistry.register({
-				type, priority: 100, name: `calls${type}`,
-				when: FocusedViewContext.isEqualTo('ash.call.view'),
-				getProvider: accessor => {
-					const view = accessor.get(IViewsService).getViewWithId('ash.call.view');
-					if (!(view instanceof CallViewPane)) { return undefined; }
-					const focused = view.element.ownerDocument.activeElement;
-					return new AccessibleContentProvider(AccessibleViewProviderId.Calls, { type },
-						() => type === AccessibleViewType.View ? view.getAccessibleContent() : localize({ bundle: 'ash.workbench', key: 'call.accessibilityHelp' }, "Create a call on this computer or a server, or join with an invitation. Your microphone starts off. Use Tab and Shift+Tab to move between controls and Enter or Space to activate a button. Muting stops sending audio; Stop listening stops playback. Share screen opens a display or window selector. Use arrow keys to choose a source, then Start sharing. Escape cancels selection. Stop sharing ends screen capture without leaving the call. Shared screen images are labeled by participant; their visual contents are not transcribed. Sharing stops when its window closes, the call reconnects, or you leave. The call owner can link the active remotely collaborating document. Open document joins in a new untitled editor and asks for a separate document invitation token. Unlink document removes only the call reference; document access and editing continue independently. Leave disconnects only you. End for everyone closes the room. Invitation keys grant access: share them only with people you want in the call. Escape closes this help."),
-						() => { if (focused instanceof HTMLElement && focused.isConnected) { focused.focus(); } }, AccessibilityVerbositySettingId.Calls);
-				},
-			}));
+		if (!accessor.getOptional(ICallService)) {
+			return registrations;
 		}
-		registrations.add(registerAction2(class OpenCalls extends Action2 {
-			constructor() { super({ id: 'ash.call.open', title: localize2({ bundle: 'ash.workbench', key: 'command.OpenCalls' }, 'Open Calls'), f1: true }); }
-			public override async run(accessor: ServicesAccessor): Promise<boolean> {
-				await accessor.get(ICommandService).executeCommand('ash.collaboration.open');
-				return accessor.get(IViewsService).focusView('ash.call.view');
-			}
-		}));
+		registrations.add(
+			registry.registerViews(COLLAB_CONTAINER_ID, [
+				{
+					id: 'ash.call.view',
+					title: 'Calls',
+					localizationKey: { bundle: 'ash', key: 'collaboration.calls' },
+					order: 1,
+					canToggleVisibility: false,
+					ctorDescriptor: new SyncDescriptor(CallViewPane),
+				},
+			]),
+		);
+		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
+			registrations.add(
+				AccessibleViewRegistry.register({
+					type,
+					priority: 100,
+					name: `calls${type}`,
+					when: FocusedViewContext.isEqualTo('ash.call.view'),
+					getProvider: accessor => {
+						const view = accessor.get(IViewsService).getViewWithId('ash.call.view');
+						if (!(view instanceof CallViewPane)) {
+							return undefined;
+						}
+						const focused = view.element.ownerDocument.activeElement;
+						return new AccessibleContentProvider(
+							AccessibleViewProviderId.Calls,
+							{ type },
+							() =>
+								type === AccessibleViewType.View
+									? view.getAccessibleContent()
+									: localize(
+											{ bundle: 'ash.workbench', key: 'call.accessibilityHelp' },
+											'Create a call on this computer or a server, or join with an invitation. Your microphone starts off. Use Tab and Shift+Tab to move between controls and Enter or Space to activate a button. Muting stops sending audio; Stop listening stops playback. Share screen opens a display or window selector. Use arrow keys to choose a source, then Start sharing. Escape cancels selection. Stop sharing ends screen capture without leaving the call. Shared screen images are labeled by participant; their visual contents are not transcribed. Sharing stops when its window closes, the call reconnects, or you leave. The call owner can link the active remotely collaborating document. Open document joins in a new untitled editor and asks for a separate document invitation token. Unlink document removes only the call reference; document access and editing continue independently. Leave disconnects only you. End for everyone closes the room. Invitation keys grant access: share them only with people you want in the call. Escape closes this help.',
+										),
+							() => {
+								if (focused instanceof HTMLElement && focused.isConnected) {
+									focused.focus();
+								}
+							},
+							AccessibilityVerbositySettingId.Calls,
+						);
+					},
+				}),
+			);
+		}
+		registrations.add(
+			registerAction2(
+				class OpenCalls extends Action2 {
+					constructor() {
+						super({
+							id: 'ash.call.open',
+							title: localize2({ bundle: 'ash.workbench', key: 'command.OpenCalls' }, 'Open Calls'),
+							f1: true,
+						});
+					}
+					public override async run(accessor: ServicesAccessor): Promise<boolean> {
+						await accessor.get(ICommandService).executeCommand('ash.collaboration.open');
+						return accessor.get(IViewsService).focusView('ash.call.view');
+					}
+				},
+			),
+		);
 		return registrations;
 	});
 }

@@ -51,7 +51,10 @@ test('Terminal font commands respect bounds and reset to the registered platform
 	await run(TerminalZoomCommandId.FontZoomIn);
 	assert.equal(configuration.getValue('terminal.integrated.fontSize'), 100);
 	await run(TerminalZoomCommandId.FontZoomReset);
-	assert.equal(configuration.getValue('terminal.integrated.fontSize'), configuration.inspect('terminal.integrated.fontSize').defaultValue);
+	assert.equal(
+		configuration.getValue('terminal.integrated.fontSize'),
+		configuration.inspect('terminal.integrated.fontSize').defaultValue,
+	);
 });
 
 function wheelFixture(resources: DisposableStore) {
@@ -60,24 +63,36 @@ function wheelFixture(resources: DisposableStore) {
 	const configuration = resources.add(new TestConfigurationService());
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(IConfigurationService, configuration);
-	const definition = TerminalExtensionsRegistry.getTerminalContributions().find(value => value.id === 'terminal.mouseWheelZoom');
+	const definition = TerminalExtensionsRegistry.getTerminalContributions().find(
+		value => value.id === 'terminal.mouseWheelZoom',
+	);
 	assert.ok(definition);
 	const createScreen = () => {
 		const element = dom.window.document.createElement('div');
 		const viewport = dom.window.document.createElement('div');
 		element.append(viewport);
-		const contribution = resources.add(services.createInstance(definition.ctor, { instance: {} as ITerminalInstance }));
+		const contribution = resources.add(
+			services.createInstance(definition.ctor, { instance: {} as ITerminalInstance }),
+		);
 		contribution.xtermReady!({ raw: { element }, isDisposed: false } as unknown as IXtermTerminal);
 		return { viewport, contribution };
 	};
 	const wheel = (viewport: HTMLElement, timeStamp: number, deltaY: number, options: WheelEventInit = {}) => {
-		const event = new dom.window.WheelEvent('wheel', { bubbles: true, cancelable: true, deltaY, ctrlKey: true, ...options });
+		const event = new dom.window.WheelEvent('wheel', {
+			bubbles: true,
+			cancelable: true,
+			deltaY,
+			ctrlKey: true,
+			...options,
+		});
 		Object.defineProperty(event, 'timeStamp', { value: timeStamp });
 		viewport.dispatchEvent(event);
 		return event;
 	};
 	return {
-		configuration, createScreen, wheel,
+		configuration,
+		createScreen,
+		wheel,
 		run: (id: TerminalZoomCommandId) => services.invokeFunction(CommandsRegistry.getCommand(id)!),
 	};
 }

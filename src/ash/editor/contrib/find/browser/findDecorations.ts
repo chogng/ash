@@ -11,7 +11,11 @@ import { type TrackedRange } from '../../../common/model/trackedRange.js';
 export class FindDecorations extends Disposable {
 	public static readonly _FIND_MATCH_DECORATION = { description: 'find-match', className: 'findMatch' };
 	// Paint above ordinary matches retained by independent decoration owners.
-	public static readonly _CURRENT_FIND_MATCH_DECORATION = { description: 'current-find-match', className: 'currentFindMatch', zIndex: 1 };
+	public static readonly _CURRENT_FIND_MATCH_DECORATION = {
+		description: 'current-find-match',
+		className: 'currentFindMatch',
+		zIndex: 1,
+	};
 
 	private readonly model: TextModel;
 	private readonly matches: TextDecorationCollection<void>;
@@ -38,15 +42,25 @@ export class FindDecorations extends Disposable {
 		this.currentMatch = null;
 	}
 
-	public getCount(): number { return this.matches.size; }
-	public getFindScope(): Range | null { return this.getFindScopes()?.[0] ?? null; }
-	public getFindScopes(): Range[] | null { return this.scopes.length ? this.scopes.map(scope => scope.range) : null; }
-	public getStartPosition(): Position { return this.startPosition; }
+	public getCount(): number {
+		return this.matches.size;
+	}
+	public getFindScope(): Range | null {
+		return this.getFindScopes()?.[0] ?? null;
+	}
+	public getFindScopes(): Range[] | null {
+		return this.scopes.length ? this.scopes.map(scope => scope.range) : null;
+	}
+	public getStartPosition(): Position {
+		return this.startPosition;
+	}
 	public setStartPosition(position: Position): void {
 		this.startPosition = position;
 		this.currentMatch = null;
 	}
-	public getDecorationRangeAt(index: number): Range | null { return this.matches.decorations[index]?.range ?? null; }
+	public getDecorationRangeAt(index: number): Range | null {
+		return this.matches.decorations[index]?.range ?? null;
+	}
 
 	public getCurrentMatchesPosition(selection: Range): number {
 		return this.matches.decorations.findIndex(item => Range.equalsRange(item.range, selection)) + 1;
@@ -58,32 +72,39 @@ export class FindDecorations extends Disposable {
 		if (previousIndex === nextIndex) return nextIndex + 1;
 		const snapshots = this.matches.decorations;
 		const previous = snapshots[previousIndex];
-		if (previous) this.matches.update(previous.id, {
-			range: previous.range,
-			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			options: FindDecorations._FIND_MATCH_DECORATION,
-			metadata: undefined,
-		});
+		if (previous)
+			this.matches.update(previous.id, {
+				range: previous.range,
+				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+				options: FindDecorations._FIND_MATCH_DECORATION,
+				metadata: undefined,
+			});
 		const next = snapshots[nextIndex];
-		if (next) this.matches.update(next.id, {
-			range: next.range,
-			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			options: FindDecorations._CURRENT_FIND_MATCH_DECORATION,
-			metadata: undefined,
-		});
+		if (next)
+			this.matches.update(next.id, {
+				range: next.range,
+				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+				options: FindDecorations._CURRENT_FIND_MATCH_DECORATION,
+				metadata: undefined,
+			});
 		this.currentMatch = range;
 		return nextIndex + 1;
 	}
 
-	public set(findMatches: readonly { readonly range: Range; }[], findScopes: Range[] | null): void {
-		this.matches.replaceAll(findMatches.map(match => ({
-			range: match.range,
-			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			options: FindDecorations._FIND_MATCH_DECORATION,
-			metadata: undefined,
-		})));
+	public set(findMatches: readonly { readonly range: Range }[], findScopes: Range[] | null): void {
+		this.matches.replaceAll(
+			findMatches.map(match => ({
+				range: match.range,
+				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+				options: FindDecorations._FIND_MATCH_DECORATION,
+				metadata: undefined,
+			})),
+		);
 		for (const scope of this.scopes) scope.dispose();
-		this.scopes = findScopes?.map(range => this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges)) ?? [];
+		this.scopes =
+			findScopes?.map(range =>
+				this.model.trackRange(range, TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges),
+			) ?? [];
 		this.currentMatch = null;
 	}
 

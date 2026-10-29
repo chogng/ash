@@ -51,7 +51,11 @@ export interface IOutlineService {
 	readonly _serviceBrand: undefined;
 	readonly onDidChange: Event<void>;
 	canCreateOutline(editor: IEditorPane): boolean;
-	createOutline(editor: IEditorPane, target: OutlineTarget, token: CancellationToken): Promise<IOutline<any> | undefined>;
+	createOutline(
+		editor: IEditorPane,
+		target: OutlineTarget,
+		token: CancellationToken,
+	): Promise<IOutline<any> | undefined>;
 	registerOutlineCreator(creator: IOutlineCreator<IEditorPane, any>): IDisposable;
 }
 

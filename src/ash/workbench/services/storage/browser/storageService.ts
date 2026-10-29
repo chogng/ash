@@ -1,9 +1,17 @@
-import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { isRecord } from "../../../../base/common/types.js";
-import { addDisposableListener } from "../../../../base/browser/dom.js";
-import { disposableWindowInterval } from "../../../../base/browser/scheduler.js";
-import { type IStorageService, type IStorageValueChangeEvent, type IWillSaveStateEvent, StorageScope, StorageTarget, type StorageValue, WillSaveStateReason } from "../../../../platform/storage/common/storage.js";
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { isRecord } from '../../../../base/common/types.js';
+import { addDisposableListener } from '../../../../base/browser/dom.js';
+import { disposableWindowInterval } from '../../../../base/browser/scheduler.js';
+import {
+	type IStorageService,
+	type IStorageValueChangeEvent,
+	type IWillSaveStateEvent,
+	StorageScope,
+	StorageTarget,
+	type StorageValue,
+	WillSaveStateReason,
+} from '../../../../platform/storage/common/storage.js';
 
 interface StoredEntry {
 	readonly value: string;
@@ -20,7 +28,9 @@ export function migrateBrowserStorage(backend: Storage): void {
 	// Current storage wins over the retired Code namespace. Archives are never read by the adapter.
 	for (const applicationId of ['code']) {
 		const prefix = `ash.${applicationId}.storage.`;
-		const keys = Array.from({ length: backend.length }, (_, index) => backend.key(index)!).filter(key => key.startsWith(prefix));
+		const keys = Array.from({ length: backend.length }, (_, index) => backend.key(index)!).filter(key =>
+			key.startsWith(prefix),
+		);
 		for (const sourceKey of keys) {
 			const original = backend.getItem(sourceKey)!;
 			const source = parseStoredDocument(original);
@@ -29,7 +39,9 @@ export function migrateBrowserStorage(backend: Storage): void {
 			const targetSource = backend.getItem(targetKey);
 			const target = targetSource === null ? new Map<string, StoredEntry>() : parseStoredDocument(targetSource);
 			for (const [key, entry] of source) {
-				if (!target.has(key)) { target.set(key, entry); }
+				if (!target.has(key)) {
+					target.set(key, entry);
+				}
 			}
 			// Archive and destination must both reach storage before removing the source.
 			backend.setItem(`ash.storage.v1.${applicationId}.${suffix}`, original);
@@ -73,33 +85,45 @@ export class BrowserStorageService extends Disposable implements IStorageService
 	constructor(options: BrowserStorageServiceOptions) {
 		super();
 		this.ownerWindow = options.ownerWindow;
-		this.onError = options.onError ?? ((error) => console.error("Failed to access browser storage", error));
-		validateIdentifier(options.workspaceId, "workspace");
-		const profileId = options.profileId ?? "default";
-		validateIdentifier(profileId, "profile");
+		this.onError = options.onError ?? (error => console.error('Failed to access browser storage', error));
+		validateIdentifier(options.workspaceId, 'workspace');
+		const profileId = options.profileId ?? 'default';
+		validateIdentifier(profileId, 'profile');
 		const flushInterval = options.flushInterval ?? 5_000;
 		if (!Number.isFinite(flushInterval) || flushInterval < 0) {
-			throw new RangeError("Browser storage flush interval must be non-negative and finite");
+			throw new RangeError('Browser storage flush interval must be non-negative and finite');
 		}
 		this.applicationStorageKey = `${this.namespace}.application`;
 		this.profileStorageKey = `${this.namespace}.profile.${encodeURIComponent(profileId)}`;
 		this.workspaceStorageKey = workspaceStorageKey(this.namespace, options.workspaceId);
 		this.backend = options.backend ?? readLocalStorage(this.ownerWindow, this.onError);
-		if (this.backend) { migrateBrowserStorage(this.backend); }
+		if (this.backend) {
+			migrateBrowserStorage(this.backend);
+		}
 		for (const scope of storageScopes) {
 			this.entries.set(scope, this.load(scope));
 		}
 
-		this._register(addDisposableListener(this.ownerWindow, "storage", (event: StorageEvent) => this.handleStorageEvent(event)));
+		this._register(
+			addDisposableListener(this.ownerWindow, 'storage', (event: StorageEvent) => this.handleStorageEvent(event)),
+		);
 
 		if (flushInterval > 0) {
-			this._register(disposableWindowInterval(this.ownerWindow, () => {
-				void this.flush(WillSaveStateReason.PERIODIC);
-			}, flushInterval));
+			this._register(
+				disposableWindowInterval(
+					this.ownerWindow,
+					() => {
+						void this.flush(WillSaveStateReason.PERIODIC);
+					},
+					flushInterval,
+				),
+			);
 		}
-		this._register(toDisposable(() => {
-			void this.flush(WillSaveStateReason.SHUTDOWN);
-		}));
+		this._register(
+			toDisposable(() => {
+				void this.flush(WillSaveStateReason.SHUTDOWN);
+			}),
+		);
 	}
 
 	get(key: string, scope: StorageScope, fallbackValue: string): string;
@@ -113,8 +137,8 @@ export class BrowserStorageService extends Disposable implements IStorageService
 	getBoolean(key: string, scope: StorageScope): boolean | undefined;
 	getBoolean(key: string, scope: StorageScope, fallbackValue?: boolean): boolean | undefined {
 		const value = this.get(key, scope);
-		if (value === "true") return true;
-		if (value === "false") return false;
+		if (value === 'true') return true;
+		if (value === 'false') return false;
 		return fallbackValue;
 	}
 
@@ -174,7 +198,7 @@ export class BrowserStorageService extends Disposable implements IStorageService
 
 	/** Switches the WORKSPACE scope while retaining application and profile state. */
 	switchWorkspace(workspaceId: string): void {
-		validateIdentifier(workspaceId, "workspace");
+		validateIdentifier(workspaceId, 'workspace');
 		const storageKey = workspaceStorageKey(this.namespace, workspaceId);
 		if (storageKey === this.workspaceStorageKey) return;
 		const previous = this.scopeEntries(StorageScope.WORKSPACE);
@@ -185,12 +209,7 @@ export class BrowserStorageService extends Disposable implements IStorageService
 			const before = previous.get(key);
 			const after = next.get(key);
 			if (before?.value === after?.value && before?.target === after?.target) continue;
-			this._onDidChangeValue.fire({
-				key,
-				scope: StorageScope.WORKSPACE,
-				target: after?.target,
-				external: true,
-			});
+			this._onDidChangeValue.fire({ key, scope: StorageScope.WORKSPACE, target: after?.target, external: true });
 		}
 	}
 
@@ -249,12 +268,7 @@ export class BrowserStorageService extends Disposable implements IStorageService
 			const before = previous.get(key);
 			const after = next.get(key);
 			if (before?.value === after?.value && before?.target === after?.target) continue;
-			this._onDidChangeValue.fire({
-				key,
-				scope,
-				target: after?.target,
-				external: true,
-			});
+			this._onDidChangeValue.fire({ key, scope, target: after?.target, external: true });
 		}
 	}
 
@@ -283,11 +297,7 @@ export class BrowserStorageService extends Disposable implements IStorageService
 	}
 }
 
-const storageScopes = [
-	StorageScope.APPLICATION,
-	StorageScope.PROFILE,
-	StorageScope.WORKSPACE,
-] as const;
+const storageScopes = [StorageScope.APPLICATION, StorageScope.PROFILE, StorageScope.WORKSPACE] as const;
 
 function readLocalStorage(ownerWindow: Window, onError: (error: unknown) => void): Storage | undefined {
 	try {
@@ -299,21 +309,18 @@ function readLocalStorage(ownerWindow: Window, onError: (error: unknown) => void
 }
 
 function serializeStoredDocument(entries: ReadonlyMap<string, StoredEntry>): string {
-	return JSON.stringify({
-		version: 1,
-		entries: Object.fromEntries(entries),
-	} satisfies StoredDocument);
+	return JSON.stringify({ version: 1, entries: Object.fromEntries(entries) } satisfies StoredDocument);
 }
 
 function parseStoredDocument(value: string): Map<string, StoredEntry> {
 	const candidate: unknown = JSON.parse(value);
 	if (!isRecord(candidate) || candidate.version !== 1 || !isRecord(candidate.entries)) {
-		throw new TypeError("Browser storage document is invalid or unsupported");
+		throw new TypeError('Browser storage document is invalid or unsupported');
 	}
 	const entries = new Map<string, StoredEntry>();
 	for (const [key, entry] of Object.entries(candidate.entries)) {
 		validateKey(key);
-		if (!isRecord(entry) || typeof entry.value !== "string") {
+		if (!isRecord(entry) || typeof entry.value !== 'string') {
 			throw new TypeError(`Browser storage entry is invalid: ${key}`);
 		}
 		validateTarget(entry.target);
@@ -334,12 +341,12 @@ function workspaceStorageKey(namespace: string, workspaceId: string): string {
 
 function validateKey(key: string): void {
 	if (key.trim().length === 0) {
-		throw new TypeError("Storage key must be non-empty");
+		throw new TypeError('Storage key must be non-empty');
 	}
 }
 
 function validateTarget(value: unknown): asserts value is StorageTarget {
 	if (value !== StorageTarget.USER && value !== StorageTarget.MACHINE) {
-		throw new TypeError("Storage target is invalid");
+		throw new TypeError('Storage target is invalid');
 	}
 }

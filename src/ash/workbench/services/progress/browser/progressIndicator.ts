@@ -80,7 +80,8 @@ export class ScopedProgressIndicator extends Disposable implements IProgressIndi
 		const current = [...this.pending].filter(pending => pending.ready).at(-1);
 		this.progressBar.element.hidden = !this.scope.isActive || !current;
 		if (current) {
-			this.progressBar.value = current.total === undefined ? undefined : current.worked / Math.max(1, current.total);
+			this.progressBar.value =
+				current.total === undefined ? undefined : current.worked / Math.max(1, current.total);
 		}
 	}
 

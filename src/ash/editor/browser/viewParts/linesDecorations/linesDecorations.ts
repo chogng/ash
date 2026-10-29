@@ -32,23 +32,54 @@ export class LinesDecorationsOverlay extends DedupOverlay {
 		this._decorationsWidth = layoutInfo.decorationsWidth;
 		return true;
 	}
-	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean { return true; }
-	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return true; }
-	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean { return true; }
-	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
-	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
-	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean { return event.scrollTopChanged; }
-	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean {
+		return true;
+	}
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
+		return true;
+	}
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean {
+		return true;
+	}
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean {
+		return true;
+	}
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean {
+		return true;
+	}
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
+		return event.scrollTopChanged;
+	}
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
+		return true;
+	}
 
 	protected _getDecorations(context: RenderingContext): DecorationToRender[] {
 		const result: DecorationToRender[] = [];
 		for (const decoration of context.getDecorationsInViewport()) {
 			const tooltip = decoration.options.linesDecorationsTooltip ?? null;
 			if (decoration.options.linesDecorationsClassName) {
-				result.push(new DecorationToRender(decoration.range.startLineNumber, decoration.range.endLineNumber, decoration.options.linesDecorationsClassName, tooltip, decoration.options.zIndex));
+				result.push(
+					new DecorationToRender(
+						decoration.range.startLineNumber,
+						decoration.range.endLineNumber,
+						decoration.options.linesDecorationsClassName,
+						tooltip,
+						decoration.options.zIndex,
+					),
+				);
 			}
 			if (decoration.options.firstLineDecorationClassName) {
-				result.push(new DecorationToRender(decoration.range.startLineNumber, decoration.range.startLineNumber, decoration.options.firstLineDecorationClassName, tooltip, decoration.options.zIndex, decoration.options.firstLineDecorationIcon ?? undefined));
+				result.push(
+					new DecorationToRender(
+						decoration.range.startLineNumber,
+						decoration.range.startLineNumber,
+						decoration.options.firstLineDecorationClassName,
+						tooltip,
+						decoration.options.zIndex,
+						decoration.options.firstLineDecorationIcon ?? undefined,
+					),
+				);
 			}
 		}
 		return result;
@@ -62,11 +93,13 @@ export class LinesDecorationsOverlay extends DedupOverlay {
 		const output: string[] = [];
 		for (let lineNumber = visibleStartLineNumber; lineNumber <= visibleEndLineNumber; lineNumber += 1) {
 			const decorations = toRender[lineNumber - visibleStartLineNumber]!.getDecorations();
-			output[lineNumber - visibleStartLineNumber] = decorations.map(decoration => {
-				const title = decoration.tooltip === null ? '' : `" title="${escapeAttribute(decoration.tooltip)}`;
-				const icon = decoration.icon ? `" data-ash-icon-id="${escapeAttribute(decoration.icon.id)}` : '';
-				return `<div class="cldr stanza-editor-line-decoration ${escapeAttribute(decoration.className)}${title}${icon}${common}`;
-			}).join('');
+			output[lineNumber - visibleStartLineNumber] = decorations
+				.map(decoration => {
+					const title = decoration.tooltip === null ? '' : `" title="${escapeAttribute(decoration.tooltip)}`;
+					const icon = decoration.icon ? `" data-ash-icon-id="${escapeAttribute(decoration.icon.id)}` : '';
+					return `<div class="cldr stanza-editor-line-decoration ${escapeAttribute(decoration.className)}${title}${icon}${common}`;
+				})
+				.join('');
 		}
 		this._renderResult = output;
 	}
@@ -78,11 +111,16 @@ export class LinesDecorationsOverlay extends DedupOverlay {
 
 /** Materializes semantic decoration icons after the overlay HTML is mounted. */
 export function renderLineDecorationIcons(container: HTMLElement): void {
-	for (const decoration of container.querySelectorAll<HTMLElement>('.stanza-editor-line-decoration[data-ash-icon-id]')) {
+	for (const decoration of container.querySelectorAll<HTMLElement>(
+		'.stanza-editor-line-decoration[data-ash-icon-id]',
+	)) {
 		appendIcon(Icon.fromId(decoration.dataset.ashIconId!), decoration);
 	}
 }
 
 function escapeAttribute(value: string): string {
-	return value.replace(/[&"<>]/gu, character => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' })[character]!);
+	return value.replace(
+		/[&"<>]/gu,
+		character => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;' })[character]!,
+	);
 }

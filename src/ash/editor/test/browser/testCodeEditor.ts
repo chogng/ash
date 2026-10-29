@@ -6,14 +6,20 @@ import { InMemoryTextModelService } from '../../common/services/inMemoryTextMode
 import { IModelService } from '../../common/services/model.js';
 import { ModelService } from '../../common/services/modelService.js';
 import { ActionWidgetService, IActionWidgetService } from '../../../platform/actionWidget/browser/actionWidget.js';
-import { ILanguageFeatureDebounceService, LanguageFeatureDebounceService } from '../../common/services/languageFeatureDebounce.js';
+import {
+	ILanguageFeatureDebounceService,
+	LanguageFeatureDebounceService,
+} from '../../common/services/languageFeatureDebounce.js';
 import { ContextKeyService, IContextKeyService } from '../../../platform/contextkey/browser/contextKeyService.js';
 import { IMarkerService } from '../../../platform/markers/common/markers.js';
 import { MarkerService } from '../../../platform/markers/common/markerService.js';
 import { IMarkerDecorationsService } from '../../common/services/markerDecorations.js';
 import { MarkerDecorationsService } from '../../common/services/markerDecorationsService.js';
 import { StandaloneCodeEditorService } from '../../standalone/browser/standaloneCodeEditorService.js';
-import { IInlineCompletionsService, InlineCompletionsService } from '../../browser/services/inlineCompletionsService.js';
+import {
+	IInlineCompletionsService,
+	InlineCompletionsService,
+} from '../../browser/services/inlineCompletionsService.js';
 import { IDataChannelService, NullDataChannelService } from '../../../platform/dataChannel/common/dataChannel.js';
 import { ITelemetryService } from '../../../platform/telemetry/common/telemetry.js';
 import { NullTelemetryService } from '../../../platform/telemetry/common/telemetryUtils.js';
@@ -35,7 +41,13 @@ import { ILanguageFeaturesService } from '../../common/services/languageFeatures
 import { LanguageFeaturesService } from '../../common/services/languageFeaturesService.js';
 import { ILanguageService } from '../../common/languages/language.js';
 import { LanguageService } from '../../common/services/languageService.js';
-import { StandaloneBulkEditService, StandaloneCommandService, StandaloneKeybindingService, StandaloneNotificationService, StandaloneWorkspaceContextService } from '../../standalone/browser/standaloneServices.js';
+import {
+	StandaloneBulkEditService,
+	StandaloneCommandService,
+	StandaloneKeybindingService,
+	StandaloneNotificationService,
+	StandaloneWorkspaceContextService,
+} from '../../standalone/browser/standaloneServices.js';
 import { IBulkEditService } from '../../browser/services/bulkEditService.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { ICommandService } from '../../../platform/commands/common/commands.js';
@@ -64,7 +76,10 @@ interface TestCodeEditorOptions extends CodeEditorWidgetOptions {
 	readonly accessibilityService?: IAccessibilityService;
 }
 
-export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add'>, parent?: IInstantiationService): InstantiationService {
+export function createCodeEditorServices(
+	disposables: Pick<DisposableStore, 'add'>,
+	parent?: IInstantiationService,
+): InstantiationService {
 	const services = disposables.add(parent ? parent.createChild() : new InstantiationService());
 	registerCodeEditorServices(services);
 	return services;
@@ -73,7 +88,10 @@ export function createCodeEditorServices(disposables: Pick<DisposableStore, 'add
 /** Completes an existing test scope without replacing its explicit service overrides. */
 export function registerCodeEditorServices(services: InstantiationService): void {
 	if (!services.has(IAccessibilitySignalService)) {
-		services.registerInstance(IAccessibilitySignalService, { playSignal: async () => { }, playSignalLoop: () => Disposable.None });
+		services.registerInstance(IAccessibilitySignalService, {
+			playSignal: async () => {},
+			playSignalLoop: () => Disposable.None,
+		});
 	}
 	if (!services.has(IClipboardService)) {
 		services.registerSingleton(IClipboardService, () => new BrowserClipboardService(undefined));
@@ -97,11 +115,15 @@ export function registerCodeEditorServices(services: InstantiationService): void
 		services.registerSingleton(IConfigurationService, () => new InMemoryConfigurationService());
 	}
 	if (!services.has(IAccessibilityService)) {
-		services.registerSingleton(IAccessibilityService, accessor => new AccessibilityService({
-			root: document.body,
-			contextKeyService: accessor.get(IContextKeyService),
-			configurationService: accessor.get(IConfigurationService),
-		}));
+		services.registerSingleton(
+			IAccessibilityService,
+			accessor =>
+				new AccessibilityService({
+					root: document.body,
+					contextKeyService: accessor.get(IContextKeyService),
+					configurationService: accessor.get(IConfigurationService),
+				}),
+		);
 	}
 	if (!services.has(IMarkerService)) {
 		services.registerSingleton(IMarkerService, () => services.createInstance(MarkerService));
@@ -125,29 +147,42 @@ export function registerCodeEditorServices(services: InstantiationService): void
 		services.registerSingleton(INotificationService, () => services.createInstance(StandaloneNotificationService));
 	}
 	if (!services.has(IQuickInputService)) {
-		services.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: services, container: document.body }));
+		services.registerSingleton(
+			IQuickInputService,
+			() => new TestQuickInputService({ instantiationService: services, container: document.body }),
+		);
 	}
 	if (!services.has(IMenuService)) {
 		services.registerSingleton(IMenuService, () => services.createInstance(new SyncDescriptor(MenuService)));
 	}
 	if (!services.has(IContextViewService)) {
-		services.registerSingleton(IContextViewService, () => services.createInstance(BrowserContextViewService, document.body));
+		services.registerSingleton(IContextViewService, () =>
+			services.createInstance(BrowserContextViewService, document.body),
+		);
 	}
 	if (!services.has(IActionWidgetService)) {
 		services.registerSingleton(IActionWidgetService, () => services.createInstance(ActionWidgetService));
 	}
 	if (!services.has(IContextMenuService)) {
-		services.registerSingleton(IContextMenuService, () => services.createInstance(new SyncDescriptor(BrowserContextMenuService)));
+		services.registerSingleton(IContextMenuService, () =>
+			services.createInstance(new SyncDescriptor(BrowserContextMenuService)),
+		);
 	}
 	if (!services.has(IHoverService)) {
-		services.registerSingleton(IHoverService, accessor => new HoverService(
-			accessor.get(IConfigurationService),
-			accessor.get(IContextViewService),
-			accessor.get(IContextMenuService),
-		));
+		services.registerSingleton(
+			IHoverService,
+			accessor =>
+				new HoverService(
+					accessor.get(IConfigurationService),
+					accessor.get(IContextViewService),
+					accessor.get(IContextMenuService),
+				),
+		);
 	}
 	if (!services.has(ILanguageFeatureDebounceService)) {
-		services.registerSingleton(ILanguageFeatureDebounceService, () => services.createInstance(LanguageFeatureDebounceService));
+		services.registerSingleton(ILanguageFeatureDebounceService, () =>
+			services.createInstance(LanguageFeatureDebounceService),
+		);
 	}
 	if (!services.has(IInlineCompletionsService)) {
 		services.registerSingleton(IInlineCompletionsService, () => services.createInstance(InlineCompletionsService));
@@ -168,7 +203,11 @@ export function registerCodeEditorServices(services: InstantiationService): void
 		services.registerInstance(IWorkspaceContextService, new StandaloneWorkspaceContextService());
 	}
 	if (!services.has(IModelService)) {
-		services.registerSingleton(IModelService, accessor => new ModelService(accessor.get(IConfigurationService), { _serviceBrand: undefined, getEOL: () => '\n' }));
+		services.registerSingleton(
+			IModelService,
+			accessor =>
+				new ModelService(accessor.get(IConfigurationService), { _serviceBrand: undefined, getEOL: () => '\n' }),
+		);
 	}
 	if (!services.has(ITextModelService)) {
 		services.registerSingleton(ITextModelService, () => services.createInstance(InMemoryTextModelService));
@@ -183,14 +222,31 @@ export function registerCodeEditorServices(services: InstantiationService): void
 export function createTestCodeEditor(options: TestCodeEditorOptions): CodeEditorWidget {
 	const resources = new DisposableStore();
 	try {
-		const { instantiationService, languageConfigurationService, languageFeaturesService, accessibilityService, ...widgetOptions } = options;
+		const {
+			instantiationService,
+			languageConfigurationService,
+			languageFeaturesService,
+			accessibilityService,
+			...widgetOptions
+		} = options;
 		setIconResolver(widgetOptions.container.ownerDocument, icon => getIconDefinition(icon));
-		const overrides = resources.add(instantiationService ? instantiationService.createChild() : new InstantiationService());
+		const overrides = resources.add(
+			instantiationService ? instantiationService.createChild() : new InstantiationService(),
+		);
 		if (!overrides.has(IContextViewService)) {
-			overrides.registerSingleton(IContextViewService, () => overrides.createInstance(BrowserContextViewService, widgetOptions.container.ownerDocument.body));
+			overrides.registerSingleton(IContextViewService, () =>
+				overrides.createInstance(BrowserContextViewService, widgetOptions.container.ownerDocument.body),
+			);
 		}
 		if (!overrides.has(IQuickInputService)) {
-			overrides.registerSingleton(IQuickInputService, () => new TestQuickInputService({ instantiationService: overrides, container: widgetOptions.container.ownerDocument.body }));
+			overrides.registerSingleton(
+				IQuickInputService,
+				() =>
+					new TestQuickInputService({
+						instantiationService: overrides,
+						container: widgetOptions.container.ownerDocument.body,
+					}),
+			);
 		}
 		if (languageConfigurationService) {
 			overrides.registerInstance(ILanguageConfigurationService, languageConfigurationService);
@@ -222,7 +278,17 @@ class TestCodeEditor extends CodeEditorWidget {
 		@ILogService logService: ILogService,
 		@IConfigurationService configurationService: IConfigurationService,
 	) {
-		super(options, instantiationService, themeService, languageConfigurationService, languageFeaturesService, contextKeyService, codeEditorService, logService, configurationService);
+		super(
+			options,
+			instantiationService,
+			themeService,
+			languageConfigurationService,
+			languageFeaturesService,
+			contextKeyService,
+			codeEditorService,
+			logService,
+			configurationService,
+		);
 		this._register(resources);
 		this.registerWithService();
 	}

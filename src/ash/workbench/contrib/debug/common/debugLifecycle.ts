@@ -15,9 +15,9 @@ export class DebugLifecycle extends Disposable {
 	) {
 		super();
 		this._register(
-			lifecycle.onBeforeShutdown((event) => {
+			lifecycle.onBeforeShutdown(event => {
 				const roots = debug.sessions.filter(
-					(session) => !session.parentSession && session.state !== 'terminated' && session.state !== 'error',
+					session => !session.parentSession && session.state !== 'terminated' && session.state !== 'error',
 				);
 				if (!roots.length || configuration.getValue<string>('debug.confirmOnExit') !== 'always') return;
 				event.veto(
@@ -31,7 +31,7 @@ export class DebugLifecycle extends Disposable {
 							primaryButton: localize('debug.stopAndClose', 'Stop Debugging and Close'),
 							cancelButton: localize('debug.keepWindowOpen', 'Keep Window Open'),
 						})
-						.then((result) => !result.confirmed),
+						.then(result => !result.confirmed),
 					'veto.debug',
 				);
 			}),

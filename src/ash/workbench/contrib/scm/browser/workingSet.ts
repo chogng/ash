@@ -59,7 +59,9 @@ export class ScmWorkingSetController extends Disposable {
 
 	private bindProvider(): void {
 		const repository = this.options.scmViewService.activeRepository;
-		this.providerListener.value = repository?.provider.onDidChangeResources(() => this.enqueue(repository.id, repository.provider.activeRepositoryName));
+		this.providerListener.value = repository?.provider.onDidChangeResources(() =>
+			this.enqueue(repository.id, repository.provider.activeRepositoryName),
+		);
 		if (repository) this.enqueue(repository.id, repository.provider.activeRepositoryName);
 	}
 
@@ -69,7 +71,9 @@ export class ScmWorkingSetController extends Disposable {
 		if (identity === this.lastRefIdentity) return;
 		this.lastRefIdentity = identity;
 		const generation = this.generation;
-		this.statusQueue = this.statusQueue.then(() => generation === this.generation ? this.acceptRef(repositoryId, ref) : undefined).catch(() => undefined);
+		this.statusQueue = this.statusQueue
+			.then(() => (generation === this.generation ? this.acceptRef(repositoryId, ref) : undefined))
+			.catch(() => undefined);
 	}
 
 	private async acceptRef(repositoryKey: string, ref: string): Promise<void> {
@@ -79,7 +83,10 @@ export class ScmWorkingSetController extends Disposable {
 			return;
 		}
 		if (repository.currentRef === ref) return;
-		repository.editorWorkingSets.set(repository.currentRef, this.options.editorPart.saveWorkingSet(repository.currentRef));
+		repository.editorWorkingSets.set(
+			repository.currentRef,
+			this.options.editorPart.saveWorkingSet(repository.currentRef),
+		);
 		repository.currentRef = ref;
 		this.store();
 		const workingSet = repository.editorWorkingSets.get(ref);
@@ -116,23 +123,43 @@ export class ScmWorkingSetController extends Disposable {
 	}
 
 	private store(): void {
-		const serialized: SerializedRepositoryWorkingSets[] = [...this.repositoryWorkingSets].map(([repositoryKey, state]) => ({
-			repositoryKey,
-			currentRef: state.currentRef,
-			editorWorkingSets: [...state.editorWorkingSets],
-		}));
-		this.options.storageService.store(WorkingSetsStorageKey, JSON.stringify(serialized), StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const serialized: SerializedRepositoryWorkingSets[] = [...this.repositoryWorkingSets].map(
+			([repositoryKey, state]) => ({
+				repositoryKey,
+				currentRef: state.currentRef,
+				editorWorkingSets: [...state.editorWorkingSets],
+			}),
+		);
+		this.options.storageService.store(
+			WorkingSetsStorageKey,
+			JSON.stringify(serialized),
+			StorageScope.WORKSPACE,
+			StorageTarget.MACHINE,
+		);
 	}
 }
 
 function validateSerializedRepository(value: unknown): SerializedRepositoryWorkingSets {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError('Invalid SCM repository working set');
+	if (typeof value !== 'object' || value === null || Array.isArray(value))
+		throw new TypeError('Invalid SCM repository working set');
 	const record = value as Record<string, unknown>;
-	if (typeof record.repositoryKey !== 'string' || !record.repositoryKey || typeof record.currentRef !== 'string' || !record.currentRef || !Array.isArray(record.editorWorkingSets)) {
+	if (
+		typeof record.repositoryKey !== 'string' ||
+		!record.repositoryKey ||
+		typeof record.currentRef !== 'string' ||
+		!record.currentRef ||
+		!Array.isArray(record.editorWorkingSets)
+	) {
 		throw new TypeError('Invalid SCM repository working set');
 	}
 	for (const entry of record.editorWorkingSets) {
-		if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || typeof entry[1] !== 'object' || entry[1] === null) {
+		if (
+			!Array.isArray(entry) ||
+			entry.length !== 2 ||
+			typeof entry[0] !== 'string' ||
+			typeof entry[1] !== 'object' ||
+			entry[1] === null
+		) {
 			throw new TypeError('Invalid SCM editor working set entry');
 		}
 	}

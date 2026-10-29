@@ -25,15 +25,20 @@ export class CSSDevelopmentService implements ICSSDevelopmentService {
 	}
 
 	public getCssModules(): Promise<string[]> {
-		if (!this.isEnabled) { return Promise.resolve([]); }
+		if (!this.isEnabled) {
+			return Promise.resolve([]);
+		}
 		// Share concurrent scans, but refresh for the next page load after source files change.
-		return this.modules ??= this.scan().finally(() => { this.modules = undefined; });
+		return (this.modules ??= this.scan().finally(() => {
+			this.modules = undefined;
+		}));
 	}
 
 	private async scan(): Promise<string[]> {
 		// Directory entries avoid following symlinks outside the host's source root.
 		const entries = await readdir(this.sourceRoot, { recursive: true, withFileTypes: true });
-		return entries.filter(entry => entry.isFile() && entry.name.endsWith('.css'))
+		return entries
+			.filter(entry => entry.isFile() && entry.name.endsWith('.css'))
 			.map(entry => relative(this.sourceRoot, resolve(entry.parentPath, entry.name)).replaceAll('\\', '/'))
 			.sort();
 	}

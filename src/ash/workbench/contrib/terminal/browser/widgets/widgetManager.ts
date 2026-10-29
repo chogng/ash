@@ -19,14 +19,18 @@ export class TerminalWidgetManager extends Disposable {
 	}
 
 	attachWidget(widget: ITerminalWidget): IDisposable | undefined {
-		if (this.isDisposed || !this.container) { widget.dispose(); return undefined; }
+		if (this.isDisposed || !this.container) {
+			widget.dispose();
+			return undefined;
+		}
 		const previous = this.widgets.get(widget.id);
 		if (previous === widget) return undefined;
 		this.widgets.delete(widget.id);
 		previous?.dispose();
 		this.widgets.set(widget.id, widget);
-		try { widget.attach(this.container); }
-		catch (error) {
+		try {
+			widget.attach(this.container);
+		} catch (error) {
 			this.widgets.delete(widget.id);
 			widget.dispose();
 			throw error;

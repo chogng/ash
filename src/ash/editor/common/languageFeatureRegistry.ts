@@ -5,7 +5,21 @@ import { type LanguageFilter, type LanguageSelector, score, selectLanguageIds } 
 import { type URI } from '../../base/common/uri.js';
 import { isNonEmptyArray } from '../../base/common/arrays.js';
 import { assertLanguageId } from './languages/language.js';
-import { type LanguageCompletionContext, type LanguageCompletionProvider, type LanguageCompletionProviderCatalog, type LanguageCompletionProviderCatalogSource, type RegisteredLanguageCompletionProvider, type LanguageCompletionProviderRegistration, languageCompletionProviderMatches, assertLanguageCompletionContext, assertLanguageProviderId, normalizeCompletionProvider, type SyntaxProvider, type RegisteredSyntaxProvider, normalizeSyntaxProvider } from './languages.js';
+import {
+	type LanguageCompletionContext,
+	type LanguageCompletionProvider,
+	type LanguageCompletionProviderCatalog,
+	type LanguageCompletionProviderCatalogSource,
+	type RegisteredLanguageCompletionProvider,
+	type LanguageCompletionProviderRegistration,
+	languageCompletionProviderMatches,
+	assertLanguageCompletionContext,
+	assertLanguageProviderId,
+	normalizeCompletionProvider,
+	type SyntaxProvider,
+	type RegisteredSyntaxProvider,
+	normalizeSyntaxProvider,
+} from './languages.js';
 
 interface Entry<T> {
 	readonly selector: LanguageSelector;
@@ -40,14 +54,16 @@ class MatchCandidate {
 		readonly notebookUri: URI | undefined,
 		readonly notebookType: string | undefined,
 		readonly recursive: boolean,
-	) { }
+	) {}
 
 	equals(other: MatchCandidate): boolean {
-		return this.notebookType === other.notebookType
-			&& this.languageId === other.languageId
-			&& this.uri.toString() === other.uri.toString()
-			&& this.notebookUri?.toString() === other.notebookUri?.toString()
-			&& this.recursive === other.recursive;
+		return (
+			this.notebookType === other.notebookType &&
+			this.languageId === other.languageId &&
+			this.uri.toString() === other.uri.toString() &&
+			this.notebookUri?.toString() === other.notebookUri?.toString() &&
+			this.recursive === other.recursive
+		);
 	}
 }
 
@@ -56,9 +72,13 @@ export class LanguageFeatureRegistry<T> extends Disposable {
 	private readonly _entries: Entry<T>[] = [];
 
 	private readonly _onDidChange = this._register(new Emitter<number>());
-	get onDidChange() { return this._onDidChange.event; }
+	get onDidChange() {
+		return this._onDidChange.event;
+	}
 
-	constructor(private readonly _notebookInfoResolver?: NotebookInfoResolver) { super(); }
+	constructor(private readonly _notebookInfoResolver?: NotebookInfoResolver) {
+		super();
+	}
 
 	protected override disposeCore(): void {
 		this._entries.length = 0;
@@ -68,12 +88,7 @@ export class LanguageFeatureRegistry<T> extends Disposable {
 
 	register(selector: LanguageSelector, provider: T): IDisposable {
 		this.assertNotDisposed();
-		let entry: Entry<T> | undefined = {
-			selector,
-			provider,
-			_score: -1,
-			_time: this._clock++,
-		};
+		let entry: Entry<T> | undefined = { selector, provider, _score: -1, _time: this._clock++ };
 
 		this._entries.push(entry);
 		this._lastCandidate = undefined;
@@ -171,7 +186,14 @@ export class LanguageFeatureRegistry<T> extends Disposable {
 		this._lastCandidate = candidate;
 
 		for (const entry of this._entries) {
-			entry._score = score(entry.selector, candidate.uri, candidate.languageId, shouldSynchronizeModel(model), candidate.notebookUri, candidate.notebookType);
+			entry._score = score(
+				entry.selector,
+				candidate.uri,
+				candidate.languageId,
+				shouldSynchronizeModel(model),
+				candidate.notebookUri,
+				candidate.notebookType,
+			);
 
 			if (isExclusive(entry.selector) && entry._score > 0) {
 				if (recursive) {
@@ -245,9 +267,11 @@ export class LanguageCompletionProviderRegistry extends Disposable implements La
 			this._register(parent.onDidChangeProviderCatalog(() => this.updateCatalog()));
 			this.updateCatalog();
 		}
-		this._register(toDisposable(() => {
-			this.providers.clear();
-		}));
+		this._register(
+			toDisposable(() => {
+				this.providers.clear();
+			}),
+		);
 	}
 
 	register(provider: LanguageCompletionProvider): IDisposable {
@@ -257,7 +281,7 @@ export class LanguageCompletionProviderRegistry extends Disposable implements La
 	registerMany(providers: readonly LanguageCompletionProvider[]): IDisposable {
 		this.assertNotDisposed();
 		if (!isNonEmptyArray(providers)) {
-			throw new TypeError("Language completion provider batch must not be empty");
+			throw new TypeError('Language completion provider batch must not be empty');
 		}
 		return this.registerGroup(providers);
 	}
@@ -273,7 +297,7 @@ export class LanguageCompletionProviderRegistry extends Disposable implements La
 			if (this.deleteOwner(owner) && !this.isDisposed) this.updateCatalog();
 		}) as LanguageCompletionProviderRegistration;
 		registration.replace = replacement => {
-			if (disposed) throw new ReferenceError("Language completion provider registration is already disposed");
+			if (disposed) throw new ReferenceError('Language completion provider registration is already disposed');
 			this.assertNotDisposed();
 			this.replace(owner, replacement);
 		};
@@ -289,40 +313,59 @@ export class LanguageCompletionProviderRegistry extends Disposable implements La
 		return Promise.resolve(this.providerCatalog);
 	}
 
-	getProviders(languageId: string, context: LanguageCompletionContext): readonly RegisteredLanguageCompletionProvider[] {
+	getProviders(
+		languageId: string,
+		context: LanguageCompletionContext,
+	): readonly RegisteredLanguageCompletionProvider[] {
 		this.assertNotDisposed();
 		assertLanguageId(languageId);
 		assertLanguageCompletionContext(context);
-		const result = [...this.providers.values()].map(entry => entry.provider).filter(provider => languageCompletionProviderMatches(provider, languageId, context));
-		return Object.freeze([...result, ...(this.parent?.getProviders(languageId, context).filter(provider => !this.providers.has(provider.id)) ?? [])]);
+		const result = [...this.providers.values()]
+			.map(entry => entry.provider)
+			.filter(provider => languageCompletionProviderMatches(provider, languageId, context));
+		return Object.freeze([
+			...result,
+			...(this.parent?.getProviders(languageId, context).filter(provider => !this.providers.has(provider.id)) ??
+				[]),
+		]);
 	}
 
 	getProvider(providerId: string): RegisteredLanguageCompletionProvider | undefined {
 		this.assertNotDisposed();
-		assertLanguageProviderId(providerId, "Language completion provider ID");
+		assertLanguageProviderId(providerId, 'Language completion provider ID');
 		return this.providers.get(providerId)?.provider ?? this.parent?.getProvider(providerId);
 	}
 
 	private updateCatalog(): void {
-		const providers = Object.freeze([...this.providers.values()].map(entry => entry.provider).map(provider => Object.freeze({
-			id: provider.id,
-			languageIds: provider.languageIds,
-			triggerCharacters: provider.triggerCharacters,
-		})));
+		const providers = Object.freeze(
+			[...this.providers.values()]
+				.map(entry => entry.provider)
+				.map(provider =>
+					Object.freeze({
+						id: provider.id,
+						languageIds: provider.languageIds,
+						triggerCharacters: provider.triggerCharacters,
+					}),
+				),
+		);
 		this.catalog = Object.freeze({
 			revision: this.catalog.revision + 1,
-			providers: Object.freeze([...providers, ...(this.parent?.providerCatalog.providers.filter(provider => !this.providers.has(provider.id)) ?? [])]),
+			providers: Object.freeze([
+				...providers,
+				...(this.parent?.providerCatalog.providers.filter(provider => !this.providers.has(provider.id)) ?? []),
+			]),
 		});
 		this.catalogEmitter.fire(this.catalog);
 	}
 
 	private replace(owner: object, providers: readonly LanguageCompletionProvider[]): void {
-		if (!Array.isArray(providers)) throw new TypeError("Language completion providers must be an array");
+		if (!Array.isArray(providers)) throw new TypeError('Language completion providers must be an array');
 		const registered = providers.map(normalizeCompletionProvider);
 		const identities = new Set<string>();
 		for (const provider of registered) {
 			const existing = this.providers.get(provider.id);
-			if (identities.has(provider.id) || existing && existing.owner !== owner) throw new RangeError(`Language completion provider '${provider.id}' is already registered`);
+			if (identities.has(provider.id) || (existing && existing.owner !== owner))
+				throw new RangeError(`Language completion provider '${provider.id}' is already registered`);
 			identities.add(provider.id);
 		}
 		this.deleteOwner(owner);
@@ -354,9 +397,11 @@ export class SyntaxProviderRegistry extends Disposable {
 
 	constructor() {
 		super();
-		this._register(toDisposable(() => {
-			this.providers.clear();
-		}));
+		this._register(
+			toDisposable(() => {
+				this.providers.clear();
+			}),
+		);
 	}
 
 	register(provider: SyntaxProvider): IDisposable {
@@ -369,7 +414,9 @@ export class SyntaxProviderRegistry extends Disposable {
 	}
 
 	/** Replaces one extension's providers without exposing a partially retired generation. */
-	registerGroup(providers: readonly SyntaxProvider[]): IDisposable & { replace(providers: readonly SyntaxProvider[]): void; } {
+	registerGroup(
+		providers: readonly SyntaxProvider[],
+	): IDisposable & { replace(providers: readonly SyntaxProvider[]): void } {
 		let current: readonly RegisteredSyntaxProvider[] = [];
 		let disposed = false;
 		const replace = (values: readonly SyntaxProvider[]): void => {
@@ -379,7 +426,7 @@ export class SyntaxProviderRegistry extends Disposable {
 			const identities = new Set<string>();
 			for (const provider of next) {
 				const existing = this.providers.get(provider.id);
-				if (identities.has(provider.id) || existing && !current.includes(existing)) {
+				if (identities.has(provider.id) || (existing && !current.includes(existing))) {
 					throw new RangeError(`Syntax provider '${provider.id}' is already registered`);
 				}
 				identities.add(provider.id);
@@ -397,7 +444,7 @@ export class SyntaxProviderRegistry extends Disposable {
 			}
 			current = [];
 			this.changeEmitter.fire();
-		}) as IDisposable & { replace(providers: readonly SyntaxProvider[]): void; };
+		}) as IDisposable & { replace(providers: readonly SyntaxProvider[]): void };
 		registration.replace = replace;
 		return registration;
 	}
@@ -434,11 +481,8 @@ export class SyntaxProviderRegistry extends Disposable {
 		this.assertNotDisposed();
 		return Object.freeze([...this.providers.values()].filter(provider => provider.synchronizeDocument));
 	}
-
 }
 
-
-
 function matchesLanguage(provider: RegisteredSyntaxProvider, languageId: string): boolean {
-	return provider.languageIds.includes("*") || provider.languageIds.includes(languageId);
+	return provider.languageIds.includes('*') || provider.languageIds.includes(languageId);
 }

@@ -16,25 +16,38 @@ export class SettingsEditorInput extends Disposable implements IResourceEditorIn
 	public readonly contentType = SettingsEditorContentType;
 	public readonly readOnly = true;
 
-	public get label(): string { return localize({ bundle: 'ash.settings', key: 'chrome.modalTitle' }, 'Ash Settings'); }
-	public getIcon(): typeof Lxicon.settings { return Lxicon.settings; }
+	public get label(): string {
+		return localize({ bundle: 'ash.settings', key: 'chrome.modalTitle' }, 'Ash Settings');
+	}
+	public getIcon(): typeof Lxicon.settings {
+		return Lxicon.settings;
+	}
 }
 
 /** Creates the singleton input routed to the Workbench Settings editor. */
-export function createSettingsEditorInput(target?: string, parameters: Readonly<Record<string, string>> = {}): IResourceEditorInput {
+export function createSettingsEditorInput(
+	target?: string,
+	parameters: Readonly<Record<string, string>> = {},
+): IResourceEditorInput {
 	const query = Object.entries(target ? { ...parameters, target } : parameters)
-		.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`).join('&');
+		.map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+		.join('&');
 	return {
 		resource: SettingsEditorResource.with({ query }),
 		contentType: SettingsEditorContentType,
-		get label(): string { return localize({ bundle: 'ash.settings', key: 'chrome.modalTitle' }, 'Ash Settings'); },
+		get label(): string {
+			return localize({ bundle: 'ash.settings', key: 'chrome.modalTitle' }, 'Ash Settings');
+		},
 		getIcon: () => Lxicon.settings,
 		readOnly: true,
 	};
 }
 
 export function isSettingsEditorInput(input: IResourceEditorInput): boolean {
-	return input.contentType === SettingsEditorContentType || input.resource.toString() === SettingsEditorResource.toString();
+	return (
+		input.contentType === SettingsEditorContentType ||
+		input.resource.toString() === SettingsEditorResource.toString()
+	);
 }
 
 /** Opens the current profile settings file as an editable JSONC resource. */
@@ -42,7 +55,9 @@ export function createUserSettingsEditorInput(): IResourceEditorInput {
 	return Object.freeze({
 		resource: UserSettingsResource,
 		languageId: 'jsonc',
-		get label(): string { return localize({ bundle: 'ash.settings', key: 'json.editorLabel' }, 'User Settings (JSON)'); },
+		get label(): string {
+			return localize({ bundle: 'ash.settings', key: 'json.editorLabel' }, 'User Settings (JSON)');
+		},
 	});
 }
 
@@ -52,7 +67,8 @@ EditorInputSerializers.registerStatic({
 	canSerialize: input => input.resource.toString() === UserSettingsResource.toString(),
 	serialize: () => UserSettingsResource.toString(),
 	deserialize: value => {
-		if (value !== UserSettingsResource.toString() && value !== 'ash-settings:/user/settings.json') throw new TypeError('Invalid user settings editor resource');
+		if (value !== UserSettingsResource.toString() && value !== 'ash-settings:/user/settings.json')
+			throw new TypeError('Invalid user settings editor resource');
 		return createUserSettingsEditorInput();
 	},
 });

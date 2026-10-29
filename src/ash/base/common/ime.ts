@@ -1,5 +1,5 @@
-import { Emitter, type Event } from "./event.js";
-import { AbstractDisposable, markAsSingleton, setDisposableOwner } from "./lifecycle.js";
+import { Emitter, type Event } from './event.js';
+import { AbstractDisposable, markAsSingleton, setDisposableOwner } from './lifecycle.js';
 
 /**
  * Coordinates whether text-input surfaces should currently accept IME

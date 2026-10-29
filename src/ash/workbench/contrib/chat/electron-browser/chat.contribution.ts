@@ -8,5 +8,9 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 
 registerAction2(OpenAgentsWindowAction);
 registerAction2(OpenAgentsWindowTitleBarAction);
-registerWorkbenchContribution(AgentsWindowInvitationContribution.ID, WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(AgentsWindowInvitationContribution));
-registerWorkbenchContribution('workbench.contrib.chatScreenshot', WorkbenchPhase.AfterRestored, accessor => accessor.get(IInstantiationService).createInstance(ChatScreenshotContribution));
+registerWorkbenchContribution(AgentsWindowInvitationContribution.ID, WorkbenchPhase.BlockStartup, accessor =>
+	accessor.get(IInstantiationService).createInstance(AgentsWindowInvitationContribution),
+);
+registerWorkbenchContribution('workbench.contrib.chatScreenshot', WorkbenchPhase.AfterRestored, accessor =>
+	accessor.get(IInstantiationService).createInstance(ChatScreenshotContribution),
+);

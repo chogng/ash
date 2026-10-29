@@ -1,22 +1,15 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import {
-	DialogResult,
-	DialogSeverity,
-} from "../../../../../platform/dialogs/common/dialogs.js";
-import {
-	DialogService,
-} from "../../../../../workbench/services/dialogs/common/dialogService.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { DialogResult, DialogSeverity } from '../../../../../platform/dialogs/common/dialogs.js';
+import { DialogService } from '../../../../../workbench/services/dialogs/common/dialogService.js';
 
-test("dialog service publishes requests through its owned model", async () => {
+test('dialog service publishes requests through its owned model', async () => {
 	using service = new DialogService();
-	const confirmation = service.confirm({
-		message: "Continue?",
-	});
+	const confirmation = service.confirm({ message: 'Continue?' });
 	const item = service.model.dialogs[0];
 
 	assert.equal(service.model.dialogs.length, 1);
-	assert.equal(item?.request.kind, "confirmation");
+	assert.equal(item?.request.kind, 'confirmation');
 	item?.close({ button: DialogResult.Primary });
 
 	assert.deepEqual(await confirmation, { confirmed: true, checkboxChecked: undefined });
@@ -38,12 +31,9 @@ test('dialog service emits lifecycle events for completion and failure', async (
 	assert.deepEqual(events, ['will', 'did', 'will', 'did']);
 });
 
-test("dialog service maps cancellation to a false confirmation", async () => {
+test('dialog service maps cancellation to a false confirmation', async () => {
 	using service = new DialogService();
-	const confirmation = service.confirm({
-		message: "Delete item?",
-		primaryButton: "Delete",
-	});
+	const confirmation = service.confirm({ message: 'Delete item?', primaryButton: 'Delete' });
 
 	service.model.dialogs[0]?.cancel();
 
@@ -60,7 +50,7 @@ test('confirmation keeps its checkbox selection', async () => {
 test('action prompt maps a secondary choice to its callback', async () => {
 	using service = new DialogService();
 	const prompt = service.prompt({
-		message: "Save changes?",
+		message: 'Save changes?',
 		buttons: [
 			{ label: 'Save', run: () => 'save' },
 			{ label: "Don't Save", run: () => 'discard' },
@@ -81,14 +71,31 @@ test('action prompt executes only the chosen button with its checkbox result', a
 		message: 'Choose action',
 		checkbox: { label: 'Remember choice' },
 		buttons: [
-			{ label: 'First', run: () => { calls.push('first'); return 'first'; } },
-			{ label: 'Second', run: ({ checkboxChecked }) => { calls.push(`second:${checkboxChecked}`); return 'second'; } },
+			{
+				label: 'First',
+				run: () => {
+					calls.push('first');
+					return 'first';
+				},
+			},
+			{
+				label: 'Second',
+				run: ({ checkboxChecked }) => {
+					calls.push(`second:${checkboxChecked}`);
+					return 'second';
+				},
+			},
 		],
 	});
 	assert.deepEqual(service.model.dialogs[0]?.request, {
-		kind: 'choice', message: 'Choose action', title: 'Confirm', detail: undefined,
+		kind: 'choice',
+		message: 'Choose action',
+		title: 'Confirm',
+		detail: undefined,
 		severity: undefined,
-		checkbox: { label: 'Remember choice' }, buttons: ['First', 'Second'], cancelButton: 'Cancel',
+		checkbox: { label: 'Remember choice' },
+		buttons: ['First', 'Second'],
+		cancelButton: 'Cancel',
 	});
 	service.model.dialogs[0]?.close({ button: DialogResult.Primary, buttonIndex: 1, checkboxChecked: true });
 	assert.deepEqual(await prompt, { result: 'second', checkboxChecked: true });
@@ -98,7 +105,8 @@ test('action prompt executes only the chosen button with its checkbox result', a
 test('action prompt runs a custom cancel callback and leaves a plain cancel empty', async () => {
 	using service = new DialogService();
 	const custom = service.prompt({
-		message: 'Choose action', buttons: [{ label: 'Apply', run: () => 'apply' }],
+		message: 'Choose action',
+		buttons: [{ label: 'Apply', run: () => 'apply' }],
 		cancelButton: { label: 'Skip', run: () => 'skip' },
 	});
 	service.model.dialogs[0]?.cancel();
@@ -108,30 +116,23 @@ test('action prompt runs a custom cancel callback and leaves a plain cancel empt
 	assert.deepEqual(await plain, { result: undefined, checkboxChecked: undefined });
 });
 
-test("input dialog returns values and checkbox state from the selected action", async () => {
+test('input dialog returns values and checkbox state from the selected action', async () => {
 	using service = new DialogService();
 	const input = service.input({
-		message: "Server address",
-		inputs: [{ value: "https://" }],
-		checkbox: { label: "Remember server" },
+		message: 'Server address',
+		inputs: [{ value: 'https://' }],
+		checkbox: { label: 'Remember server' },
 	});
 	const item = service.model.dialogs[0];
-	assert.equal(item?.request.kind, "input");
-	item?.close({ button: DialogResult.Primary, values: ["https://example.test"], checkboxChecked: true });
-	assert.deepEqual(await input, {
-		confirmed: true,
-		values: ["https://example.test"],
-		checkboxChecked: true,
-	});
+	assert.equal(item?.request.kind, 'input');
+	item?.close({ button: DialogResult.Primary, values: ['https://example.test'], checkboxChecked: true });
+	assert.deepEqual(await input, { confirmed: true, values: ['https://example.test'], checkboxChecked: true });
 });
 
-test("disposing dialog service cancels every queued model request", async () => {
+test('disposing dialog service cancels every queued model request', async () => {
 	const service = new DialogService();
-	const confirmation = service.confirm({ message: "Active" });
-	const message = service.showMessage({
-		severity: DialogSeverity.Warning,
-		message: "Queued",
-	});
+	const confirmation = service.confirm({ message: 'Active' });
+	const message = service.showMessage({ severity: DialogSeverity.Warning, message: 'Queued' });
 
 	assert.equal(service.model.dialogs.length, 2);
 	service.dispose();
@@ -141,31 +142,52 @@ test("disposing dialog service cancels every queued model request", async () => 
 	assert.equal(service.model.dialogs.length, 0);
 });
 
-test("dialog service propagates model presentation failures", async () => {
+test('dialog service propagates model presentation failures', async () => {
 	using service = new DialogService();
-	const result = service.showMessage({
-		severity: DialogSeverity.Error,
-		message: "Failure",
-	});
+	const result = service.showMessage({ severity: DialogSeverity.Error, message: 'Failure' });
 
-	service.model.dialogs[0]?.fail(new Error("render failed"));
+	service.model.dialogs[0]?.fail(new Error('render failed'));
 
 	await assert.rejects(result, /render failed/);
 	assert.equal(service.model.dialogs.length, 0);
 });
 
-test("info, warn, and error use the dialog queue with their severity", async () => {
+test('info, warn, and error use the dialog queue with their severity', async () => {
 	using service = new DialogService();
 	const results = [
-		service.info("Information", "First detail"),
-		service.warn("Warning", "Second detail"),
-		service.error("Failure", "Third detail"),
+		service.info('Information', 'First detail'),
+		service.warn('Warning', 'Second detail'),
+		service.error('Failure', 'Third detail'),
 	];
-	assert.deepEqual(service.model.dialogs.map(item => item.request), [
-		{ kind: "message", severity: DialogSeverity.Info, message: "Information", detail: "First detail", title: "Information", primaryButton: "OK" },
-		{ kind: "message", severity: DialogSeverity.Warning, message: "Warning", detail: "Second detail", title: "Warning", primaryButton: "OK" },
-		{ kind: "message", severity: DialogSeverity.Error, message: "Failure", detail: "Third detail", title: "Error", primaryButton: "OK" },
-	]);
+	assert.deepEqual(
+		service.model.dialogs.map(item => item.request),
+		[
+			{
+				kind: 'message',
+				severity: DialogSeverity.Info,
+				message: 'Information',
+				detail: 'First detail',
+				title: 'Information',
+				primaryButton: 'OK',
+			},
+			{
+				kind: 'message',
+				severity: DialogSeverity.Warning,
+				message: 'Warning',
+				detail: 'Second detail',
+				title: 'Warning',
+				primaryButton: 'OK',
+			},
+			{
+				kind: 'message',
+				severity: DialogSeverity.Error,
+				message: 'Failure',
+				detail: 'Third detail',
+				title: 'Error',
+				primaryButton: 'OK',
+			},
+		],
+	);
 	for (const item of service.model.dialogs) item.close({ button: DialogResult.Primary });
 	await Promise.all(results);
 });

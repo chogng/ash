@@ -2,52 +2,59 @@ import { createTextModelFeatures } from '../../../../common/model/modelFeatures.
 import { registerTextModelFeatures } from '../../../../common/model/textModelFeatures.js';
 import { after as afterModelFeatures } from 'mocha';
 import { registerTestTokens } from '../../../../test/common/testTokenization.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { createRemoveMatchingBracketsCommand } from "../../common/bracketEditing.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { createRemoveMatchingBracketsCommand } from '../../common/bracketEditing.js';
 import { TestLanguageConfigurationService } from '../../../../test/common/modes/testLanguageConfigurationService.js';
-import { Selection } from "../../../../common/core/selection.js";
-import { Position } from "../../../../common/core/position.js";
-import { TextModel } from "../../../../common/model/textModel.js";
+import { Selection } from '../../../../common/core/selection.js';
+import { Position } from '../../../../common/core/position.js';
+import { TextModel } from '../../../../common/model/textModel.js';
 import { createTestCursorsController } from '../../../../test/common/testCursorConfiguration.js';
 
-test("Remove matching brackets deletes distinct model pairs atomically and restores undo", () => {
+test('Remove matching brackets deletes distinct model pairs atomically and restores undo', () => {
 	using configurations = configurationsForBrackets();
-	using model = new TextModel("{(value)}", { languageId: "typescript", languageConfigurationService: configurations });
+	using model = new TextModel('{(value)}', {
+		languageId: 'typescript',
+		languageConfigurationService: configurations,
+	});
 	const bracketPairs = model.bracketPairs;
-	using selections = createTestCursorsController(model, primaryFirst([
-		Selection.fromPositions(new Position((0) + 1, (0) + 1)),
-		Selection.fromPositions(new Position((0) + 1, (1) + 1)),
-	], 1));
+	using selections = createTestCursorsController(
+		model,
+		primaryFirst(
+			[Selection.fromPositions(new Position(0 + 1, 0 + 1)), Selection.fromPositions(new Position(0 + 1, 1 + 1))],
+			1,
+		),
+	);
 	assert.equal(bracketPairs.getBracketPairsInRange(model.getFullModelRange()).toArray().length, 2);
 	const commands = createRemoveMatchingBracketsCommand(bracketPairs, selections.getSelections());
 	assert.ok(commands);
 	selections.executeCommands(commands);
-	assert.equal(model.getText(), "value");
+	assert.equal(model.getText(), 'value');
 	assert.deepEqual(bracketPairs.getBracketsInRange(model.getFullModelRange()).toArray(), []);
-	assert.deepEqual(selections.getSelections(), [Selection.fromPositions(new Position((0) + 1, (0) + 1))]);
+	assert.deepEqual(selections.getSelections(), [Selection.fromPositions(new Position(0 + 1, 0 + 1))]);
 	selections.context.model.undo();
-	assert.equal(model.getText(), "{(value)}");
+	assert.equal(model.getText(), '{(value)}');
 });
 
-test("Remove matching brackets leaves non-bracket or range selections alone", async () => {
+test('Remove matching brackets leaves non-bracket or range selections alone', async () => {
 	using configurations = configurationsForBrackets();
-	using model = new TextModel("// ()", { languageId: "typescript", languageConfigurationService: configurations });
-	using tokens = registerTestTokens(new Map([
-		['// ()', [{ offset: 0, type: 'comment' }]],
-	]));
+	using model = new TextModel('// ()', { languageId: 'typescript', languageConfigurationService: configurations });
+	using tokens = registerTestTokens(new Map([['// ()', [{ offset: 0, type: 'comment' }]]]));
 	model.tokenization.forceTokenization(model.getLineCount());
 	const bracketPairs = model.bracketPairs;
-	const cursor = [Selection.fromPositions(new Position((0) + 1, (3) + 1))];
+	const cursor = [Selection.fromPositions(new Position(0 + 1, 3 + 1))];
 	assert.equal(createRemoveMatchingBracketsCommand(bracketPairs, cursor), undefined);
-	const range = [Selection.fromPositions(new Position((0) + 1, (0) + 1), new Position((0) + 1, (2) + 1))];
+	const range = [Selection.fromPositions(new Position(0 + 1, 0 + 1), new Position(0 + 1, 2 + 1))];
 	assert.equal(createRemoveMatchingBracketsCommand(bracketPairs, range), undefined);
 });
 
 for (const reversed of [false, true]) {
 	test(`Remove matching brackets preserves unrelated ${reversed ? 'reversed' : 'forward'} selections`, () => {
 		using configurations = configurationsForBrackets();
-		using model = new TextModel('(value) keep', { languageId: "typescript", languageConfigurationService: configurations });
+		using model = new TextModel('(value) keep', {
+			languageId: 'typescript',
+			languageConfigurationService: configurations,
+		});
 		const bracketPairs = model.bracketPairs;
 		const other = reversed ? new Selection(1, 13, 1, 9) : new Selection(1, 9, 1, 13);
 		using cursors = createTestCursorsController(model, [new Selection(1, 1, 1, 1), other]);
@@ -55,7 +62,10 @@ for (const reversed of [false, true]) {
 		assert.ok(commands);
 		cursors.executeCommands(commands);
 		assert.equal(model.getText(), 'value keep');
-		assert.deepEqual(cursors.getSelections(), [new Selection(1, 1, 1, 1), reversed ? new Selection(1, 11, 1, 7) : new Selection(1, 7, 1, 11)]);
+		assert.deepEqual(cursors.getSelections(), [
+			new Selection(1, 1, 1, 1),
+			reversed ? new Selection(1, 11, 1, 7) : new Selection(1, 7, 1, 11),
+		]);
 		model.undo();
 		assert.equal(model.getText(), '(value) keep');
 	});
@@ -63,9 +73,12 @@ for (const reversed of [false, true]) {
 
 function configurationsForBrackets(): TestLanguageConfigurationService {
 	const configurations = new TestLanguageConfigurationService();
-	configurations.register("typescript", {
-		comments: { lineComment: "//", blockComment: ["/*", "*/"] },
-		brackets: [["(", ")"], ["{", "}"]],
+	configurations.register('typescript', {
+		comments: { lineComment: '//', blockComment: ['/*', '*/'] },
+		brackets: [
+			['(', ')'],
+			['{', '}'],
+		],
 	});
 	return configurations;
 }

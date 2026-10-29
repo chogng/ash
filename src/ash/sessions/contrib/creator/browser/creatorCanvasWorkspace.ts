@@ -26,19 +26,30 @@ export abstract class CreatorCanvasWorkspace extends Disposable implements ICrea
 	protected actionsDomNode!: HTMLElement;
 	protected toolbar!: WorkbenchToolBar;
 	protected readonly hasWorkspaceActions: boolean = true;
-	protected get editor(): DesignEditorWidget { return this.page.editor; }
-	protected get document(): DesignDocumentController { return this.page.workingCopy; }
-	protected get commands(): DocumentCommands { return new DocumentCommands(this.document.model); }
+	protected get editor(): DesignEditorWidget {
+		return this.page.editor;
+	}
+	protected get document(): DesignDocumentController {
+		return this.page.workingCopy;
+	}
+	protected get commands(): DocumentCommands {
+		return new DocumentCommands(this.document.model);
+	}
 
 	constructor(
 		protected readonly ownerDocument: Document,
 		public readonly mode: CreatorMode,
 		@IInstantiationService protected readonly instantiation: IInstantiationService,
 		@IContextMenuService private readonly contextMenus: IContextMenuService,
-	) { super(); }
+	) {
+		super();
+	}
 
 	public create(container: HTMLElement): void {
-		this.domNode = h(this.ownerDocument, 'section', { className: 'ash-creator-workspace', attributes: { 'data-creator-mode': this.mode } });
+		this.domNode = h(this.ownerDocument, 'section', {
+			className: 'ash-creator-workspace',
+			attributes: { 'data-creator-mode': this.mode },
+		});
 		if (this.hasWorkspaceActions) {
 			this.actionsDomNode = h(this.ownerDocument, 'div', { className: 'ash-creator-workspace-actions' });
 			this.domNode.append(this.actionsDomNode);
@@ -49,7 +60,11 @@ export abstract class CreatorCanvasWorkspace extends Disposable implements ICrea
 		this.page = this._register(this.instantiation.createInstance(DesignEditorPage, this.mode));
 		this.page.create(this.contentDomNode);
 		if (this.hasWorkspaceActions) {
-			this.toolbar = this._register(new WorkbenchToolBar(this.actionsDomNode, this.contextMenus, { ariaLabel: localize('sessions.creator.workspaceActions', 'Workspace actions') }));
+			this.toolbar = this._register(
+				new WorkbenchToolBar(this.actionsDomNode, this.contextMenus, {
+					ariaLabel: localize('sessions.creator.workspaceActions', 'Workspace actions'),
+				}),
+			);
 		}
 		this.createModeContent();
 		if (this.hasWorkspaceActions) {
@@ -61,33 +76,65 @@ export abstract class CreatorCanvasWorkspace extends Disposable implements ICrea
 	}
 
 	protected updateActions(): void {
-		if (!this.hasWorkspaceActions) { return; }
+		if (!this.hasWorkspaceActions) {
+			return;
+		}
 		this.toolbar.setActions(this.getModeActions(), [
 			this.action('open', localize('sessions.creator.open', 'Open document'), () => this.document.openDocument()),
 			this.action('save', localize('sessions.creator.save', 'Save document'), () => this.editor.saveDocument()),
-			this.action('exportSvg', localize('sessions.design.export', 'Export SVG'), () => this.document.exportDocument()),
+			this.action('exportSvg', localize('sessions.design.export', 'Export SVG'), () =>
+				this.document.exportDocument(),
+			),
 		]);
 	}
 
-	protected createModeContent(): void { }
-	protected getModeActions(): readonly IAction[] { return []; }
+	protected createModeContent(): void {}
+	protected getModeActions(): readonly IAction[] {
+		return [];
+	}
 	protected action(id: string, label: string, run: () => unknown, enabled = true): IAction {
-		return { id: `sessions.creator.${this.mode}.${id}`, label, tooltip: label, run, enabled: enabled && !this.document.isBusy };
+		return {
+			id: `sessions.creator.${this.mode}.${id}`,
+			label,
+			tooltip: label,
+			run,
+			enabled: enabled && !this.document.isBusy,
+		};
 	}
 	protected addFrame(width: number, height: number): string {
 		this.editor.setMode(DesignMode.Design);
 		const frames = this.document.model.value.shapes;
 		const x = Math.max(0, ...frames.map(shape => shape.x + shape.width + 40));
-		const frame: DesignShape = { id: generateUuid(), kind: 'frame', x, y: 0, width, height, rotation: 0, fill: '#ffffff', clip: true, children: [] };
+		const frame: DesignShape = {
+			id: generateUuid(),
+			kind: 'frame',
+			x,
+			y: 0,
+			width,
+			height,
+			rotation: 0,
+			fill: '#ffffff',
+			clip: true,
+			children: [],
+		};
 		this.commands.insertShape(frame);
 		this.editor.revealShape(frame.id);
 		return frame.id;
 	}
-	public setVisible(visible: boolean): void { this.page.setVisible(visible ? true : false); }
+	public setVisible(visible: boolean): void {
+		this.page.setVisible(visible ? true : false);
+	}
 	public layout(dimension: IDimension): void {
 		this.domNode.classList.toggle('narrow', dimension.width < 600);
-		this.page.layout({ width: dimension.width, height: Math.max(0, dimension.height - (this.actionsDomNode?.offsetHeight ?? 0)) });
+		this.page.layout({
+			width: dimension.width,
+			height: Math.max(0, dimension.height - (this.actionsDomNode?.offsetHeight ?? 0)),
+		});
 	}
-	public focus(): void { this.page.focus(); }
-	public getAccessibleContent(): string { return this.editor.getAccessibleContent(); }
+	public focus(): void {
+		this.page.focus();
+	}
+	public getAccessibleContent(): string {
+		return this.editor.getAccessibleContent();
+	}
 }

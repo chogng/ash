@@ -9,7 +9,10 @@ import { DisposableStore, toDisposable } from '../../../../../../base/common/lif
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../../nls.js';
 import { AgentHostConnectionsService } from '../../../../../../platform/agentHost/browser/agentHostConnectionsService.js';
-import { IAgentHostConnectionsService, agentHostConnectionAddress } from '../../../../../../platform/agentHost/common/agentHostConnectionsService.js';
+import {
+	IAgentHostConnectionsService,
+	agentHostConnectionAddress,
+} from '../../../../../../platform/agentHost/common/agentHostConnectionsService.js';
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { ILanguageModelsConfigurationService } from '../../../../../../workbench/contrib/chat/common/languageModelsConfiguration.js';
@@ -19,21 +22,41 @@ import type { Automation, IAutomationBackendService } from '../../../../../../pl
 import { ContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService } from '../../../../../../platform/notification/common/notification.js';
-import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../../platform/quickinput/common/quickInput.js';
+import {
+	IQuickInputService,
+	type IQuickPick,
+	type IQuickPickItem,
+} from '../../../../../../platform/quickinput/common/quickInput.js';
 import { TestQuickInputService } from '../../../../../../platform/quickinput/test/browser/testQuickInputService.js';
-import { IRemoteConnectionApi, IRemoteConnectionService, RemoteConnectionService, type RemoteConnectionDefinition } from '../../../../../../platform/remote/common/remoteConnectionService.js';
+import {
+	IRemoteConnectionApi,
+	IRemoteConnectionService,
+	RemoteConnectionService,
+	type RemoteConnectionDefinition,
+} from '../../../../../../platform/remote/common/remoteConnectionService.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { AgentHostFileSystemProvider } from '../../../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
 import { FileService } from '../../../../../../platform/files/common/fileService.js';
 import { IFileService, type IFileChangeEvent } from '../../../../../../platform/files/common/files.js';
 import { createSshRemoteWorkspaceUri } from '../../../../../../platform/remote/common/remote.js';
-import { AgentHostFileSystemService, IAgentHostFileSystemService } from '../../../../../../workbench/services/agentHost/common/agentHostFileSystemService.js';
-import { IRendererHostService, type IRendererAgentHost, type IRendererAgentHostConnection, type IRendererHost } from '../../../../../../platform/renderer/common/rendererHost.js';
+import {
+	AgentHostFileSystemService,
+	IAgentHostFileSystemService,
+} from '../../../../../../workbench/services/agentHost/common/agentHostFileSystemService.js';
+import {
+	IRendererHostService,
+	type IRendererAgentHost,
+	type IRendererAgentHostConnection,
+	type IRendererHost,
+} from '../../../../../../platform/renderer/common/rendererHost.js';
 import { createDisconnectedRendererApi } from '../../../../../../workbench/browser/rendererApi.js';
 import { CommandService } from '../../../../../../workbench/services/commands/common/commandService.js';
 import { productLanguagePackCatalogs } from '../../../../../../workbench/services/localization/common/localizationCatalogs.js';
 import { TestNotificationService } from '../../../../../../workbench/services/notification/test/common/testNotificationService.js';
-import { ISessionsProvidersService, SessionsProvidersService } from '../../../../../services/sessions/browser/sessionsProvidersService.js';
+import {
+	ISessionsProvidersService,
+	SessionsProvidersService,
+} from '../../../../../services/sessions/browser/sessionsProvidersService.js';
 import { ProviderAutomationService } from '../../../../automations/browser/providerAutomationService.js';
 import { SSHAgentHostContribution } from '../../browser/sshAgentHost.contribution.js';
 
@@ -52,7 +75,9 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	browserEnvironment.window.document.body.append(container);
 	lifetime.add(toDisposable(() => container.remove()));
 	const contexts = lifetime.add(new ContextKeyService());
-	const quickInput = lifetime.add(new TestQuickInputService({ container, instantiationService: services, contextKeyService: contexts }));
+	const quickInput = lifetime.add(
+		new TestQuickInputService({ container, instantiationService: services, contextKeyService: contexts }),
+	);
 	services.registerInstance(IQuickInputService, quickInput);
 	const notifications = lifetime.add(new TestNotificationService());
 	services.registerInstance(INotificationService, notifications);
@@ -61,21 +86,30 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	const registry = lifetime.add(new SessionsProvidersService());
 	services.registerInstance(ISessionsProvidersService, registry);
 	services.registerInstance(IRemoteConnectionApi, {
-		available: true, list: async () => remoteConnections,
-		save: async value => value, update: async (_name, value) => value,
-		remove: async () => undefined, connect: async () => { throw new Error('Additional hosts must not open another window'); },
+		available: true,
+		list: async () => remoteConnections,
+		save: async value => value,
+		update: async (_name, value) => value,
+		remove: async () => undefined,
+		connect: async () => {
+			throw new Error('Additional hosts must not open another window');
+		},
 	});
 	services.registerInstance(IRemoteConnectionService, lifetime.add(services.createInstance(RemoteConnectionService)));
 	const opened: string[] = [];
 	const closed: string[] = [];
 	const renamed: string[] = [];
 	const deleted: string[] = [];
-	let openResult: ((target: RemoteConnectionDefinition, host: IRendererAgentHost) => Promise<IRendererAgentHost>) | undefined;
+	let openResult:
+		((target: RemoteConnectionDefinition, host: IRendererAgentHost) => Promise<IRendererAgentHost>) | undefined;
 	const renderer = createDisconnectedRendererApi();
 	services.registerInstance(IConfigurationService, lifetime.add(new InMemoryConfigurationService()));
 	services.registerInstance(ILanguageModelsConfigurationService, {
-		onDidChangeModels: Event.None, getDefaultNewChatModel: () => undefined,
-		rememberSelectedModel: () => { }, isModelVisible: () => true, setModelVisible: async () => { },
+		onDidChangeModels: Event.None,
+		getDefaultNewChatModel: () => undefined,
+		rememberSelectedModel: () => {},
+		isModelVisible: () => true,
+		setModelVisible: async () => {},
 	});
 	const hostChanges = lifetime.add(new Emitter<void>());
 	const hosts = new Map<string, IRendererAgentHostConnection>();
@@ -86,58 +120,96 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	const files = lifetime.add(new FileService());
 	services.registerInstance(IFileService, files);
 	const primaryRequests: string[] = [];
-	const primary = lifetime.add(new AgentHostFileSystemProvider({
-		api: {
-			...renderer.fs,
-			resolvePath: async resource => { primaryRequests.push(resource.toString()); throw new Error('Unexpected primary file fallback'); },
-		},
-		resourceApi: renderer.resource,
-		directories: () => [{ uri: URI.file('/primary'), target: { type: 'environment', dirId: 'primary' } }],
-	}));
-	services.registerInstance(IAgentHostFileSystemService, lifetime.add(services.createInstance(AgentHostFileSystemService, primary, undefined)));
+	const primary = lifetime.add(
+		new AgentHostFileSystemProvider({
+			api: {
+				...renderer.fs,
+				resolvePath: async resource => {
+					primaryRequests.push(resource.toString());
+					throw new Error('Unexpected primary file fallback');
+				},
+			},
+			resourceApi: renderer.resource,
+			directories: () => [{ uri: URI.file('/primary'), target: { type: 'environment', dirId: 'primary' } }],
+		}),
+	);
+	services.registerInstance(
+		IAgentHostFileSystemService,
+		lifetime.add(services.createInstance(AgentHostFileSystemService, primary, undefined)),
+	);
 	type HostEvent = Parameters<Parameters<IRendererHost['events']['subscribe']>[0]>[0];
 	const hostEvents = new Map<string, Emitter<HostEvent>>();
-	const fileRequests: { host: string; operation: string; path: string; }[] = [];
+	const fileRequests: { host: string; operation: string; path: string }[] = [];
 	const resourceRequests: string[] = [];
 	const openResources = new Set<string>();
 
 	services.registerInstance(IRendererHostService, {
 		...renderer,
 		agentHosts: {
-			get connections() { return [...hosts.values()]; },
+			get connections() {
+				return [...hosts.values()];
+			},
 			onDidChangeConnections: hostChanges.event,
 			disconnect,
-			reconnect: async () => { },
+			reconnect: async () => {},
 			connect: async (target, signal) => {
 				const key = agentHostConnectionAddress(target);
 				const existing = hosts.get(key);
 				if (existing?.host) return existing.host;
 				opened.push(target.name);
 				const session: AgentSession = {
-					sessionId: 'same-session', title: target.name, status: 'active',
-					manager: { status: 'idle', statusChangedAtUnixMs: 0 }, threads: [],
+					sessionId: 'same-session',
+					title: target.name,
+					status: 'active',
+					manager: { status: 'idle', statusChangedAtUnixMs: 0 },
+					threads: [],
 				};
 				const plan: Automation = {
-					id: 'same-automation', revision: 1, status: 'enabled', createdAt: 1, updatedAt: 1, nextRunAt: null,
-					definition: { title: target.name, prompt: 'Review', directory: '/srv/project', session: { type: 'new' }, schedule: { type: 'interval', anchor: 1, minutes: 60 } },
+					id: 'same-automation',
+					revision: 1,
+					status: 'enabled',
+					createdAt: 1,
+					updatedAt: 1,
+					nextRunAt: null,
+					definition: {
+						title: target.name,
+						prompt: 'Review',
+						directory: '/srv/project',
+						session: { type: 'new' },
+						schedule: { type: 'interval', anchor: 1, minutes: 60 },
+					},
 				};
 				const automation: IAutomationBackendService = {
 					onDidChange: Event.None,
-					list: async () => [plan], runs: async () => [], preview: async () => [],
-					delete: async id => { deleted.push(`${target.name}:${id}`); },
-					save: async () => { throw new Error('Unexpected save'); },
-					run: async () => { throw new Error('Unexpected run'); },
-					getRun: async () => { throw new Error('Unexpected run read'); },
-					stop: async () => { throw new Error('Unexpected stop'); },
-					readResult: async () => { throw new Error('Unexpected result'); },
+					list: async () => [plan],
+					runs: async () => [],
+					preview: async () => [],
+					delete: async id => {
+						deleted.push(`${target.name}:${id}`);
+					},
+					save: async () => {
+						throw new Error('Unexpected save');
+					},
+					run: async () => {
+						throw new Error('Unexpected run');
+					},
+					getRun: async () => {
+						throw new Error('Unexpected run read');
+					},
+					stop: async () => {
+						throw new Error('Unexpected stop');
+					},
+					readResult: async () => {
+						throw new Error('Unexpected result');
+					},
 				};
 				const events = lifetime.add(new Emitter<HostEvent>());
 				hostEvents.set(target.name, events);
-				const resources = new Map<string, { bytes: Buffer; metadata: ResourceMetadataResult; }>();
+				const resources = new Map<string, { bytes: Buffer; metadata: ResourceMetadataResult }>();
 				let nextResource = 0;
 				let nextRevision = 1;
-				const disk = new Map<string, { bytes: Buffer; revision: string; }>();
-				const readStored = (path: string): { bytes: Buffer; revision: string; } => {
+				const disk = new Map<string, { bytes: Buffer; revision: string }>();
+				const readStored = (path: string): { bytes: Buffer; revision: string } => {
 					let stored = disk.get(path);
 					if (!stored) {
 						stored = { bytes: Buffer.from(`${target.name}:${path}`), revision: 'r1' };
@@ -148,10 +220,19 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 				const writeStored = (path: string, bytes: Buffer) => {
 					const revision = `r${++nextRevision}`;
 					disk.set(path, { bytes: Buffer.from(bytes), revision });
-					return { metadata: { fileType: 'file' as const, sizeBytes: bytes.byteLength, readonly: false, modifiedAtMillis: null }, revision };
+					return {
+						metadata: {
+							fileType: 'file' as const,
+							sizeBytes: bytes.byteLength,
+							readonly: false,
+							modifiedAtMillis: null,
+						},
+						revision,
+					};
 				};
 				const api: IRendererHost = {
-					...renderer, automation,
+					...renderer,
+					automation,
 					events: { subscribe: listener => events.event(listener) },
 					resource: {
 						connectionGeneration: 0,
@@ -165,10 +246,20 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 							assert.ok(resource, 'resource belongs to this host connection');
 							const bytes = resource.bytes.subarray(offset, offset + maxBytes);
 							resourceRequests.push(`${target.name}:read:${resourceId}`);
-							return { resourceId, offset, dataBase64: bytes.toString('base64'), decodedLength: bytes.byteLength, eof: offset + bytes.byteLength === resource.bytes.byteLength };
+							return {
+								resourceId,
+								offset,
+								dataBase64: bytes.toString('base64'),
+								decodedLength: bytes.byteLength,
+								eof: offset + bytes.byteLength === resource.bytes.byteLength,
+							};
 						},
 						release: async ({ resourceId }) => {
-							assert.equal(resources.delete(resourceId), true, 'release the allocating host connection resource');
+							assert.equal(
+								resources.delete(resourceId),
+								true,
+								'release the allocating host connection resource',
+							);
 							resourceRequests.push(`${target.name}:release:${resourceId}`);
 							openResources.delete(`${target.name}:${resourceId}`);
 						},
@@ -188,7 +279,12 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 							const bytes = Buffer.from(stored.bytes);
 							// Hosts deliberately reuse opaque IDs; only their allocating connection can consume them.
 							const resourceId = `resource-${++nextResource}`;
-							const metadata = { resourceId, mimeType: 'text/plain', size: bytes.byteLength, sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}` };
+							const metadata = {
+								resourceId,
+								mimeType: 'text/plain',
+								size: bytes.byteLength,
+								sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+							};
 							resources.set(resourceId, { bytes, metadata });
 							openResources.add(`${target.name}:${resourceId}`);
 							resourceRequests.push(`${target.name}:open:${resourceId}`);
@@ -208,15 +304,25 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 					appServer: { ...renderer.appServer, getConnectionState: async () => 'ready' },
 					session: {
 						...renderer.session,
-						subscribeCatalog: async () => ({ sessions: [session] }), unsubscribeCatalog: async () => { },
-						rename: async params => { renamed.push(`${target.name}:${params.sessionId}`); return { session: { ...session, title: params.title }, agentTree: { roots: [] } }; },
+						subscribeCatalog: async () => ({ sessions: [session] }),
+						unsubscribeCatalog: async () => {},
+						rename: async params => {
+							renamed.push(`${target.name}:${params.sessionId}`);
+							return { session: { ...session, title: params.title }, agentTree: { roots: [] } };
+						},
 					},
 				};
 				const host: IRendererAgentHost = {
-					id: target.name, connection: target, api, ...toDisposable(() => {
+					id: target.name,
+					connection: target,
+					api,
+					...toDisposable(() => {
 						closed.push(target.name);
-						if (hosts.get(key)?.host === host) { hosts.delete(key); hostChanges.fire(); }
-					})
+						if (hosts.get(key)?.host === host) {
+							hosts.delete(key);
+							hostChanges.fire();
+						}
+					}),
 				};
 				try {
 					await raceCancellationError(openResult ? openResult(target, host) : Promise.resolve(host), signal);
@@ -224,11 +330,17 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 					hosts.set(key, { id: host.id, connection: target, state: 'ready', host });
 					hostChanges.fire();
 					return host;
-				} catch (error) { host.dispose(); throw error; }
+				} catch (error) {
+					host.dispose();
+					throw error;
+				}
 			},
 		},
 	});
-	services.registerInstance(IAgentHostConnectionsService, lifetime.add(services.createInstance(AgentHostConnectionsService)));
+	services.registerInstance(
+		IAgentHostConnectionsService,
+		lifetime.add(services.createInstance(AgentHostConnectionsService)),
+	);
 	const contribution = lifetime.add(services.createInstance(SSHAgentHostContribution));
 	const commands = lifetime.add(new CommandService(services));
 	const automations = lifetime.add(services.createInstance(ProviderAutomationService));
@@ -247,7 +359,9 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	async function connect(name: string): Promise<void> {
 		const result = commands.executeCommand(manageHosts);
 		const shown = new DeferredPromise<void>();
-		using listener = quickInput.onShow(() => { void shown.complete(); });
+		using listener = quickInput.onShow(() => {
+			void shown.complete();
+		});
 		await choose('Connect a Saved SSH Host…');
 		await shown.p;
 		await choose(name);
@@ -255,10 +369,35 @@ function fixture(remoteConnections: readonly RemoteConnectionDefinition[] = targ
 	}
 	return {
 		[Symbol.dispose]: () => lifetime.dispose(),
-		services, commands, contribution, registry, automations, quickInput, errors,
-		opened, closed, renamed, deleted, connect, choose, picker, files, fileRequests, primaryRequests, resourceRequests, openResources,
-		changeFiles: (name: string, path: string) => hostEvents.get(name)!.fire({ method: 'fs/changed', params: { type: 'pathsChanged', dirId: `agent-host:${name}`, paths: [path] } }),
-		deferOpen: (next: typeof openResult) => { openResult = next; },
+		services,
+		commands,
+		contribution,
+		registry,
+		automations,
+		quickInput,
+		errors,
+		opened,
+		closed,
+		renamed,
+		deleted,
+		connect,
+		choose,
+		picker,
+		files,
+		fileRequests,
+		primaryRequests,
+		resourceRequests,
+		openResources,
+		changeFiles: (name: string, path: string) =>
+			hostEvents
+				.get(name)!
+				.fire({
+					method: 'fs/changed',
+					params: { type: 'pathsChanged', dirId: `agent-host:${name}`, paths: [path] },
+				}),
+		deferOpen: (next: typeof openResult) => {
+			openResult = next;
+		},
 	};
 }
 
@@ -290,9 +429,15 @@ test('disconnecting one Agents host unregisters its provider and retains the oth
 	await context.choose('build-a');
 	await result;
 	assert.deepEqual(context.closed, ['build-a']);
-	assert.deepEqual(context.registry.getProviders().map(provider => provider.label), ['build-b']);
+	assert.deepEqual(
+		context.registry.getProviders().map(provider => provider.label),
+		['build-b'],
+	);
 	await context.automations.refresh();
-	assert.deepEqual(context.automations.automations.get().map(plan => plan.name), ['build-b']);
+	assert.deepEqual(
+		context.automations.automations.get().map(plan => plan.name),
+		['build-b'],
+	);
 });
 
 test('reselecting an already connected target shares the existing scope', async () => {
@@ -307,7 +452,11 @@ test('closing the Agents owner retires pending setup and releases its late resul
 	using context = fixture();
 	const entered = new DeferredPromise<void>();
 	const release = new DeferredPromise<void>();
-	context.deferOpen(async (_target, host) => { void entered.complete(); await release.p; return host; });
+	context.deferOpen(async (_target, host) => {
+		void entered.complete();
+		await release.p;
+		return host;
+	});
 	const connecting = context.connect('build-a');
 	await entered.p;
 	context.contribution.dispose();
@@ -333,9 +482,10 @@ test('the host picker uses Chinese labels and closes on cancellation and owner d
 		await interrupted;
 		assert.equal(context.quickInput.currentQuickInput, undefined);
 		assert.deepEqual(context.opened, []);
-	} finally { resetNlsResolver(); }
+	} finally {
+		resetNlsResolver();
+	}
 });
-
 
 test('connected Agents hosts route identical file paths through their own filesystems and retire disconnected routes', async () => {
 	using context = fixture();
@@ -350,8 +500,12 @@ test('connected Agents hosts route identical file paths through their own filesy
 	assert.equal(written.stat.sizeBytes, Buffer.byteLength(updated));
 	assert.equal(written.revision, 'r2');
 	assert.deepEqual(context.resourceRequests, [
-		'build-a:open:resource-1', 'build-a:read:resource-1', 'build-a:release:resource-1',
-		'build-b:open:resource-1', 'build-b:read:resource-1', 'build-b:release:resource-1',
+		'build-a:open:resource-1',
+		'build-a:read:resource-1',
+		'build-a:release:resource-1',
+		'build-b:open:resource-1',
+		'build-b:read:resource-1',
+		'build-b:release:resource-1',
 	]);
 	assert.equal(context.openResources.size, 0);
 	assert.deepEqual(context.fileRequests, [
@@ -396,10 +550,13 @@ test('Agents file changes preserve their originating authority and stop after sc
 	using listener = context.files.onDidChangeFiles(change => changes.push(change));
 	context.changeFiles('build-a', 'main.ts');
 	context.changeFiles('build-b', 'main.ts');
-	assert.deepEqual(changes.map(change => change.resources?.map(resource => resource.toString())), [
-		[URI.joinPath(createSshRemoteWorkspaceUri(targets[0]!.host, targets[0]!.workspace), 'main.ts').toString()],
-		[URI.joinPath(createSshRemoteWorkspaceUri(targets[1]!.host, targets[1]!.workspace), 'main.ts').toString()],
-	]);
+	assert.deepEqual(
+		changes.map(change => change.resources?.map(resource => resource.toString())),
+		[
+			[URI.joinPath(createSshRemoteWorkspaceUri(targets[0]!.host, targets[0]!.workspace), 'main.ts').toString()],
+			[URI.joinPath(createSshRemoteWorkspaceUri(targets[1]!.host, targets[1]!.workspace), 'main.ts').toString()],
+		],
+	);
 	const disconnect = context.commands.executeCommand(manageHosts);
 	await context.choose('build-a');
 	await disconnect;
@@ -407,5 +564,8 @@ test('Agents file changes preserve their originating authority and stop after sc
 	context.changeFiles('build-a', 'retired.ts');
 	assert.equal(changes.length, observed);
 	context.changeFiles('build-b', 'current.ts');
-	assert.deepEqual(changes.at(-1)!.resources?.map(resource => resource.toString()), [URI.joinPath(createSshRemoteWorkspaceUri(targets[1]!.host, targets[1]!.workspace), 'current.ts').toString()]);
+	assert.deepEqual(
+		changes.at(-1)!.resources?.map(resource => resource.toString()),
+		[URI.joinPath(createSshRemoteWorkspaceUri(targets[1]!.host, targets[1]!.workspace), 'current.ts').toString()],
+	);
 });

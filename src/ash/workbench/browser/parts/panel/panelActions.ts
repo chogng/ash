@@ -11,7 +11,10 @@ import { IPaneCompositePartService } from '../../../services/panecomposite/brows
 
 export class TogglePanelAction extends Action2 {
 	public static readonly ID = 'workbench.action.togglePanel';
-	public static readonly LABEL = localize2({ bundle: 'ash.actions', key: 'togglePanelVisibility' }, 'Toggle Panel Visibility');
+	public static readonly LABEL = localize2(
+		{ bundle: 'ash.actions', key: 'togglePanelVisibility' },
+		'Toggle Panel Visibility',
+	);
 	constructor() {
 		super({
 			id: TogglePanelAction.ID,
@@ -25,17 +28,8 @@ export class TogglePanelAction extends Action2 {
 				icon: Lxicon.layoutPanel1,
 			},
 			menu: [
-				{
-					id: MenuId.TitleBar,
-					when: IsAuxiliaryWindowContext.isEqualTo(false),
-					group: 'navigation',
-					order: 9,
-				},
-				{
-					id: MenuId.MenubarViewMenu,
-					group: '2_appearance',
-					order: 11,
-				},
+				{ id: MenuId.TitleBar, when: IsAuxiliaryWindowContext.isEqualTo(false), group: 'navigation', order: 9 },
+				{ id: MenuId.MenubarViewMenu, group: '2_appearance', order: 11 },
 			],
 			f1: true,
 		});
@@ -48,7 +42,11 @@ export class TogglePanelAction extends Action2 {
 		} else {
 			const panes = accessor.get(IPaneCompositePartService);
 			// User-initiated reopening returns input to the retained active view.
-			const panel = await panes.openPaneComposite(panes.getLastActivePaneCompositeId(ViewContainerLocation.Panel), ViewContainerLocation.Panel, true);
+			const panel = await panes.openPaneComposite(
+				panes.getLastActivePaneCompositeId(ViewContainerLocation.Panel),
+				ViewContainerLocation.Panel,
+				true,
+			);
 			if (!panel) layout.showPart('panel');
 		}
 	}
@@ -56,62 +54,68 @@ export class TogglePanelAction extends Action2 {
 
 registerAction2(TogglePanelAction);
 
-registerAction2(class ClosePanelAction extends Action2 {
-	constructor() {
-		super({
-			id: 'workbench.action.closePanel',
-			title: localize2({ bundle: 'ash.actions', key: 'hidePanel' }, 'Hide Panel'),
-			precondition: PanelVisibleContext.isEqualTo(true),
-			f1: true,
-		});
-	}
+registerAction2(
+	class ClosePanelAction extends Action2 {
+		constructor() {
+			super({
+				id: 'workbench.action.closePanel',
+				title: localize2({ bundle: 'ash.actions', key: 'hidePanel' }, 'Hide Panel'),
+				precondition: PanelVisibleContext.isEqualTo(true),
+				f1: true,
+			});
+		}
 
-	public override run(accessor: ServicesAccessor): void {
-		accessor.get(IWorkbenchLayoutService).hidePart('panel');
-	}
-});
+		public override run(accessor: ServicesAccessor): void {
+			accessor.get(IWorkbenchLayoutService).hidePart('panel');
+		}
+	},
+);
 
-registerAction2(class FocusPanelAction extends Action2 {
-	constructor() {
-		super({
-			id: 'workbench.action.focusPanel',
-			title: localize2({ bundle: 'ash.actions', key: 'focusPanel' }, 'Focus into Panel'),
-			f1: true,
-		});
-	}
+registerAction2(
+	class FocusPanelAction extends Action2 {
+		constructor() {
+			super({
+				id: 'workbench.action.focusPanel',
+				title: localize2({ bundle: 'ash.actions', key: 'focusPanel' }, 'Focus into Panel'),
+				f1: true,
+			});
+		}
 
-	public override async run(accessor: ServicesAccessor): Promise<void> {
-		const panes = accessor.get(IPaneCompositePartService);
-		await panes.openPaneComposite(panes.getLastActivePaneCompositeId(ViewContainerLocation.Panel), ViewContainerLocation.Panel, true);
-	}
-});
+		public override async run(accessor: ServicesAccessor): Promise<void> {
+			const panes = accessor.get(IPaneCompositePartService);
+			await panes.openPaneComposite(
+				panes.getLastActivePaneCompositeId(ViewContainerLocation.Panel),
+				ViewContainerLocation.Panel,
+				true,
+			);
+		}
+	},
+);
 
-registerAction2(class ToggleMaximizedPanelAction extends Action2 {
-	constructor() {
-		super({
-			id: 'workbench.action.toggleMaximizedPanel',
-			title: localize2({ bundle: 'ash.actions', key: 'maximizePanel' }, 'Maximize Panel'),
-			tooltip: localize2({ bundle: 'ash.actions', key: 'maximizePanel' }, 'Maximize Panel'),
-			icon: Lxicon.screenFull,
-			toggled: {
-				condition: PanelMaximizedContext.isEqualTo(true),
-				title: localize2({ bundle: 'ash.actions', key: 'restoreEditorArea' }, 'Restore Editor Area'),
-				tooltip: localize2({ bundle: 'ash.actions', key: 'restoreEditorArea' }, 'Restore Editor Area'),
-				icon: Lxicon.screenNormal,
-			},
-			menu: {
-				id: MenuId.PanelTitle,
-				group: 'navigation',
-				order: 40,
-			},
-			f1: true,
-		});
-	}
+registerAction2(
+	class ToggleMaximizedPanelAction extends Action2 {
+		constructor() {
+			super({
+				id: 'workbench.action.toggleMaximizedPanel',
+				title: localize2({ bundle: 'ash.actions', key: 'maximizePanel' }, 'Maximize Panel'),
+				tooltip: localize2({ bundle: 'ash.actions', key: 'maximizePanel' }, 'Maximize Panel'),
+				icon: Lxicon.screenFull,
+				toggled: {
+					condition: PanelMaximizedContext.isEqualTo(true),
+					title: localize2({ bundle: 'ash.actions', key: 'restoreEditorArea' }, 'Restore Editor Area'),
+					tooltip: localize2({ bundle: 'ash.actions', key: 'restoreEditorArea' }, 'Restore Editor Area'),
+					icon: Lxicon.screenNormal,
+				},
+				menu: { id: MenuId.PanelTitle, group: 'navigation', order: 40 },
+				f1: true,
+			});
+		}
 
-	public override run(accessor: ServicesAccessor): void {
-		accessor.get(IWorkbenchLayoutService).toggleMaximizedPanel();
-	}
-});
+		public override run(accessor: ServicesAccessor): void {
+			accessor.get(IWorkbenchLayoutService).toggleMaximizedPanel();
+		}
+	},
+);
 
 MenusRegistry.appendMenuItem(MenuId.PanelTitle, {
 	command: {
@@ -127,8 +131,10 @@ MenusRegistry.appendMenuItem(MenuId.PanelTitle, {
 // All entry points mutate the window layout owner; terminal panes follow its position event.
 const panelPositionMenu = MenuId.for('PanelPositionMenu');
 MenusRegistry.appendMenuItem(MenuId.ViewContainerTitleContext, {
-	submenu: panelPositionMenu, title: localize2('positionPanel', 'Panel Position'),
-	when: ContextKeyExpr.equals('viewContainerLocation', 'panel'), group: '3_layout',
+	submenu: panelPositionMenu,
+	title: localize2('positionPanel', 'Panel Position'),
+	when: ContextKeyExpr.equals('viewContainerLocation', 'panel'),
+	group: '3_layout',
 });
 for (const [position, suffix, title] of [
 	[Position.LEFT, 'Left', localize2('positionPanelLeft', 'Move Panel Left')],
@@ -136,16 +142,20 @@ for (const [position, suffix, title] of [
 	[Position.TOP, 'Top', localize2('positionPanelTop', 'Move Panel to Top')],
 	[Position.BOTTOM, 'Bottom', localize2('positionPanelBottom', 'Move Panel to Bottom')],
 ] as const) {
-	registerAction2(class extends Action2 {
-		constructor() {
-			super({
-				id: `workbench.action.positionPanel${suffix}`, title, f1: true,
-				toggled: PanelPositionContext.isEqualTo(positionToString(position)),
-				menu: { id: panelPositionMenu, group: 'position', order: position },
-			});
-		}
-		override run(accessor: ServicesAccessor): void {
-			accessor.get(IWorkbenchLayoutService).setPanelPosition(position);
-		}
-	});
+	registerAction2(
+		class extends Action2 {
+			constructor() {
+				super({
+					id: `workbench.action.positionPanel${suffix}`,
+					title,
+					f1: true,
+					toggled: PanelPositionContext.isEqualTo(positionToString(position)),
+					menu: { id: panelPositionMenu, group: 'position', order: position },
+				});
+			}
+			override run(accessor: ServicesAccessor): void {
+				accessor.get(IWorkbenchLayoutService).setPanelPosition(position);
+			}
+		},
+	);
 }

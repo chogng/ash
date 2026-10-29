@@ -3,37 +3,63 @@ import { IWorkingCopyService, type IWorkingCopy } from '../../../services/workin
 import { EditorWorkingCopy } from './textResourceEditor.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
-import { type IDimension } from "../../../../base/browser/dom.js";
-import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import { type IDimension } from '../../../../base/browser/dom.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import {
+	Disposable,
+	DisposableStore,
+	MutableDisposable,
+	toDisposable,
+	type IDisposable,
+} from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { raceCancellationError } from '../../../../base/common/async.js';
 import type { Range } from '../../../../editor/common/core/range.js';
 import { ScrollType } from '../../../../editor/common/editorCommon.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
-import { assertDefined } from "../../../../base/common/types.js";
+import { assertDefined } from '../../../../base/common/types.js';
 import { EditorPane } from '../../../browser/parts/editor/editorPane.js';
-import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IEditorPaneWithScrolling, type IEditorPaneScrollPosition, type IResourceEditorInput, type ISaveOptions } from '../../../common/editor.js';
+import {
+	EditorPaneSelectionChangeReason,
+	type IEditorPaneWithSelection,
+	type IEditorPaneWithScrolling,
+	type IEditorPaneScrollPosition,
+	type IResourceEditorInput,
+	type ISaveOptions,
+} from '../../../common/editor.js';
 
-import { DIFF_EDITOR_ID, isDiffEditorInput } from "../../../common/editor/diffEditorInput.js";
+import { DIFF_EDITOR_ID, isDiffEditorInput } from '../../../common/editor/diffEditorInput.js';
 import { BaseTextEditorModel } from '../../../common/editor/textEditorModel.js';
 import { TextDiffEditorModel } from '../../../common/editor/textDiffEditorModel.js';
 import { applyTextEditorOptions } from '../../../common/editor/editorOptions.js';
-import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
-import { DiffModel } from "../../../../editor/common/diff/diffModel.js";
+import { type ITextResourceStore } from '../../../services/textmodelResolver/common/textResourceStore.js';
+import { DiffModel } from '../../../../editor/common/diff/diffModel.js';
 import { type HideUnchangedRegionsOptions } from '../../../../editor/common/config/diffEditor.js';
 import { AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
-import { type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "../../../../editor/common/diff/documentDiffProvider.js";
-import { DiffEditorWidget } from "../../../../editor/browser/widget/diffEditor/diffEditorWidget.js";
-import { type TextModelReference, type ITextModelResourceService } from "../../../services/textmodelResolver/common/textModelResourceService.js";
-import { h } from "../../../../base/browser/dom.js";
+import {
+	type IDocumentDiffProvider,
+	type IDocumentDiffProviderOptions,
+} from '../../../../editor/common/diff/documentDiffProvider.js';
+import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
+import {
+	type TextModelReference,
+	type ITextModelResourceService,
+} from '../../../services/textmodelResolver/common/textModelResourceService.js';
+import { h } from '../../../../base/browser/dom.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { getDiffComputationOptions, getDiffWordWrap } from "../../../services/editor/common/editorConfiguration.js";
+import { getDiffComputationOptions, getDiffWordWrap } from '../../../services/editor/common/editorConfiguration.js';
 import { toEditorPaneSelectionChangeReason } from './textEditor.js';
-import { editorOptionsRegistry, type IDiffEditorOptions, type IEditorOptions } from '../../../../editor/common/config/editorOptions.js';
+import {
+	editorOptionsRegistry,
+	type IDiffEditorOptions,
+	type IEditorOptions,
+} from '../../../../editor/common/config/editorOptions.js';
 
-export interface DiffEditorPaneOptions extends Pick<CodeEditorWidgetOptions, 'onOpenLocation' | 'onApplyWorkspaceEdit'> {
+export interface DiffEditorPaneOptions extends Pick<
+	CodeEditorWidgetOptions,
+	'onOpenLocation' | 'onApplyWorkspaceEdit'
+> {
 	readonly modelService: ITextModelResourceService;
 	/** The pane owns this provider across input changes; models cancel their own requests. */
 	readonly createComputationService: () => IDocumentDiffProvider & IDisposable;
@@ -60,7 +86,9 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 	private container: HTMLDivElement | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
 
-	public get workingCopy(): IWorkingCopy | undefined { return this.session.value?.workingCopy; }
+	public get workingCopy(): IWorkingCopy | undefined {
+		return this.session.value?.workingCopy;
+	}
 
 	async save(options?: ISaveOptions): Promise<void> {
 		await this.workingCopy?.save(new AbortController().signal, options);
@@ -102,22 +130,26 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 		@IStorageService storageService: IStorageService,
 	) {
 		super(DIFF_EDITOR_ID, themeService, storageService);
-		if (!resourceStore || typeof resourceStore.resolve !== "function") {
+		if (!resourceStore || typeof resourceStore.resolve !== 'function') {
 			this.dispose();
-			throw new TypeError("Diff editor pane requires a text resource store");
+			throw new TypeError('Diff editor pane requires a text resource store');
 		}
-		if (!options || typeof options !== "object" || typeof options.createComputationService !== "function") {
+		if (!options || typeof options !== 'object' || typeof options.createComputationService !== 'function') {
 			this.dispose();
-			throw new TypeError("Diff editor pane requires a Workbench diff computation service");
+			throw new TypeError('Diff editor pane requires a Workbench diff computation service');
 		}
-		if (!options.modelService || typeof options.modelService.acquire !== "function") {
+		if (!options.modelService || typeof options.modelService.acquire !== 'function') {
 			this.dispose();
-			throw new TypeError("Diff editor pane requires a text model service");
+			throw new TypeError('Diff editor pane requires a text model service');
 		}
 		this.modelService = options.modelService;
 		let computationService: IDocumentDiffProvider & IDisposable;
-		try { computationService = options.createComputationService(); }
-		catch (error) { this.dispose(); throw error; }
+		try {
+			computationService = options.createComputationService();
+		} catch (error) {
+			this.dispose();
+			throw error;
+		}
 		if (!computationService || typeof computationService.computeDiff !== 'function') {
 			this.dispose();
 			throw new TypeError('Diff editor pane factory returned an invalid Workbench diff computation service');
@@ -126,24 +158,26 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 	}
 
 	public override create(parent: HTMLElement): void {
-		if (this.container) throw new ReferenceError("DiffEditorPane has already been created");
-		const container = h(parent.ownerDocument, "div");
-		container.className = "stanza-diff-editor-pane";
+		if (this.container) throw new ReferenceError('DiffEditorPane has already been created');
+		const container = h(parent.ownerDocument, 'div');
+		container.className = 'stanza-diff-editor-pane';
 		parent.append(container);
 		super.create(container);
 		this.container = container;
-		this._register(toDisposable(() => {
-			container.remove();
-			this.container = undefined;
-		}));
+		this._register(
+			toDisposable(() => {
+				container.remove();
+				this.container = undefined;
+			}),
+		);
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		if (!isDiffEditorInput(input)) {
-			throw new TypeError("Diff editor pane requires a diff editor input");
+			throw new TypeError('Diff editor pane requires a diff editor input');
 		}
 		const container = this.requireContainer();
-		throwIfCancelled(signal, "Diff editor input loading was cancelled");
+		throwIfCancelled(signal, 'Diff editor input loading was cancelled');
 		using references = new DisposableStore();
 		const acquisition = new AbortController();
 		const acquisitionSignal = AbortSignal.any([signal, acquisition.signal]);
@@ -162,10 +196,16 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 			[original, modified] = await Promise.all([acquire(input.original), acquire(input.modified)]);
 			references.delete(original);
 			references.delete(modified);
-			throwIfCancelled(signal, "Diff editor input loading was cancelled");
+			throwIfCancelled(signal, 'Diff editor input loading was cancelled');
 			next = this.instantiationService.createInstance(
-				DiffEditorPaneSession, container, original, modified,
-				input.original.label, input.modified, this.options, this.computationService,
+				DiffEditorPaneSession,
+				container,
+				original,
+				modified,
+				input.original.label,
+				input.modified,
+				this.options,
+				this.computationService,
 			);
 			// The host keeps this candidate hidden. Build its controls while syntax
 			// initializes, then publish only when both lexical sides and the diff are ready.
@@ -174,7 +214,7 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 				original.model.tokenization.whenReady(acquisitionSignal),
 				modified.model.tokenization.whenReady(acquisitionSignal),
 			]);
-			throwIfCancelled(signal, "Diff editor input loading was cancelled");
+			throwIfCancelled(signal, 'Diff editor input loading was cancelled');
 		} catch (error) {
 			acquisition.abort();
 			next?.dispose();
@@ -188,12 +228,16 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 		this.session.value = next;
 		const listeners = new DisposableStore();
 		listeners.add(next.editor.modifiedEditor.onDidScrollChange(() => this.scrollChangeEmitter.fire()));
-		listeners.add(next.editor.modifiedEditor.onDidChangeCursorSelection(event => {
-			this.selectionChangeEmitter.fire(toEditorPaneSelectionChangeReason(event.source));
-		}));
-		listeners.add(next.editor.modifiedEditor.onDidChangeModelContent(() => {
-			this.selectionChangeEmitter.fire(EditorPaneSelectionChangeReason.EDIT);
-		}));
+		listeners.add(
+			next.editor.modifiedEditor.onDidChangeCursorSelection(event => {
+				this.selectionChangeEmitter.fire(toEditorPaneSelectionChangeReason(event.source));
+			}),
+		);
+		listeners.add(
+			next.editor.modifiedEditor.onDidChangeModelContent(() => {
+				this.selectionChangeEmitter.fire(EditorPaneSelectionChangeReason.EDIT);
+			}),
+		);
 		this.selectionListener.value = listeners;
 		next.layout(this.dimension);
 	}
@@ -231,7 +275,7 @@ export class TextDiffEditor extends EditorPane implements IEditorPaneWithSelecti
 	}
 
 	private requireContainer(): HTMLDivElement {
-		assertDefined(this.container, new ReferenceError("Diff editor pane has not been created"));
+		assertDefined(this.container, new ReferenceError('Diff editor pane has not been created'));
 		return this.container;
 	}
 }
@@ -257,19 +301,25 @@ class DiffEditorPaneSession extends Disposable {
 		super();
 		this._register(original);
 		// Widgets must detach before their last model reference is released.
-		this.workingCopy = modifiedInput.readOnly ? undefined : this._register(new EditorWorkingCopy(modified, modifiedInput, workingCopies, undefined));
+		this.workingCopy = modifiedInput.readOnly
+			? undefined
+			: this._register(new EditorWorkingCopy(modified, modifiedInput, workingCopies, undefined));
 		if (!this.workingCopy) this._register(modified);
 		const originalEditorModel = this._register(new BaseTextEditorModel(original.model));
-		const modifiedEditorModel = this._register(new BaseTextEditorModel(modified.model, modifiedInput.readOnly === true));
+		const modifiedEditorModel = this._register(
+			new BaseTextEditorModel(modified.model, modifiedInput.readOnly === true),
+		);
 		const editorModel = this._register(new TextDiffEditorModel(originalEditorModel, modifiedEditorModel));
 		const textModels = editorModel.textDiffEditorModel;
 		assertDefined(textModels, new ReferenceError('Diff editor requires two resolved text models'));
-		const model = this.model = this._register(new DiffModel({
-			original: textModels.original,
-			modified: textModels.modified,
-			diffProvider: computationService,
-			diffOptions: getDiffComputationOptions(configuration, modified.model.getLanguageId()),
-		}));
+		const model = (this.model = this._register(
+			new DiffModel({
+				original: textModels.original,
+				modified: textModels.modified,
+				diffProvider: computationService,
+				diffOptions: getDiffComputationOptions(configuration, modified.model.getLanguageId()),
+			}),
+		));
 		const readEditorOptions = (): IDiffEditorOptions => {
 			const languageId = model.modified.getLanguageId();
 			const configured = getEditorOptions(configuration, languageId);
@@ -284,71 +334,90 @@ class DiffEditorPaneSession extends Disposable {
 				lineHeight: options.lineHeight ?? configured.lineHeight,
 				fontLigatures: options.fontLigatures ?? configured.fontLigatures,
 				wordWrap: getDiffWordWrap(configuration, languageId),
-				diffCodeLens: configuration.getValue<boolean>('diffEditor.codeLens', { overrideIdentifier: languageId }) ?? false,
+				diffCodeLens:
+					configuration.getValue<boolean>('diffEditor.codeLens', { overrideIdentifier: languageId }) ?? false,
 			};
 		};
-		this._register(configuration.onDidChangeConfiguration(event => {
-			const languageId = model.modified.getLanguageId();
-			if (event.affectsConfiguration('editor', { overrideIdentifier: languageId })
-				|| event.affectsConfiguration('diffEditor.wordWrap', { overrideIdentifier: languageId })
-				|| event.affectsConfiguration('diffEditor.codeLens', { overrideIdentifier: languageId })) {
-				this.editor.updateOptions(readEditorOptions());
-			}
-			if (event.affectsConfiguration("diffEditor.ignoreTrimWhitespace", { overrideIdentifier: languageId })
-				|| event.affectsConfiguration("diffEditor.maxComputationTime", { overrideIdentifier: languageId })
-				|| event.affectsConfiguration('diffEditor.experimental.showMoves')) {
+		this._register(
+			configuration.onDidChangeConfiguration(event => {
+				const languageId = model.modified.getLanguageId();
+				if (
+					event.affectsConfiguration('editor', { overrideIdentifier: languageId }) ||
+					event.affectsConfiguration('diffEditor.wordWrap', { overrideIdentifier: languageId }) ||
+					event.affectsConfiguration('diffEditor.codeLens', { overrideIdentifier: languageId })
+				) {
+					this.editor.updateOptions(readEditorOptions());
+				}
+				if (
+					event.affectsConfiguration('diffEditor.ignoreTrimWhitespace', { overrideIdentifier: languageId }) ||
+					event.affectsConfiguration('diffEditor.maxComputationTime', { overrideIdentifier: languageId }) ||
+					event.affectsConfiguration('diffEditor.experimental.showMoves')
+				) {
+					this.updateOptions(getDiffComputationOptions(configuration, languageId));
+				}
+				if (
+					event.affectsConfiguration('diffEditor.hideUnchangedRegions.enabled') ||
+					event.affectsConfiguration('diffEditor.hideUnchangedRegions.contextLineCount') ||
+					event.affectsConfiguration('diffEditor.hideUnchangedRegions.minimumLineCount') ||
+					event.affectsConfiguration('diffEditor.hideUnchangedRegions.revealLineCount')
+				) {
+					this.editor.setHideUnchangedRegionsOptions(getHideUnchangedRegionsOptions(configuration));
+				}
+				if (
+					event.affectsConfiguration('diffEditor.renderSideBySide') ||
+					event.affectsConfiguration('diffEditor.useInlineViewWhenSpaceIsLimited') ||
+					event.affectsConfiguration('diffEditor.renderSideBySideInlineBreakpoint')
+				) {
+					this.editor.setViewMode(
+						configuration.getValue('diffEditor.renderSideBySide'),
+						configuration.getValue('diffEditor.useInlineViewWhenSpaceIsLimited'),
+						configuration.getValue('diffEditor.renderSideBySideInlineBreakpoint'),
+					);
+				}
+				if (
+					event.affectsConfiguration('diffEditor.enableSplitViewResizing') ||
+					event.affectsConfiguration('diffEditor.splitViewDefaultRatio')
+				) {
+					this.editor.setSplitViewOptions(
+						configuration.getValue('diffEditor.enableSplitViewResizing'),
+						configuration.getValue('diffEditor.splitViewDefaultRatio'),
+					);
+				}
+				if (event.affectsConfiguration(AccessibilityVerbositySettingId.DiffEditor)) {
+					this.editor.setAccessibilityHelpHint(
+						configuration.getValue(AccessibilityVerbositySettingId.DiffEditor),
+					);
+				}
+			}),
+		);
+		this._register(
+			modified.model.onDidChangeLanguage(() => {
+				const languageId = model.modified.getLanguageId();
 				this.updateOptions(getDiffComputationOptions(configuration, languageId));
-			}
-			if (event.affectsConfiguration("diffEditor.hideUnchangedRegions.enabled")
-				|| event.affectsConfiguration("diffEditor.hideUnchangedRegions.contextLineCount")
-				|| event.affectsConfiguration("diffEditor.hideUnchangedRegions.minimumLineCount")
-				|| event.affectsConfiguration("diffEditor.hideUnchangedRegions.revealLineCount")) {
-				this.editor.setHideUnchangedRegionsOptions(getHideUnchangedRegionsOptions(configuration));
-			}
-			if (event.affectsConfiguration('diffEditor.renderSideBySide')
-				|| event.affectsConfiguration('diffEditor.useInlineViewWhenSpaceIsLimited')
-				|| event.affectsConfiguration('diffEditor.renderSideBySideInlineBreakpoint')) {
-				this.editor.setViewMode(
-					configuration.getValue('diffEditor.renderSideBySide'),
-					configuration.getValue('diffEditor.useInlineViewWhenSpaceIsLimited'),
-					configuration.getValue('diffEditor.renderSideBySideInlineBreakpoint'),
-				);
-			}
-			if (event.affectsConfiguration('diffEditor.enableSplitViewResizing')
-				|| event.affectsConfiguration('diffEditor.splitViewDefaultRatio')) {
-				this.editor.setSplitViewOptions(
-					configuration.getValue('diffEditor.enableSplitViewResizing'),
-					configuration.getValue('diffEditor.splitViewDefaultRatio'),
-				);
-			}
-			if (event.affectsConfiguration(AccessibilityVerbositySettingId.DiffEditor)) {
-				this.editor.setAccessibilityHelpHint(configuration.getValue(AccessibilityVerbositySettingId.DiffEditor));
-			}
-		}));
-		this._register(modified.model.onDidChangeLanguage(() => {
-			const languageId = model.modified.getLanguageId();
-			this.updateOptions(getDiffComputationOptions(configuration, languageId));
-			this.editor.updateOptions(readEditorOptions());
-		}));
-		this.editor = this._register(instantiationService.createInstance(DiffEditorWidget, {
-			...readEditorOptions(),
-			container,
-			model,
-			onOpenLocation: options.onOpenLocation,
-			onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
-			readOnly: editorModel.isReadonly(),
-			renderSideBySide: configuration.getValue('diffEditor.renderSideBySide'),
-			useInlineViewWhenSpaceIsLimited: configuration.getValue('diffEditor.useInlineViewWhenSpaceIsLimited'),
-			renderSideBySideInlineBreakpoint: configuration.getValue('diffEditor.renderSideBySideInlineBreakpoint'),
-			enableSplitViewResizing: configuration.getValue('diffEditor.enableSplitViewResizing'),
-			splitViewDefaultRatio: configuration.getValue('diffEditor.splitViewDefaultRatio'),
-			hideUnchangedRegions: getHideUnchangedRegionsOptions(configuration),
-			showLineNumbers: options.showLineNumbers,
-			showInlineChanges: options.showInlineChanges,
-			loopChanges: options.loopChanges,
-			originalAriaLabel: originalLabel,
-			modifiedAriaLabel: modifiedInput.label,
-		}));
+				this.editor.updateOptions(readEditorOptions());
+			}),
+		);
+		this.editor = this._register(
+			instantiationService.createInstance(DiffEditorWidget, {
+				...readEditorOptions(),
+				container,
+				model,
+				onOpenLocation: options.onOpenLocation,
+				onApplyWorkspaceEdit: options.onApplyWorkspaceEdit,
+				readOnly: editorModel.isReadonly(),
+				renderSideBySide: configuration.getValue('diffEditor.renderSideBySide'),
+				useInlineViewWhenSpaceIsLimited: configuration.getValue('diffEditor.useInlineViewWhenSpaceIsLimited'),
+				renderSideBySideInlineBreakpoint: configuration.getValue('diffEditor.renderSideBySideInlineBreakpoint'),
+				enableSplitViewResizing: configuration.getValue('diffEditor.enableSplitViewResizing'),
+				splitViewDefaultRatio: configuration.getValue('diffEditor.splitViewDefaultRatio'),
+				hideUnchangedRegions: getHideUnchangedRegionsOptions(configuration),
+				showLineNumbers: options.showLineNumbers,
+				showInlineChanges: options.showInlineChanges,
+				loopChanges: options.loopChanges,
+				originalAriaLabel: originalLabel,
+				modifiedAriaLabel: modifiedInput.label,
+			}),
+		);
 		this.editor.setAccessibilityHelpHint(configuration.getValue(AccessibilityVerbositySettingId.DiffEditor));
 	}
 
@@ -359,11 +428,17 @@ class DiffEditorPaneSession extends Disposable {
 	async waitForDiff(signal: AbortSignal): Promise<void> {
 		if (this.model.state.kind !== 'loading') return;
 		using listeners = new DisposableStore();
-		await raceCancellationError(new Promise<void>(resolve => {
-			listeners.add(this.model.onDidChange(state => {
-				if (state.kind !== 'loading') resolve();
-			}));
-		}), signal, 'Diff editor input loading was cancelled');
+		await raceCancellationError(
+			new Promise<void>(resolve => {
+				listeners.add(
+					this.model.onDidChange(state => {
+						if (state.kind !== 'loading') resolve();
+					}),
+				);
+			}),
+			signal,
+			'Diff editor input loading was cancelled',
+		);
 	}
 
 	restoreSelection(selection: Range, source: TextEditorSelectionSource): void {
@@ -387,17 +462,19 @@ class DiffEditorPaneSession extends Disposable {
 
 function getHideUnchangedRegionsOptions(configuration: IConfigurationService): HideUnchangedRegionsOptions {
 	return {
-		enabled: configuration.getValue<boolean>("diffEditor.hideUnchangedRegions.enabled"),
-		contextLineCount: configuration.getValue<number>("diffEditor.hideUnchangedRegions.contextLineCount"),
-		minimumLineCount: configuration.getValue<number>("diffEditor.hideUnchangedRegions.minimumLineCount"),
-		revealLineCount: configuration.getValue<number>("diffEditor.hideUnchangedRegions.revealLineCount"),
+		enabled: configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'),
+		contextLineCount: configuration.getValue<number>('diffEditor.hideUnchangedRegions.contextLineCount'),
+		minimumLineCount: configuration.getValue<number>('diffEditor.hideUnchangedRegions.minimumLineCount'),
+		revealLineCount: configuration.getValue<number>('diffEditor.hideUnchangedRegions.revealLineCount'),
 	};
 }
 
 /** Only editor-owned options cross into the widget; Workbench settings can share the namespace. */
 function getEditorOptions(configuration: IConfigurationService, languageId: string): IEditorOptions {
 	const values = configuration.getValue<Record<string, unknown>>('editor', { overrideIdentifier: languageId });
-	return Object.fromEntries(editorOptionsRegistry
-		.filter(option => values[option.name] !== undefined)
-		.map(option => [option.name, values[option.name]]));
+	return Object.fromEntries(
+		editorOptionsRegistry
+			.filter(option => values[option.name] !== undefined)
+			.map(option => [option.name, values[option.name]]),
+	);
 }

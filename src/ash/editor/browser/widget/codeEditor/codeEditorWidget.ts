@@ -1,37 +1,102 @@
 import type { IBulkEditOptions } from '../../services/bulkEditService.js';
 import { IMarkerDecorationsService } from '../../../common/services/markerDecorations.js';
-import { getClientArea, h, isHTMLElement, scheduleAtNextAnimationFrame } from "../../../../base/browser/dom.js";
+import { getClientArea, h, isHTMLElement, scheduleAtNextAnimationFrame } from '../../../../base/browser/dom.js';
 import { type IKeyboardEvent } from '../../../../base/browser/keyboardEvent.js';
 import { isAncestorOfActiveElement, trackFocus, type IFocusTracker } from '../../../../base/browser/focus.js';
 import { type IMouseWheelEvent } from '../../../../base/browser/mouseEvent.js';
-import { Emitter, type Event } from "../../../../base/common/event.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
 import { onUnexpectedError } from '../../../../base/common/errors.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
+import {
+	Disposable,
+	DisposableStore,
+	MutableDisposable,
+	toDisposable,
+	type IDisposable,
+} from '../../../../base/common/lifecycle.js';
 import { type IDimension } from '../../../common/core/2d/dimension.js';
-import { Selection, type ISelection } from "../../../common/core/selection.js";
-import { Position, type IPosition } from "../../../common/core/position.js";
+import { Selection, type ISelection } from '../../../common/core/selection.js';
+import { Position, type IPosition } from '../../../common/core/position.js';
 import { CursorColumns } from '../../../common/core/cursorColumns.js';
-import { Range, type IRange } from "../../../common/core/range.js";
-import { TextModel } from "../../../common/model/textModel.js";
-import { type ICursorStateComputer, type IIdentifiedSingleEditOperation, type IModelDecoration, type IModelDecorationsChangeAccessor, type IModelDeltaDecoration, type ITextModel } from '../../../common/model.js';
+import { Range, type IRange } from '../../../common/core/range.js';
+import { TextModel } from '../../../common/model/textModel.js';
+import {
+	type ICursorStateComputer,
+	type IIdentifiedSingleEditOperation,
+	type IModelDecoration,
+	type IModelDecorationsChangeAccessor,
+	type IModelDeltaDecoration,
+	type ITextModel,
+} from '../../../common/model.js';
 import { type IModelContentChangedEvent, type IModelDecorationsChangedEvent } from '../../../common/textModelEvents.js';
-import { EditorType, Handler, ScrollType, type CompositionTypePayload, type ICommand, type IEditorAction, type ICodeEditorViewState, type IEditorDecorationsCollection, type IEditorModel, type IEditorViewState, type IModelChangedEvent, type INewScrollPosition, type ReplacePreviousCharPayload, type TypePayload, type IContentSizeChangedEvent } from '../../../common/editorCommon.js';
+import {
+	EditorType,
+	Handler,
+	ScrollType,
+	type CompositionTypePayload,
+	type ICommand,
+	type IEditorAction,
+	type ICodeEditorViewState,
+	type IEditorDecorationsCollection,
+	type IEditorModel,
+	type IEditorViewState,
+	type IModelChangedEvent,
+	type INewScrollPosition,
+	type ReplacePreviousCharPayload,
+	type TypePayload,
+	type IContentSizeChangedEvent,
+} from '../../../common/editorCommon.js';
 import { VerticalRevealType } from '../../../common/viewEvents.js';
-import type { ICodeEditor, IContentWidget, IEditorMouseEvent, IGlyphMarginWidget, IOverlayWidget, IOverviewRuler, IPartialEditorMouseEvent, IPasteEvent, PastePayload, IViewZoneChangeAccessor } from '../../editorBrowser.js';
+import type {
+	ICodeEditor,
+	IContentWidget,
+	IEditorMouseEvent,
+	IGlyphMarginWidget,
+	IOverlayWidget,
+	IOverviewRuler,
+	IPartialEditorMouseEvent,
+	IPasteEvent,
+	PastePayload,
+	IViewZoneChangeAccessor,
+} from '../../editorBrowser.js';
 import { View, type EditorTextDirection, type EditorViewportPresentation } from '../../view.js';
-import { KeyboardNavigationController, ViewController } from "../../view/viewController.js";
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import { CodeEditorContributions } from "./codeEditorContributions.js";
+import { KeyboardNavigationController, ViewController } from '../../view/viewController.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { CodeEditorContributions } from './codeEditorContributions.js';
 import { EditorConfiguration, type IEditorConstructionOptions } from '../../config/editorConfiguration.js';
 import { migrateOptions } from '../../config/migrateOptions.js';
-import { EditorExtensionsRegistry, type EditorAction, type EditorCommandEvent, type EditorContributionRegistration, type TextEditorContributionContext } from '../../editorExtensions.js';
-import { IVersionedEditorWorkerClient, VersionedEditorWorkerClient, type VersionedEditorWorkerFactory } from '../../services/editorWorkerService.js';
+import {
+	EditorExtensionsRegistry,
+	type EditorAction,
+	type EditorCommandEvent,
+	type EditorContributionRegistration,
+	type TextEditorContributionContext,
+} from '../../editorExtensions.js';
+import {
+	IVersionedEditorWorkerClient,
+	VersionedEditorWorkerClient,
+	type VersionedEditorWorkerFactory,
+} from '../../services/editorWorkerService.js';
 import { EditorWorker } from '../../../common/services/editorWebWorker.js';
 import { ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
 import { type EditorIndentationOptions } from '../../../common/core/misc/indentation.js';
-import { type ConfigurationChangedEvent, EditorLineWrapping, EditorOption, type EditorLayoutInfo, type FindComputedEditorOptionValueById, type IComputedEditorOptions, type IEditorOptions, WrappingIndent } from '../../../common/config/editorOptions.js';
-import { type LanguageCompletionProvider, type LanguageCompletionWorkerFactory, type LanguageLocation, type LanguageWorkspaceEdit, type LanguageDiagnosticsHost } from '../../../common/languages.js';
+import {
+	type ConfigurationChangedEvent,
+	EditorLineWrapping,
+	EditorOption,
+	type EditorLayoutInfo,
+	type FindComputedEditorOptionValueById,
+	type IComputedEditorOptions,
+	type IEditorOptions,
+	WrappingIndent,
+} from '../../../common/config/editorOptions.js';
+import {
+	type LanguageCompletionProvider,
+	type LanguageCompletionWorkerFactory,
+	type LanguageLocation,
+	type LanguageWorkspaceEdit,
+	type LanguageDiagnosticsHost,
+} from '../../../common/languages.js';
 import { isCompletionsEnablement, type CompletionsEnablement } from '../../../common/services/completionsEnablement.js';
 import { ICodeEditorService } from '../../services/codeEditorService.js';
 import { applyFontInfo } from '../../config/domFontInfo.js';
@@ -46,8 +111,8 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { EditSources, TextModelEditSource } from '../../../common/textModelEditSource.js';
 import { MenuId } from '../../../../platform/actions/common/actions.js';
-import { type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
-import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
+import { type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 import { InternalEditorAction } from '../../../common/editorAction.js';
 import { type ICursorPositionChangedEvent, type ICursorSelectionChangedEvent } from '../../../common/cursorEvents.js';
@@ -73,7 +138,10 @@ export interface CodeEditorWidgetOptions extends IEditorConstructionOptions {
 	readonly onExecuteEditorCommand?: (id: string, args: readonly unknown[] | undefined) => void | Promise<void>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
 	/** Return whether the edit was applied when the host can distinguish cancellation from success. */
-	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>;
+	readonly onApplyWorkspaceEdit?: (
+		edit: LanguageWorkspaceEdit,
+		options?: IBulkEditOptions,
+	) => void | boolean | Promise<void | boolean>;
 	readonly registerBeforeSave?: (hook: () => void | Promise<void>) => IDisposable;
 	readonly onContributionError?: (error: unknown) => void;
 	/** Omit to use the registered set; an array selects exactly those contributions. */
@@ -133,10 +201,14 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	private readonly mouseDragEmitter = this._register(new Emitter<IEditorMouseEvent>());
 	private readonly mouseDropEmitter = this._register(new Emitter<IPartialEditorMouseEvent>());
 	private readonly mouseDropCanceledEmitter = this._register(new Emitter<void>());
-	private readonly dropIntoEditorEmitter = this._register(new Emitter<{ readonly position: Position; readonly event: DragEvent; }>());
+	private readonly dropIntoEditorEmitter = this._register(
+		new Emitter<{ readonly position: Position; readonly event: DragEvent }>(),
+	);
 	private readonly mouseWheelEmitter = this._register(new Emitter<IMouseWheelEvent>());
 	private readonly changeEmitter = this._register(new Emitter<IModelContentChangedEvent>());
-	private readonly scrollChangeEmitter = this._register(new Emitter<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }>());
+	private readonly scrollChangeEmitter = this._register(
+		new Emitter<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }>(),
+	);
 	private readonly modelWillChangeEmitter = this._register(new Emitter<IModelChangedEvent>());
 	private readonly modelChangeEmitter = this._register(new Emitter<IModelChangedEvent>());
 	private readonly modelDecorationsEmitter = this._register(new Emitter<IModelDecorationsChangedEvent>());
@@ -249,41 +321,51 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			this.constructionOptions = constructionOptions;
 			this.instantiationService = this.rootServices;
 			this.onLanguageError = options.onLanguageError ?? options.onContributionError ?? reportLanguageError;
-			this.configuration = this._register(this.rootServices.createInstance(EditorConfiguration,
-				options.isSimpleWidget ?? false,
-				options.contextMenuId ?? (options.isSimpleWidget ? MenuId.SimpleEditorContext : MenuId.EditorContext),
-				{
-					...constructionOptions,
-					lineNumbers: options.lineNumbers ?? (options.presentation === 'embedded' ? 'off' : undefined),
-					minimap: { ...options.minimap, enabled: options.minimap?.enabled ?? options.presentation !== 'embedded' },
-					guides: {
-						...options.guides,
-						indentation: options.guides?.indentation ?? options.presentation !== 'embedded',
+			this.configuration = this._register(
+				this.rootServices.createInstance(
+					EditorConfiguration,
+					options.isSimpleWidget ?? false,
+					options.contextMenuId ??
+						(options.isSimpleWidget ? MenuId.SimpleEditorContext : MenuId.EditorContext),
+					{
+						...constructionOptions,
+						lineNumbers: options.lineNumbers ?? (options.presentation === 'embedded' ? 'off' : undefined),
+						minimap: {
+							...options.minimap,
+							enabled: options.minimap?.enabled ?? options.presentation !== 'embedded',
+						},
+						guides: {
+							...options.guides,
+							indentation: options.guides?.indentation ?? options.presentation !== 'embedded',
+						},
+						renderLineHighlight:
+							options.renderLineHighlight ?? (options.presentation === 'embedded' ? 'none' : undefined),
+						wordWrap: options.wordWrap ?? (options.lineWrapping === EditorLineWrapping.On ? 'on' : 'off'),
+						padding:
+							options.padding === undefined
+								? undefined
+								: { top: options.padding.top ?? 0, bottom: options.padding.bottom ?? 0 },
 					},
-					renderLineHighlight: options.renderLineHighlight ?? (options.presentation === 'embedded' ? 'none' : undefined),
-					wordWrap: options.wordWrap ?? (options.lineWrapping === EditorLineWrapping.On ? 'on' : 'off'),
-					padding: options.padding === undefined ? undefined : {
-						top: options.padding.top ?? 0,
-						bottom: options.padding.bottom ?? 0,
-					},
-				},
-				options.container,
-			));
+					options.container,
+				),
+			);
 			this.isSimpleWidget = this.configuration.isSimpleWidget;
 			this.contextMenuId = this.configuration.contextMenuId;
 			this.onDidChangeConfiguration = this.configuration.onDidChange;
-			this._register(this.configuration.onDidChange(event => {
-				if (event.hasChanged(EditorOption.layoutInfo)) {
-					this.layoutChangeEmitter.fire(this.getLayoutInfo());
-				}
-			}));
+			this._register(
+				this.configuration.onDidChange(event => {
+					if (event.hasChanged(EditorOption.layoutInfo)) {
+						this.layoutChangeEmitter.fire(this.getLayoutInfo());
+					}
+				}),
+			);
 			this.rootDomNode = h(options.container.ownerDocument, 'div');
 			options.container.append(this.rootDomNode);
 			this._register(toDisposable(() => this.rootDomNode.remove()));
 			this.widgetFocus = this._register(trackFocus(this.rootDomNode));
 			this._register(this.widgetFocus.onDidFocus(() => this.focusEditorWidgetEmitter.fire()));
 			this._register(this.widgetFocus.onDidBlur(() => this.blurEditorWidgetEmitter.fire()));
-			const editorServices = this.editorServices = this._register(this.rootServices.createChild());
+			const editorServices = (this.editorServices = this._register(this.rootServices.createChild()));
 			this.contextKeyService = this._register(contextKeyService.createScoped(this.rootDomNode));
 			editorServices.registerInstance(IContextKeyService, this.contextKeyService);
 			this.instantiationService = this.editorServices;
@@ -321,9 +403,11 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			const languageConfigurationService = this.languageConfigurationService;
 			const languageFeaturesService = this.languageFeaturesService;
 			const onLanguageError = this.onLanguageError;
-			const editorWorker = modelStore.add(options.editorWorkerFactory
-				? options.editorWorkerFactory(model)
-				: new VersionedEditorWorkerClient(model, () => new EditorWorker()));
+			const editorWorker = modelStore.add(
+				options.editorWorkerFactory
+					? options.editorWorkerFactory(model)
+					: new VersionedEditorWorkerClient(model, () => new EditorWorker()),
+			);
 			services.registerInstance(IVersionedEditorWorkerClient, editorWorker);
 			this.configuration.setIsDominatedByLongLines(model.isDominatedByLongLines());
 			this.configuration.setModelLineCount(model.lineCount);
@@ -333,69 +417,81 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			modelStore.add(toDisposable(() => model.onBeforeDetached(attachedView)));
 			const ownerWindow = options.container.ownerDocument.defaultView;
 			if (!ownerWindow) throw new ReferenceError('Code editor requires a browser window');
-			const viewModel = modelStore.add(new ViewModel(
-				this.decorationOwnerId,
-				this.configuration,
-				model,
-				DOMLineBreaksComputerFactory.create(ownerWindow),
-				MonospaceLineBreaksComputerFactory.create(this.configuration.options),
-				callback => scheduleAtNextAnimationFrame(ownerWindow, callback),
-				languageConfigurationService,
-				themeService,
-				attachedView,
-				{ batchChanges: callback => callback() },
-			));
-			modelStore.add(viewModel.onEvent(event => {
-				if (event.kind === OutgoingViewModelEventKind.ContentSizeChanged) {
-					this.contentSizeChangeEmitter.fire(event);
-					return;
-				}
-				if (event.kind === OutgoingViewModelEventKind.ViewZonesChanged) {
-					this.viewZonesChangeEmitter.fire();
-					return;
-				}
-				if (event.kind === OutgoingViewModelEventKind.ScrollChanged) {
-					this.scrollChangeEmitter.fire({ scrollTopChanged: event.scrollTopChanged, scrollLeftChanged: event.scrollLeftChanged });
-					return;
-				}
-				if (event.kind === OutgoingViewModelEventKind.ModelContentChanged) {
-					this.changeEmitter.fire(event.event);
-					return;
-				}
-				if (event.kind === OutgoingViewModelEventKind.ReadOnlyEditAttempt) {
-					this.readOnlyEditEmitter.fire();
-					return;
-				}
-				if (event.kind !== OutgoingViewModelEventKind.CursorStateChanged) return;
-				const primary = event.selections[0];
-				if (!primary) return;
-				this.cursorPositionEmitter.fire({
-					position: primary.getPosition(),
-					secondaryPositions: event.selections.slice(1).map(selection => selection.getPosition()),
-					reason: event.reason,
-					source: event.source,
-				});
-				this.cursorSelectionEmitter.fire({
-					selection: primary,
-					secondarySelections: event.selections.slice(1),
-					modelVersionId: event.modelVersionId,
-					oldSelections: event.oldSelections,
-					oldModelVersionId: event.oldModelVersionId,
-					source: event.source,
-					reason: event.reason,
-				});
-			}));
+			const viewModel = modelStore.add(
+				new ViewModel(
+					this.decorationOwnerId,
+					this.configuration,
+					model,
+					DOMLineBreaksComputerFactory.create(ownerWindow),
+					MonospaceLineBreaksComputerFactory.create(this.configuration.options),
+					callback => scheduleAtNextAnimationFrame(ownerWindow, callback),
+					languageConfigurationService,
+					themeService,
+					attachedView,
+					{ batchChanges: callback => callback() },
+				),
+			);
+			modelStore.add(
+				viewModel.onEvent(event => {
+					if (event.kind === OutgoingViewModelEventKind.ContentSizeChanged) {
+						this.contentSizeChangeEmitter.fire(event);
+						return;
+					}
+					if (event.kind === OutgoingViewModelEventKind.ViewZonesChanged) {
+						this.viewZonesChangeEmitter.fire();
+						return;
+					}
+					if (event.kind === OutgoingViewModelEventKind.ScrollChanged) {
+						this.scrollChangeEmitter.fire({
+							scrollTopChanged: event.scrollTopChanged,
+							scrollLeftChanged: event.scrollLeftChanged,
+						});
+						return;
+					}
+					if (event.kind === OutgoingViewModelEventKind.ModelContentChanged) {
+						this.changeEmitter.fire(event.event);
+						return;
+					}
+					if (event.kind === OutgoingViewModelEventKind.ReadOnlyEditAttempt) {
+						this.readOnlyEditEmitter.fire();
+						return;
+					}
+					if (event.kind !== OutgoingViewModelEventKind.CursorStateChanged) return;
+					const primary = event.selections[0];
+					if (!primary) return;
+					this.cursorPositionEmitter.fire({
+						position: primary.getPosition(),
+						secondaryPositions: event.selections.slice(1).map(selection => selection.getPosition()),
+						reason: event.reason,
+						source: event.source,
+					});
+					this.cursorSelectionEmitter.fire({
+						selection: primary,
+						secondarySelections: event.selections.slice(1),
+						modelVersionId: event.modelVersionId,
+						oldSelections: event.oldSelections,
+						oldModelVersionId: event.oldModelVersionId,
+						source: event.source,
+						reason: event.reason,
+					});
+				}),
+			);
 			const commandEmitter = modelStore.add(new Emitter<EditorCommandEvent>());
-			const executeCommand = <T>(commandId: string, operation: () => T): T => executeEditorCommand(commandEmitter, commandId, operation);
+			const executeCommand = <T>(commandId: string, operation: () => T): T =>
+				executeEditorCommand(commandEmitter, commandId, operation);
 			const getService = services.get.bind(services);
 			const getOptionalService = services.getOptional.bind(services);
 			const provideService = services.registerInstance.bind(services);
 			const semanticTokenSource = model.tokenization.renderedTokens;
 			const selectContributions = () => {
-				if (options.contributionIds === undefined) return options.contributions ?? EditorExtensionsRegistry.getEditorContributions();
+				if (options.contributionIds === undefined)
+					return options.contributions ?? EditorExtensionsRegistry.getEditorContributions();
 				const custom = options.contributions ?? [];
 				const registered = EditorExtensionsRegistry.getSomeEditorContributions([...options.contributionIds]);
-				return [...registered.filter(contribution => !custom.some(candidate => candidate.id === contribution.id)), ...custom];
+				return [
+					...registered.filter(contribution => !custom.some(candidate => candidate.id === contribution.id)),
+					...custom,
+				];
 			};
 			const selectedContributions = selectContributions();
 			const contributions = modelStore.add(services.createInstance(CodeEditorContributions));
@@ -415,52 +511,71 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				register: value => modelStore.add(value),
 			});
 			const ariaLabel = options.ariaLabel ?? editorLabel(model.uri);
-			const view = modelStore.add(new View({
-				container: options.container,
-				rootDomNode: this.rootDomNode,
-				viewModel,
-				commandDelegate: {
-					type: text => this.type('keyboard', text),
-					paste: (text, pasteOnNewLine, multicursorText, mode) => this.paste('keyboard', text, pasteOnNewLine, multicursorText, mode),
-					compositionType: (text, replacePrevCharCnt, replaceNextCharCnt, positionDelta) => this.viewModel.compositionType(text, replacePrevCharCnt, replaceNextCharCnt, positionDelta, 'keyboard'),
-					startComposition: () => this.viewModel.startComposition(),
-					endComposition: () => this.viewModel.endComposition('keyboard'),
-					cut: () => this.viewModel.cut('keyboard'),
-				},
-				configuration: this.configuration,
-				theme: themeService.getColorTheme(),
-				ariaLabel,
-				dimension: options.dimension,
-				semanticTokenSource,
-				configurationService: this.configurationService,
-				textDirection: options.textDirection,
-				presentation: options.presentation,
-				indentation: options.indentation,
-				controller: {
-					ownerId: this.ownerId,
-					logService: this.logService,
+			const view = modelStore.add(
+				new View({
+					container: options.container,
+					rootDomNode: this.rootDomNode,
+					viewModel,
+					commandDelegate: {
+						type: text => this.type('keyboard', text),
+						paste: (text, pasteOnNewLine, multicursorText, mode) =>
+							this.paste('keyboard', text, pasteOnNewLine, multicursorText, mode),
+						compositionType: (text, replacePrevCharCnt, replaceNextCharCnt, positionDelta) =>
+							this.viewModel.compositionType(
+								text,
+								replacePrevCharCnt,
+								replaceNextCharCnt,
+								positionDelta,
+								'keyboard',
+							),
+						startComposition: () => this.viewModel.startComposition(),
+						endComposition: () => this.viewModel.endComposition('keyboard'),
+						cut: () => this.viewModel.cut('keyboard'),
+					},
+					configuration: this.configuration,
+					theme: themeService.getColorTheme(),
 					ariaLabel,
+					dimension: options.dimension,
 					semanticTokenSource,
-				},
-			}));
+					configurationService: this.configurationService,
+					textDirection: options.textDirection,
+					presentation: options.presentation,
+					indentation: options.indentation,
+					controller: { ownerId: this.ownerId, logService: this.logService, ariaLabel, semanticTokenSource },
+				}),
+			);
 			this.modelState = { model, view, viewModel, contributions };
 			for (const widget of this.contentWidgets.values()) this.view.addContentWidget(widget);
 			for (const widget of this.overlayWidgets.values()) this.view.addOverlayWidget(widget);
 			for (const widget of this.glyphWidgets.values()) this.view.addGlyphMarginWidget(widget);
-			modelStore.add(this.controller.editContext.onDidCompositionStart(() => this.compositionStartEmitter.fire()));
+			modelStore.add(
+				this.controller.editContext.onDidCompositionStart(() => this.compositionStartEmitter.fire()),
+			);
 			modelStore.add(this.controller.editContext.onDidCompositionEnd(() => this.compositionEndEmitter.fire()));
-			modelStore.add(this.controller.onDidEdit(event => {
-				if (event.insertedText !== undefined && ['insertText', 'insertReplacementText', 'insertLineBreak', 'insertParagraph'].includes(event.inputType)) this.typeEmitter.fire(event.insertedText);
-			}));
+			modelStore.add(
+				this.controller.onDidEdit(event => {
+					if (
+						event.insertedText !== undefined &&
+						['insertText', 'insertReplacementText', 'insertLineBreak', 'insertParagraph'].includes(
+							event.inputType,
+						)
+					)
+						this.typeEmitter.fire(event.insertedText);
+				}),
+			);
 			modelStore.add(this.view.onWillCopy(event => this.willCopyEmitter.fire(event)));
 			modelStore.add(this.view.onWillCut(event => this.willCutEmitter.fire(event)));
 			modelStore.add(this.view.onWillPaste(event => this.willPasteEmitter.fire(event)));
-			modelStore.add(this.controller.editContext.onDidFocus(() => {
-				this.focusEditorTextEmitter.fire();
-			}));
-			modelStore.add(this.controller.editContext.onDidBlur(() => {
-				this.blurEditorTextEmitter.fire();
-			}));
+			modelStore.add(
+				this.controller.editContext.onDidFocus(() => {
+					this.focusEditorTextEmitter.fire();
+				}),
+			);
+			modelStore.add(
+				this.controller.editContext.onDidBlur(() => {
+					this.blurEditorTextEmitter.fire();
+				}),
+			);
 			const inputEvents = view.controller.userInputEvents;
 			modelStore.add(new EditorContextKeysManager(this, this.contextKeyService, languageFeaturesService));
 			modelStore.add(inputEvents.onKeyDown(event => this.keyDownEmitter.fire(event)));
@@ -471,16 +586,21 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			modelStore.add(inputEvents.onMouseDown(event => this.mouseDownEmitter.fire(event)));
 			modelStore.add(inputEvents.onMouseUp(event => this.mouseUpEmitter.fire(event)));
 			modelStore.add(inputEvents.onMouseDrag(event => this.mouseDragEmitter.fire(event)));
-			modelStore.add(inputEvents.onMouseDrop(event => {
-				this.mouseDropEmitter.fire(event);
-				const position = event.target?.position;
-				if (position) this.dropIntoEditorEmitter.fire({ position, event: event.event.browserEvent as DragEvent });
-			}));
+			modelStore.add(
+				inputEvents.onMouseDrop(event => {
+					this.mouseDropEmitter.fire(event);
+					const position = event.target?.position;
+					if (position)
+						this.dropIntoEditorEmitter.fire({ position, event: event.event.browserEvent as DragEvent });
+				}),
+			);
 			modelStore.add(inputEvents.onMouseDropCanceled(() => this.mouseDropCanceledEmitter.fire()));
 			modelStore.add(inputEvents.onMouseWheel(event => this.mouseWheelEmitter.fire(event)));
-			modelStore.add(toDisposable(() => {
-				if (!model.isDisposed()) model.removeAllDecorationsWithOwnerId(this.decorationOwnerId);
-			}));
+			modelStore.add(
+				toDisposable(() => {
+					if (!model.isDisposed()) model.removeAllDecorationsWithOwnerId(this.decorationOwnerId);
+				}),
+			);
 			// Release contribution controllers before the View, including on later attach failures.
 			modelStore.delete(contributions);
 			modelStore.add(contributions);
@@ -505,13 +625,13 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 				registerBeforeSave: options.registerBeforeSave,
 				register: value => modelStore.add(value),
 			};
-			contributions.initialize(
-				this,
-				installContext,
-				options.onContributionError,
-			);
+			contributions.initialize(this, installContext, options.onContributionError);
 			if (options.contributions === undefined || options.contributionIds !== undefined) {
-				modelStore.add(EditorExtensionsRegistry.onDidChangeEditorContributions(() => contributions.refresh(selectContributions())));
+				modelStore.add(
+					EditorExtensionsRegistry.onDidChangeEditorContributions(() =>
+						contributions.refresh(selectContributions()),
+					),
+				);
 			}
 			modelStore.add(contributions.onAfterModelAttached());
 		} catch (error) {
@@ -532,10 +652,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			throw new TypeError('Code editor requires a live TextModel');
 		}
 		const previousModel = this.currentModel;
-		const event: IModelChangedEvent = {
-			oldModelUrl: previousModel?.uri ?? null,
-			newModelUrl: model?.uri ?? null,
-		};
+		const event: IModelChangedEvent = { oldModelUrl: previousModel?.uri ?? null, newModelUrl: model?.uri ?? null };
 		const hadTextFocus = previousModel !== null && this.view.isFocused();
 		this.modelWillChangeEmitter.fire(event);
 		if (this.isDisposed) {
@@ -641,7 +758,7 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		return this.configuration.getRawOptions();
 	}
 
-	getScrolledVisiblePosition(position: Position): { top: number; left: number; height: number; } | null {
+	getScrolledVisiblePosition(position: Position): { top: number; left: number; height: number } | null {
 		if (!this.currentModel) return null;
 		this.view.textModel.offsetAt(position);
 		const coordinates = this.view.getPositionContentCoordinates(position);
@@ -756,19 +873,43 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	revealLines(startLineNumber: number, endLineNumber: number, scrollType?: ScrollType): void {
-		this.revealModelRange(new Range(startLineNumber, 1, endLineNumber, 1), VerticalRevealType.Simple, scrollType, false);
+		this.revealModelRange(
+			new Range(startLineNumber, 1, endLineNumber, 1),
+			VerticalRevealType.Simple,
+			scrollType,
+			false,
+		);
 	}
 
 	revealLinesInCenter(startLineNumber: number, endLineNumber: number, scrollType?: ScrollType): void {
-		this.revealModelRange(new Range(startLineNumber, 1, endLineNumber, 1), VerticalRevealType.Center, scrollType, false);
+		this.revealModelRange(
+			new Range(startLineNumber, 1, endLineNumber, 1),
+			VerticalRevealType.Center,
+			scrollType,
+			false,
+		);
 	}
 
-	revealLinesInCenterIfOutsideViewport(startLineNumber: number, endLineNumber: number, scrollType?: ScrollType): void {
-		this.revealModelRange(new Range(startLineNumber, 1, endLineNumber, 1), VerticalRevealType.CenterIfOutsideViewport, scrollType, false);
+	revealLinesInCenterIfOutsideViewport(
+		startLineNumber: number,
+		endLineNumber: number,
+		scrollType?: ScrollType,
+	): void {
+		this.revealModelRange(
+			new Range(startLineNumber, 1, endLineNumber, 1),
+			VerticalRevealType.CenterIfOutsideViewport,
+			scrollType,
+			false,
+		);
 	}
 
 	revealLinesNearTop(startLineNumber: number, endLineNumber: number, scrollType?: ScrollType): void {
-		this.revealModelRange(new Range(startLineNumber, 1, endLineNumber, 1), VerticalRevealType.NearTop, scrollType, false);
+		this.revealModelRange(
+			new Range(startLineNumber, 1, endLineNumber, 1),
+			VerticalRevealType.NearTop,
+			scrollType,
+			false,
+		);
 	}
 
 	revealRange(range: IRange, scrollType?: ScrollType): void {
@@ -795,9 +936,16 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		this.revealModelRange(range, VerticalRevealType.NearTopIfOutsideViewport, scrollType);
 	}
 
-	private revealModelRange(range: IRange, verticalType: VerticalRevealType, scrollType = ScrollType.Smooth, revealHorizontal = true): void {
+	private revealModelRange(
+		range: IRange,
+		verticalType: VerticalRevealType,
+		scrollType = ScrollType.Smooth,
+		revealHorizontal = true,
+	): void {
 		if (!this.currentModel) return;
-		const viewRange = this.viewModel.coordinatesConverter.convertModelRangeToViewRange(this.currentModel.validateRange(range));
+		const viewRange = this.viewModel.coordinatesConverter.convertModelRangeToViewRange(
+			this.currentModel.validateRange(range),
+		);
 		this.viewModel.revealRange('api', revealHorizontal, viewRange, verticalType, scrollType);
 	}
 
@@ -829,13 +977,23 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	getVisibleColumnFromPosition(position: IPosition): number {
 		if (!this.currentModel) return position.column;
 		const valid = this.currentModel.validatePosition(position);
-		return CursorColumns.visibleColumnFromColumn(this.currentModel.getLineContent(valid.lineNumber), valid.column, this.currentModel.getOptions().tabSize) + 1;
+		return (
+			CursorColumns.visibleColumnFromColumn(
+				this.currentModel.getLineContent(valid.lineNumber),
+				valid.column,
+				this.currentModel.getOptions().tabSize,
+			) + 1
+		);
 	}
 
 	getStatusbarColumn(position: IPosition): number {
 		if (!this.currentModel) return position.column;
 		const valid = this.currentModel.validatePosition(position);
-		return CursorColumns.toStatusbarColumn(this.currentModel.getLineContent(valid.lineNumber), valid.column, this.currentModel.getOptions().tabSize);
+		return CursorColumns.toStatusbarColumn(
+			this.currentModel.getLineContent(valid.lineNumber),
+			valid.column,
+			this.currentModel.getOptions().tabSize,
+		);
 	}
 
 	hasTextFocus(): boolean {
@@ -843,12 +1001,18 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 	}
 
 	hasWidgetFocus(): boolean {
-		if (!this.currentModel) { return false; }
+		if (!this.currentModel) {
+			return false;
+		}
 		// Blur events are deferred; command routing needs the current DOM focus instead of that event cache.
-		if (isAncestorOfActiveElement(this.rootDomNode)) { return true; }
+		if (isAncestorOfActiveElement(this.rootDomNode)) {
+			return true;
+		}
 		// Overflow content widgets belong to the editor even when their DOM is mounted outside its root.
 		for (const widget of this.contentWidgets.values()) {
-			if (isAncestorOfActiveElement(widget.getDomNode())) { return true; }
+			if (isAncestorOfActiveElement(widget.getDomNode())) {
+				return true;
+			}
 		}
 		return false;
 	}
@@ -912,11 +1076,17 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		const model = this.view.textModel;
 		if (lineNumber > model.getLineCount()) {
 			// An empty range at EOF spans the trailing zones, rather than the last text line.
-			const last = this.viewModel.coordinatesConverter.getViewLineNumberOfModelPosition(model.getLineCount(), model.getLineMaxColumn(model.getLineCount()));
+			const last = this.viewModel.coordinatesConverter.getViewLineNumberOfModelPosition(
+				model.getLineCount(),
+				model.getLineMaxColumn(model.getLineCount()),
+			);
 			return this.viewModel.viewLayout.getVerticalOffsetAfterLineNumber(last, !includeViewZones);
 		}
 		const position = model.validatePosition(new Position(lineNumber, 1));
-		const viewLine = this.viewModel.coordinatesConverter.getViewLineNumberOfModelPosition(position.lineNumber, position.column);
+		const viewLine = this.viewModel.coordinatesConverter.getViewLineNumberOfModelPosition(
+			position.lineNumber,
+			position.column,
+		);
 		return this.viewModel.viewLayout.getVerticalOffsetForLineNumber(viewLine, includeViewZones);
 	}
 
@@ -926,7 +1096,10 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		// Diff gutters can still refer to an old final line while model edits are
 		// being published. Let the model normalize both coordinates together.
 		const position = model.validatePosition(new Position(lineNumber, Number.MAX_SAFE_INTEGER));
-		const viewLine = this.viewModel.coordinatesConverter.getViewLineNumberOfModelPosition(position.lineNumber, position.column);
+		const viewLine = this.viewModel.coordinatesConverter.getViewLineNumberOfModelPosition(
+			position.lineNumber,
+			position.column,
+		);
 		return this.viewModel.viewLayout.getVerticalOffsetAfterLineNumber(viewLine, includeViewZones);
 	}
 
@@ -958,7 +1131,12 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		if (Selection.isISelection(selection)) {
 			cursorSelection = selection;
 		} else if (Range.isIRange(selection)) {
-			cursorSelection = new Selection(selection.startLineNumber, selection.startColumn, selection.endLineNumber, selection.endColumn);
+			cursorSelection = new Selection(
+				selection.startLineNumber,
+				selection.startColumn,
+				selection.endLineNumber,
+				selection.endColumn,
+			);
 		} else {
 			throw new TypeError('Editor selection must be a range or a selection');
 		}
@@ -980,18 +1158,31 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		this.viewModel.executeCommand(command, source);
 	}
 
-	executeEdits(source: string | null | undefined, edits: IIdentifiedSingleEditOperation[], endCursorState?: ICursorStateComputer | Selection[]): boolean;
-	executeEdits(source: TextModelEditSource | undefined, edits: IIdentifiedSingleEditOperation[], endCursorState?: ICursorStateComputer | Selection[]): boolean;
-	executeEdits(source: string | null | undefined | TextModelEditSource, edits: IIdentifiedSingleEditOperation[], endCursorState?: ICursorStateComputer | Selection[]): boolean {
+	executeEdits(
+		source: string | null | undefined,
+		edits: IIdentifiedSingleEditOperation[],
+		endCursorState?: ICursorStateComputer | Selection[],
+	): boolean;
+	executeEdits(
+		source: TextModelEditSource | undefined,
+		edits: IIdentifiedSingleEditOperation[],
+		endCursorState?: ICursorStateComputer | Selection[],
+	): boolean;
+	executeEdits(
+		source: string | null | undefined | TextModelEditSource,
+		edits: IIdentifiedSingleEditOperation[],
+		endCursorState?: ICursorStateComputer | Selection[],
+	): boolean {
 		if (!this.currentModel) return false;
 		if (this.configuration.options.get(EditorOption.readOnly)) return false;
 		const reason = source instanceof TextModelEditSource ? source : EditSources.unknown({ name: source });
 		const sourceName = source instanceof TextModelEditSource ? source.metadata.source : source;
-		const cursorStateComputer: ICursorStateComputer = endCursorState === undefined
-			? () => null
-			: Array.isArray(endCursorState)
-				? () => endCursorState
-				: endCursorState;
+		const cursorStateComputer: ICursorStateComputer =
+			endCursorState === undefined
+				? () => null
+				: Array.isArray(endCursorState)
+					? () => endCursorState
+					: endCursorState;
 		this.viewModel.executeEdits(sourceName, edits, cursorStateComputer, reason);
 		return true;
 	}
@@ -1015,7 +1206,10 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		// paste distribution. Programmatic input already uses the plain type path.
 		if (source === 'keyboard' && text.length > 1 && /[\r\n]/u.test(text)) {
 			this.pushUndoStop();
-			viewModel.executeCommands(viewModel.getSelections().map(selection => new ReplaceCommand(selection, text)), source);
+			viewModel.executeCommands(
+				viewModel.getSelections().map(selection => new ReplaceCommand(selection, text)),
+				source,
+			);
 			this.pushUndoStop();
 		} else {
 			viewModel.type(text, source);
@@ -1024,13 +1218,24 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		if (source === 'keyboard') this.typeEmitter.fire(text);
 	}
 
-	private paste(source: string | null | undefined, text: string, pasteOnNewLine: boolean, multicursorText: string[] | null, mode: string | null, clipboardEvent?: ClipboardEvent): void {
+	private paste(
+		source: string | null | undefined,
+		text: string,
+		pasteOnNewLine: boolean,
+		multicursorText: string[] | null,
+		mode: string | null,
+		clipboardEvent?: ClipboardEvent,
+	): void {
 		const viewModel = this.viewModel;
 		const start = viewModel.getSelection().getStartPosition();
 		viewModel.paste(text, pasteOnNewLine, multicursorText, source);
 		viewModel.revealPrimaryCursor(source, true);
 		if (source === 'keyboard') {
-			this.pasteEmitter.fire({ range: Range.fromPositions(start, viewModel.getSelection().getStartPosition()), languageId: mode, clipboardEvent });
+			this.pasteEmitter.fire({
+				range: Range.fromPositions(start, viewModel.getSelection().getStartPosition()),
+				languageId: mode,
+				clipboardEvent,
+			});
 		}
 	}
 
@@ -1055,13 +1260,26 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			}
 			case Handler.CompositionType: {
 				const composition = args as Partial<CompositionTypePayload>;
-				this.viewModel.compositionType(composition.text ?? '', composition.replacePrevCharCnt ?? 0, composition.replaceNextCharCnt ?? 0, composition.positionDelta ?? 0, source);
+				this.viewModel.compositionType(
+					composition.text ?? '',
+					composition.replacePrevCharCnt ?? 0,
+					composition.replaceNextCharCnt ?? 0,
+					composition.positionDelta ?? 0,
+					source,
+				);
 				this.viewModel.revealPrimaryCursor(source, true);
 				return;
 			}
 			case Handler.Paste: {
 				const paste = args as Partial<PastePayload>;
-				this.paste(source, paste.text ?? '', paste.pasteOnNewLine ?? false, paste.multicursorText ?? null, paste.mode ?? null, paste.clipboardEvent);
+				this.paste(
+					source,
+					paste.text ?? '',
+					paste.pasteOnNewLine ?? false,
+					paste.multicursorText ?? null,
+					paste.mode ?? null,
+					paste.clipboardEvent,
+				);
 				return;
 			}
 			case Handler.Cut:
@@ -1077,8 +1295,13 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 			}
 			const command = EditorExtensionsRegistry.getEditorCommand(handlerId);
 			if (command && this.contextKeyService.contextMatchesRules(command.precondition)) {
-				const commandArgs = payload && typeof payload === 'object' && !Array.isArray(payload) ? { ...args, source } : payload ?? { source };
-				void Promise.resolve(this.invokeWithinContext(accessor => command.runEditorCommand(accessor, this, commandArgs))).catch(onUnexpectedError);
+				const commandArgs =
+					payload && typeof payload === 'object' && !Array.isArray(payload)
+						? { ...args, source }
+						: (payload ?? { source });
+				void Promise.resolve(
+					this.invokeWithinContext(accessor => command.runEditorCommand(accessor, this, commandArgs)),
+				).catch(onUnexpectedError);
 			}
 		} catch (error) {
 			onUnexpectedError(error);
@@ -1095,12 +1318,18 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 
 	getSupportedActions(): IEditorAction[] {
 		this.assertNotDisposed();
-		return Array.from(EditorExtensionsRegistry.getEditorActions(), action => this.createEditorAction(action)).filter(action => action.isSupported());
+		return Array.from(EditorExtensionsRegistry.getEditorActions(), action =>
+			this.createEditorAction(action),
+		).filter(action => action.isSupported());
 	}
 
 	private createEditorAction(action: EditorAction): IEditorAction {
 		return new InternalEditorAction(
-			action.id, action.label, action.alias, action.metadata, action.precondition,
+			action.id,
+			action.label,
+			action.alias,
+			action.metadata,
+			action.precondition,
 			async args => {
 				this.assertNotDisposed();
 				if (this.currentModel) {
@@ -1111,7 +1340,9 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		);
 	}
 
-	invokeWithinContext<T>(fn: (accessor: import('../../../../platform/instantiation/common/instantiation.js').ServicesAccessor) => T): T {
+	invokeWithinContext<T>(
+		fn: (accessor: import('../../../../platform/instantiation/common/instantiation.js').ServicesAccessor) => T,
+	): T {
 		return this.instantiationService.invokeFunction(fn);
 	}
 
@@ -1159,8 +1390,10 @@ export class CodeEditorWidget extends Disposable implements ICodeEditor {
 		// Decoration sources are editor-owned disposables and leave with their contribution.
 	}
 
-	public getContribution<T extends import('../../../common/editorCommon.js').IEditorContribution>(id: string): T | null {
-		return this.currentModel ? this.contributions.get(id) as T | undefined ?? null : null;
+	public getContribution<T extends import('../../../common/editorCommon.js').IEditorContribution>(
+		id: string,
+	): T | null {
+		return this.currentModel ? ((this.contributions.get(id) as T | undefined) ?? null) : null;
 	}
 }
 
@@ -1175,7 +1408,11 @@ class EditorContextKeysManager extends Disposable {
 	private readonly isComposing: IContextKey<boolean>;
 	private readonly languageId: IContextKey<string>;
 
-	constructor(private readonly editor: CodeEditorWidget, contextKeyService: IContextKeyService, languageFeaturesService: ILanguageFeaturesService) {
+	constructor(
+		private readonly editor: CodeEditorWidget,
+		contextKeyService: IContextKeyService,
+		languageFeaturesService: ILanguageFeaturesService,
+	) {
 		super();
 		contextKeyService.createKey('editorId', editor.getId());
 		this.editorSimpleInput = EditorContextKeys.editorSimpleInput.bindTo(contextKeyService);
@@ -1204,30 +1441,66 @@ class EditorContextKeysManager extends Disposable {
 		const rename = EditorContextKeys.hasRenameProvider.bindTo(contextKeyService);
 		const codeActions = EditorContextKeys.hasCodeActionsProvider.bindTo(contextKeyService);
 		const navigationProviders = [
-			[EditorContextKeys.hasDefinitionProvider.bindTo(contextKeyService), languageFeaturesService.definitionProvider],
-			[EditorContextKeys.hasDeclarationProvider.bindTo(contextKeyService), languageFeaturesService.declarationProvider],
-			[EditorContextKeys.hasTypeDefinitionProvider.bindTo(contextKeyService), languageFeaturesService.typeDefinitionProvider],
-			[EditorContextKeys.hasImplementationProvider.bindTo(contextKeyService), languageFeaturesService.implementationProvider],
-			[EditorContextKeys.hasReferenceProvider.bindTo(contextKeyService), languageFeaturesService.referenceProvider],
-			[EditorContextKeys.hasCallHierarchyProvider.bindTo(contextKeyService), languageFeaturesService.callHierarchyProvider],
-			[EditorContextKeys.hasTypeHierarchyProvider.bindTo(contextKeyService), languageFeaturesService.typeHierarchyProvider],
+			[
+				EditorContextKeys.hasDefinitionProvider.bindTo(contextKeyService),
+				languageFeaturesService.definitionProvider,
+			],
+			[
+				EditorContextKeys.hasDeclarationProvider.bindTo(contextKeyService),
+				languageFeaturesService.declarationProvider,
+			],
+			[
+				EditorContextKeys.hasTypeDefinitionProvider.bindTo(contextKeyService),
+				languageFeaturesService.typeDefinitionProvider,
+			],
+			[
+				EditorContextKeys.hasImplementationProvider.bindTo(contextKeyService),
+				languageFeaturesService.implementationProvider,
+			],
+			[
+				EditorContextKeys.hasReferenceProvider.bindTo(contextKeyService),
+				languageFeaturesService.referenceProvider,
+			],
+			[
+				EditorContextKeys.hasCallHierarchyProvider.bindTo(contextKeyService),
+				languageFeaturesService.callHierarchyProvider,
+			],
+			[
+				EditorContextKeys.hasTypeHierarchyProvider.bindTo(contextKeyService),
+				languageFeaturesService.typeHierarchyProvider,
+			],
 		] as const;
-		this._register(toDisposable(() => {
-			for (const key of [
-				this.editorSimpleInput, this.editorFocus, this.textInputFocus, this.editorTextFocus,
-				this.editorReadonly, this.hasMultipleSelections, this.hasNonEmptySelection,
-				this.isComposing, this.languageId, documentFormatting, selectionFormatting, signatureHelp, rename, codeActions,
-			]) {
-				key.reset();
-			}
-			for (const [key] of navigationProviders) {
-				key.reset();
-			}
-		}));
+		this._register(
+			toDisposable(() => {
+				for (const key of [
+					this.editorSimpleInput,
+					this.editorFocus,
+					this.textInputFocus,
+					this.editorTextFocus,
+					this.editorReadonly,
+					this.hasMultipleSelections,
+					this.hasNonEmptySelection,
+					this.isComposing,
+					this.languageId,
+					documentFormatting,
+					selectionFormatting,
+					signatureHelp,
+					rename,
+					codeActions,
+				]) {
+					key.reset();
+				}
+				for (const [key] of navigationProviders) {
+					key.reset();
+				}
+			}),
+		);
 		const updateLanguageFeatures = () => {
 			const hasRangeProvider = languageFeaturesService.documentRangeFormattingEditProvider.has(model);
 			selectionFormatting.set(hasRangeProvider);
-			documentFormatting.set(hasRangeProvider || languageFeaturesService.documentFormattingEditProvider.has(model));
+			documentFormatting.set(
+				hasRangeProvider || languageFeaturesService.documentFormattingEditProvider.has(model),
+			);
 			signatureHelp.set(languageFeaturesService.signatureHelpProvider.has(model));
 			rename.set(languageFeaturesService.renameProvider.has(model));
 			codeActions.set(languageFeaturesService.codeActionProvider.has(model));
@@ -1279,7 +1552,12 @@ class EditorDecorationsCollection implements IEditorDecorationsCollection {
 	private generation: number;
 	readonly onDidChange: Event<IModelDecorationsChangedEvent>;
 
-	constructor(private readonly editor: CodeEditorWidget, private readonly readGeneration: () => number, private readonly ownerId: number, decorations: IModelDeltaDecoration[]) {
+	constructor(
+		private readonly editor: CodeEditorWidget,
+		private readonly readGeneration: () => number,
+		private readonly ownerId: number,
+		decorations: IModelDeltaDecoration[],
+	) {
 		this.generation = readGeneration();
 		this.onDidChange = editor.onDidChangeModelDecorations;
 		this.set(decorations);
@@ -1307,7 +1585,9 @@ class EditorDecorationsCollection implements IEditorDecorationsCollection {
 	getRanges(): Range[] {
 		this.synchronizeModel();
 		const model = this.editor.getModel();
-		return model ? this.ids.map(id => model.getDecorationRange(id)).filter((range): range is Range => range !== null) : [];
+		return model
+			? this.ids.map(id => model.getDecorationRange(id)).filter((range): range is Range => range !== null)
+			: [];
 	}
 
 	has(decoration: IModelDecoration): boolean {
@@ -1340,29 +1620,36 @@ class EditorDecorationsCollection implements IEditorDecorationsCollection {
 }
 
 function validateOptions(options: CodeEditorWidgetOptions): void {
-	if (!options || typeof options !== "object" || !isHTMLElement(options.container) || (options.model !== null && !(options.model instanceof TextModel))) {
-		throw new TypeError("Code editor widget requires a container and a text model or null");
+	if (
+		!options ||
+		typeof options !== 'object' ||
+		!isHTMLElement(options.container) ||
+		(options.model !== null && !(options.model instanceof TextModel))
+	) {
+		throw new TypeError('Code editor widget requires a container and a text model or null');
 	}
-	if (options.onContributionError !== undefined && typeof options.onContributionError !== "function") {
-		throw new TypeError("Code editor contribution error handler must be a function");
+	if (options.onContributionError !== undefined && typeof options.onContributionError !== 'function') {
+		throw new TypeError('Code editor contribution error handler must be a function');
 	}
 }
 
 export function isCodeEditorViewState(value: unknown): value is CodeEditorViewState {
 	if (!value || typeof value !== 'object') return false;
 	const state = value as Partial<CodeEditorViewState>;
-	return Array.isArray(state.cursorState)
-		&& state.cursorState.length > 0
-		&& state.cursorState.every(cursor => Boolean(cursor?.selectionStart && cursor?.position))
-		&& Boolean(state.viewState)
-		&& typeof state.viewState?.scrollLeft === 'number'
-		&& Boolean(state.viewState?.firstPosition)
-		&& Boolean(state.contributionsState && typeof state.contributionsState === 'object');
+	return (
+		Array.isArray(state.cursorState) &&
+		state.cursorState.length > 0 &&
+		state.cursorState.every(cursor => Boolean(cursor?.selectionStart && cursor?.position)) &&
+		Boolean(state.viewState) &&
+		typeof state.viewState?.scrollLeft === 'number' &&
+		Boolean(state.viewState?.firstPosition) &&
+		Boolean(state.contributionsState && typeof state.contributionsState === 'object')
+	);
 }
 
 function executeEditorCommand<T>(emitter: Emitter<EditorCommandEvent>, commandId: string, operation: () => T): T {
 	const result = operation();
-	if (result && typeof (result as { readonly then?: unknown; }).then === 'function') {
+	if (result && typeof (result as { readonly then?: unknown }).then === 'function') {
 		return Promise.resolve(result).then(value => {
 			emitter.fire(Object.freeze({ commandId }));
 			return value;

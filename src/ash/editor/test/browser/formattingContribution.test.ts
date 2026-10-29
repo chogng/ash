@@ -9,7 +9,9 @@ test('Document formatting contribution releases select listeners with its toolba
 	const contribution = new FormattingContribution(environment.window.document.body, {
 		documentActions: [],
 		onToggleMark: () => undefined,
-		onSetTextStyle: style => { styles.push(style); },
+		onSetTextStyle: style => {
+			styles.push(style);
+		},
 		onClearTextStyle: () => undefined,
 		onRunDocumentAction: () => undefined,
 	});

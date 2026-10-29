@@ -2,9 +2,16 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { h } from '../../../../../base/browser/dom.js';
-import type { AuxiliaryWindowOpenOptions, IAuxiliaryWindow, IAuxiliaryWindowService as IAuxiliaryWindowServiceContract } from '../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import type {
+	AuxiliaryWindowOpenOptions,
+	IAuxiliaryWindow,
+	IAuxiliaryWindowService as IAuxiliaryWindowServiceContract,
+} from '../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import type { WorkbenchLayoutStyle } from '../../../../common/configuration.js';
-import type { Position as PanelPosition, IWorkbenchLayoutService as IWorkbenchLayoutServiceContract } from '../../../../services/layout/browser/layoutService.js';
+import type {
+	Position as PanelPosition,
+	IWorkbenchLayoutService as IWorkbenchLayoutServiceContract,
+} from '../../../../services/layout/browser/layoutService.js';
 
 const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 Object.defineProperty(globalThis, 'window', { configurable: true, value: browserEnvironment.window });
@@ -16,8 +23,10 @@ const { IConfigurationService } = await import('../../../../../platform/configur
 const { InstantiationService } = await import('../../../../../platform/instantiation/common/instantiationService.js');
 const { WorkbenchConfiguration } = await import('../../../../common/configuration.js');
 const { WorkbenchContributionsRegistry, WorkbenchPhase } = await import('../../../../common/contributions.js');
-const { IAuxiliaryWindowService } = await import('../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js');
-const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../../services/configuration/test/common/testServices.js");
+const { IAuxiliaryWindowService } =
+	await import('../../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js');
+const { TestConfigurationService: WorkbenchConfigurationService } =
+	await import('../../../../services/configuration/test/common/testServices.js');
 const { IWorkbenchLayoutService, Position } = await import('../../../../services/layout/browser/layoutService.js');
 const { BrowserLayoutService } = await import('../../../../../platform/layout/browser/layoutService.js');
 await import('../../browser/modernUI.contribution.js');
@@ -26,26 +35,46 @@ class TestWorkbenchLayoutService extends BrowserLayoutService implements IWorkbe
 	public readonly styles: WorkbenchLayoutStyle[] = [];
 	public readonly onDidChangePartVisibility = Event.None;
 	readonly onDidChangePanelPosition = Event.None;
-	getSideBarPosition(): PanelPosition { return Position.LEFT; }
-	getPanelPosition(): PanelPosition { return Position.BOTTOM; }
-	setPanelPosition(): void { }
+	getSideBarPosition(): PanelPosition {
+		return Position.LEFT;
+	}
+	getPanelPosition(): PanelPosition {
+		return Position.BOTTOM;
+	}
+	setPanelPosition(): void {}
 
-	constructor(container: HTMLElement) { super({ root: container }); }
-	isPartVisible(): boolean { return false; }
-	hasFocus(): boolean { return false; }
-	getVisibleNeighborPart(): undefined { return undefined; }
+	constructor(container: HTMLElement) {
+		super({ root: container });
+	}
+	isPartVisible(): boolean {
+		return false;
+	}
+	hasFocus(): boolean {
+		return false;
+	}
+	getVisibleNeighborPart(): undefined {
+		return undefined;
+	}
 	readonly onDidChangeAuxiliaryBarMaximized = Event.None;
-	isAuxiliaryBarMaximized(): boolean { return false; }
-	toggleMaximizedAuxiliaryBar(): void { }
-	setAuxiliaryBarMaximized(): boolean { return false; }
-	isPanelMaximized(): boolean { return false; }
-	toggleMaximizedPanel(): void { }
-	showPart(): void { }
-	showParts(): void { }
-	hidePart(): void { }
-	hideParts(): void { }
-	getPartSize() { return { width: 0, height: 0 }; }
-	resizePart(): void { }
+	isAuxiliaryBarMaximized(): boolean {
+		return false;
+	}
+	toggleMaximizedAuxiliaryBar(): void {}
+	setAuxiliaryBarMaximized(): boolean {
+		return false;
+	}
+	isPanelMaximized(): boolean {
+		return false;
+	}
+	toggleMaximizedPanel(): void {}
+	showPart(): void {}
+	showParts(): void {}
+	hidePart(): void {}
+	hideParts(): void {}
+	getPartSize() {
+		return { width: 0, height: 0 };
+	}
+	resizePart(): void {}
 
 	public setLayoutStyle(style: WorkbenchLayoutStyle): void {
 		this.styles.push(style);
@@ -89,9 +118,13 @@ test('Modern UI contribution starts at restore and owns live window layout style
 		onDidLayout: Event.None,
 		onBeforeUnload: Event.None,
 		onDidClose: closeEmitter.event,
-		layout(): void { },
-		dispose(): void { closeEmitter.fire(); },
-		[Symbol.dispose](): void { closeEmitter.fire(); },
+		layout(): void {},
+		dispose(): void {
+			closeEmitter.fire();
+		},
+		[Symbol.dispose](): void {
+			closeEmitter.fire();
+		},
 	} as unknown as IAuxiliaryWindow;
 
 	using host = WorkbenchContributionsRegistry.createHost(services);

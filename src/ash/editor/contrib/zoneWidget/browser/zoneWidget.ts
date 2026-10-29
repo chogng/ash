@@ -3,7 +3,12 @@ import { h } from '../../../../base/browser/dom.js';
 import { Sash, SashState, type SashDragEvent } from '../../../../base/browser/ui/sash/sash.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { Color } from '../../../../base/common/color.js';
-import { type ICodeEditor, type IOverlayWidget, type IOverlayWidgetPosition, type IViewZone } from '../../../browser/editorBrowser.js';
+import {
+	type ICodeEditor,
+	type IOverlayWidget,
+	type IOverlayWidgetPosition,
+	type IViewZone,
+} from '../../../browser/editorBrowser.js';
 import { EditorOption, type EditorLayoutInfo } from '../../../common/config/editorOptions.js';
 import { type Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
@@ -43,7 +48,10 @@ interface ResolvedOptions {
 }
 
 export class OverlayWidgetDelegate implements IOverlayWidget {
-	constructor(private readonly _id: string, private readonly _domNode: HTMLElement) { }
+	constructor(
+		private readonly _id: string,
+		private readonly _domNode: HTMLElement,
+	) {}
 
 	getId(): string {
 		return this._id;
@@ -106,7 +114,8 @@ export abstract class ZoneWidget extends Disposable {
 		this.assertNotDisposed();
 		if (this.created) throw new Error('Zone widget has already been created');
 		this.created = true;
-		for (const className of this.options.className.split(/\s+/u).filter(Boolean)) this.domNode.classList.add(className);
+		for (const className of this.options.className.split(/\s+/u).filter(Boolean))
+			this.domNode.classList.add(className);
 		this.domNode.classList.toggle('show-frame', this.options.showFrame);
 		this.domNode.classList.toggle('show-arrow', this.options.showArrow);
 
@@ -143,7 +152,15 @@ export abstract class ZoneWidget extends Disposable {
 		this.hide();
 		this._isShowing = true;
 		this.heightInLines = this.limitHeightInLines(heightInLines);
-		this.anchor.set([{ range, options: { description: 'zone-widget-position', stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges } }]);
+		this.anchor.set([
+			{
+				range,
+				options: {
+					description: 'zone-widget-position',
+					stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+				},
+			},
+		]);
 		const viewZone: IViewZone = {
 			afterLineNumber: range.startLineNumber,
 			afterColumn: range.startColumn,
@@ -169,7 +186,8 @@ export abstract class ZoneWidget extends Disposable {
 		}
 		this.layoutZone();
 		this._isShowing = false;
-		if (!this.options.keepEditorSelection) this.editor.setSelection(Selection.fromPositions(range.getStartPosition(), range.getEndPosition()));
+		if (!this.options.keepEditorSelection)
+			this.editor.setSelection(Selection.fromPositions(range.getStartPosition(), range.getEndPosition()));
 		this.revealRange(range, range.endLineNumber === model.getLineCount());
 	}
 
@@ -181,7 +199,15 @@ export abstract class ZoneWidget extends Disposable {
 		const model = this.editor.getModel();
 		if (!model) throw new Error('Zone widget requires an editor model');
 		model.validateRange(range);
-		this.anchor.set([{ range, options: { description: 'zone-widget-position', stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges } }]);
+		this.anchor.set([
+			{
+				range,
+				options: {
+					description: 'zone-widget-position',
+					stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+				},
+			},
+		]);
 		this.heightInLines = this.limitHeightInLines(heightInLines);
 		this.layoutZone();
 	}
@@ -218,10 +244,13 @@ export abstract class ZoneWidget extends Disposable {
 	}
 
 	protected _getMaximumHeightInLines(): number {
-		return Math.max(12, this.editor.getLayoutInfo().height / this.editor.getOption(EditorOption.lineHeight) * 0.8);
+		return Math.max(
+			12,
+			(this.editor.getLayoutInfo().height / this.editor.getOption(EditorOption.lineHeight)) * 0.8,
+		);
 	}
 
-	protected _getResizeBounds(): { readonly minLines: number; readonly maxLines: number; } {
+	protected _getResizeBounds(): { readonly minLines: number; readonly maxLines: number } {
 		return { minLines: 5, maxLines: 35 };
 	}
 
@@ -232,7 +261,7 @@ export abstract class ZoneWidget extends Disposable {
 		this.layoutZone();
 	}
 
-	protected _onWidth(_widthInPixels: number): void { }
+	protected _onWidth(_widthInPixels: number): void {}
 
 	protected abstract _fillContainer(container: HTMLElement): void;
 	protected abstract _doLayout(heightInPixels: number, widthInPixels: number): void;
@@ -256,7 +285,7 @@ export abstract class ZoneWidget extends Disposable {
 	protected _decoratingElementsHeight(): number {
 		const lineHeight = this.editor.getOption(EditorOption.lineHeight);
 		const arrowHeight = this.options.showArrow ? Math.round(lineHeight / 3) : 0;
-		const frameWidth = this.options.showFrame ? this.options.frameWidth ?? Math.round(lineHeight / 9) : 0;
+		const frameWidth = this.options.showFrame ? (this.options.frameWidth ?? Math.round(lineHeight / 9)) : 0;
 		return 2 * arrowHeight + 2 * frameWidth;
 	}
 
@@ -287,7 +316,10 @@ export abstract class ZoneWidget extends Disposable {
 			const anchor = this.anchor.getRange(0)!.getStartPosition();
 			const nextAfterLineNumber = anchor.lineNumber;
 			const nextHeightInPixels = this.heightInPixels;
-			const needsZoneLayout = this._viewZone.afterLineNumber !== nextAfterLineNumber || this._viewZone.afterColumn !== anchor.column || this._viewZone.heightInPx !== nextHeightInPixels;
+			const needsZoneLayout =
+				this._viewZone.afterLineNumber !== nextAfterLineNumber ||
+				this._viewZone.afterColumn !== anchor.column ||
+				this._viewZone.heightInPx !== nextHeightInPixels;
 			this._viewZone.afterLineNumber = nextAfterLineNumber;
 			this._viewZone.afterColumn = anchor.column;
 			this._viewZone.heightInPx = nextHeightInPixels;
@@ -307,7 +339,7 @@ export abstract class ZoneWidget extends Disposable {
 		const lineHeight = this.editor.getOption(EditorOption.lineHeight);
 		const widthInPixels = this._getWidth(layout);
 		const arrowHeight = this.options.showArrow ? Math.round(lineHeight / 3) : 0;
-		const frameWidth = this.options.showFrame ? this.options.frameWidth ?? Math.round(lineHeight / 9) : 0;
+		const frameWidth = this.options.showFrame ? (this.options.frameWidth ?? Math.round(lineHeight / 9)) : 0;
 		const containerHeight = Math.max(0, heightInPixels - 2 * arrowHeight - 2 * frameWidth);
 		// ViewZones already supplies the content origin, including a minimap on the left.
 		this.domNode.style.left = '0px';
@@ -316,7 +348,10 @@ export abstract class ZoneWidget extends Disposable {
 		if (this.arrowDomNode) {
 			const anchor = this.anchor.getRange(0)!.getStartPosition();
 			const coordinates = this.editor.getScrolledVisiblePosition(anchor);
-			const relativeLeft = Math.min(Math.max(arrowHeight, coordinates ? coordinates.left - layout.contentLeft : arrowHeight), Math.max(arrowHeight, widthInPixels - arrowHeight));
+			const relativeLeft = Math.min(
+				Math.max(arrowHeight, coordinates ? coordinates.left - layout.contentLeft : arrowHeight),
+				Math.max(arrowHeight, widthInPixels - arrowHeight),
+			);
 			this.arrowDomNode.style.left = `${relativeLeft}px`;
 		}
 		if (this.container) {
@@ -342,13 +377,17 @@ export abstract class ZoneWidget extends Disposable {
 	private _initSash(): void {
 		const sash = this._register(new Sash(this.domNode, 'horizontal'));
 		this.resizeSash = sash;
-		this._register(sash.onDidStart(() => {
-			this.resizeStartHeightInLines = this.heightInLines;
-		}));
+		this._register(
+			sash.onDidStart(() => {
+				this.resizeStartHeightInLines = this.heightInLines;
+			}),
+		);
 		this._register(sash.onDidChange(event => this.handleSashChange(event)));
-		this._register(sash.onDidEnd(() => {
-			this.resizeStartHeightInLines = undefined;
-		}));
+		this._register(
+			sash.onDidEnd(() => {
+				this.resizeStartHeightInLines = undefined;
+			}),
+		);
 		this.updateSashState();
 	}
 
@@ -378,11 +417,20 @@ export abstract class ZoneWidget extends Disposable {
 
 function readOptions(options: IOptions): ResolvedOptions {
 	if (!options || typeof options !== 'object') throw new TypeError('Zone widget options must be an object');
-	if (options.frameWidth !== undefined && (!Number.isFinite(options.frameWidth) || options.frameWidth < 0)) throw new RangeError('Zone widget frame width must be finite and non-negative');
-	if (options.ordinal !== undefined && !Number.isFinite(options.ordinal)) throw new RangeError('Zone widget ordinal must be finite');
-	if (options.className !== undefined && typeof options.className !== 'string') throw new TypeError('Zone widget class name must be a string');
-	if (options.frameColor !== undefined && typeof options.frameColor !== 'string' && !(options.frameColor instanceof Color)) throw new TypeError('Zone widget frame color must be a color or string');
-	if (options.arrowColor !== undefined && !(options.arrowColor instanceof Color)) throw new TypeError('Zone widget arrow color must be a color');
+	if (options.frameWidth !== undefined && (!Number.isFinite(options.frameWidth) || options.frameWidth < 0))
+		throw new RangeError('Zone widget frame width must be finite and non-negative');
+	if (options.ordinal !== undefined && !Number.isFinite(options.ordinal))
+		throw new RangeError('Zone widget ordinal must be finite');
+	if (options.className !== undefined && typeof options.className !== 'string')
+		throw new TypeError('Zone widget class name must be a string');
+	if (
+		options.frameColor !== undefined &&
+		typeof options.frameColor !== 'string' &&
+		!(options.frameColor instanceof Color)
+	)
+		throw new TypeError('Zone widget frame color must be a color or string');
+	if (options.arrowColor !== undefined && !(options.arrowColor instanceof Color))
+		throw new TypeError('Zone widget arrow color must be a color');
 	return Object.freeze({
 		showFrame: options.showFrame ?? true,
 		showArrow: options.showArrow ?? true,
@@ -397,11 +445,14 @@ function readOptions(options: IOptions): ResolvedOptions {
 }
 
 function normalizeRange(rangeOrPosition: Range | Position): Range {
-	return Range.isIRange(rangeOrPosition) ? Range.fromPositions(rangeOrPosition.getStartPosition(), rangeOrPosition.getEndPosition()) : Range.fromPositions(rangeOrPosition);
+	return Range.isIRange(rangeOrPosition)
+		? Range.fromPositions(rangeOrPosition.getStartPosition(), rangeOrPosition.getEndPosition())
+		: Range.fromPositions(rangeOrPosition);
 }
 
 function validateHeightInLines(heightInLines: number): void {
-	if (!Number.isFinite(heightInLines) || heightInLines <= 0) throw new RangeError('Zone widget height must be finite and positive');
+	if (!Number.isFinite(heightInLines) || heightInLines <= 0)
+		throw new RangeError('Zone widget height must be finite and positive');
 }
 
 function setOptionalCustomProperty(element: HTMLElement, name: string, value: string | undefined): void {

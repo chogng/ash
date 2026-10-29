@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { browserEnvironment } from '../../../../../../editor/test/browser/testEditorDom.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
-import { ContextKeyService, IContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import {
+	ContextKeyService,
+	IContextKeyService,
+} from '../../../../../../platform/contextkey/browser/contextKeyService.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { FilterWidget } from '../../viewFilter.js';
 import { FilterViewPane } from '../../viewPane.js';
@@ -16,7 +19,11 @@ suite('View filter', () => {
 		assert.throws(() => services.createInstance(FilterWidget, { ariaLabel: 'Output filter' }), /contextKeyService/);
 		using context = new ContextKeyService();
 		services.registerInstance(IContextKeyService, context);
-		using widget = services.createInstance(FilterWidget, { ariaLabel: 'Output filter', placeholder: 'Filter output', text: 'initial' });
+		using widget = services.createInstance(FilterWidget, {
+			ariaLabel: 'Output filter',
+			placeholder: 'Filter output',
+			text: 'initial',
+		});
 		browserEnvironment.window.document.body.append(widget.element);
 		const input = widget.element.querySelector('input')!;
 		const edits: string[] = [];
@@ -36,7 +43,8 @@ suite('View filter', () => {
 		using context = new ContextKeyService();
 		services.registerInstance(IContextKeyService, context);
 		using widget = services.createInstance(FilterWidget, {
-			ariaLabel: 'Output filter', history: Array.from({ length: 101 }, (_, index) => `saved-${index}`),
+			ariaLabel: 'Output filter',
+			history: Array.from({ length: 101 }, (_, index) => `saved-${index}`),
 		});
 		browserEnvironment.window.document.body.append(widget.element);
 		const input = widget.element.querySelector('input')!;
@@ -80,7 +88,9 @@ suite('View filter', () => {
 			widget.dispose();
 			assert.equal(widget.element.isConnected, false);
 			assert.doesNotThrow(() => key(input, 'ArrowUp'));
-		} finally { widget.dispose(); }
+		} finally {
+			widget.dispose();
+		}
 	});
 
 	test('retains the same filter, query, selection and focus when responsive layout moves its host', () => {
@@ -88,7 +98,9 @@ suite('View filter', () => {
 		using context = new ContextKeyService();
 		services.registerInstance(IContextKeyService, context);
 		using pane = services.createInstance(TestFilterPane, browserEnvironment.window.document.body, {
-			id: 'filter-pane', title: 'Output', filterOptions: { ariaLabel: 'Output filter', text: 'current query' },
+			id: 'filter-pane',
+			title: 'Output',
+			filterOptions: { ariaLabel: 'Output filter', text: 'current query' },
 		});
 		pane.setVisible(true);
 		pane.layout(300, 0, 320);
@@ -120,7 +132,9 @@ suite('View filter', () => {
 		using context = new ContextKeyService();
 		services.registerInstance(IContextKeyService, context);
 		using pane = services.createInstance(TestFilterPane, browserEnvironment.window.document.body, {
-			id: 'filter-title-pane', title: 'Output', filterOptions: { ariaLabel: 'Output filter' },
+			id: 'filter-title-pane',
+			title: 'Output',
+			filterOptions: { ariaLabel: 'Output filter' },
 		});
 		pane.setVisible(true);
 		pane.layout(80, 0, 240);
@@ -139,7 +153,9 @@ suite('View filter', () => {
 			assert.equal(pane.filterWidget.hasFocus(), true);
 			pane.dispose();
 			assert.equal(host.children.length, 0);
-		} finally { host.remove(); }
+		} finally {
+			host.remove();
+		}
 	});
 
 	test('observes externally replaced workspace history without replacing the focused filter', () => {
@@ -169,10 +185,16 @@ suite('View filter', () => {
 class TestFilterPane extends FilterViewPane {
 	contentSize: [number, number] = [0, 0];
 	bodyFocused = false;
-	protected override layoutBodyContent(height: number, width: number): void { this.contentSize = [height, width]; }
-	protected override focusBodyContent(): void { this.bodyFocused = true; }
+	protected override layoutBodyContent(height: number, width: number): void {
+		this.contentSize = [height, width];
+	}
+	protected override focusBodyContent(): void {
+		this.bodyFocused = true;
+	}
 }
 
 function key(input: HTMLInputElement, key: string, options: KeyboardEventInit = {}): void {
-	input.dispatchEvent(new browserEnvironment.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options }));
+	input.dispatchEvent(
+		new browserEnvironment.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...options }),
+	);
 }

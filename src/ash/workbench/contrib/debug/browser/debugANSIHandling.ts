@@ -4,11 +4,23 @@ import type { DebugLinkHoverBehaviorTypeData, ILinkDetector } from './linkDetect
 import '../../terminal/common/terminalColorRegistry.js';
 
 const palette = ['Black', 'Red', 'Green', 'Yellow', 'Blue', 'Magenta', 'Cyan', 'White'];
-interface Style { foreground?: string; background?: string; bold?: boolean; italic?: boolean; underline?: boolean; }
+interface Style {
+	foreground?: string;
+	background?: string;
+	bold?: boolean;
+	italic?: boolean;
+	underline?: boolean;
+}
 
 /** Styles output text only. Terminal commands and OSC links never execute in the Console. */
-export function handleANSIOutput(text: string, linkDetector: ILinkDetector, workspaceFolder: IWorkspaceFolder | undefined, _highlights: IMatch[] | undefined, hoverBehavior: DebugLinkHoverBehaviorTypeData): HTMLSpanElement {
-	const runs: { text: string; style: Style; }[] = [];
+export function handleANSIOutput(
+	text: string,
+	linkDetector: ILinkDetector,
+	workspaceFolder: IWorkspaceFolder | undefined,
+	_highlights: IMatch[] | undefined,
+	hoverBehavior: DebugLinkHoverBehaviorTypeData,
+): HTMLSpanElement {
+	const runs: { text: string; style: Style }[] = [];
 	let style: Style = {};
 	let offset = 0;
 	for (const match of text.matchAll(/\x1b(?:\[[0-?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))/g)) {
@@ -18,7 +30,12 @@ export function handleANSIOutput(text: string, linkDetector: ILinkDetector, work
 	}
 	if (offset < text.length) runs.push({ text: text.slice(offset), style });
 	// Linkify the plain text once, so an escape within a URL cannot split its target.
-	const root = linkDetector.linkify(runs.map(run => run.text).join(''), hoverBehavior, true, workspaceFolder) as HTMLSpanElement;
+	const root = linkDetector.linkify(
+		runs.map(run => run.text).join(''),
+		hoverBehavior,
+		true,
+		workspaceFolder,
+	) as HTMLSpanElement;
 	if (!text.includes('\x1b')) return root;
 	const walker = root.ownerDocument.createTreeWalker(root, 4 /* SHOW_TEXT */);
 	const nodes: Text[] = [];
@@ -42,7 +59,10 @@ export function handleANSIOutput(text: string, linkDetector: ILinkDetector, work
 			fragment.append(span);
 			position += count;
 			runOffset += count;
-			if (runOffset === run.text.length) { runIndex++; runOffset = 0; }
+			if (runOffset === run.text.length) {
+				runIndex++;
+				runOffset = 0;
+			}
 		}
 		node.replaceWith(fragment);
 	}
@@ -60,8 +80,10 @@ function applyCodes(previous: Style, parameters: string): Style {
 		else if (code === 4 || code === 24) style.underline = code === 4;
 		else if (code === 39) delete style.foreground;
 		else if (code === 49) delete style.background;
-		else if (code >= 30 && code <= 37 || code >= 90 && code <= 97) style.foreground = paletteColor(code % 10, code >= 90);
-		else if (code >= 40 && code <= 47 || code >= 100 && code <= 107) style.background = paletteColor(code % 10, code >= 100);
+		else if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97))
+			style.foreground = paletteColor(code % 10, code >= 90);
+		else if ((code >= 40 && code <= 47) || (code >= 100 && code <= 107))
+			style.background = paletteColor(code % 10, code >= 100);
 		else if (code === 38 || code === 48) {
 			const kind = codes[++index];
 			let color: string | undefined;
@@ -69,19 +91,26 @@ function applyCodes(previous: Style, parameters: string): Style {
 				const value = codes[++index];
 				if (value !== undefined && value >= 0 && value <= 255) {
 					if (value < 16) color = paletteColor(value % 8, value >= 8);
-					else if (value >= 232) color = `rgb(${Array(3).fill(8 + (value - 232) * 10).join(', ')})`;
+					else if (value >= 232)
+						color = `rgb(${Array(3)
+							.fill(8 + (value - 232) * 10)
+							.join(', ')})`;
 					else {
 						const cell = value - 16;
-						const channel = (n: number) => n === 0 ? 0 : 55 + n * 40;
+						const channel = (n: number) => (n === 0 ? 0 : 55 + n * 40);
 						color = `rgb(${[Math.floor(cell / 36), Math.floor(cell / 6) % 6, cell % 6].map(channel).join(', ')})`;
 					}
 				}
 			} else if (kind === 2) {
 				const rgb = codes.slice(index + 1, index + 4);
 				index += 3;
-				if (rgb.length === 3 && rgb.every(value => value >= 0 && value <= 255)) color = `rgb(${rgb.join(', ')})`;
+				if (rgb.length === 3 && rgb.every(value => value >= 0 && value <= 255))
+					color = `rgb(${rgb.join(', ')})`;
 			}
-			if (color) { if (code === 38) style.foreground = color; else style.background = color; }
+			if (color) {
+				if (code === 38) style.foreground = color;
+				else style.background = color;
+			}
 		}
 	}
 	return style;

@@ -3,5 +3,6 @@ import { NativeTitlebarPart } from '../../../electron-browser/parts/titlebar/tit
 
 /** Selects Electron's window controls and application menu for the shared title service. */
 export function createElectronTitlebarPartFactory(): TitlebarPartFactory {
-	return (container, options, instantiationService) => instantiationService.createInstance(NativeTitlebarPart, container, options);
+	return (container, options, instantiationService) =>
+		instantiationService.createInstance(NativeTitlebarPart, container, options);
 }

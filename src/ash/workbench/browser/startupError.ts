@@ -42,13 +42,21 @@ export function showStartupError(error: unknown, writeClipboard: (text: string) 
 	message.append(title, detail, copy, retry, copyStatus);
 	container.replaceChildren(message);
 	const resources = new DisposableStore();
-	resources.add(addDisposableListener(copy, 'click', () => {
-		void writeClipboard(details).then(() => {
-			copyStatus.textContent = localize('workbench.startupError.copied', 'Error details copied.');
-		}, () => {
-			copyStatus.textContent = localize('workbench.startupError.copyFailed', 'Could not copy. Select the details above to copy them manually.');
-		});
-	}));
+	resources.add(
+		addDisposableListener(copy, 'click', () => {
+			void writeClipboard(details).then(
+				() => {
+					copyStatus.textContent = localize('workbench.startupError.copied', 'Error details copied.');
+				},
+				() => {
+					copyStatus.textContent = localize(
+						'workbench.startupError.copyFailed',
+						'Could not copy. Select the details above to copy them manually.',
+					);
+				},
+			);
+		}),
+	);
 	resources.add(addDisposableListener(retry, 'click', () => window.location.reload()));
 	resources.add(toDisposable(() => message.remove()));
 	resources.add(addDisposableListener(window, 'pagehide', () => resources.dispose(), { once: true }));

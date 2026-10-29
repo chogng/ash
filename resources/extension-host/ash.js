@@ -1,5 +1,18 @@
 import { createSCMApi } from './scm.js';
-import { languages as ashLanguages, workspace as ashWorkspace, window as ashWindow, tasks as ashTasks, terminals as ashTerminals, speech as ashSpeech, debug as ashDebug, __runtime as ashRuntime, CancellationTokenSource, ResolvedAuthority, ManagedResolvedAuthority, RemoteAuthorityResolverError } from './host.mjs';
+import {
+	languages as ashLanguages,
+	workspace as ashWorkspace,
+	window as ashWindow,
+	tasks as ashTasks,
+	terminals as ashTerminals,
+	speech as ashSpeech,
+	debug as ashDebug,
+	__runtime as ashRuntime,
+	CancellationTokenSource,
+	ResolvedAuthority,
+	ManagedResolvedAuthority,
+	RemoteAuthorityResolverError,
+} from './host.mjs';
 
 // This is the public editor contract inside the supervised process. Editor models and UI
 // remain with the initiating client; this module owns only extension callback lifetimes.
@@ -7,24 +20,42 @@ export function createApi(configuration, initialization) {
 	const localization = initialization?.localization ?? configuration.localization;
 	if (localization?.package) {
 		const visit = value => {
-			if (typeof value === 'string') return value.replace(/^%(.+)%$/, (text, key) => localization.package[key] ?? text);
+			if (typeof value === 'string')
+				return value.replace(/^%(.+)%$/, (text, key) => localization.package[key] ?? text);
 			if (Array.isArray(value)) return value.map(visit);
-			if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, visit(entry)]));
+			if (value && typeof value === 'object')
+				return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, visit(entry)]));
 			return value;
 		};
-		configuration = { ...configuration, commands: visit(configuration.commands), manifest: visit(configuration.manifest) };
+		configuration = {
+			...configuration,
+			commands: visit(configuration.commands),
+			manifest: visit(configuration.manifest),
+		};
 	}
 	const terminalContribution = configuration.manifest?.contributes?.terminal;
-	if (terminalContribution !== undefined && (!terminalContribution || typeof terminalContribution !== 'object' || Array.isArray(terminalContribution))) throw new TypeError('Invalid terminal contributions');
+	if (
+		terminalContribution !== undefined &&
+		(!terminalContribution || typeof terminalContribution !== 'object' || Array.isArray(terminalContribution))
+	)
+		throw new TypeError('Invalid terminal contributions');
 	const declaredProfiles = terminalContribution?.profiles;
 	const legacyProfiles = configuration.manifest?.contributes?.terminalProfiles;
-	if (declaredProfiles !== undefined && legacyProfiles !== undefined) throw new TypeError('Conflicting terminal profile declarations');
+	if (declaredProfiles !== undefined && legacyProfiles !== undefined)
+		throw new TypeError('Conflicting terminal profile declarations');
 	const terminalProfiles = declaredProfiles ?? legacyProfiles ?? [];
-	if (!Array.isArray(terminalProfiles) || terminalProfiles.length > 128) throw new TypeError('Invalid terminal profile declarations');
+	if (!Array.isArray(terminalProfiles) || terminalProfiles.length > 128)
+		throw new TypeError('Invalid terminal profile declarations');
 	const titles = new Map();
 	if (!Array.isArray(configuration.commands)) throw new TypeError('Invalid command contributions');
 	for (const entry of configuration.commands) {
-		if (typeof entry.command !== 'string' || !entry.command || typeof entry.title !== 'string' || !entry.title || titles.has(entry.command)) {
+		if (
+			typeof entry.command !== 'string' ||
+			!entry.command ||
+			typeof entry.title !== 'string' ||
+			!entry.title ||
+			titles.has(entry.command)
+		) {
 			throw new TypeError('Invalid command contribution');
 		}
 		titles.set(entry.command, entry.title);
@@ -45,40 +76,82 @@ export function createApi(configuration, initialization) {
 	let terminalCompletionsAdmitted = false;
 	let terminalQuickFixesAdmitted = false;
 	function requireEnvironmentCapability() {
-		if (!environmentAdmitted) throw new Error('Terminal environment collections require the admitted terminal provider capability');
+		if (!environmentAdmitted)
+			throw new Error('Terminal environment collections require the admitted terminal provider capability');
 	}
 	function environmentCollection(scope) {
 		const scopeId = scope?.workspaceFolder?.uri.toString() ?? '';
-		const entries = () => [...environmentMutators.values()].filter(entry => (entry.scope?.workspaceFolder?.uri.toString() ?? '') === scopeId);
+		const entries = () =>
+			[...environmentMutators.values()].filter(
+				entry => (entry.scope?.workspaceFolder?.uri.toString() ?? '') === scopeId,
+			);
 		const key = variable => JSON.stringify([scopeId, variable]);
 		const view = Object.freeze({
-			get persistent() { return environmentPersistent; },
+			get persistent() {
+				return environmentPersistent;
+			},
 			set persistent(value) {
 				requireEnvironmentCapability();
-				if (typeof value !== 'boolean') throw new TypeError('Environment collection persistence must be a boolean');
+				if (typeof value !== 'boolean')
+					throw new TypeError('Environment collection persistence must be a boolean');
 				environmentPersistent = value;
 			},
-			get description() { return environmentDescriptions.get(scopeId)?.description; },
+			get description() {
+				return environmentDescriptions.get(scopeId)?.description;
+			},
 			set description(value) {
 				requireEnvironmentCapability();
-				if (value !== undefined && (typeof value !== 'string' || value.length > 32768 || value.includes('\0'))) throw new TypeError('Invalid terminal environment description');
+				if (value !== undefined && (typeof value !== 'string' || value.length > 32768 || value.includes('\0')))
+					throw new TypeError('Invalid terminal environment description');
 				if (value === undefined) environmentDescriptions.delete(scopeId);
 				else environmentDescriptions.set(scopeId, { description: value, ...(scope ? { scope } : {}) });
 			},
-			replace(variable, value, options) { setEnvironmentMutator(key(variable), variable, value, 1, scope, options); },
-			append(variable, value, options) { setEnvironmentMutator(key(variable), variable, value, 2, scope, options); },
-			prepend(variable, value, options) { setEnvironmentMutator(key(variable), variable, value, 3, scope, options); },
-			get(variable) { return environmentMutators.get(key(variable)); },
-			delete(variable) { requireEnvironmentCapability(); environmentMutators.delete(key(variable)); },
-			clear() { requireEnvironmentCapability(); for (const entry of entries()) environmentMutators.delete(key(entry.variable)); },
-			forEach(callback, thisArg) { for (const entry of entries()) callback.call(thisArg, entry.variable, entry, view); },
-			[Symbol.iterator]() { return entries().map(entry => [entry.variable, entry])[Symbol.iterator](); },
+			replace(variable, value, options) {
+				setEnvironmentMutator(key(variable), variable, value, 1, scope, options);
+			},
+			append(variable, value, options) {
+				setEnvironmentMutator(key(variable), variable, value, 2, scope, options);
+			},
+			prepend(variable, value, options) {
+				setEnvironmentMutator(key(variable), variable, value, 3, scope, options);
+			},
+			get(variable) {
+				return environmentMutators.get(key(variable));
+			},
+			delete(variable) {
+				requireEnvironmentCapability();
+				environmentMutators.delete(key(variable));
+			},
+			clear() {
+				requireEnvironmentCapability();
+				for (const entry of entries()) environmentMutators.delete(key(entry.variable));
+			},
+			forEach(callback, thisArg) {
+				for (const entry of entries()) callback.call(thisArg, entry.variable, entry, view);
+			},
+			[Symbol.iterator]() {
+				return entries()
+					.map(entry => [entry.variable, entry])
+					[Symbol.iterator]();
+			},
 			getScoped(scope) {
 				requireEnvironmentCapability();
 				if (scope === undefined || scope.workspaceFolder === undefined) return environmentVariableCollection;
 				const folder = scope.workspaceFolder;
-				if (!folder || !(folder.uri instanceof Uri) || typeof folder.name !== 'string' || !folder.name || !Number.isSafeInteger(folder.index) || folder.index < 0) throw new TypeError('Invalid terminal environment scope');
-				return environmentCollection(Object.freeze({ workspaceFolder: Object.freeze({ uri: folder.uri, name: folder.name, index: folder.index }) }));
+				if (
+					!folder ||
+					!(folder.uri instanceof Uri) ||
+					typeof folder.name !== 'string' ||
+					!folder.name ||
+					!Number.isSafeInteger(folder.index) ||
+					folder.index < 0
+				)
+					throw new TypeError('Invalid terminal environment scope');
+				return environmentCollection(
+					Object.freeze({
+						workspaceFolder: Object.freeze({ uri: folder.uri, name: folder.name, index: folder.index }),
+					}),
+				);
 			},
 		});
 		return view;
@@ -86,10 +159,36 @@ export function createApi(configuration, initialization) {
 	const environmentVariableCollection = environmentCollection();
 	function setEnvironmentMutator(key, variable, value, type, scope, options = { applyAtProcessCreation: true }) {
 		requireEnvironmentCapability();
-		if (typeof variable !== 'string' || !variable || variable.length > 32768 || /[=\0]/.test(variable) || typeof value !== 'string' || value.length > 32768 || value.includes('\0')) throw new TypeError('Invalid terminal environment mutator');
-		if (!environmentMutators.has(key) && environmentMutators.size >= 1024) throw new RangeError('Terminal environment collection quota exceeded');
-		if (!options || typeof options !== 'object' || Array.isArray(options) || Object.keys(options).some(key => !['applyAtProcessCreation', 'applyAtShellIntegration'].includes(key)) || Object.values(options).some(value => value !== undefined && typeof value !== 'boolean')) throw new TypeError('Invalid terminal environment mutator');
-		environmentMutators.set(key, Object.freeze({ variable, value, type, options: Object.freeze({ ...options }), ...(scope ? { scope } : {}) }));
+		if (
+			typeof variable !== 'string' ||
+			!variable ||
+			variable.length > 32768 ||
+			/[=\0]/.test(variable) ||
+			typeof value !== 'string' ||
+			value.length > 32768 ||
+			value.includes('\0')
+		)
+			throw new TypeError('Invalid terminal environment mutator');
+		if (!environmentMutators.has(key) && environmentMutators.size >= 1024)
+			throw new RangeError('Terminal environment collection quota exceeded');
+		if (
+			!options ||
+			typeof options !== 'object' ||
+			Array.isArray(options) ||
+			Object.keys(options).some(key => !['applyAtProcessCreation', 'applyAtShellIntegration'].includes(key)) ||
+			Object.values(options).some(value => value !== undefined && typeof value !== 'boolean')
+		)
+			throw new TypeError('Invalid terminal environment mutator');
+		environmentMutators.set(
+			key,
+			Object.freeze({
+				variable,
+				value,
+				type,
+				options: Object.freeze({ ...options }),
+				...(scope ? { scope } : {}),
+			}),
+		);
 	}
 	function snapshotEnvironment() {
 		const entries = [...environmentMutators.values()];
@@ -151,7 +250,14 @@ export function createApi(configuration, initialization) {
 	const debuggerTypes = new Set((configuration.debuggers ?? []).map(value => value.type));
 	const registeredDebuggerTypes = new Set();
 	const debugSessions = new Map();
-	const debugListeners = { start: new Set(), end: new Set(), active: new Set(), custom: new Set(), breakpoints: new Set(), stackItem: new Set() };
+	const debugListeners = {
+		start: new Set(),
+		end: new Set(),
+		active: new Set(),
+		custom: new Set(),
+		breakpoints: new Set(),
+		stackItem: new Set(),
+	};
 	let debugEventRegistration;
 	let debugSequence = -1;
 	let activeDebugSession;
@@ -161,33 +267,66 @@ export function createApi(configuration, initialization) {
 	let breakpointSequence = 0;
 
 	function debugSession(value) {
-		if (typeof value?.id !== 'string' || typeof value.type !== 'string' || typeof value.name !== 'string' || !value.configuration || typeof value.configuration !== 'object') throw new TypeError('Invalid debug session snapshot');
+		if (
+			typeof value?.id !== 'string' ||
+			typeof value.type !== 'string' ||
+			typeof value.name !== 'string' ||
+			!value.configuration ||
+			typeof value.configuration !== 'object'
+		)
+			throw new TypeError('Invalid debug session snapshot');
 		let entry = debugSessions.get(value.id);
 		if (!entry) {
 			entry = { value, handle: undefined, parent: debugSessions.get(value.parentSessionId)?.handle };
 			entry.handle = Object.freeze({
 				id: value.id,
-				get type() { return entry.value.type; },
-				get parentSession() { return entry.value.parentSessionId == null ? undefined : entry.parent ??= debugSessions.get(entry.value.parentSessionId)?.handle; },
-				get name() { return entry.value.name; },
+				get type() {
+					return entry.value.type;
+				},
+				get parentSession() {
+					return entry.value.parentSessionId == null
+						? undefined
+						: (entry.parent ??= debugSessions.get(entry.value.parentSessionId)?.handle);
+				},
+				get name() {
+					return entry.value.name;
+				},
 				set name(name) {
-					if (typeof name !== 'string' || name.length > 32768 || name.includes('\0')) throw new TypeError('Invalid debug session name');
+					if (typeof name !== 'string' || name.length > 32768 || name.includes('\0'))
+						throw new TypeError('Invalid debug session name');
 					serviceOwner();
 					entry.value = { ...entry.value, name };
 					void request({ operation: 'setDebugSessionName', sessionId: value.id, name }, 'done');
 				},
-				get configuration() { return entry.value.configuration; },
+				get configuration() {
+					return entry.value.configuration;
+				},
 				get workspaceFolder() {
 					const folder = entry.value.workspaceFolder;
-					return folder === null ? undefined : { uri: Uri.parse(folder.uri), name: folder.name, index: folder.index };
+					return folder === null
+						? undefined
+						: { uri: Uri.parse(folder.uri), name: folder.name, index: folder.index };
 				},
 				getDebugProtocolBreakpoint(breakpoint) {
 					if (!(breakpoint instanceof Breakpoint)) throw new TypeError('Invalid debug breakpoint');
-					return request({ operation: 'getDebugProtocolBreakpoint', sessionId: value.id, breakpointId: breakpoint.id }, 'debugResponse').then(result => result.hasBody ? result.value : undefined);
+					return request(
+						{ operation: 'getDebugProtocolBreakpoint', sessionId: value.id, breakpointId: breakpoint.id },
+						'debugResponse',
+					).then(result => (result.hasBody ? result.value : undefined));
 				},
 				customRequest(command, args) {
-					if (typeof command !== 'string' || !command || command.length > 256 || command.includes('\0')) throw new TypeError('Invalid Debug Adapter command');
-					return request({ operation: 'debugCustomRequest', sessionId: value.id, command, arguments: args === undefined ? null : args, hasArguments: args !== undefined }, 'debugResponse').then(result => result.hasBody ? result.value : undefined);
+					if (typeof command !== 'string' || !command || command.length > 256 || command.includes('\0'))
+						throw new TypeError('Invalid Debug Adapter command');
+					return request(
+						{
+							operation: 'debugCustomRequest',
+							sessionId: value.id,
+							command,
+							arguments: args === undefined ? null : args,
+							hasArguments: args !== undefined,
+						},
+						'debugResponse',
+					).then(result => (result.hasBody ? result.value : undefined));
 				},
 			});
 			debugSessions.set(value.id, entry);
@@ -207,42 +346,86 @@ export function createApi(configuration, initialization) {
 
 	function ensureDebugEvents() {
 		if (debugEventRegistration) return;
-		debugEventRegistration = ashDebug.registerDebugEvents('ash.debug.events', (_context, event) => invoke(async () => {
-			if (!Number.isSafeInteger(event?.sequence) || event.sequence < 0) throw new TypeError('Invalid debug event sequence');
-			if (event.sequence < debugSequence) return;
-			debugSequence = event.sequence;
-			if (event.type === 'snapshot') {
-				if (!Array.isArray(event.sessions) || !Array.isArray(event.breakpoints)) throw new TypeError('Invalid debug snapshot');
-				await applyBreakpointChanges(event.breakpoints, [...debugBreakpoints.values()].filter(point => !event.breakpoints.some(value => value.id === point.id)).map(encodeBreakpoint), []);
-				const retained = new Set(event.sessions.map(value => { debugSession(value); return value.id; }));
-				for (const id of debugSessions.keys()) if (!retained.has(id)) debugSessions.delete(id);
-				activeDebugSession = event.activeSession === null ? undefined : debugSessions.get(event.activeSession)?.handle;
-				await updateActiveStackItem(event.activeStackItem);
-				return;
-			}
-			if (event.type === 'stackItem') { await updateActiveStackItem(event.item); return; }
-			if (event.type === 'name') { debugSession(event.session); return; }
-			if (event.type === 'breakpoints') { await applyBreakpointChanges(event.added, event.removed, event.changed); return; }
-			if (!Object.hasOwn(debugListeners, event.type)) throw new TypeError('Invalid debug event');
-			const session = event.session === null ? undefined : debugSession(event.session);
-			if (event.type === 'active') activeDebugSession = session;
-			const value = event.type === 'custom' ? { session, event: event.event, body: event.hasBody ? event.body : undefined } : session;
-			try {
-				await Promise.all([...debugListeners[event.type]].map(async entry => entry.listener.call(entry.thisArg, value)));
-			} finally {
-				if (event.type === 'end') debugSessions.delete(event.session.id);
-			}
-		}));
+		debugEventRegistration = ashDebug.registerDebugEvents('ash.debug.events', (_context, event) =>
+			invoke(async () => {
+				if (!Number.isSafeInteger(event?.sequence) || event.sequence < 0)
+					throw new TypeError('Invalid debug event sequence');
+				if (event.sequence < debugSequence) return;
+				debugSequence = event.sequence;
+				if (event.type === 'snapshot') {
+					if (!Array.isArray(event.sessions) || !Array.isArray(event.breakpoints))
+						throw new TypeError('Invalid debug snapshot');
+					await applyBreakpointChanges(
+						event.breakpoints,
+						[...debugBreakpoints.values()]
+							.filter(point => !event.breakpoints.some(value => value.id === point.id))
+							.map(encodeBreakpoint),
+						[],
+					);
+					const retained = new Set(
+						event.sessions.map(value => {
+							debugSession(value);
+							return value.id;
+						}),
+					);
+					for (const id of debugSessions.keys()) if (!retained.has(id)) debugSessions.delete(id);
+					activeDebugSession =
+						event.activeSession === null ? undefined : debugSessions.get(event.activeSession)?.handle;
+					await updateActiveStackItem(event.activeStackItem);
+					return;
+				}
+				if (event.type === 'stackItem') {
+					await updateActiveStackItem(event.item);
+					return;
+				}
+				if (event.type === 'name') {
+					debugSession(event.session);
+					return;
+				}
+				if (event.type === 'breakpoints') {
+					await applyBreakpointChanges(event.added, event.removed, event.changed);
+					return;
+				}
+				if (!Object.hasOwn(debugListeners, event.type)) throw new TypeError('Invalid debug event');
+				const session = event.session === null ? undefined : debugSession(event.session);
+				if (event.type === 'active') activeDebugSession = session;
+				const value =
+					event.type === 'custom'
+						? { session, event: event.event, body: event.hasBody ? event.body : undefined }
+						: session;
+				try {
+					await Promise.all(
+						[...debugListeners[event.type]].map(async entry => entry.listener.call(entry.thisArg, value)),
+					);
+				} finally {
+					if (event.type === 'end') debugSessions.delete(event.session.id);
+				}
+			}),
+		);
 		subscriptions.push(debugEventRegistration);
 	}
 
 	async function updateActiveStackItem(value) {
 		let item;
 		if (value !== undefined && value !== null) {
-			if (!['thread', 'frame'].includes(value.kind) || !Number.isSafeInteger(value.threadId) || value.kind === 'frame' && !Number.isSafeInteger(value.frameId)) throw new TypeError('Invalid active debug stack item');
+			if (
+				!['thread', 'frame'].includes(value.kind) ||
+				!Number.isSafeInteger(value.threadId) ||
+				(value.kind === 'frame' && !Number.isSafeInteger(value.frameId))
+			)
+				throw new TypeError('Invalid active debug stack item');
 			const session = debugSession(value.session);
-			if (activeStackItem?.session === session && activeStackItem.threadId === value.threadId && (activeStackItem instanceof DebugStackFrame ? activeStackItem.frameId : undefined) === (value.kind === 'frame' ? value.frameId : undefined)) return;
-			item = value.kind === 'frame' ? new DebugStackFrame(session, value.threadId, value.frameId) : new DebugThread(session, value.threadId);
+			if (
+				activeStackItem?.session === session &&
+				activeStackItem.threadId === value.threadId &&
+				(activeStackItem instanceof DebugStackFrame ? activeStackItem.frameId : undefined) ===
+					(value.kind === 'frame' ? value.frameId : undefined)
+			)
+				return;
+			item =
+				value.kind === 'frame'
+					? new DebugStackFrame(session, value.threadId, value.frameId)
+					: new DebugThread(session, value.threadId);
 		}
 		if (item === activeStackItem) return;
 		activeStackItem = item;
@@ -250,11 +433,20 @@ export function createApi(configuration, initialization) {
 	}
 
 	function encodeBreakpoint(point) {
-		if (!(point instanceof SourceBreakpoint) && !(point instanceof FunctionBreakpoint)) throw new TypeError('Unsupported breakpoint type');
+		if (!(point instanceof SourceBreakpoint) && !(point instanceof FunctionBreakpoint))
+			throw new TypeError('Unsupported breakpoint type');
 		const state = breakpointStates.get(point);
 		return {
-			id: point.id, enabled: point.enabled,
-			...(point instanceof SourceBreakpoint ? { kind: 'source', uri: point.location.uri.toString(), line: point.location.range.start.line, column: state.column === null ? null : point.location.range.start.character } : { kind: 'function', name: point.functionName }),
+			id: point.id,
+			enabled: point.enabled,
+			...(point instanceof SourceBreakpoint
+				? {
+						kind: 'source',
+						uri: point.location.uri.toString(),
+						line: point.location.range.start.line,
+						column: state.column === null ? null : point.location.range.start.character,
+					}
+				: { kind: 'function', name: point.functionName }),
 			...(point.condition === undefined ? {} : { condition: point.condition }),
 			...(point.hitCondition === undefined ? {} : { hitCondition: point.hitCondition }),
 			...(point.logMessage === undefined ? {} : { logMessage: point.logMessage }),
@@ -262,21 +454,51 @@ export function createApi(configuration, initialization) {
 	}
 
 	function decodeBreakpoint(value) {
-		if (typeof value?.id !== 'string' || typeof value.enabled !== 'boolean' || !['source', 'function'].includes(value.kind)) throw new TypeError('Invalid breakpoint snapshot');
+		if (
+			typeof value?.id !== 'string' ||
+			typeof value.enabled !== 'boolean' ||
+			!['source', 'function'].includes(value.kind)
+		)
+			throw new TypeError('Invalid breakpoint snapshot');
 		const previous = debugBreakpoints.get(value.id);
-		const point = previous ?? (value.kind === 'source'
-			? new SourceBreakpoint(new Location(Uri.parse(value.uri), new Position(value.line, value.column ?? 0)), value.enabled, value.condition, value.hitCondition, value.logMessage)
-			: new FunctionBreakpoint(value.name, value.enabled, value.condition, value.hitCondition, value.logMessage));
-		breakpointStates.set(point, { ...value, location: value.kind === 'source' ? new Location(Uri.parse(value.uri), new Position(value.line, value.column ?? 0)) : undefined });
+		const point =
+			previous ??
+			(value.kind === 'source'
+				? new SourceBreakpoint(
+						new Location(Uri.parse(value.uri), new Position(value.line, value.column ?? 0)),
+						value.enabled,
+						value.condition,
+						value.hitCondition,
+						value.logMessage,
+					)
+				: new FunctionBreakpoint(
+						value.name,
+						value.enabled,
+						value.condition,
+						value.hitCondition,
+						value.logMessage,
+					));
+		breakpointStates.set(point, {
+			...value,
+			location:
+				value.kind === 'source'
+					? new Location(Uri.parse(value.uri), new Position(value.line, value.column ?? 0))
+					: undefined,
+		});
 		return point;
 	}
 
 	async function applyBreakpointChanges(additions, removals, changes) {
 		if (![additions, removals, changes].every(Array.isArray)) throw new TypeError('Invalid breakpoint change');
-		const added = [], removed = [], changed = [];
+		const added = [],
+			removed = [],
+			changed = [];
 		for (const value of removals) {
 			const point = debugBreakpoints.get(value.id);
-			if (point) { debugBreakpoints.delete(value.id); removed.push(point); }
+			if (point) {
+				debugBreakpoints.delete(value.id);
+				removed.push(point);
+			}
 		}
 		for (const value of [...additions, ...changes]) {
 			const previous = debugBreakpoints.get(value.id);
@@ -287,7 +509,11 @@ export function createApi(configuration, initialization) {
 			else if (before !== JSON.stringify(encodeBreakpoint(point))) changed.push(point);
 		}
 		if (added.length || removed.length || changed.length) {
-			const event = Object.freeze({ added: Object.freeze(added), removed: Object.freeze(removed), changed: Object.freeze(changed) });
+			const event = Object.freeze({
+				added: Object.freeze(added),
+				removed: Object.freeze(removed),
+				changed: Object.freeze(changed),
+			});
 			await Promise.all([...debugListeners.breakpoints].map(entry => entry.listener.call(entry.thisArg, event)));
 		}
 	}
@@ -298,16 +524,42 @@ export function createApi(configuration, initialization) {
 		const values = points.map(encodeBreakpoint);
 		const owned = serviceOwner();
 		ensureDebugEvents();
-		const added = [], removed = [];
+		const added = [],
+			removed = [];
 		for (const point of points) {
-			if (remove) { const current = debugBreakpoints.get(point.id); if (current) { removed.push(current); debugBreakpoints.delete(point.id); } }
-			else if (!debugBreakpoints.has(point.id)) { debugBreakpoints.set(point.id, point); added.push(point); }
+			if (remove) {
+				const current = debugBreakpoints.get(point.id);
+				if (current) {
+					removed.push(current);
+					debugBreakpoints.delete(point.id);
+				}
+			} else if (!debugBreakpoints.has(point.id)) {
+				debugBreakpoints.set(point.id, point);
+				added.push(point);
+			}
 		}
-		const changes = added.length || removed.length
-			? Promise.all([...debugListeners.breakpoints].map(entry => entry.listener.call(entry.thisArg, Object.freeze({ added: Object.freeze(added), removed: Object.freeze(removed), changed: Object.freeze([]) }))))
-			: Promise.resolve();
+		const changes =
+			added.length || removed.length
+				? Promise.all(
+						[...debugListeners.breakpoints].map(entry =>
+							entry.listener.call(
+								entry.thisArg,
+								Object.freeze({
+									added: Object.freeze(added),
+									removed: Object.freeze(removed),
+									changed: Object.freeze([]),
+								}),
+							),
+						),
+					)
+				: Promise.resolve();
 		owned?.push(changes);
-		void request(remove ? { operation: 'removeDebugBreakpoints', breakpointIds: values.map(value => value.id) } : { operation: 'addDebugBreakpoints', breakpoints: values }, 'done');
+		void request(
+			remove
+				? { operation: 'removeDebugBreakpoints', breakpointIds: values.map(value => value.id) }
+				: { operation: 'addDebugBreakpoints', breakpoints: values },
+			'done',
+		);
 	}
 
 	class ProcessExecution {
@@ -324,34 +576,61 @@ export function createApi(configuration, initialization) {
 				this.args = argsOrOptions;
 				this.options = options;
 			} else {
-				if (typeof command !== 'string' || options !== undefined) throw new TypeError('ShellExecution requires a command line or a command and arguments');
+				if (typeof command !== 'string' || options !== undefined)
+					throw new TypeError('ShellExecution requires a command line or a command and arguments');
 				this.commandLine = command;
 				this.options = argsOrOptions;
 			}
 		}
 	}
-	class CustomExecution { constructor(callback) { if (typeof callback !== 'function') throw new TypeError('CustomExecution requires a callback'); this.callback = callback; } }
+	class CustomExecution {
+		constructor(callback) {
+			if (typeof callback !== 'function') throw new TypeError('CustomExecution requires a callback');
+			this.callback = callback;
+		}
+	}
 	class EventEmitter {
 		constructor() {
 			this.listeners = new Set();
 			this.event = (listener, thisArg, disposables) => {
-				const entry = { listener, thisArg }; this.listeners.add(entry);
+				const entry = { listener, thisArg };
+				this.listeners.add(entry);
 				const disposable = new Disposable(() => this.listeners.delete(entry));
-				disposables?.push(disposable); return disposable;
+				disposables?.push(disposable);
+				return disposable;
 			};
 		}
-		fire(value) { for (const entry of [...this.listeners]) entry.listener.call(entry.thisArg, value); }
-		dispose() { this.listeners.clear(); }
+		fire(value) {
+			for (const entry of [...this.listeners]) entry.listener.call(entry.thisArg, value);
+		}
+		dispose() {
+			this.listeners.clear();
+		}
 	}
 	class Task {
-		constructor(definition, scopeOrName, nameOrSource, sourceOrExecution, executionOrMatchers, problemMatchers = []) {
+		constructor(
+			definition,
+			scopeOrName,
+			nameOrSource,
+			sourceOrExecution,
+			executionOrMatchers,
+			problemMatchers = [],
+		) {
 			this.definition = definition;
 			if (typeof scopeOrName === 'string') {
-				this.name = scopeOrName; this.source = nameOrSource; this.execution = sourceOrExecution; this.problemMatchers = executionOrMatchers ?? [];
+				this.name = scopeOrName;
+				this.source = nameOrSource;
+				this.execution = sourceOrExecution;
+				this.problemMatchers = executionOrMatchers ?? [];
 			} else {
-				this.scope = scopeOrName; this.name = nameOrSource; this.source = sourceOrExecution; this.execution = executionOrMatchers; this.problemMatchers = problemMatchers;
+				this.scope = scopeOrName;
+				this.name = nameOrSource;
+				this.source = sourceOrExecution;
+				this.execution = executionOrMatchers;
+				this.problemMatchers = problemMatchers;
 			}
-			this.problemMatchers = typeof this.problemMatchers === 'string' ? [this.problemMatchers] : this.problemMatchers;
+			this.problemMatchers =
+				typeof this.problemMatchers === 'string' ? [this.problemMatchers] : this.problemMatchers;
 			this.isBackground = false;
 			this.presentationOptions = {};
 			this.runOptions = {};
@@ -359,8 +638,12 @@ export function createApi(configuration, initialization) {
 	}
 	class TaskGroup {
 		constructor(id, label, isDefault) {
-			if (typeof id !== 'string' || typeof label !== 'string') throw new TypeError('TaskGroup requires an ID and label');
-			Object.defineProperties(this, { id: { value: id, enumerable: true }, isDefault: { value: isDefault, enumerable: true } });
+			if (typeof id !== 'string' || typeof label !== 'string')
+				throw new TypeError('TaskGroup requires an ID and label');
+			Object.defineProperties(this, {
+				id: { value: id, enumerable: true },
+				isDefault: { value: isDefault, enumerable: true },
+			});
 			this.label = label;
 		}
 		static Build = new TaskGroup('build', 'Build');
@@ -369,26 +652,52 @@ export function createApi(configuration, initialization) {
 		static Rebuild = new TaskGroup('rebuild', 'Rebuild');
 	}
 	class DebugAdapterExecutable {
-		constructor(command, args = [], options) { this.command = command; this.args = args; this.options = options; }
+		constructor(command, args = [], options) {
+			this.command = command;
+			this.args = args;
+			this.options = options;
+		}
 	}
 	class DebugThread {
-		constructor(session, threadId) { this.session = session; this.threadId = threadId; Object.freeze(this); }
+		constructor(session, threadId) {
+			this.session = session;
+			this.threadId = threadId;
+			Object.freeze(this);
+		}
 	}
 	class DebugStackFrame {
-		constructor(session, threadId, frameId) { this.session = session; this.threadId = threadId; this.frameId = frameId; Object.freeze(this); }
+		constructor(session, threadId, frameId) {
+			this.session = session;
+			this.threadId = threadId;
+			this.frameId = frameId;
+			Object.freeze(this);
+		}
 	}
 	class DebugAdapterInlineImplementation {
-		constructor(implementation) { this.implementation = implementation; }
+		constructor(implementation) {
+			this.implementation = implementation;
+		}
 	}
 	class DebugAdapterServer {
 		constructor(port, host) {
-			if (!Number.isInteger(port) || port < 1 || port > 65535 || host !== undefined && (typeof host !== 'string' || !host.trim() || host.length > 256 || host.includes('\0'))) { throw new TypeError('Invalid Debug Adapter server'); }
-			this.port = port; this.host = host;
+			if (
+				!Number.isInteger(port) ||
+				port < 1 ||
+				port > 65535 ||
+				(host !== undefined &&
+					(typeof host !== 'string' || !host.trim() || host.length > 256 || host.includes('\0')))
+			) {
+				throw new TypeError('Invalid Debug Adapter server');
+			}
+			this.port = port;
+			this.host = host;
 		}
 	}
 	class DebugAdapterNamedPipeServer {
 		constructor(path) {
-			if (typeof path !== 'string' || !path || path.length > 32768 || path.includes('\0')) { throw new TypeError('Invalid Debug Adapter named pipe'); }
+			if (typeof path !== 'string' || !path || path.length > 32768 || path.includes('\0')) {
+				throw new TypeError('Invalid Debug Adapter named pipe');
+			}
 			this.path = path;
 		}
 	}
@@ -398,11 +707,22 @@ export function createApi(configuration, initialization) {
 	const taskRevealNames = ['always', 'silent', 'never'];
 	function encodeTaskPresentationOptions(options) {
 		if (options === undefined) return undefined;
-		if (!options || typeof options !== 'object' || Array.isArray(options)) throw new TypeError('Invalid Task presentationOptions');
-		if (Object.keys(options).some(key => !['echo', 'showReuseMessage', 'panel', 'clear', 'reveal', 'focus', 'close'].includes(key))) return unsupported('Task presentation options');
-		if (options.panel !== undefined && !Object.values(TaskPanelKind).includes(options.panel)
-			|| options.reveal !== undefined && !Object.values(TaskRevealKind).includes(options.reveal)
-			|| ['echo', 'showReuseMessage', 'clear', 'focus', 'close'].some(key => options[key] !== undefined && typeof options[key] !== 'boolean')) throw new TypeError('Invalid Task presentationOptions');
+		if (!options || typeof options !== 'object' || Array.isArray(options))
+			throw new TypeError('Invalid Task presentationOptions');
+		if (
+			Object.keys(options).some(
+				key => !['echo', 'showReuseMessage', 'panel', 'clear', 'reveal', 'focus', 'close'].includes(key),
+			)
+		)
+			return unsupported('Task presentation options');
+		if (
+			(options.panel !== undefined && !Object.values(TaskPanelKind).includes(options.panel)) ||
+			(options.reveal !== undefined && !Object.values(TaskRevealKind).includes(options.reveal)) ||
+			['echo', 'showReuseMessage', 'clear', 'focus', 'close'].some(
+				key => options[key] !== undefined && typeof options[key] !== 'boolean',
+			)
+		)
+			throw new TypeError('Invalid Task presentationOptions');
 		const presentation = {
 			...(options.echo === undefined ? {} : { echo: options.echo }),
 			...(options.showReuseMessage === undefined ? {} : { showReuseMessage: options.showReuseMessage }),
@@ -415,7 +735,8 @@ export function createApi(configuration, initialization) {
 		return Object.keys(presentation).length ? presentation : undefined;
 	}
 	function encodeTask(task, id, customExecutions, fetchedCustomExecution) {
-		if (!(task instanceof Task) || typeof task.definition?.type !== 'string') throw new TypeError('Task requires a TaskDefinition');
+		if (!(task instanceof Task) || typeof task.definition?.type !== 'string')
+			throw new TypeError('Task requires a TaskDefinition');
 		let presentation = encodeTaskPresentationOptions(task.presentationOptions);
 		// revealProblems belongs to tasks.json, not the public TaskPresentationOptions.
 		// Editing a fetched Task must retain this configuration-only policy even
@@ -425,54 +746,95 @@ export function createApi(configuration, initialization) {
 		const terminalGroup = taskTerminalGroups.get(task);
 		if (terminalGroup !== undefined) presentation = { ...presentation, group: terminalGroup };
 		const runOptions = task.runOptions;
-		if (runOptions !== undefined && (!runOptions || typeof runOptions !== 'object' || Array.isArray(runOptions) || Object.keys(runOptions).some(key => key !== 'reevaluateOnRerun') || runOptions.reevaluateOnRerun !== undefined && typeof runOptions.reevaluateOnRerun !== 'boolean')) {
+		if (
+			runOptions !== undefined &&
+			(!runOptions ||
+				typeof runOptions !== 'object' ||
+				Array.isArray(runOptions) ||
+				Object.keys(runOptions).some(key => key !== 'reevaluateOnRerun') ||
+				(runOptions.reevaluateOnRerun !== undefined && typeof runOptions.reevaluateOnRerun !== 'boolean'))
+		) {
 			throw new TypeError('Invalid Task runOptions');
 		}
 		const execution = task.execution;
 		if (execution instanceof CustomExecution) {
-			if (execution === fetchedCustomExecution && typeof execution.callback !== 'function') customExecutions.delete(id);
+			if (execution === fetchedCustomExecution && typeof execution.callback !== 'function')
+				customExecutions.delete(id);
 			else {
-				if (typeof execution.callback !== 'function') return unsupported('CustomExecution copied from another task owner');
+				if (typeof execution.callback !== 'function')
+					return unsupported('CustomExecution copied from another task owner');
 				customExecutions.set(id, execution);
 			}
-		}
-		else customExecutions.delete(id);
+		} else customExecutions.delete(id);
 		let descriptor;
 		if (execution instanceof ProcessExecution) {
 			descriptor = { type: 'process', program: execution.process, args: execution.args };
 		} else if (execution instanceof ShellExecution) {
 			const options = execution.options;
-			const shellOptions = options && { ...(options.executable === undefined ? {} : { executable: options.executable }), ...(options.shellArgs === undefined ? {} : { shellArgs: options.shellArgs }), ...(options.shellQuoting === undefined ? {} : { shellQuoting: options.shellQuoting }) };
-			descriptor = { type: 'shell', ...(execution.commandLine === undefined ? { command: execution.command, args: execution.args } : { commandLine: execution.commandLine }), ...(shellOptions && Object.keys(shellOptions).length ? { options: shellOptions } : {}) };
+			const shellOptions = options && {
+				...(options.executable === undefined ? {} : { executable: options.executable }),
+				...(options.shellArgs === undefined ? {} : { shellArgs: options.shellArgs }),
+				...(options.shellQuoting === undefined ? {} : { shellQuoting: options.shellQuoting }),
+			};
+			descriptor = {
+				type: 'shell',
+				...(execution.commandLine === undefined
+					? { command: execution.command, args: execution.args }
+					: { commandLine: execution.commandLine }),
+				...(shellOptions && Object.keys(shellOptions).length ? { options: shellOptions } : {}),
+			};
 		} else if (execution instanceof CustomExecution) {
 			descriptor = { type: 'custom', id };
 		} else if (execution !== undefined) {
 			return unsupported('Task execution');
 		}
-		const scope = typeof task.scope === 'number' ? task.scope : task.scope?.uri ? { uri: task.scope.uri.toString() } : undefined;
+		const scope =
+			typeof task.scope === 'number'
+				? task.scope
+				: task.scope?.uri
+					? { uri: task.scope.uri.toString() }
+					: undefined;
 		const group = ['build', 'test', 'clean', 'rebuild'].includes(task.group?.id) ? task.group.id : 'other';
 		return {
-			id, label: task.name, source: task.source, group, definition: task.definition,
+			id,
+			label: task.name,
+			source: task.source,
+			group,
+			definition: task.definition,
 			...(presentation === undefined ? {} : { presentation }),
 			...(runOptions === undefined ? {} : { runOptions }),
 			...(scope === undefined ? {} : { scope }),
 			...(task.group?.isDefault === undefined ? {} : { groupIsDefault: task.group.isDefault }),
 			...(descriptor === undefined ? {} : { execution: descriptor }),
-			problemMatchers: task.problemMatchers ?? [], isBackground: task.isBackground ?? false,
+			problemMatchers: task.problemMatchers ?? [],
+			isBackground: task.isBackground ?? false,
 			...(task.detail === undefined ? {} : { detail: task.detail }),
 			...(execution?.options?.cwd === undefined ? {} : { cwd: execution.options.cwd }),
 			...(execution?.options?.env === undefined ? {} : { env: execution.options.env }),
 		};
 	}
 	function decodeTask(value) {
-		if (typeof value?.id !== 'string' || typeof value.name !== 'string' || typeof value.source !== 'string' || typeof value.definition?.type !== 'string') throw new TypeError('Invalid task snapshot');
-		const scope = typeof value.scope === 'number' ? value.scope : Object.freeze({ uri: Uri.parse(value.scope.uri), name: value.scope.name, index: value.scope.index });
+		if (
+			typeof value?.id !== 'string' ||
+			typeof value.name !== 'string' ||
+			typeof value.source !== 'string' ||
+			typeof value.definition?.type !== 'string'
+		)
+			throw new TypeError('Invalid task snapshot');
+		const scope =
+			typeof value.scope === 'number'
+				? value.scope
+				: Object.freeze({ uri: Uri.parse(value.scope.uri), name: value.scope.name, index: value.scope.index });
 		const descriptor = value.execution;
 		let execution;
-		if (descriptor?.type === 'process') execution = new ProcessExecution(descriptor.program, descriptor.args, value.options);
+		if (descriptor?.type === 'process')
+			execution = new ProcessExecution(descriptor.program, descriptor.args, value.options);
 		else if (descriptor?.type === 'shell') {
 			const options = { ...value.options, ...descriptor.options };
-			execution = descriptor.commandLine === undefined ? new ShellExecution(descriptor.command, descriptor.args, options) : new ShellExecution(descriptor.commandLine, options);
+			execution =
+				descriptor.commandLine === undefined
+					? new ShellExecution(descriptor.command, descriptor.args, options)
+					: new ShellExecution(descriptor.commandLine, options);
 		} else if (descriptor?.type === 'custom') {
 			// The callback remains with the canonical task's extension owner. Fetched
 			// instances expose its public execution type and run through that task identity.
@@ -481,31 +843,65 @@ export function createApi(configuration, initialization) {
 		const task = new Task(value.definition, scope, value.name, value.source, execution, value.problemMatchers);
 		if (value.presentation !== undefined) {
 			const presentation = value.presentation;
-			if (!presentation || typeof presentation !== 'object' || Array.isArray(presentation)
-				|| Object.keys(presentation).some(key => !['echo', 'showReuseMessage', 'panel', 'clear', 'reveal', 'revealProblems', 'focus', 'close', 'group'].includes(key))
-				|| presentation.group !== undefined && (typeof presentation.group !== 'string' || presentation.group.length > 256 || presentation.group.includes('\0'))
-				|| presentation.panel !== undefined && !taskPanelNames.includes(presentation.panel)
-				|| presentation.reveal !== undefined && !taskRevealNames.includes(presentation.reveal)
-				|| presentation.revealProblems !== undefined && !['always', 'onProblem', 'never'].includes(presentation.revealProblems)
-				|| ['echo', 'showReuseMessage', 'clear', 'focus', 'close'].some(key => presentation[key] !== undefined && typeof presentation[key] !== 'boolean')) throw new TypeError('Invalid Task presentation snapshot');
+			if (
+				!presentation ||
+				typeof presentation !== 'object' ||
+				Array.isArray(presentation) ||
+				Object.keys(presentation).some(
+					key =>
+						![
+							'echo',
+							'showReuseMessage',
+							'panel',
+							'clear',
+							'reveal',
+							'revealProblems',
+							'focus',
+							'close',
+							'group',
+						].includes(key),
+				) ||
+				(presentation.group !== undefined &&
+					(typeof presentation.group !== 'string' ||
+						presentation.group.length > 256 ||
+						presentation.group.includes('\0'))) ||
+				(presentation.panel !== undefined && !taskPanelNames.includes(presentation.panel)) ||
+				(presentation.reveal !== undefined && !taskRevealNames.includes(presentation.reveal)) ||
+				(presentation.revealProblems !== undefined &&
+					!['always', 'onProblem', 'never'].includes(presentation.revealProblems)) ||
+				['echo', 'showReuseMessage', 'clear', 'focus', 'close'].some(
+					key => presentation[key] !== undefined && typeof presentation[key] !== 'boolean',
+				)
+			)
+				throw new TypeError('Invalid Task presentation snapshot');
 			task.presentationOptions = {
 				...(presentation.echo === undefined ? {} : { echo: presentation.echo }),
-				...(presentation.showReuseMessage === undefined ? {} : { showReuseMessage: presentation.showReuseMessage }),
+				...(presentation.showReuseMessage === undefined
+					? {}
+					: { showReuseMessage: presentation.showReuseMessage }),
 				...(presentation.panel === undefined ? {} : { panel: taskPanelNames.indexOf(presentation.panel) + 1 }),
-				...(presentation.reveal === undefined ? {} : { reveal: taskRevealNames.indexOf(presentation.reveal) + 1 }),
+				...(presentation.reveal === undefined
+					? {}
+					: { reveal: taskRevealNames.indexOf(presentation.reveal) + 1 }),
 				...(presentation.focus === undefined ? {} : { focus: presentation.focus }),
 				...(presentation.clear === undefined ? {} : { clear: presentation.clear }),
 				...(presentation.close === undefined ? {} : { close: presentation.close }),
 			};
-			if (presentation.revealProblems !== undefined) taskProblemRevealModes.set(task, presentation.revealProblems);
+			if (presentation.revealProblems !== undefined)
+				taskProblemRevealModes.set(task, presentation.revealProblems);
 			if (presentation.group !== undefined) taskTerminalGroups.set(task, presentation.group);
 		}
 		task.runOptions = value.runOptions === undefined ? {} : { ...value.runOptions };
 		task.isBackground = value.isBackground;
 		if (value.detail !== null) task.detail = value.detail;
-		const group = [TaskGroup.Build, TaskGroup.Test, TaskGroup.Clean, TaskGroup.Rebuild].find(group => group.id === value.group);
-		if (value.groupIsDefault !== undefined && typeof value.groupIsDefault !== 'boolean') throw new TypeError('Invalid TaskGroup default flag');
-		if (group) task.group = value.groupIsDefault === undefined ? group : new TaskGroup(group.id, group.label, value.groupIsDefault);
+		const group = [TaskGroup.Build, TaskGroup.Test, TaskGroup.Clean, TaskGroup.Rebuild].find(
+			group => group.id === value.group,
+		);
+		if (value.groupIsDefault !== undefined && typeof value.groupIsDefault !== 'boolean')
+			throw new TypeError('Invalid TaskGroup default flag');
+		if (group)
+			task.group =
+				value.groupIsDefault === undefined ? group : new TaskGroup(group.id, group.label, value.groupIsDefault);
 		fetchedTaskIds.set(task, value.id);
 		fetchedTaskSnapshots.set(task, { signature: taskFingerprint(task), execution, callback: execution?.callback });
 		if (execution instanceof CustomExecution) fetchedCustomExecutions.set(execution, value.id);
@@ -514,17 +910,34 @@ export function createApi(configuration, initialization) {
 	function taskFingerprint(task) {
 		const execution = task.execution;
 		return JSON.stringify({
-			definition: task.definition, scope: task.scope, name: task.name, source: task.source,
-			isBackground: task.isBackground, detail: task.detail, group: task.group?.id, groupIsDefault: task.group?.isDefault, problemMatchers: task.problemMatchers,
-			presentationOptions: task.presentationOptions, runOptions: task.runOptions,
+			definition: task.definition,
+			scope: task.scope,
+			name: task.name,
+			source: task.source,
+			isBackground: task.isBackground,
+			detail: task.detail,
+			group: task.group?.id,
+			groupIsDefault: task.group?.isDefault,
+			problemMatchers: task.problemMatchers,
+			presentationOptions: task.presentationOptions,
+			runOptions: task.runOptions,
 			execution: execution instanceof CustomExecution ? { type: 'custom' } : execution,
 		});
 	}
 	function decodeTaskExecution(value, task, sequence = 0) {
-		if (typeof value?.id !== 'string' || typeof value.active !== 'boolean') throw new TypeError('Invalid task execution snapshot');
+		if (typeof value?.id !== 'string' || typeof value.active !== 'boolean')
+			throw new TypeError('Invalid task execution snapshot');
 		let execution = taskExecutionHandles.get(value.id);
 		if (!execution) {
-			execution = Object.freeze({ task: task ?? pendingTaskExecutions.get(value.task.clientTaskId ?? value.task.id)?.task ?? decodeTask(value.task), terminate() { void request({ operation: 'terminateTask', executionId: value.id }, 'done'); } });
+			execution = Object.freeze({
+				task:
+					task ??
+					pendingTaskExecutions.get(value.task.clientTaskId ?? value.task.id)?.task ??
+					decodeTask(value.task),
+				terminate() {
+					void request({ operation: 'terminateTask', executionId: value.id }, 'done');
+				},
+			});
 			taskExecutionHandles.set(value.id, execution);
 		}
 		if (value.active && sequence >= Math.max(taskSnapshotSequence, taskStateSequences.get(value.id) ?? 0)) {
@@ -534,13 +947,19 @@ export function createApi(configuration, initialization) {
 		return execution;
 	}
 	function applyTaskSnapshot(executions, sequence) {
-		if (!Array.isArray(executions) || !Number.isSafeInteger(sequence) || sequence < 0) throw new TypeError('Invalid task execution snapshot');
+		if (!Array.isArray(executions) || !Number.isSafeInteger(sequence) || sequence < 0)
+			throw new TypeError('Invalid task execution snapshot');
 		if (sequence < taskEventSequence || sequence < taskSnapshotSequence) return;
 		taskSnapshotSequence = sequence;
 		activeTaskExecutions.clear();
 		taskStateSequences.clear();
 		for (const execution of executions) decodeTaskExecution(execution, undefined, sequence);
-		for (const [id, execution] of taskExecutionHandles) if (!activeTaskExecutions.has(id) && !pendingTaskExecutions.has(fetchedTaskIds.get(execution.task) ?? providedTaskIds.get(execution.task))) taskExecutionHandles.delete(id);
+		for (const [id, execution] of taskExecutionHandles)
+			if (
+				!activeTaskExecutions.has(id) &&
+				!pendingTaskExecutions.has(fetchedTaskIds.get(execution.task) ?? providedTaskIds.get(execution.task))
+			)
+				taskExecutionHandles.delete(id);
 	}
 	function listenTask(kind, listener, thisArg, disposables) {
 		if (typeof listener !== 'function') throw new TypeError('Task event requires a listener');
@@ -553,37 +972,61 @@ export function createApi(configuration, initialization) {
 	}
 	function ensureTaskEvents() {
 		if (taskEventRegistration) return;
-		taskEventRegistration = ashTasks.registerTaskEvents('ash.tasks.events', (_context, event) => invoke(async () => {
-			if (!Number.isSafeInteger(event.sequence) || event.sequence < 0) throw new TypeError('Invalid task event sequence');
-			if (event.type === 'snapshot') {
-				applyTaskSnapshot(event.executions, event.sequence);
-				return;
-			}
-			if (!Object.hasOwn(taskListeners, event.type)) throw new TypeError('Invalid task event');
-			taskEventSequence = Math.max(taskEventSequence, event.sequence);
-			const execution = decodeTaskExecution(event.execution, undefined, event.sequence);
-			const content = event.type === 'processStart' ? { execution, processId: event.processId } : event.type === 'processEnd' ? { execution, exitCode: event.exitCode ?? undefined } : { execution };
-			if (event.type === 'end') {
-				activeTaskExecutions.delete(event.execution.id);
-				// Retain an end fence only while executeTask can still return an older start snapshot.
-				if (pendingTaskExecutions.has(event.execution.task.clientTaskId ?? event.execution.task.id)) taskStateSequences.set(event.execution.id, event.sequence);
-				else taskStateSequences.delete(event.execution.id);
-			}
-			try {
-				await Promise.all([...taskListeners[event.type]].map(async entry => entry.listener.call(entry.thisArg, content)));
-			} finally {
-				if (event.type === 'end' && !pendingTaskExecutions.has(event.execution.task.clientTaskId ?? event.execution.task.id)) taskExecutionHandles.delete(event.execution.id);
-			}
-		}), (_context, executionId, definition) => invoke(async () => {
-			const execution = providedCustomExecutions.get(executionId);
-			if (!execution) throw new Error('Custom Task execution has retired');
-			return await execution.callback(definition);
-		}));
+		taskEventRegistration = ashTasks.registerTaskEvents(
+			'ash.tasks.events',
+			(_context, event) =>
+				invoke(async () => {
+					if (!Number.isSafeInteger(event.sequence) || event.sequence < 0)
+						throw new TypeError('Invalid task event sequence');
+					if (event.type === 'snapshot') {
+						applyTaskSnapshot(event.executions, event.sequence);
+						return;
+					}
+					if (!Object.hasOwn(taskListeners, event.type)) throw new TypeError('Invalid task event');
+					taskEventSequence = Math.max(taskEventSequence, event.sequence);
+					const execution = decodeTaskExecution(event.execution, undefined, event.sequence);
+					const content =
+						event.type === 'processStart'
+							? { execution, processId: event.processId }
+							: event.type === 'processEnd'
+								? { execution, exitCode: event.exitCode ?? undefined }
+								: { execution };
+					if (event.type === 'end') {
+						activeTaskExecutions.delete(event.execution.id);
+						// Retain an end fence only while executeTask can still return an older start snapshot.
+						if (pendingTaskExecutions.has(event.execution.task.clientTaskId ?? event.execution.task.id))
+							taskStateSequences.set(event.execution.id, event.sequence);
+						else taskStateSequences.delete(event.execution.id);
+					}
+					try {
+						await Promise.all(
+							[...taskListeners[event.type]].map(async entry =>
+								entry.listener.call(entry.thisArg, content),
+							),
+						);
+					} finally {
+						if (
+							event.type === 'end' &&
+							!pendingTaskExecutions.has(event.execution.task.clientTaskId ?? event.execution.task.id)
+						)
+							taskExecutionHandles.delete(event.execution.id);
+					}
+				}),
+			(_context, executionId, definition) =>
+				invoke(async () => {
+					const execution = providedCustomExecutions.get(executionId);
+					if (!execution) throw new Error('Custom Task execution has retired');
+					return await execution.callback(definition);
+				}),
+		);
 		subscriptions.push(taskEventRegistration);
 	}
 
 	function statusSnapshot() {
-		return { revision: statusRevision, entries: [...statusItems.values()].filter(item => item.visible).map(item => item.snapshot()) };
+		return {
+			revision: statusRevision,
+			entries: [...statusItems.values()].filter(item => item.visible).map(item => item.snapshot()),
+		};
 	}
 	function statusChanged() {
 		++statusRevision;
@@ -595,7 +1038,10 @@ export function createApi(configuration, initialization) {
 		// Coalesce synchronous property changes and keep the flush inside its originating invocation.
 		const flush = Promise.resolve().then(async () => {
 			statusFlushes.delete(id);
-			await request({ operation: 'setStatusBarEntries', registrationId: statusRegistrationId, ...statusSnapshot() }, 'done');
+			await request(
+				{ operation: 'setStatusBarEntries', registrationId: statusRegistrationId, ...statusSnapshot() },
+				'done',
+			);
 		});
 		owned?.push(flush);
 		flush.catch(() => undefined);
@@ -605,47 +1051,140 @@ export function createApi(configuration, initialization) {
 	}
 	class StatusBarItem {
 		#handle;
-		#values = { text: '', name: undefined, tooltip: undefined, command: undefined, accessibilityInformation: undefined };
+		#values = {
+			text: '',
+			name: undefined,
+			tooltip: undefined,
+			command: undefined,
+			accessibilityInformation: undefined,
+		};
 		#disposed = false;
 		#visible = false;
 		constructor(id, alignment, priority) {
-			Object.defineProperties(this, { id: { value: id, enumerable: true }, alignment: { value: alignment, enumerable: true }, priority: { value: priority, enumerable: true } });
+			Object.defineProperties(this, {
+				id: { value: id, enumerable: true },
+				alignment: { value: alignment, enumerable: true },
+				priority: { value: priority, enumerable: true },
+			});
 			this.#handle = `item.${++statusSequence}`;
 			statusItems.set(this.#handle, this);
 		}
-		get visible() { return this.#visible; }
-		get text() { return this.#values.text; }
-		set text(value) { if (typeof value !== 'string' || value.length > 8192 || value.includes('\0')) throw new TypeError('Invalid status bar text'); this.set('text', value); }
-		get name() { return this.#values.name; }
-		set name(value) { if (value !== undefined && (typeof value !== 'string' || value.length > 8192 || value.includes('\0'))) throw new TypeError('Invalid status bar name'); this.set('name', value); }
-		get color() { return unsupported('StatusBarItem.color'); }
-		set color(_value) { return unsupported('StatusBarItem.color'); }
-		get backgroundColor() { return unsupported('StatusBarItem.backgroundColor'); }
-		set backgroundColor(_value) { return unsupported('StatusBarItem.backgroundColor'); }
-		get tooltip() { return this.#values.tooltip; }
-		set tooltip(value) { if (value !== undefined && typeof value !== 'string') return unsupported('StatusBarItem.tooltip MarkdownString'); if (value?.length > 8192 || value?.includes('\0')) throw new TypeError('Invalid status bar tooltip'); this.set('tooltip', value); }
-		get command() { return this.#values.command; }
+		get visible() {
+			return this.#visible;
+		}
+		get text() {
+			return this.#values.text;
+		}
+		set text(value) {
+			if (typeof value !== 'string' || value.length > 8192 || value.includes('\0'))
+				throw new TypeError('Invalid status bar text');
+			this.set('text', value);
+		}
+		get name() {
+			return this.#values.name;
+		}
+		set name(value) {
+			if (value !== undefined && (typeof value !== 'string' || value.length > 8192 || value.includes('\0')))
+				throw new TypeError('Invalid status bar name');
+			this.set('name', value);
+		}
+		get color() {
+			return unsupported('StatusBarItem.color');
+		}
+		set color(_value) {
+			return unsupported('StatusBarItem.color');
+		}
+		get backgroundColor() {
+			return unsupported('StatusBarItem.backgroundColor');
+		}
+		set backgroundColor(_value) {
+			return unsupported('StatusBarItem.backgroundColor');
+		}
+		get tooltip() {
+			return this.#values.tooltip;
+		}
+		set tooltip(value) {
+			if (value !== undefined && typeof value !== 'string')
+				return unsupported('StatusBarItem.tooltip MarkdownString');
+			if (value?.length > 8192 || value?.includes('\0')) throw new TypeError('Invalid status bar tooltip');
+			this.set('tooltip', value);
+		}
+		get command() {
+			return this.#values.command;
+		}
 		set command(value) {
-			if (value !== undefined && (typeof (typeof value === 'string' ? value : value?.command) !== 'string' || !(typeof value === 'string' ? value : value.command) || typeof value !== 'string' && value.arguments !== undefined && !Array.isArray(value.arguments))) throw new TypeError('Invalid status bar command');
+			if (
+				value !== undefined &&
+				(typeof (typeof value === 'string' ? value : value?.command) !== 'string' ||
+					!(typeof value === 'string' ? value : value.command) ||
+					(typeof value !== 'string' && value.arguments !== undefined && !Array.isArray(value.arguments)))
+			)
+				throw new TypeError('Invalid status bar command');
 			this.set('command', value);
 		}
-		get accessibilityInformation() { return this.#values.accessibilityInformation; }
-		set accessibilityInformation(value) { if (value !== undefined && (typeof value?.label !== 'string' || value.label.length > 8192 || value.label.includes('\0'))) throw new TypeError('Invalid status bar accessibility information'); if (value?.role !== undefined && value.role !== 'button') return unsupported('StatusBarItem.accessibilityInformation.role'); this.set('accessibilityInformation', value); }
-		set(key, value) { if (this.#disposed) return; if (this.#visible) checkStatusUpdate(); this.#values[key] = value; if (this.#visible) statusChanged(); }
-		show() { if (this.#disposed || this.#visible) return; checkStatusUpdate(); this.#visible = true; statusChanged(); }
-		hide() { if (!this.#visible) return; checkStatusUpdate(); this.#visible = false; statusChanged(); }
+		get accessibilityInformation() {
+			return this.#values.accessibilityInformation;
+		}
+		set accessibilityInformation(value) {
+			if (
+				value !== undefined &&
+				(typeof value?.label !== 'string' || value.label.length > 8192 || value.label.includes('\0'))
+			)
+				throw new TypeError('Invalid status bar accessibility information');
+			if (value?.role !== undefined && value.role !== 'button')
+				return unsupported('StatusBarItem.accessibilityInformation.role');
+			this.set('accessibilityInformation', value);
+		}
+		set(key, value) {
+			if (this.#disposed) return;
+			if (this.#visible) checkStatusUpdate();
+			this.#values[key] = value;
+			if (this.#visible) statusChanged();
+		}
+		show() {
+			if (this.#disposed || this.#visible) return;
+			checkStatusUpdate();
+			this.#visible = true;
+			statusChanged();
+		}
+		hide() {
+			if (!this.#visible) return;
+			checkStatusUpdate();
+			this.#visible = false;
+			statusChanged();
+		}
 		dispose() {
 			if (this.#disposed) return;
 			this.hide();
 			this.#disposed = true;
 			statusItems.delete(this.#handle);
 			// A retained, disposed public item must not keep its last command's argument graph alive.
-			this.#values = { text: '', name: undefined, tooltip: undefined, command: undefined, accessibilityInformation: undefined };
+			this.#values = {
+				text: '',
+				name: undefined,
+				tooltip: undefined,
+				command: undefined,
+				accessibilityInformation: undefined,
+			};
 		}
 		snapshot() {
 			const value = this.#values.command;
-			const command = value === undefined ? null : { command: typeof value === 'string' ? value : value.command, arguments: typeof value === 'string' ? [] : value.arguments ?? [] };
-			return { id: this.#handle, text: this.text, tooltip: this.tooltip ?? null, ariaLabel: this.accessibilityInformation?.label ?? this.name ?? null, alignment: this.alignment === 1 ? 'left' : 'right', priority: this.priority ?? 0, command };
+			const command =
+				value === undefined
+					? null
+					: {
+							command: typeof value === 'string' ? value : value.command,
+							arguments: typeof value === 'string' ? [] : (value.arguments ?? []),
+						};
+			return {
+				id: this.#handle,
+				text: this.text,
+				tooltip: this.tooltip ?? null,
+				ariaLabel: this.accessibilityInformation?.label ?? this.name ?? null,
+				alignment: this.alignment === 1 ? 'left' : 'right',
+				priority: this.priority ?? 0,
+				command,
+			};
 		}
 	}
 	function createStatusBarItem(idOrAlignment, alignmentOrPriority, priority) {
@@ -654,29 +1193,64 @@ export function createApi(configuration, initialization) {
 		const id = explicitId ? idOrAlignment : configuration.extensionId;
 		const alignment = (explicitId ? alignmentOrPriority : idOrAlignment) ?? 1;
 		const order = explicitId ? priority : alignmentOrPriority;
-		if (!id || id.length > 256 || ![1, 2].includes(alignment) || order !== undefined && !Number.isFinite(order)) throw new TypeError('Invalid status bar identity, alignment or priority');
+		if (!id || id.length > 256 || ![1, 2].includes(alignment) || (order !== undefined && !Number.isFinite(order)))
+			throw new TypeError('Invalid status bar identity, alignment or priority');
 		if (statusItems.size >= 128) throw new RangeError('Status bar item quota exceeded');
 		return new StatusBarItem(id, alignment, order);
 	}
 
 	class WorkspaceEdit {
-		constructor() { workspaceEdits.set(this, []); }
-		replace(uri, range, newText) { workspaceEdits.get(this).push({ uri, range, newText }); }
-		insert(uri, position, newText) { this.replace(uri, new Range(position, position), newText); }
-		delete(uri, range) { this.replace(uri, range, ''); }
-		set(uri, edits) { const entries = workspaceEdits.get(this); workspaceEdits.set(this, entries.filter(entry => entry.uri.toString() !== uri.toString())); for (const edit of edits ?? []) this.replace(uri, edit.range, edit.newText); }
-		renameFile(oldUri, newUri, options = {}) { workspaceEdits.get(this).push({ oldUri, newUri, options }); }
-		entries() { const entries = new Map(); for (const entry of workspaceEdits.get(this)) { if (!entry.uri) continue; const key = entry.uri.toString(); if (!entries.has(key)) entries.set(key, [entry.uri, []]); entries.get(key)[1].push(new api.TextEdit(entry.range, entry.newText)); } return [...entries.values()]; }
+		constructor() {
+			workspaceEdits.set(this, []);
+		}
+		replace(uri, range, newText) {
+			workspaceEdits.get(this).push({ uri, range, newText });
+		}
+		insert(uri, position, newText) {
+			this.replace(uri, new Range(position, position), newText);
+		}
+		delete(uri, range) {
+			this.replace(uri, range, '');
+		}
+		set(uri, edits) {
+			const entries = workspaceEdits.get(this);
+			workspaceEdits.set(
+				this,
+				entries.filter(entry => entry.uri.toString() !== uri.toString()),
+			);
+			for (const edit of edits ?? []) this.replace(uri, edit.range, edit.newText);
+		}
+		renameFile(oldUri, newUri, options = {}) {
+			workspaceEdits.get(this).push({ oldUri, newUri, options });
+		}
+		entries() {
+			const entries = new Map();
+			for (const entry of workspaceEdits.get(this)) {
+				if (!entry.uri) continue;
+				const key = entry.uri.toString();
+				if (!entries.has(key)) entries.set(key, [entry.uri, []]);
+				entries.get(key)[1].push(new api.TextEdit(entry.range, entry.newText));
+			}
+			return [...entries.values()];
+		}
 	}
 	async function encodeWorkspaceEdit(edit) {
 		if (!(edit instanceof WorkspaceEdit)) throw new TypeError('Provider must return a WorkspaceEdit');
 		const entries = [];
 		for (const value of workspaceEdits.get(edit)) {
-			if (value.oldUri) { entries.push({ kind: 'rename', source: value.oldUri.toString(), target: value.newUri.toString(), existing: value.options.overwrite ? 'overwrite' : value.options.ignoreIfExists ? 'ignore' : 'error' }); continue; }
+			if (value.oldUri) {
+				entries.push({
+					kind: 'rename',
+					source: value.oldUri.toString(),
+					target: value.newUri.toString(),
+					existing: value.options.overwrite ? 'overwrite' : value.options.ignoreIfExists ? 'ignore' : 'error',
+				});
+				continue;
+			}
 			const resource = value.uri.toString();
 			let previous = entries.at(-1);
 			if (previous?.resource !== resource) {
-				const snapshot = documents.get(resource)?.value ?? await api.workspace.openTextDocument(value.uri);
+				const snapshot = documents.get(resource)?.value ?? (await api.workspace.openTextDocument(value.uri));
 				previous = { kind: 'textDocument', resource, expectedText: snapshot.getText(), edits: [] };
 				entries.push(previous);
 			}
@@ -688,129 +1262,384 @@ export function createApi(configuration, initialization) {
 		if (value instanceof Uri) return value.toString();
 		if (Array.isArray(value)) return value.map(entry => coordinates(entry, outbound));
 		if (!value || typeof value !== 'object') return value;
-		const names = outbound ? { line: 'lineIndex', character: 'columnIndex', startLine: 'startLineIndex', endLine: 'endLineIndex' } : { lineIndex: 'line', columnIndex: 'character', startLineIndex: 'startLine', endLineIndex: 'endLine' };
-		return Object.fromEntries(Object.entries(value).map(([key, entry]) => [names[key] ?? key, coordinates(entry, outbound)]));
+		const names = outbound
+			? { line: 'lineIndex', character: 'columnIndex', startLine: 'startLineIndex', endLine: 'endLineIndex' }
+			: { lineIndex: 'line', columnIndex: 'character', startLineIndex: 'startLine', endLineIndex: 'endLine' };
+		return Object.fromEntries(
+			Object.entries(value).map(([key, entry]) => [names[key] ?? key, coordinates(entry, outbound)]),
+		);
 	}
 	function registerLanguageOperation(selector, operation, provider, method) {
 		ensureDocumentEvents();
-		const entries = (Array.isArray(selector) ? selector : [selector]).map(entry => typeof entry === 'string' ? entry : entry.language);
-		if (entries.some(entry => typeof entry !== 'string') || typeof provider?.[method] !== 'function') throw new TypeError('Invalid language provider');
-		const registration = ashRuntime.registerContribution({ kind: 'languageProvider', registrationId: `ash.${operation}.${++providerSequence}`, languageIds: entries, operations: [operation] }, operation, (call, payload) => invoke(async () => {
-			const request = coordinates(payload, false);
-			const snapshot = operation === 'workspaceSymbols' ? undefined : document({ uri: payload.resource, ...payload });
-			const point = request.position && new Position(request.position.line, request.position.character);
-			const token = call.cancellationToken;
-			let result;
-			if (operation === 'workspaceSymbols') result = await provider[method](request.query, token);
-			else if (operation === 'rename') result = request.kind === 'prepare' ? await provider.prepareRename?.(snapshot, point, token) : await provider[method](snapshot, point, request.newName, token);
-			else if (operation === 'references') result = await provider[method](snapshot, point, { includeDeclaration: request.includeDeclaration }, token);
-			else if (operation === 'codeAction') result = await provider[method](snapshot, new Range(request.range.start, request.range.end), { diagnostics: [], only: request.only?.[0] ? new api.CodeActionKind(request.only[0]) : undefined, triggerKind: 1 }, token);
-			else if (operation === 'selectionRanges') result = await provider[method](snapshot, request.positions.map(value => new Position(value.line, value.character)), token);
-			else if (operation === 'foldingRanges') result = await provider[method](snapshot, {}, token);
-			else if (operation === 'formatting') {
-				if (request.kind !== 'document') return { edits: [] };
-				result = await provider[method](snapshot, request.options, token);
-				return coordinates({ edits: (result ?? []).map(edit => ({ range: edit.range, text: edit.newText })) }, true);
-			}
-			else if (operation === 'definition' || operation === 'documentHighlights') result = await provider[method](snapshot, point, token);
-			else result = await provider[method](snapshot, token);
-			if (operation === 'rename' && request.kind !== 'prepare') return coordinates(await encodeWorkspaceEdit(result), true);
-			if (operation === 'definition' || operation === 'references') result = (Array.isArray(result) ? result : result ? [result] : []).map(value => ({ resource: value.uri.toString(), range: value.range }));
-			if (operation === 'workspaceSymbols') result = (result ?? []).map(value => ({ name: value.name, kind: value.kind + 1, resource: value.location.uri.toString(), range: value.location.range }));
-			if (operation === 'documentSymbols') { const encode = values => values.map(value => ({ ...value, kind: value.kind + 1, children: encode(value.children ?? []) })); result = encode(result ?? []); }
-			if (operation === 'selectionRanges') { const flat = []; for (let value of result ?? []) { while (value) { flat.push(value.range); value = value.parent; } } result = flat; }
-			if (operation === 'documentLinks') result = (result ?? []).map(value => ({ range: value.range, target: value.target?.toString() }));
-			if (operation === 'codeAction') result = await Promise.all((result ?? []).map(async value => ({ title: value.title, ...(value.kind ? { kind: value.kind.value } : {}), ...(value.edit ? { edit: await encodeWorkspaceEdit(value.edit) } : {}), ...(value.disabled ? { disabledReason: value.disabled.reason } : {}) })));
-			return coordinates(result ?? (operation === 'rename' ? null : []), true);
-		}));
+		const entries = (Array.isArray(selector) ? selector : [selector]).map(entry =>
+			typeof entry === 'string' ? entry : entry.language,
+		);
+		if (entries.some(entry => typeof entry !== 'string') || typeof provider?.[method] !== 'function')
+			throw new TypeError('Invalid language provider');
+		const registration = ashRuntime.registerContribution(
+			{
+				kind: 'languageProvider',
+				registrationId: `ash.${operation}.${++providerSequence}`,
+				languageIds: entries,
+				operations: [operation],
+			},
+			operation,
+			(call, payload) =>
+				invoke(async () => {
+					const request = coordinates(payload, false);
+					const snapshot =
+						operation === 'workspaceSymbols' ? undefined : document({ uri: payload.resource, ...payload });
+					const point = request.position && new Position(request.position.line, request.position.character);
+					const token = call.cancellationToken;
+					let result;
+					if (operation === 'workspaceSymbols') result = await provider[method](request.query, token);
+					else if (operation === 'rename')
+						result =
+							request.kind === 'prepare'
+								? await provider.prepareRename?.(snapshot, point, token)
+								: await provider[method](snapshot, point, request.newName, token);
+					else if (operation === 'references')
+						result = await provider[method](
+							snapshot,
+							point,
+							{ includeDeclaration: request.includeDeclaration },
+							token,
+						);
+					else if (operation === 'codeAction')
+						result = await provider[method](
+							snapshot,
+							new Range(request.range.start, request.range.end),
+							{
+								diagnostics: [],
+								only: request.only?.[0] ? new api.CodeActionKind(request.only[0]) : undefined,
+								triggerKind: 1,
+							},
+							token,
+						);
+					else if (operation === 'selectionRanges')
+						result = await provider[method](
+							snapshot,
+							request.positions.map(value => new Position(value.line, value.character)),
+							token,
+						);
+					else if (operation === 'foldingRanges') result = await provider[method](snapshot, {}, token);
+					else if (operation === 'formatting') {
+						if (request.kind !== 'document') return { edits: [] };
+						result = await provider[method](snapshot, request.options, token);
+						return coordinates(
+							{ edits: (result ?? []).map(edit => ({ range: edit.range, text: edit.newText })) },
+							true,
+						);
+					} else if (operation === 'definition' || operation === 'documentHighlights')
+						result = await provider[method](snapshot, point, token);
+					else result = await provider[method](snapshot, token);
+					if (operation === 'rename' && request.kind !== 'prepare')
+						return coordinates(await encodeWorkspaceEdit(result), true);
+					if (operation === 'definition' || operation === 'references')
+						result = (Array.isArray(result) ? result : result ? [result] : []).map(value => ({
+							resource: value.uri.toString(),
+							range: value.range,
+						}));
+					if (operation === 'workspaceSymbols')
+						result = (result ?? []).map(value => ({
+							name: value.name,
+							kind: value.kind + 1,
+							resource: value.location.uri.toString(),
+							range: value.location.range,
+						}));
+					if (operation === 'documentSymbols') {
+						const encode = values =>
+							values.map(value => ({
+								...value,
+								kind: value.kind + 1,
+								children: encode(value.children ?? []),
+							}));
+						result = encode(result ?? []);
+					}
+					if (operation === 'selectionRanges') {
+						const flat = [];
+						for (let value of result ?? []) {
+							while (value) {
+								flat.push(value.range);
+								value = value.parent;
+							}
+						}
+						result = flat;
+					}
+					if (operation === 'documentLinks')
+						result = (result ?? []).map(value => ({
+							range: value.range,
+							target: value.target?.toString(),
+						}));
+					if (operation === 'codeAction')
+						result = await Promise.all(
+							(result ?? []).map(async value => ({
+								title: value.title,
+								...(value.kind ? { kind: value.kind.value } : {}),
+								...(value.edit ? { edit: await encodeWorkspaceEdit(value.edit) } : {}),
+								...(value.disabled ? { disabledReason: value.disabled.reason } : {}),
+							})),
+						);
+					return coordinates(result ?? (operation === 'rename' ? null : []), true);
+				}),
+		);
 		subscriptions.push(registration);
 		return registration;
 	}
 	function registerCustomEditorProvider(viewType, provider) {
-		const contribution = configuration.manifest?.contributes?.customEditors?.find(entry => entry.viewType === viewType);
-		if (!contribution || typeof provider.resolveCustomTextEditor !== 'function') throw new TypeError('Custom editor must be declared in package.json');
-		const registration = ashRuntime.registerContribution({ kind: 'customTextEditor', registrationId: viewType, viewType, displayName: contribution.displayName, selectors: contribution.selector.map(value => value.filenamePattern), priority: contribution.priority ?? 'default' }, 'resolveCustomTextEditor', (call, payload) => invoke(async () => {
-			const value = document(payload.document, true);
-			const listeners = new Set();
-			const disposalListeners = new Set();
-			const resources = {};
-			const assetUris = new Set();
-			const panel = { webview: { html: '', options: {}, asWebviewUri(uri) { return uri; }, onDidReceiveMessage: listener => { listeners.add(listener); return new Disposable(() => listeners.delete(listener)); }, async postMessage(message) { panel.update = message; return true; } }, onDidDispose: listener => { disposalListeners.add(listener); return new Disposable(() => disposalListeners.delete(listener)); }, dispose() { for (const listener of disposalListeners) listener(); disposalListeners.clear(); listeners.clear(); } };
-			// Worker-owned object URLs are immutable package assets; renderer revokes them on retirement.
-			panel.webview.asWebviewUri = uri => { if (uri.scheme === 'blob') { assetUris.add(uri.toString()); if (!webviewAssets.has(uri.toString())) { webviewAssets.add(uri.toString()); globalThis.__ashWebviewResource?.(uri.toString()); } } return uri; };
-			customPanels.get(payload.document.uri)?.dispose();
-			customPanels.set(payload.document.uri, panel);
-			await provider.resolveCustomTextEditor(value, panel, call.cancellationToken);
-			// Asset roles come from HTML, independent of the author's asWebviewUri call order.
-			for (const match of panel.webview.html.matchAll(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>|<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi)) {
-				const uri = match[1] ?? match[2];
-				if (!assetUris.has(uri)) continue;
-				const role = match[1] ? 'script' : 'style';
-				if (resources[role] && resources[role] !== uri) return unsupported('multiple custom editor script/style assets');
-				resources[role] = uri;
-			}
-			return { html: Object.keys(resources).length ? panel.webview.html.replace(/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>\s*<\/script>|<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi, (tag, script, style) => script === resources.script || style === resources.style ? '' : tag) : panel.webview.html, ...(Object.keys(resources).length ? { resources } : {}), ...(panel.update ? { update: panel.update } : {}) };
-		}));
-		subscriptions.push(registration, new Disposable(() => { for (const panel of customPanels.values()) panel.dispose(); customPanels.clear(); }));
+		const contribution = configuration.manifest?.contributes?.customEditors?.find(
+			entry => entry.viewType === viewType,
+		);
+		if (!contribution || typeof provider.resolveCustomTextEditor !== 'function')
+			throw new TypeError('Custom editor must be declared in package.json');
+		const registration = ashRuntime.registerContribution(
+			{
+				kind: 'customTextEditor',
+				registrationId: viewType,
+				viewType,
+				displayName: contribution.displayName,
+				selectors: contribution.selector.map(value => value.filenamePattern),
+				priority: contribution.priority ?? 'default',
+			},
+			'resolveCustomTextEditor',
+			(call, payload) =>
+				invoke(async () => {
+					const value = document(payload.document, true);
+					const listeners = new Set();
+					const disposalListeners = new Set();
+					const resources = {};
+					const assetUris = new Set();
+					const panel = {
+						webview: {
+							html: '',
+							options: {},
+							asWebviewUri(uri) {
+								return uri;
+							},
+							onDidReceiveMessage: listener => {
+								listeners.add(listener);
+								return new Disposable(() => listeners.delete(listener));
+							},
+							async postMessage(message) {
+								panel.update = message;
+								return true;
+							},
+						},
+						onDidDispose: listener => {
+							disposalListeners.add(listener);
+							return new Disposable(() => disposalListeners.delete(listener));
+						},
+						dispose() {
+							for (const listener of disposalListeners) listener();
+							disposalListeners.clear();
+							listeners.clear();
+						},
+					};
+					// Worker-owned object URLs are immutable package assets; renderer revokes them on retirement.
+					panel.webview.asWebviewUri = uri => {
+						if (uri.scheme === 'blob') {
+							assetUris.add(uri.toString());
+							if (!webviewAssets.has(uri.toString())) {
+								webviewAssets.add(uri.toString());
+								globalThis.__ashWebviewResource?.(uri.toString());
+							}
+						}
+						return uri;
+					};
+					customPanels.get(payload.document.uri)?.dispose();
+					customPanels.set(payload.document.uri, panel);
+					await provider.resolveCustomTextEditor(value, panel, call.cancellationToken);
+					// Asset roles come from HTML, independent of the author's asWebviewUri call order.
+					for (const match of panel.webview.html.matchAll(
+						/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>|<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi,
+					)) {
+						const uri = match[1] ?? match[2];
+						if (!assetUris.has(uri)) continue;
+						const role = match[1] ? 'script' : 'style';
+						if (resources[role] && resources[role] !== uri)
+							return unsupported('multiple custom editor script/style assets');
+						resources[role] = uri;
+					}
+					return {
+						html: Object.keys(resources).length
+							? panel.webview.html.replace(
+									/<script\b[^>]*\bsrc=["']([^"']+)["'][^>]*>\s*<\/script>|<link\b[^>]*\bhref=["']([^"']+)["'][^>]*>/gi,
+									(tag, script, style) =>
+										script === resources.script || style === resources.style ? '' : tag,
+								)
+							: panel.webview.html,
+						...(Object.keys(resources).length ? { resources } : {}),
+						...(panel.update ? { update: panel.update } : {}),
+					};
+				}),
+		);
+		subscriptions.push(
+			registration,
+			new Disposable(() => {
+				for (const panel of customPanels.values()) panel.dispose();
+				customPanels.clear();
+			}),
+		);
 		return registration;
 	}
 
 	function registerImageEditorProvider(viewType, provider) {
 		if (!imageEditorAdmitted) throw new Error('Image editors require the admitted imageEditor capability');
 		const declaration = configuration.manifest?.contributes?.imageEditors?.find(entry => entry.id === viewType);
-		if (!declaration || typeof provider?.resolveImageEditor !== 'function') throw new TypeError('Image editor must be declared in package.json');
-		const registration = ashRuntime.registerContribution({ kind: 'dataChannel', registrationId: viewType, channelId: 'image.editor.v1' }, 'receiveData', (call, payload) => invoke(async () => {
-			const context = payload?.data;
-			if (!context || !['screen', 'selection'].includes(context.source) || Object.keys(context).join(',') !== 'source') throw new TypeError('Invalid image editor context');
-			const assets = new Set();
-			const view = {
-				html: '', asWebviewUri(uri) {
-					if (uri.scheme !== 'blob') throw new TypeError('Image view resources must belong to this browser extension');
-					const value = uri.toString(); assets.add(value);
-					if (!webviewAssets.has(value)) { webviewAssets.add(value); globalThis.__ashWebviewResource?.(value); }
-					return uri;
-				}, setState(value) { view.state = value; }
-			};
-			await provider.resolveImageEditor(Object.freeze({ source: context.source }), view, call.cancellationToken);
-			return { html: view.html, resources: [...assets], state: view.state ?? null };
-		}));
+		if (!declaration || typeof provider?.resolveImageEditor !== 'function')
+			throw new TypeError('Image editor must be declared in package.json');
+		const registration = ashRuntime.registerContribution(
+			{ kind: 'dataChannel', registrationId: viewType, channelId: 'image.editor.v1' },
+			'receiveData',
+			(call, payload) =>
+				invoke(async () => {
+					const context = payload?.data;
+					if (
+						!context ||
+						!['screen', 'selection'].includes(context.source) ||
+						Object.keys(context).join(',') !== 'source'
+					)
+						throw new TypeError('Invalid image editor context');
+					const assets = new Set();
+					const view = {
+						html: '',
+						asWebviewUri(uri) {
+							if (uri.scheme !== 'blob')
+								throw new TypeError('Image view resources must belong to this browser extension');
+							const value = uri.toString();
+							assets.add(value);
+							if (!webviewAssets.has(value)) {
+								webviewAssets.add(value);
+								globalThis.__ashWebviewResource?.(value);
+							}
+							return uri;
+						},
+						setState(value) {
+							view.state = value;
+						},
+					};
+					await provider.resolveImageEditor(
+						Object.freeze({ source: context.source }),
+						view,
+						call.cancellationToken,
+					);
+					return { html: view.html, resources: [...assets], state: view.state ?? null };
+				}),
+		);
 		subscriptions.push(registration);
 		return registration;
 	}
 
 	function registerCanvasProvider(id, provider) {
 		if (!canvasAdmitted) throw new Error('Canvas providers require the admitted dataChannel capability');
-		if (typeof id !== 'string' || !/^[A-Za-z0-9._-]{1,128}$/.test(id) || ['resolveCanvas', 'closeCanvas', 'onDidChangeCanvases'].some(key => provider?.[key] !== undefined && typeof provider[key] !== 'function')) throw new TypeError('Invalid Canvas provider');
+		if (
+			typeof id !== 'string' ||
+			!/^[A-Za-z0-9._-]{1,128}$/.test(id) ||
+			['resolveCanvas', 'closeCanvas', 'onDidChangeCanvases'].some(
+				key => provider?.[key] !== undefined && typeof provider[key] !== 'function',
+			)
+		)
+			throw new TypeError('Invalid Canvas provider');
 		const declaration = configuration.manifest?.contributes?.canvases?.find(entry => entry.id === id);
-		if (!declaration || typeof declaration.displayName !== 'string' || !declaration.displayName.trim() || declaration.displayName.length > 256 || declaration.description !== undefined && (typeof declaration.description !== 'string' || declaration.description.length > 4096) || declaration.requiresInput !== undefined && typeof declaration.requiresInput !== 'boolean' || typeof provider?.openCanvas !== 'function') throw new TypeError('Canvas provider must be declared in package.json');
+		if (
+			!declaration ||
+			typeof declaration.displayName !== 'string' ||
+			!declaration.displayName.trim() ||
+			declaration.displayName.length > 256 ||
+			(declaration.description !== undefined &&
+				(typeof declaration.description !== 'string' || declaration.description.length > 4096)) ||
+			(declaration.requiresInput !== undefined && typeof declaration.requiresInput !== 'boolean') ||
+			typeof provider?.openCanvas !== 'function'
+		)
+			throw new TypeError('Canvas provider must be declared in package.json');
 		if (canvasRegistrations.has(id)) throw new Error('Canvas provider is already registered');
-		const registrationId = 'canvas.' + (++canvasRegistrationGeneration);
-		const handle = ashRuntime.registerContribution({ kind: 'dataChannel', registrationId, channelId: 'canvas.provider.v1' }, 'receiveData', (call, payload) => invoke(async () => {
-			const data = payload?.data;
-			if (data?.action === 'describe') return { state: 'definition', canvasId: id, displayName: declaration.displayName, description: declaration.description ?? '', requiresInput: declaration.requiresInput === true };
-			const context = data?.context;
-			if (!context || Object.keys(context).sort().join(',') !== 'instanceId,sessionId,threadId' || Object.values(context).some(value => typeof value !== 'string' || !value.trim() || value.length > 1024) || !/^[A-Za-z0-9._-]{1,128}$/.test(context.instanceId)) throw new TypeError('Invalid Canvas context');
-			const operation = data.action === 'open' ? provider.openCanvas : data.action === 'resolve' ? provider.resolveCanvas : data.action === 'close' ? provider.closeCanvas : undefined;
-			if (!['open', 'resolve', 'close'].includes(data.action)) throw new TypeError('Invalid Canvas operation');
-			if (!operation) return { state: 'unchanged' };
-			const canvas = await operation.call(provider, Object.freeze({ sessionId: context.sessionId, threadId: context.threadId, instanceId: context.instanceId }), call.cancellationToken);
-			if (data.action === 'close') return { state: 'closed' };
-			if (canvas === null) return { state: 'closed' };
-			if (canvas === undefined) return { state: 'pending' };
-			if (typeof canvas.url !== 'string' || canvas.url.length > 8192 || canvas.title !== undefined && (typeof canvas.title !== 'string' || !canvas.title.trim() || canvas.title.length > 256) || canvas.status !== undefined && (typeof canvas.status !== 'string' || canvas.status.length > 4096)) throw new TypeError('Invalid Canvas source');
-			return { state: 'ready', url: canvas.url, ...(canvas.title === undefined ? {} : { title: canvas.title }), ...(canvas.status === undefined ? {} : { status: canvas.status }) };
-		}));
+		const registrationId = 'canvas.' + ++canvasRegistrationGeneration;
+		const handle = ashRuntime.registerContribution(
+			{ kind: 'dataChannel', registrationId, channelId: 'canvas.provider.v1' },
+			'receiveData',
+			(call, payload) =>
+				invoke(async () => {
+					const data = payload?.data;
+					if (data?.action === 'describe')
+						return {
+							state: 'definition',
+							canvasId: id,
+							displayName: declaration.displayName,
+							description: declaration.description ?? '',
+							requiresInput: declaration.requiresInput === true,
+						};
+					const context = data?.context;
+					if (
+						!context ||
+						Object.keys(context).sort().join(',') !== 'instanceId,sessionId,threadId' ||
+						Object.values(context).some(
+							value => typeof value !== 'string' || !value.trim() || value.length > 1024,
+						) ||
+						!/^[A-Za-z0-9._-]{1,128}$/.test(context.instanceId)
+					)
+						throw new TypeError('Invalid Canvas context');
+					const operation =
+						data.action === 'open'
+							? provider.openCanvas
+							: data.action === 'resolve'
+								? provider.resolveCanvas
+								: data.action === 'close'
+									? provider.closeCanvas
+									: undefined;
+					if (!['open', 'resolve', 'close'].includes(data.action))
+						throw new TypeError('Invalid Canvas operation');
+					if (!operation) return { state: 'unchanged' };
+					const canvas = await operation.call(
+						provider,
+						Object.freeze({
+							sessionId: context.sessionId,
+							threadId: context.threadId,
+							instanceId: context.instanceId,
+						}),
+						call.cancellationToken,
+					);
+					if (data.action === 'close') return { state: 'closed' };
+					if (canvas === null) return { state: 'closed' };
+					if (canvas === undefined) return { state: 'pending' };
+					if (
+						typeof canvas.url !== 'string' ||
+						canvas.url.length > 8192 ||
+						(canvas.title !== undefined &&
+							(typeof canvas.title !== 'string' || !canvas.title.trim() || canvas.title.length > 256)) ||
+						(canvas.status !== undefined &&
+							(typeof canvas.status !== 'string' || canvas.status.length > 4096))
+					)
+						throw new TypeError('Invalid Canvas source');
+					return {
+						state: 'ready',
+						url: canvas.url,
+						...(canvas.title === undefined ? {} : { title: canvas.title }),
+						...(canvas.status === undefined ? {} : { status: canvas.status }),
+					};
+				}),
+		);
 		let active = true;
 		const changed = provider.onDidChangeCanvases?.(() => {
-			if (active) void request({ operation: 'editorOperation', payload: { method: 'canvasChanged', canvasId: id } }, 'value').catch(() => { });
+			if (active)
+				void request(
+					{ operation: 'editorOperation', payload: { method: 'canvasChanged', canvasId: id } },
+					'value',
+				).catch(() => {});
 		});
-		const registration = new Disposable(() => { active = false; changed?.dispose(); canvasRegistrations.delete(id); handle.dispose(); });
+		const registration = new Disposable(() => {
+			active = false;
+			changed?.dispose();
+			canvasRegistrations.delete(id);
+			handle.dispose();
+		});
 		canvasRegistrations.set(id, registration);
 		subscriptions.push(registration);
 		return registration;
 	}
 
-	function unsupported(name) { throw new Error(`Unsupported Ash API: ${name}`); }
+	function unsupported(name) {
+		throw new Error(`Unsupported Ash API: ${name}`);
+	}
 	let workspaceFolders;
 	const workspaceFolderStates = new WeakMap();
 	const workspaceListeners = { configuration: new Set(), workspace: new Set(), jsonSchemas: new Set() };
@@ -821,19 +1650,30 @@ export function createApi(configuration, initialization) {
 		return JSON.stringify([uri.scheme, uri.authority.toLowerCase(), path]);
 	}
 	function acceptFolders(folders, previous = []) {
-		return Object.freeze(folders.map(folder => {
-			const uri = Uri.parse(folder.uri);
-			const retained = previous.find(value => folderKey(value.uri) === folderKey(uri));
-			if (retained) {
-				const state = workspaceFolderStates.get(retained);
-				state.name = folder.name; state.index = folder.index;
-				return retained;
-			}
-			const state = { name: folder.name, index: folder.index };
-			const value = Object.freeze({ uri, get name() { return state.name; }, get index() { return state.index; } });
-			workspaceFolderStates.set(value, state);
-			return value;
-		}));
+		return Object.freeze(
+			folders.map(folder => {
+				const uri = Uri.parse(folder.uri);
+				const retained = previous.find(value => folderKey(value.uri) === folderKey(uri));
+				if (retained) {
+					const state = workspaceFolderStates.get(retained);
+					state.name = folder.name;
+					state.index = folder.index;
+					return retained;
+				}
+				const state = { name: folder.name, index: folder.index };
+				const value = Object.freeze({
+					uri,
+					get name() {
+						return state.name;
+					},
+					get index() {
+						return state.index;
+					},
+				});
+				workspaceFolderStates.set(value, state);
+				return value;
+			}),
+		);
 	}
 	function listenWorkspace(kind, listener, thisArg, disposables) {
 		if (typeof listener !== 'function') throw new TypeError('Workspace event requires a listener');
@@ -846,47 +1686,131 @@ export function createApi(configuration, initialization) {
 	}
 	function equalConfig(left, right) {
 		if (Object.is(left, right)) return true;
-		if (!left || !right || typeof left !== 'object' || typeof right !== 'object' || Array.isArray(left) !== Array.isArray(right)) return false;
+		if (
+			!left ||
+			!right ||
+			typeof left !== 'object' ||
+			typeof right !== 'object' ||
+			Array.isArray(left) !== Array.isArray(right)
+		)
+			return false;
 		const keys = Object.keys(left);
-		return keys.length === Object.keys(right).length && keys.every(key => Object.hasOwn(right, key) && equalConfig(left[key], right[key]));
+		return (
+			keys.length === Object.keys(right).length &&
+			keys.every(key => Object.hasOwn(right, key) && equalConfig(left[key], right[key]))
+		);
 	}
 	function ensureWorkspaceEvents() {
 		if (workspaceRegistration) return workspaceRegistration;
-		workspaceRegistration = ashWorkspace.registerWorkspaceEvents('ash.workspace.events', (_context, event) => invoke(async () => {
-			if (!Object.hasOwn(workspaceRevisions, event.type) || !Number.isSafeInteger(event.revision) || event.revision < 1 || typeof event.emit !== 'boolean') throw new TypeError('Invalid workspace event');
-			if (event.revision <= workspaceRevisions[event.type]) return;
-			const before = windowFacts();
-			let content;
-			if (event.type === 'configuration') {
-				if (!event.configurationValues || typeof event.configurationValues !== 'object' || Array.isArray(event.configurationValues) || !event.configurationData || typeof event.configurationData !== 'object' || Array.isArray(event.configurationData)
-					|| !Array.isArray(event.change?.keys) || event.change.keys.some(key => typeof key !== 'string') || !Array.isArray(event.change.overrides)
-					|| event.change.overrides.some(entry => !Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string' || !Array.isArray(entry[1]) || entry[1].some(key => typeof key !== 'string'))) throw new TypeError('Invalid configuration snapshot');
-				const after = Object.freeze({ ...before, configurationValues: copyConfig(event.configurationValues), configurationData: copyConfig(event.configurationData) });
-				initialization = after;
-				const keys = [...event.change.keys, ...event.change.overrides.flatMap(entry => entry[1])];
-				content = Object.freeze({
-					affectsConfiguration(section, scope) {
-						if (typeof section !== 'string') throw new TypeError('Configuration section must be a string');
-						if (!keys.some(key => section === '' || key === section || key.startsWith(section + '.') || section.startsWith(key + '.'))) return false;
-						return scope == null || !equalConfig(getConfiguration(undefined, scope, before).get(section), getConfiguration(undefined, scope, after).get(section));
-					}
-				});
-			} else if (event.type === 'workspace') {
-				if (!Array.isArray(event.workspaceFolders) || event.workspaceFolders.length > 256 || event.workspaceFolders.some((folder, index) => typeof folder.uri !== 'string' || typeof folder.name !== 'string' || folder.index !== index)
-					|| event.workspaceName !== null && typeof event.workspaceName !== 'string' || event.workspaceFile !== null && typeof event.workspaceFile !== 'string') throw new TypeError('Invalid workspace snapshot');
-				const previous = getWorkspaceFolders() ?? [];
-				const next = acceptFolders(event.workspaceFolders, previous);
-				initialization = Object.freeze({ ...before, workspaceFolders: copyConfig(event.workspaceFolders), workspaceName: event.workspaceName, workspaceFile: event.workspaceFile });
-				workspaceFolders = next;
-				content = Object.freeze({ added: Object.freeze(next.filter(folder => !previous.includes(folder))), removed: Object.freeze(previous.filter(folder => !next.includes(folder))) });
-			}
-			workspaceRevisions[event.type] = event.revision;
-			if (event.emit) await Promise.all([...workspaceListeners[event.type]].map(async entry => entry.listener.call(entry.thisArg, content)));
-		}));
+		workspaceRegistration = ashWorkspace.registerWorkspaceEvents('ash.workspace.events', (_context, event) =>
+			invoke(async () => {
+				if (
+					!Object.hasOwn(workspaceRevisions, event.type) ||
+					!Number.isSafeInteger(event.revision) ||
+					event.revision < 1 ||
+					typeof event.emit !== 'boolean'
+				)
+					throw new TypeError('Invalid workspace event');
+				if (event.revision <= workspaceRevisions[event.type]) return;
+				const before = windowFacts();
+				let content;
+				if (event.type === 'configuration') {
+					if (
+						!event.configurationValues ||
+						typeof event.configurationValues !== 'object' ||
+						Array.isArray(event.configurationValues) ||
+						!event.configurationData ||
+						typeof event.configurationData !== 'object' ||
+						Array.isArray(event.configurationData) ||
+						!Array.isArray(event.change?.keys) ||
+						event.change.keys.some(key => typeof key !== 'string') ||
+						!Array.isArray(event.change.overrides) ||
+						event.change.overrides.some(
+							entry =>
+								!Array.isArray(entry) ||
+								entry.length !== 2 ||
+								typeof entry[0] !== 'string' ||
+								!Array.isArray(entry[1]) ||
+								entry[1].some(key => typeof key !== 'string'),
+						)
+					)
+						throw new TypeError('Invalid configuration snapshot');
+					const after = Object.freeze({
+						...before,
+						configurationValues: copyConfig(event.configurationValues),
+						configurationData: copyConfig(event.configurationData),
+					});
+					initialization = after;
+					const keys = [...event.change.keys, ...event.change.overrides.flatMap(entry => entry[1])];
+					content = Object.freeze({
+						affectsConfiguration(section, scope) {
+							if (typeof section !== 'string')
+								throw new TypeError('Configuration section must be a string');
+							if (
+								!keys.some(
+									key =>
+										section === '' ||
+										key === section ||
+										key.startsWith(section + '.') ||
+										section.startsWith(key + '.'),
+								)
+							)
+								return false;
+							return (
+								scope == null ||
+								!equalConfig(
+									getConfiguration(undefined, scope, before).get(section),
+									getConfiguration(undefined, scope, after).get(section),
+								)
+							);
+						},
+					});
+				} else if (event.type === 'workspace') {
+					if (
+						!Array.isArray(event.workspaceFolders) ||
+						event.workspaceFolders.length > 256 ||
+						event.workspaceFolders.some(
+							(folder, index) =>
+								typeof folder.uri !== 'string' ||
+								typeof folder.name !== 'string' ||
+								folder.index !== index,
+						) ||
+						(event.workspaceName !== null && typeof event.workspaceName !== 'string') ||
+						(event.workspaceFile !== null && typeof event.workspaceFile !== 'string')
+					)
+						throw new TypeError('Invalid workspace snapshot');
+					const previous = getWorkspaceFolders() ?? [];
+					const next = acceptFolders(event.workspaceFolders, previous);
+					initialization = Object.freeze({
+						...before,
+						workspaceFolders: copyConfig(event.workspaceFolders),
+						workspaceName: event.workspaceName,
+						workspaceFile: event.workspaceFile,
+					});
+					workspaceFolders = next;
+					content = Object.freeze({
+						added: Object.freeze(next.filter(folder => !previous.includes(folder))),
+						removed: Object.freeze(previous.filter(folder => !next.includes(folder))),
+					});
+				}
+				workspaceRevisions[event.type] = event.revision;
+				if (event.emit)
+					await Promise.all(
+						[...workspaceListeners[event.type]].map(async entry =>
+							entry.listener.call(entry.thisArg, content),
+						),
+					);
+			}),
+		);
 		return workspaceRegistration;
 	}
 	function windowFacts() {
-		if (!initialization || !Array.isArray(initialization.workspaceFolders) || !initialization.configurationValues || !initialization.configurationData) {
+		if (
+			!initialization ||
+			!Array.isArray(initialization.workspaceFolders) ||
+			!initialization.configurationValues ||
+			!initialization.configurationData
+		) {
 			throw new Error('Window initialization is unavailable for this activation');
 		}
 		return initialization;
@@ -897,12 +1821,19 @@ export function createApi(configuration, initialization) {
 	}
 	function workspaceFolder(resource, folders = getWorkspaceFolders()) {
 		if (!(resource instanceof Uri)) throw new TypeError('Workspace resource must be a URI');
-		const normalize = path => configuration.pathSeparator === '\\' && resource.scheme === 'file' ? path.toLowerCase() : path;
+		const normalize = path =>
+			configuration.pathSeparator === '\\' && resource.scheme === 'file' ? path.toLowerCase() : path;
 		const path = normalize(resource.path);
-		return (folders ?? []).filter(folder => {
-			const root = normalize(folder.uri.path).replace(/\/+$/, '');
-			return resource.scheme === folder.uri.scheme && resource.authority.toLowerCase() === folder.uri.authority.toLowerCase() && (path === root || path.startsWith(root + '/'));
-		}).sort((a, b) => b.uri.path.length - a.uri.path.length)[0];
+		return (folders ?? [])
+			.filter(folder => {
+				const root = normalize(folder.uri.path).replace(/\/+$/, '');
+				return (
+					resource.scheme === folder.uri.scheme &&
+					resource.authority.toLowerCase() === folder.uri.authority.toLowerCase() &&
+					(path === root || path.startsWith(root + '/'))
+				);
+			})
+			.sort((a, b) => b.uri.path.length - a.uri.path.length)[0];
 	}
 	function configValue(values, key) {
 		if (!key) return values;
@@ -912,42 +1843,78 @@ export function createApi(configuration, initialization) {
 		}
 		return values;
 	}
-	function copyConfig(value) { return value === undefined ? undefined : JSON.parse(JSON.stringify(value)); }
+	function copyConfig(value) {
+		return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+	}
 	function jsonValue(value) {
 		// Reject lossy JSON conversion before crossing the private host boundary.
 		const ancestors = [];
-		return JSON.parse(JSON.stringify(value, function (_key, entry) {
-			while (ancestors.length && ancestors.at(-1) !== this) ancestors.pop();
-			if (entry && typeof entry === 'object') {
-				if (ancestors.length >= 64) throw new TypeError('JSON value is too deeply nested');
-				ancestors.push(entry);
-			}
-			if (entry === null || typeof entry === 'string' || typeof entry === 'boolean' || typeof entry === 'number' && Number.isFinite(entry)
-				|| typeof entry === 'object' && (Array.isArray(entry) || Object.getPrototypeOf(entry) === Object.prototype || Object.getPrototypeOf(entry) === null)) return entry;
-			throw new TypeError('Value must be JSON');
-		}));
+		return JSON.parse(
+			JSON.stringify(value, function (_key, entry) {
+				while (ancestors.length && ancestors.at(-1) !== this) ancestors.pop();
+				if (entry && typeof entry === 'object') {
+					if (ancestors.length >= 64) throw new TypeError('JSON value is too deeply nested');
+					ancestors.push(entry);
+				}
+				if (
+					entry === null ||
+					typeof entry === 'string' ||
+					typeof entry === 'boolean' ||
+					(typeof entry === 'number' && Number.isFinite(entry)) ||
+					(typeof entry === 'object' &&
+						(Array.isArray(entry) ||
+							Object.getPrototypeOf(entry) === Object.prototype ||
+							Object.getPrototypeOf(entry) === null))
+				)
+					return entry;
+				throw new TypeError('Value must be JSON');
+			}),
+		);
 	}
 	function mergeConfig(left, right) {
-		if (!left || !right || typeof left !== 'object' || typeof right !== 'object' || Array.isArray(left) || Array.isArray(right)) return copyConfig(right);
+		if (
+			!left ||
+			!right ||
+			typeof left !== 'object' ||
+			typeof right !== 'object' ||
+			Array.isArray(left) ||
+			Array.isArray(right)
+		)
+			return copyConfig(right);
 		const result = Object.assign(Object.create(null), copyConfig(left));
-		for (const [key, value] of Object.entries(right)) result[key] = Object.hasOwn(result, key) ? mergeConfig(result[key], value) : copyConfig(value);
+		for (const [key, value] of Object.entries(right))
+			result[key] = Object.hasOwn(result, key) ? mergeConfig(result[key], value) : copyConfig(value);
 		return result;
 	}
 	function getConfiguration(section, scope, facts = windowFacts()) {
-		if (section !== undefined && typeof section !== 'string') throw new TypeError('Configuration section must be a string');
+		if (section !== undefined && typeof section !== 'string')
+			throw new TypeError('Configuration section must be a string');
 		const data = facts.configurationData;
 		const resource = scope instanceof Uri ? scope : scope?.uri;
 		const language = scope instanceof Uri ? undefined : scope?.languageId;
 		const folders = facts.workspaceFolders.map(folder => ({ ...folder, uri: Uri.parse(folder.uri) }));
 		const folder = resource ? workspaceFolder(resource, folders) : undefined;
-		const folderModel = folder ? data.folders.find(([uri]) => folderKey(Uri.from(uri)) === folderKey(folder.uri))?.[1] : undefined;
-		const models = [data.defaults, data.application, data.userLocal, data.userRemote, data.workspace, folderModel, data.policy].filter(Boolean);
-		const languageContents = model => (model?.overrides ?? []).filter(override => override.identifiers.includes(language)).reduce((result, override) => mergeConfig(result, override.contents), {});
+		const folderModel = folder
+			? data.folders.find(([uri]) => folderKey(Uri.from(uri)) === folderKey(folder.uri))?.[1]
+			: undefined;
+		const models = [
+			data.defaults,
+			data.application,
+			data.userLocal,
+			data.userRemote,
+			data.workspace,
+			folderModel,
+			data.policy,
+		].filter(Boolean);
+		const languageContents = model =>
+			(model?.overrides ?? [])
+				.filter(override => override.identifiers.includes(language))
+				.reduce((result, override) => mergeConfig(result, override.contents), {});
 		let values = copyConfig(facts.configurationValues);
 		if (folderModel) values = mergeConfig(values, folderModel.contents);
 		if (language) for (const model of models) values = mergeConfig(values, languageContents(model));
 		values = mergeConfig(values, data.policy?.contents ?? {});
-		const fullKey = key => section ? key ? section + '.' + key : section : key;
+		const fullKey = key => (section ? (key ? section + '.' + key : section) : key);
 		const combinedValue = (first, second, key, override) => {
 			const a = configValue(override ? languageContents(first) : first?.contents, key);
 			const b = configValue(override ? languageContents(second) : second?.contents, key);
@@ -956,32 +1923,64 @@ export function createApi(configuration, initialization) {
 		const contents = configValue(values, section);
 		return Object.freeze({
 			...(contents && typeof contents === 'object' && !Array.isArray(contents) ? copyConfig(contents) : {}),
-			get(key, fallback) { const value = configValue(values, fullKey(key)); return value === undefined ? fallback : copyConfig(value); },
-			has(key) { return configValue(values, fullKey(key)) !== undefined; },
+			get(key, fallback) {
+				const value = configValue(values, fullKey(key));
+				return value === undefined ? fallback : copyConfig(value);
+			},
+			has(key) {
+				return configValue(values, fullKey(key)) !== undefined;
+			},
 			async update(key, value, target) {
-				if (typeof key !== 'string' || !fullKey(key) || fullKey(key).length > 1024 || fullKey(key).includes('\0')) throw new TypeError('Invalid configuration key');
-				if (target !== 'user' && target !== 'workspace') throw new TypeError('Configuration target must be user or workspace');
+				if (
+					typeof key !== 'string' ||
+					!fullKey(key) ||
+					fullKey(key).length > 1024 ||
+					fullKey(key).includes('\0')
+				)
+					throw new TypeError('Invalid configuration key');
+				if (target !== 'user' && target !== 'workspace')
+					throw new TypeError('Configuration target must be user or workspace');
 				if (language !== undefined) return unsupported('Configuration language override writes');
 				if (value === undefined) {
 					await request({ operation: 'resetConfiguration', section: fullKey(key), target }, 'done');
 				} else {
-					await request({ operation: 'updateConfiguration', section: fullKey(key), value: jsonValue(value), target }, 'done');
+					await request(
+						{ operation: 'updateConfiguration', section: fullKey(key), value: jsonValue(value), target },
+						'done',
+					);
 				}
 			},
 			inspect(key) {
 				const name = fullKey(key);
-				if (!models.some(model => model.keys?.includes(name)) && configValue(values, name) === undefined) return undefined;
+				if (!models.some(model => model.keys?.includes(name)) && configValue(values, name) === undefined)
+					return undefined;
 				return {
 					key: name,
 					defaultValue: copyConfig(configValue(data.defaults?.contents, name)),
 					globalValue: combinedValue(data.userLocal, data.userRemote, name, false),
 					workspaceValue: copyConfig(configValue(data.workspace?.contents, name)),
 					workspaceFolderValue: copyConfig(configValue(folderModel?.contents, name)),
-					defaultLanguageValue: language ? copyConfig(configValue(languageContents(data.defaults), name)) : undefined,
-					globalLanguageValue: language ? combinedValue(data.userLocal, data.userRemote, name, true) : undefined,
-					workspaceLanguageValue: language ? copyConfig(configValue(languageContents(data.workspace), name)) : undefined,
-					workspaceFolderLanguageValue: language ? copyConfig(configValue(languageContents(folderModel), name)) : undefined,
-					languageIds: [...new Set(models.flatMap(model => (model.overrides ?? []).filter(override => override.keys.includes(name)).flatMap(override => override.identifiers)))],
+					defaultLanguageValue: language
+						? copyConfig(configValue(languageContents(data.defaults), name))
+						: undefined,
+					globalLanguageValue: language
+						? combinedValue(data.userLocal, data.userRemote, name, true)
+						: undefined,
+					workspaceLanguageValue: language
+						? copyConfig(configValue(languageContents(data.workspace), name))
+						: undefined,
+					workspaceFolderLanguageValue: language
+						? copyConfig(configValue(languageContents(folderModel), name))
+						: undefined,
+					languageIds: [
+						...new Set(
+							models.flatMap(model =>
+								(model.overrides ?? [])
+									.filter(override => override.keys.includes(name))
+									.flatMap(override => override.identifiers),
+							),
+						),
+					],
 				};
 			},
 		});
@@ -1011,30 +2010,43 @@ export function createApi(configuration, initialization) {
 		const owned = serviceOwner();
 		const promise = (async () => {
 			const encoded = JSON.stringify(operation);
-			const result = JSON.parse(await (owned ? globalThis.__ashRequest(id, encoded) : globalThis.__ashBackgroundRequest(encoded)));
+			const result = JSON.parse(
+				await (owned ? globalThis.__ashRequest(id, encoded) : globalThis.__ashBackgroundRequest(encoded)),
+			);
 			if (result.result !== resultKind) throw new Error(`Invalid result for ${operation.operation}`);
 			return result;
 		})();
 		// The runtime callback retains its IO. Node lifecycle calls survive callback return
 		// and are cancelled by the supervisor when this authorized incarnation retires.
-		const settled = promise.then(() => undefined, () => undefined);
+		const settled = promise.then(
+			() => undefined,
+			() => undefined,
+		);
 		owned?.push(settled);
 		return promise;
 	}
 
 	function storageKey(key) {
-		if (typeof key !== 'string' || !key || key.length > 1024 || /[\u0000-\u001f\u007f-\u009f]/.test(key)) throw new TypeError('Invalid extension state key');
+		if (typeof key !== 'string' || !key || key.length > 1024 || /[\u0000-\u001f\u007f-\u009f]/.test(key))
+			throw new TypeError('Invalid extension state key');
 		return key;
 	}
 	const storage = Object.freeze({
 		async get(key) {
-			const { response } = await request({ operation: 'coreService', request: { service: 'storageGet', key: storageKey(key) } }, 'coreService');
-			if (response?.service !== 'storageValue' || typeof response.found !== 'boolean') throw new Error('Invalid extension state response');
+			const { response } = await request(
+				{ operation: 'coreService', request: { service: 'storageGet', key: storageKey(key) } },
+				'coreService',
+			);
+			if (response?.service !== 'storageValue' || typeof response.found !== 'boolean')
+				throw new Error('Invalid extension state response');
 			return response.found ? jsonValue(response.value) : undefined;
 		},
 		async update(key, value) {
 			storageKey(key);
-			const service = value === undefined ? { service: 'storageDelete', key } : { service: 'storageSet', key, value: jsonValue(value) };
+			const service =
+				value === undefined
+					? { service: 'storageDelete', key }
+					: { service: 'storageSet', key, value: jsonValue(value) };
 			const { response } = await request({ operation: 'coreService', request: service }, 'coreService');
 			if (response?.service !== 'storageUpdated') throw new Error('Invalid extension state response');
 		},
@@ -1042,11 +2054,23 @@ export function createApi(configuration, initialization) {
 
 	// Use ECMAScript primitives: the restricted V8 host does not supply browser text codecs.
 	function secretBytes(value) {
-		try { return Array.from(encodeURIComponent(value).matchAll(/%([0-9a-f]{2})|(.)/gi), match => match[1] ? parseInt(match[1], 16) : match[2].charCodeAt(0)); }
-		catch { throw new TypeError('Invalid extension secret text'); }
+		try {
+			return Array.from(encodeURIComponent(value).matchAll(/%([0-9a-f]{2})|(.)/gi), match =>
+				match[1] ? parseInt(match[1], 16) : match[2].charCodeAt(0),
+			);
+		} catch {
+			throw new TypeError('Invalid extension secret text');
+		}
 	}
 	function secretKey(key) {
-		if (typeof key !== 'string' || !key || key.length > 256 || secretBytes(key).length > 256 || /[\u0000-\u001f\u007f-\u009f]/.test(key)) throw new TypeError('Invalid extension secret key');
+		if (
+			typeof key !== 'string' ||
+			!key ||
+			key.length > 256 ||
+			secretBytes(key).length > 256 ||
+			/[\u0000-\u001f\u007f-\u009f]/.test(key)
+		)
+			throw new TypeError('Invalid extension secret key');
 		return key;
 	}
 	async function secretRequest(service, resultKind) {
@@ -1058,9 +2082,17 @@ export function createApi(configuration, initialization) {
 		async get(key) {
 			const { value } = await secretRequest({ service: 'secretLoad', key: secretKey(key) }, 'secretLoaded');
 			if (value === null) return undefined;
-			if (!Array.isArray(value) || value.length > 65536 || value.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)) throw new Error('Invalid extension secret response');
-			try { return decodeURIComponent(value.map(byte => '%' + byte.toString(16).padStart(2, '0')).join('')); }
-			catch { throw new Error('Invalid extension secret response'); }
+			if (
+				!Array.isArray(value) ||
+				value.length > 65536 ||
+				value.some(byte => !Number.isInteger(byte) || byte < 0 || byte > 255)
+			)
+				throw new Error('Invalid extension secret response');
+			try {
+				return decodeURIComponent(value.map(byte => '%' + byte.toString(16).padStart(2, '0')).join(''));
+			} catch {
+				throw new Error('Invalid extension secret response');
+			}
 		},
 		async store(key, value) {
 			secretKey(key);
@@ -1075,7 +2107,6 @@ export function createApi(configuration, initialization) {
 			if (typeof deleted !== 'boolean') throw new Error('Invalid extension secret response');
 			return deleted;
 		},
-
 	});
 
 	async function invoke(callback) {
@@ -1100,9 +2131,13 @@ export function createApi(configuration, initialization) {
 	}
 	function message(severity, text, ...items) {
 		if (typeof text !== 'string') throw new TypeError('Message must be a string');
-		if (items.length === 0) return request({ operation: 'showMessage', message: text, severity }, 'done').then(() => undefined);
-		const labels = items.map(item => typeof item === 'string' ? item : item?.title);
-		if (labels.length > 16 || labels.some(label => typeof label !== 'string' || !label.trim() || label.length > 512)) {
+		if (items.length === 0)
+			return request({ operation: 'showMessage', message: text, severity }, 'done').then(() => undefined);
+		const labels = items.map(item => (typeof item === 'string' ? item : item?.title));
+		if (
+			labels.length > 16 ||
+			labels.some(label => typeof label !== 'string' || !label.trim() || label.length > 512)
+		) {
 			throw new TypeError('Message buttons require at most 16 non-empty titles; message options are unsupported');
 		}
 		const operation = { operation: 'showMessage', message: text, severity, items: labels };
@@ -1115,7 +2150,8 @@ export function createApi(configuration, initialization) {
 		})();
 		return selection.then(result => {
 			if (result.index === null) return undefined;
-			if (!Number.isInteger(result.index) || result.index < 0 || result.index >= items.length) throw new TypeError('Invalid message button selection');
+			if (!Number.isInteger(result.index) || result.index < 0 || result.index >= items.length)
+				throw new TypeError('Invalid message button selection');
 			return items[result.index];
 		});
 	}
@@ -1125,24 +2161,46 @@ export function createApi(configuration, initialization) {
 			if (typeof callback !== 'function') throw new TypeError('Disposable requires a callback');
 			this.#callback = callback;
 		}
-		dispose() { const callback = this.#callback; this.#callback = undefined; callback?.(); }
-		static from(...items) { return new Disposable(() => { for (const item of items) item.dispose(); }); }
+		dispose() {
+			const callback = this.#callback;
+			this.#callback = undefined;
+			callback?.();
+		}
+		static from(...items) {
+			return new Disposable(() => {
+				for (const item of items) item.dispose();
+			});
+		}
 	}
 	class Position {
 		constructor(line, character) {
-			if (!Number.isSafeInteger(line) || line < 0 || !Number.isSafeInteger(character) || character < 0) throw new RangeError('Invalid position');
+			if (!Number.isSafeInteger(line) || line < 0 || !Number.isSafeInteger(character) || character < 0)
+				throw new RangeError('Invalid position');
 			this.line = line;
 			this.character = character;
 			Object.freeze(this);
 		}
-		compareTo(other) { return Math.sign(this.line - other.line || this.character - other.character); }
-		isEqual(other) { return this.compareTo(other) === 0; }
-		isBefore(other) { return this.compareTo(other) < 0; }
-		isAfter(other) { return this.compareTo(other) > 0; }
-		isBeforeOrEqual(other) { return this.compareTo(other) <= 0; }
-		isAfterOrEqual(other) { return this.compareTo(other) >= 0; }
+		compareTo(other) {
+			return Math.sign(this.line - other.line || this.character - other.character);
+		}
+		isEqual(other) {
+			return this.compareTo(other) === 0;
+		}
+		isBefore(other) {
+			return this.compareTo(other) < 0;
+		}
+		isAfter(other) {
+			return this.compareTo(other) > 0;
+		}
+		isBeforeOrEqual(other) {
+			return this.compareTo(other) <= 0;
+		}
+		isAfterOrEqual(other) {
+			return this.compareTo(other) >= 0;
+		}
 		translate(lineDelta = 0, characterDelta = 0) {
-			if (typeof lineDelta === 'object') return this.translate(lineDelta.lineDelta ?? 0, lineDelta.characterDelta ?? 0);
+			if (typeof lineDelta === 'object')
+				return this.translate(lineDelta.lineDelta ?? 0, lineDelta.characterDelta ?? 0);
 			return new Position(this.line + lineDelta, this.character + characterDelta);
 		}
 		with(line = this.line, character = this.character) {
@@ -1152,38 +2210,76 @@ export function createApi(configuration, initialization) {
 	}
 	class Range {
 		constructor(start, end, endLine, endCharacter) {
-			if (typeof start === 'number') { start = new Position(start, end); end = new Position(endLine, endCharacter); }
+			if (typeof start === 'number') {
+				start = new Position(start, end);
+				end = new Position(endLine, endCharacter);
+			}
 			const first = new Position(start.line, start.character);
 			const last = new Position(end.line, end.character);
 			this.start = first.isBeforeOrEqual(last) ? first : last;
 			this.end = first.isBeforeOrEqual(last) ? last : first;
 			Object.freeze(this);
 		}
-		get isEmpty() { return this.start.isEqual(this.end); }
-		get isSingleLine() { return this.start.line === this.end.line; }
+		get isEmpty() {
+			return this.start.isEqual(this.end);
+		}
+		get isSingleLine() {
+			return this.start.line === this.end.line;
+		}
 		contains(value) {
 			if (value.start && value.end) return this.contains(value.start) && this.contains(value.end);
 			return this.start.isBeforeOrEqual(value) && this.end.isAfterOrEqual(value);
 		}
-		isEqual(other) { return this.start.isEqual(other.start) && this.end.isEqual(other.end); }
+		isEqual(other) {
+			return this.start.isEqual(other.start) && this.end.isEqual(other.end);
+		}
 	}
 	class Location {
 		constructor(uri, rangeOrPosition) {
-			if (!(uri instanceof Uri) || !(rangeOrPosition instanceof Position) && !(rangeOrPosition instanceof Range)) throw new TypeError('Invalid location');
+			if (
+				!(uri instanceof Uri) ||
+				(!(rangeOrPosition instanceof Position) && !(rangeOrPosition instanceof Range))
+			)
+				throw new TypeError('Invalid location');
 			this.uri = uri;
-			this.range = rangeOrPosition instanceof Range ? rangeOrPosition : new Range(rangeOrPosition, rangeOrPosition);
+			this.range =
+				rangeOrPosition instanceof Range ? rangeOrPosition : new Range(rangeOrPosition, rangeOrPosition);
 		}
 	}
 	class Breakpoint {
 		constructor(enabled = true, condition, hitCondition, logMessage) {
-			if (typeof enabled !== 'boolean' || [condition, hitCondition, logMessage].some(value => value !== undefined && (typeof value !== 'string' || value.length > 32768 || value.includes('\0')))) throw new TypeError('Invalid breakpoint properties');
-			breakpointStates.set(this, { id: `ash.breakpoint.${configuration.extensionId}.${++breakpointSequence}.${Math.random().toString(36).slice(2)}`, enabled, condition, hitCondition, logMessage });
+			if (
+				typeof enabled !== 'boolean' ||
+				[condition, hitCondition, logMessage].some(
+					value =>
+						value !== undefined &&
+						(typeof value !== 'string' || value.length > 32768 || value.includes('\0')),
+				)
+			)
+				throw new TypeError('Invalid breakpoint properties');
+			breakpointStates.set(this, {
+				id: `ash.breakpoint.${configuration.extensionId}.${++breakpointSequence}.${Math.random().toString(36).slice(2)}`,
+				enabled,
+				condition,
+				hitCondition,
+				logMessage,
+			});
 		}
-		get id() { return breakpointStates.get(this).id; }
-		get enabled() { return breakpointStates.get(this).enabled; }
-		get condition() { return breakpointStates.get(this).condition; }
-		get hitCondition() { return breakpointStates.get(this).hitCondition; }
-		get logMessage() { return breakpointStates.get(this).logMessage; }
+		get id() {
+			return breakpointStates.get(this).id;
+		}
+		get enabled() {
+			return breakpointStates.get(this).enabled;
+		}
+		get condition() {
+			return breakpointStates.get(this).condition;
+		}
+		get hitCondition() {
+			return breakpointStates.get(this).hitCondition;
+		}
+		get logMessage() {
+			return breakpointStates.get(this).logMessage;
+		}
 	}
 	class SourceBreakpoint extends Breakpoint {
 		constructor(location, enabled, condition, hitCondition, logMessage) {
@@ -1191,15 +2287,25 @@ export function createApi(configuration, initialization) {
 			if (!(location instanceof Location)) throw new TypeError('SourceBreakpoint requires a Location');
 			Object.assign(breakpointStates.get(this), { location, column: location.range.start.character });
 		}
-		get location() { return breakpointStates.get(this).location; }
+		get location() {
+			return breakpointStates.get(this).location;
+		}
 	}
 	class FunctionBreakpoint extends Breakpoint {
 		constructor(functionName, enabled, condition, hitCondition, logMessage) {
 			super(enabled, condition, hitCondition, logMessage);
-			if (typeof functionName !== 'string' || !functionName || functionName.length > 32768 || functionName.includes('\0')) throw new TypeError('FunctionBreakpoint requires a function name');
+			if (
+				typeof functionName !== 'string' ||
+				!functionName ||
+				functionName.length > 32768 ||
+				functionName.includes('\0')
+			)
+				throw new TypeError('FunctionBreakpoint requires a function name');
 			breakpointStates.get(this).name = functionName;
 		}
-		get functionName() { return breakpointStates.get(this).name; }
+		get functionName() {
+			return breakpointStates.get(this).name;
+		}
 	}
 	const uriPaths = new WeakMap();
 	class Uri {
@@ -1210,7 +2316,13 @@ export function createApi(configuration, initialization) {
 		static parse(value) {
 			const match = /^([a-zA-Z][\w+.-]*):(?:(\/\/)([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?$/.exec(value);
 			if (!match) throw new TypeError('Invalid URI');
-			const uri = new Uri(match[1], decodeURIComponent(match[3] ?? ''), decodeURIComponent(match[4]), match[5] ?? '', match[6] ?? '');
+			const uri = new Uri(
+				match[1],
+				decodeURIComponent(match[3] ?? ''),
+				decodeURIComponent(match[4]),
+				match[5] ?? '',
+				match[6] ?? '',
+			);
 			uriPaths.set(uri, match[4]);
 			return uri;
 		}
@@ -1219,15 +2331,21 @@ export function createApi(configuration, initialization) {
 			if (configuration.pathSeparator === '\\') path = path.replaceAll('\\', '/');
 			if (path.startsWith('//')) {
 				const boundary = path.indexOf('/', 2);
-				return new Uri('file', boundary < 0 ? path.slice(2) : path.slice(2, boundary), boundary < 0 ? '/' : path.slice(boundary));
+				return new Uri(
+					'file',
+					boundary < 0 ? path.slice(2) : path.slice(2, boundary),
+					boundary < 0 ? '/' : path.slice(boundary),
+				);
 			}
 			return new Uri('file', '', path.startsWith('/') ? path : '/' + path);
 		}
 		static joinPath(base, ...segments) {
-			if (!(base instanceof Uri) || !base.path || segments.some(value => typeof value !== 'string')) throw new TypeError('URI path required');
+			if (!(base instanceof Uri) || !base.path || segments.some(value => typeof value !== 'string'))
+				throw new TypeError('URI path required');
 			let path = [base.path, ...segments.filter(value => value.length > 0)].join('/');
 			if (base.scheme === 'file' && configuration.pathSeparator === '\\') path = path.replaceAll('\\', '/');
-			const driveRoot = base.scheme === 'file' && configuration.pathSeparator === '\\' && /^\/[a-zA-Z]:\//.test(path);
+			const driveRoot =
+				base.scheme === 'file' && configuration.pathSeparator === '\\' && /^\/[a-zA-Z]:\//.test(path);
 			const parts = [];
 			for (const part of path.split('/')) {
 				if (!part || part === '.') continue;
@@ -1235,20 +2353,51 @@ export function createApi(configuration, initialization) {
 					if (parts.length > (driveRoot ? 1 : 0)) parts.pop();
 				} else parts.push(part);
 			}
-			return base.with({ path: (path.startsWith('/') ? '/' : '') + parts.join('/') + (path.endsWith('/') && parts.length ? '/' : '') });
+			return base.with({
+				path:
+					(path.startsWith('/') ? '/' : '') +
+					parts.join('/') +
+					(path.endsWith('/') && parts.length ? '/' : ''),
+			});
 		}
-		static from(components) { return new Uri(components.scheme, components.authority ?? '', components.path ?? '', components.query ?? '', components.fragment ?? ''); }
-		with(change) { const next = Uri.from({ ...this, ...change }); if (change.path === undefined && uriPaths.has(this)) uriPaths.set(next, uriPaths.get(this)); return next; }
+		static from(components) {
+			return new Uri(
+				components.scheme,
+				components.authority ?? '',
+				components.path ?? '',
+				components.query ?? '',
+				components.fragment ?? '',
+			);
+		}
+		with(change) {
+			const next = Uri.from({ ...this, ...change });
+			if (change.path === undefined && uriPaths.has(this)) uriPaths.set(next, uriPaths.get(this));
+			return next;
+		}
 		get fsPath() {
 			let path = this.authority ? `//${this.authority}${this.path}` : this.path;
 			if (!this.authority && /^\/[a-zA-Z]:/.test(path)) path = path[1].toLowerCase() + path.slice(2);
 			return configuration.pathSeparator === '\\' ? path.replaceAll('/', '\\') : path;
 		}
 		toString(skipEncoding = false) {
-			const path = skipEncoding ? this.path : uriPaths.get(this) ?? this.path.split('/').map(part => encodeURIComponent(part).replace(/%3A/gi, ':')).join('/');
+			const path = skipEncoding
+				? this.path
+				: (uriPaths.get(this) ??
+					this.path
+						.split('/')
+						.map(part => encodeURIComponent(part).replace(/%3A/gi, ':'))
+						.join('/'));
 			return `${this.scheme}:${this.authority || this.scheme === 'file' ? `//${this.authority}` : ''}${path}${this.query ? `?${this.query}` : ''}${this.fragment ? `#${this.fragment}` : ''}`;
 		}
-		toJSON() { return { scheme: this.scheme, authority: this.authority, path: this.path, query: this.query, fragment: this.fragment }; }
+		toJSON() {
+			return {
+				scheme: this.scheme,
+				authority: this.authority,
+				path: this.path,
+				query: this.query,
+				fragment: this.fragment,
+			};
+		}
 	}
 	const extensionUri = Uri.file(configuration.extensionPath);
 	const extension = Object.freeze({
@@ -1257,29 +2406,47 @@ export function createApi(configuration, initialization) {
 		extensionPath: extensionUri.fsPath,
 		packageJSON: configuration.manifest,
 		extensionKind: 1,
-		get isActive() { return statusActive; },
+		get isActive() {
+			return statusActive;
+		},
 		get exports() {
 			if (!statusActive) throw new Error('Extension has not completed activation');
 			return activationExports;
 		},
-		activate() { return activationPromise; },
+		activate() {
+			return activationPromise;
+		},
 	});
 	function observeDocument(snapshot) {
-		if (snapshot.uri !== undefined) observedDocuments.get(globalThis.__ashInvocation(false))?.set(snapshot.uri, snapshot.version);
+		if (snapshot.uri !== undefined)
+			observedDocuments.get(globalThis.__ashInvocation(false))?.set(snapshot.uri, snapshot.version);
 	}
 	function document(snapshot, live = false) {
 		const key = snapshot.uri;
 		observeDocument(snapshot);
 		const existing = live ? documents.get(key) : undefined;
 		if (existing && existing.snapshot.version > snapshot.version) return existing.value;
-		if (existing) { existing.snapshot = snapshot; return existing.value; }
+		if (existing) {
+			existing.snapshot = snapshot;
+			return existing.value;
+		}
 		const state = { snapshot, closed: false };
 		const value = Object.freeze({
 			uri: key === undefined ? undefined : Uri.parse(key),
-			get version() { observeDocument(state.snapshot); return state.snapshot.version; },
-			get languageId() { return state.snapshot.languageId; },
-			get isClosed() { return state.closed; },
-			get lineCount() { observeDocument(state.snapshot); return state.snapshot.text.split('\n').length; },
+			get version() {
+				observeDocument(state.snapshot);
+				return state.snapshot.version;
+			},
+			get languageId() {
+				return state.snapshot.languageId;
+			},
+			get isClosed() {
+				return state.closed;
+			},
+			get lineCount() {
+				observeDocument(state.snapshot);
+				return state.snapshot.text.split('\n').length;
+			},
 			getText(range) {
 				observeDocument(state.snapshot);
 				if (!range) return state.snapshot.text;
@@ -1290,7 +2457,10 @@ export function createApi(configuration, initialization) {
 				const lines = state.snapshot.text.split('\n');
 				if (position.line < 0) return 0;
 				if (position.line >= lines.length) return state.snapshot.text.length;
-				return lines.slice(0, position.line).reduce((total, line) => total + line.length + 1, 0) + Math.max(0, Math.min(position.character, lines[position.line].replace(/\r$/, '').length));
+				return (
+					lines.slice(0, position.line).reduce((total, line) => total + line.length + 1, 0) +
+					Math.max(0, Math.min(position.character, lines[position.line].replace(/\r$/, '').length))
+				);
 			},
 			positionAt(offset) {
 				observeDocument(state.snapshot);
@@ -1303,15 +2473,27 @@ export function createApi(configuration, initialization) {
 				observeDocument(state.snapshot);
 				const index = typeof line === 'number' ? line : line.line;
 				const lines = state.snapshot.text.split('\n');
-				if (!Number.isSafeInteger(index) || index < 0 || index >= lines.length) throw new RangeError('Line is outside the document');
+				if (!Number.isSafeInteger(index) || index < 0 || index >= lines.length)
+					throw new RangeError('Line is outside the document');
 				const text = lines[index].replace(/\r$/, '');
-				return Object.freeze({ lineNumber: index, text, range: new Range(index, 0, index, text.length), rangeIncludingLineBreak: index + 1 < lines.length ? new Range(index, 0, index + 1, 0) : new Range(index, 0, index, text.length), firstNonWhitespaceCharacterIndex: text.search(/\S/) < 0 ? text.length : text.search(/\S/), isEmptyOrWhitespace: !text.trim() });
+				return Object.freeze({
+					lineNumber: index,
+					text,
+					range: new Range(index, 0, index, text.length),
+					rangeIncludingLineBreak:
+						index + 1 < lines.length
+							? new Range(index, 0, index + 1, 0)
+							: new Range(index, 0, index, text.length),
+					firstNonWhitespaceCharacterIndex: text.search(/\S/) < 0 ? text.length : text.search(/\S/),
+					isEmptyOrWhitespace: !text.trim(),
+				});
 			},
 			getWordRangeAtPosition(position, regex) {
 				if (regex !== undefined) return unsupported('TextDocument custom word regex');
 				const text = this.lineAt(position).text;
 				for (const match of text.matchAll(/[\p{L}\p{N}_]+/gu)) {
-					if (match.index <= position.character && position.character <= match.index + match[0].length) return new Range(position.line, match.index, position.line, match.index + match[0].length);
+					if (match.index <= position.character && position.character <= match.index + match[0].length)
+						return new Range(position.line, match.index, position.line, match.index + match[0].length);
 				}
 				return undefined;
 			},
@@ -1331,23 +2513,46 @@ export function createApi(configuration, initialization) {
 	}
 	function ensureDocumentEvents() {
 		if (!documentRegistration) {
-			documentRegistration = ashWorkspace.registerTextDocumentEvents('ash.documents', (_call, event) => invoke(async () => {
-				if (!['open', 'change', 'close'].includes(event.type) || !event.document) throw new TypeError('Invalid document event');
-				const value = document(event.document, true);
-				if (event.type === 'close') {
-					const state = documents.get(event.document.uri);
-					state.closed = true;
-					documents.delete(event.document.uri);
-				}
-				const content = event.type === 'change' ? { document: value, contentChanges: event.contentChanges.map(change => ({ ...change, range: new Range(change.range.start, change.range.end) })), reason: event.reason === 'undo' ? 1 : event.reason === 'redo' ? 2 : undefined } : value;
-				await Promise.all([...documentListeners[event.type]].map(entry => entry.listener.call(entry.thisArg, content)));
-			}));
+			documentRegistration = ashWorkspace.registerTextDocumentEvents('ash.documents', (_call, event) =>
+				invoke(async () => {
+					if (!['open', 'change', 'close'].includes(event.type) || !event.document)
+						throw new TypeError('Invalid document event');
+					const value = document(event.document, true);
+					if (event.type === 'close') {
+						const state = documents.get(event.document.uri);
+						state.closed = true;
+						documents.delete(event.document.uri);
+					}
+					const content =
+						event.type === 'change'
+							? {
+									document: value,
+									contentChanges: event.contentChanges.map(change => ({
+										...change,
+										range: new Range(change.range.start, change.range.end),
+									})),
+									reason: event.reason === 'undo' ? 1 : event.reason === 'redo' ? 2 : undefined,
+								}
+							: value;
+					await Promise.all(
+						[...documentListeners[event.type]].map(entry => entry.listener.call(entry.thisArg, content)),
+					);
+				}),
+			);
 			subscriptions.push(documentRegistration);
 		}
 	}
 	class Diagnostic {
 		constructor(range, message, severity = 0) {
-			if (!(range instanceof Range) || typeof message !== 'string' || !message || !Number.isInteger(severity) || severity < 0 || severity > 3) throw new TypeError('Invalid diagnostic');
+			if (
+				!(range instanceof Range) ||
+				typeof message !== 'string' ||
+				!message ||
+				!Number.isInteger(severity) ||
+				severity < 0 ||
+				severity > 3
+			)
+				throw new TypeError('Invalid diagnostic');
 			Object.assign(this, { range, message, severity });
 		}
 	}
@@ -1361,11 +2566,32 @@ export function createApi(configuration, initialization) {
 			if (disposed) throw new Error('Diagnostic collection is disposed');
 			if (next.size > 1024) throw new RangeError('Too many diagnostic resources');
 			const payload = [...next].map(([uri, value]) => ({
-				uri, version: value.version, diagnostics: value.diagnostics.map(diagnostic => {
-					if (!diagnostic || ![0, 1, 2, 3].includes(diagnostic.severity) || typeof diagnostic.message !== 'string' || !diagnostic.message || !(diagnostic.range instanceof Range)) throw new TypeError('Invalid diagnostic');
-					if (diagnostic.relatedInformation !== undefined || diagnostic.tags !== undefined || typeof diagnostic.code === 'object') return unsupported('Diagnostic related information/tags/code targets');
-					return { start: diagnostic.range.start, end: diagnostic.range.end, message: diagnostic.message, severity: ['error', 'warning', 'information', 'hint'][diagnostic.severity], source: diagnostic.source ?? null, code: diagnostic.code === undefined ? null : String(diagnostic.code) };
-				})
+				uri,
+				version: value.version,
+				diagnostics: value.diagnostics.map(diagnostic => {
+					if (
+						!diagnostic ||
+						![0, 1, 2, 3].includes(diagnostic.severity) ||
+						typeof diagnostic.message !== 'string' ||
+						!diagnostic.message ||
+						!(diagnostic.range instanceof Range)
+					)
+						throw new TypeError('Invalid diagnostic');
+					if (
+						diagnostic.relatedInformation !== undefined ||
+						diagnostic.tags !== undefined ||
+						typeof diagnostic.code === 'object'
+					)
+						return unsupported('Diagnostic related information/tags/code targets');
+					return {
+						start: diagnostic.range.start,
+						end: diagnostic.range.end,
+						message: diagnostic.message,
+						severity: ['error', 'warning', 'information', 'hint'][diagnostic.severity],
+						source: diagnostic.source ?? null,
+						code: diagnostic.code === undefined ? null : String(diagnostic.code),
+					};
+				}),
 			}));
 			request({ operation: 'setDiagnostics', collection: id, entries: payload }, 'done');
 			entries = next;
@@ -1373,7 +2599,10 @@ export function createApi(configuration, initialization) {
 		return Object.freeze({
 			name,
 			set(uri, diagnostics) {
-				if (uri === undefined) { publish(new Map()); return; }
+				if (uri === undefined) {
+					publish(new Map());
+					return;
+				}
 				const values = uri instanceof Uri ? [[uri, diagnostics]] : uri;
 				if (!Array.isArray(values)) throw new TypeError('Diagnostic entries must be an array');
 				const next = new Map(entries);
@@ -1381,55 +2610,168 @@ export function createApi(configuration, initialization) {
 				for (const [resource, items] of values) {
 					if (!(resource instanceof Uri)) throw new TypeError('Diagnostic resource must be a URI');
 					const key = resource.toString();
-					if (items === undefined) { next.delete(key); merged.delete(key); }
-					else {
-						if (!Array.isArray(items) || items.length > 10_000) throw new TypeError('Invalid diagnostic list');
+					if (items === undefined) {
+						next.delete(key);
+						merged.delete(key);
+					} else {
+						if (!Array.isArray(items) || items.length > 10_000)
+							throw new TypeError('Invalid diagnostic list');
 						const combined = [...(merged.get(key) ?? []), ...items];
 						merged.set(key, combined);
-						next.set(key, { version: observedDocuments.get(globalThis.__ashInvocation(false))?.get(key) ?? null, diagnostics: Object.freeze(combined) });
+						next.set(key, {
+							version: observedDocuments.get(globalThis.__ashInvocation(false))?.get(key) ?? null,
+							diagnostics: Object.freeze(combined),
+						});
 					}
 				}
 				publish(next);
 			},
-			delete(uri) { const next = new Map(entries); next.delete(uri.toString()); publish(next); },
-			clear() { publish(new Map()); },
-			get(uri) { if (disposed) throw new Error('Diagnostic collection is disposed'); return entries.get(uri.toString())?.diagnostics ?? []; },
-			has(uri) { return entries.has(uri.toString()); },
-			forEach(callback, thisArg) { for (const [uri, value] of entries) callback.call(thisArg, Uri.parse(uri), value.diagnostics, this); },
-			*[Symbol.iterator]() { for (const [uri, value] of entries) yield [Uri.parse(uri), value.diagnostics]; },
+			delete(uri) {
+				const next = new Map(entries);
+				next.delete(uri.toString());
+				publish(next);
+			},
+			clear() {
+				publish(new Map());
+			},
+			get(uri) {
+				if (disposed) throw new Error('Diagnostic collection is disposed');
+				return entries.get(uri.toString())?.diagnostics ?? [];
+			},
+			has(uri) {
+				return entries.has(uri.toString());
+			},
+			forEach(callback, thisArg) {
+				for (const [uri, value] of entries) callback.call(thisArg, Uri.parse(uri), value.diagnostics, this);
+			},
+			*[Symbol.iterator]() {
+				for (const [uri, value] of entries) yield [Uri.parse(uri), value.diagnostics];
+			},
 			dispose() {
 				if (disposed) return;
 				// Deactivation has no live client invocation; the Workbench retires its owners.
-				if (!ashRuntime.isDisposed && (pending.has(globalThis.__ashInvocation(false)) || typeof globalThis.__ashBackgroundRequest === 'function')) publish(new Map());
+				if (
+					!ashRuntime.isDisposed &&
+					(pending.has(globalThis.__ashInvocation(false)) ||
+						typeof globalThis.__ashBackgroundRequest === 'function')
+				)
+					publish(new Map());
 				disposed = true;
 				entries.clear();
 			},
 		});
 	}
-	const completionKinds = ['text', 'method', 'function', 'constructor', 'field', 'variable', 'class', 'interface', 'module', 'property', 'unit', 'value', 'enum', 'keyword', 'snippet', undefined, 'file', 'reference', 'folder', undefined, undefined, undefined, undefined, undefined, 'typeParameter'];
-	const completionNames = ['Text', 'Method', 'Function', 'Constructor', 'Field', 'Variable', 'Class', 'Interface', 'Module', 'Property', 'Unit', 'Value', 'Enum', 'Keyword', 'Snippet', 'Color', 'File', 'Reference', 'Folder', 'EnumMember', 'Constant', 'Struct', 'Event', 'Operator', 'TypeParameter'];
+	const completionKinds = [
+		'text',
+		'method',
+		'function',
+		'constructor',
+		'field',
+		'variable',
+		'class',
+		'interface',
+		'module',
+		'property',
+		'unit',
+		'value',
+		'enum',
+		'keyword',
+		'snippet',
+		undefined,
+		'file',
+		'reference',
+		'folder',
+		undefined,
+		undefined,
+		undefined,
+		undefined,
+		undefined,
+		'typeParameter',
+	];
+	const completionNames = [
+		'Text',
+		'Method',
+		'Function',
+		'Constructor',
+		'Field',
+		'Variable',
+		'Class',
+		'Interface',
+		'Module',
+		'Property',
+		'Unit',
+		'Value',
+		'Enum',
+		'Keyword',
+		'Snippet',
+		'Color',
+		'File',
+		'Reference',
+		'Folder',
+		'EnumMember',
+		'Constant',
+		'Struct',
+		'Event',
+		'Operator',
+		'TypeParameter',
+	];
 	function completionResult(value, snapshot, position) {
 		const items = value == null ? [] : Array.isArray(value) ? value : value.items;
 		if (!Array.isArray(items) || items.length > 10_000) throw new TypeError('Invalid completion list');
 		return {
-			isIncomplete: value?.isIncomplete === true, items: items.map((item, index) => {
+			isIncomplete: value?.isIncomplete === true,
+			items: items.map((item, index) => {
 				const label = typeof item.label === 'string' ? item.label : item.label?.label;
-				if (typeof label !== 'string' || !label || (item.kind !== undefined && !completionKinds[item.kind])) throw new TypeError('Invalid completion item');
-				if (item.command !== undefined || item.range?.inserting !== undefined) return unsupported('CompletionItem command/insert-replace ranges');
-				const range = item.textEdit?.range ?? item.range ?? snapshot.getWordRangeAtPosition(position) ?? new Range(position, position);
+				if (typeof label !== 'string' || !label || (item.kind !== undefined && !completionKinds[item.kind]))
+					throw new TypeError('Invalid completion item');
+				if (item.command !== undefined || item.range?.inserting !== undefined)
+					return unsupported('CompletionItem command/insert-replace ranges');
+				const range =
+					item.textEdit?.range ??
+					item.range ??
+					snapshot.getWordRangeAtPosition(position) ??
+					new Range(position, position);
 				const insertion = item.textEdit?.newText ?? item.insertText ?? label;
-				const result = { id: String(index), label, kind: completionKinds[item.kind ?? 0], range, insertText: insertion instanceof SnippetString ? insertion.value : insertion, insertTextFormat: insertion instanceof SnippetString ? 'snippet' : 'plainText' };
-				for (const field of ['detail', 'filterText', 'sortText', 'preselect', 'commitCharacters']) if (item[field] !== undefined) result[field] = item[field];
-				if (item.documentation !== undefined) result.documentation = typeof item.documentation === 'string' ? item.documentation : item.documentation.value;
-				if (item.additionalTextEdits !== undefined) result.additionalTextEdits = item.additionalTextEdits.map(edit => ({ range: edit.range, text: edit.newText }));
+				const result = {
+					id: String(index),
+					label,
+					kind: completionKinds[item.kind ?? 0],
+					range,
+					insertText: insertion instanceof SnippetString ? insertion.value : insertion,
+					insertTextFormat: insertion instanceof SnippetString ? 'snippet' : 'plainText',
+				};
+				for (const field of ['detail', 'filterText', 'sortText', 'preselect', 'commitCharacters'])
+					if (item[field] !== undefined) result[field] = item[field];
+				if (item.documentation !== undefined)
+					result.documentation =
+						typeof item.documentation === 'string' ? item.documentation : item.documentation.value;
+				if (item.additionalTextEdits !== undefined)
+					result.additionalTextEdits = item.additionalTextEdits.map(edit => ({
+						range: edit.range,
+						text: edit.newText,
+					}));
 				return result;
-			})
+			}),
 		};
 	}
 	function registerTreeDataProvider(provider, options) {
 		if (!treeAdmitted) throw new Error('Tree views require the admitted treeView capability');
-		if (!options || typeof options.id !== 'string' || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(options.id) || typeof options.title !== 'string' || !options.title || options.title.length > 512 || typeof provider?.getChildren !== 'function' || typeof provider?.getTreeItem !== 'function') throw new TypeError('Invalid tree provider or view options');
-		if (options.containerId !== undefined && (typeof options.containerId !== 'string' || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(options.containerId))) throw new TypeError('Invalid tree container ID');
+		if (
+			!options ||
+			typeof options.id !== 'string' ||
+			!/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(options.id) ||
+			typeof options.title !== 'string' ||
+			!options.title ||
+			options.title.length > 512 ||
+			typeof provider?.getChildren !== 'function' ||
+			typeof provider?.getTreeItem !== 'function'
+		)
+			throw new TypeError('Invalid tree provider or view options');
+		if (
+			options.containerId !== undefined &&
+			(typeof options.containerId !== 'string' || !/^[A-Za-z][A-Za-z0-9._-]{0,127}$/.test(options.containerId))
+		)
+			throw new TypeError('Invalid tree container ID');
 		const registrationId = `ash.tree.${++providerSequence}`;
 		const nodes = new Map();
 		const identities = new Map();
@@ -1443,87 +2785,183 @@ export function createApi(configuration, initialization) {
 			if (node) identities.delete(node.element);
 			nodes.delete(handle);
 		};
-		const registration = ashRuntime.registerContribution({ kind: 'treeDataProvider', registrationId, viewId: options.id, title: options.title, ...(options.containerId === undefined ? {} : { containerId: options.containerId }) }, 'tree', (call, payload) => invoke(async () => {
-			if (disposed) throw new Error('Tree provider was disposed');
-			const node = payload.handle === undefined ? undefined : nodes.get(payload.handle);
-			if (payload.handle !== undefined && !node) throw new Error('Tree item has retired');
-			const token = call.cancellationToken;
-			if (payload.method === 'children') {
-				const elements = await provider.getChildren(node?.element, token) ?? [];
-				if (!Array.isArray(elements) || elements.length > 10000) throw new TypeError('Tree children must be a bounded array');
-				const result = [];
-				const handles = new Set();
-				const pendingNodes = new Map();
-				const pendingIdentities = new Map();
-				for (const element of elements) {
-					const item = await provider.getTreeItem(element, token);
-					if (disposed || token.isCancellationRequested) throw new Error('Tree request was cancelled');
-					if (!item || typeof item !== 'object') throw new TypeError('Invalid tree item');
-					const label = (typeof item.label === 'string' ? item.label : item.label?.label) ?? item.resourceUri?.path?.split('/').pop();
-					if (typeof label !== 'string' || label.length > 4096) throw new TypeError('Tree item requires a bounded label');
-					const handle = item.id ?? identities.get(element) ?? pendingIdentities.get(element) ?? `node.${++sequence}`;
-					if (typeof handle !== 'string' || !handle || handle.length > 1024 || handles.has(handle) || handle === payload.handle) throw new TypeError('Invalid or duplicate tree item ID');
-					const previous = nodes.get(handle);
-					if (previous && previous.parent !== payload.handle) throw new TypeError('A tree item must have one parent');
-					const collapsibleState = item.collapsibleState ?? 0;
-					if (![0, 1, 2].includes(collapsibleState)) throw new TypeError('Invalid tree collapse state');
-					const description = item.description === true ? item.resourceUri?.path : item.description === false ? undefined : item.description;
-					const tooltip = typeof item.tooltip === 'string' ? item.tooltip : undefined;
-					for (const text of [description, tooltip]) {
-						if (text !== undefined && (typeof text !== 'string' || text.length > 4096)) throw new TypeError('Invalid tree description or tooltip');
+		const registration = ashRuntime.registerContribution(
+			{
+				kind: 'treeDataProvider',
+				registrationId,
+				viewId: options.id,
+				title: options.title,
+				...(options.containerId === undefined ? {} : { containerId: options.containerId }),
+			},
+			'tree',
+			(call, payload) =>
+				invoke(async () => {
+					if (disposed) throw new Error('Tree provider was disposed');
+					const node = payload.handle === undefined ? undefined : nodes.get(payload.handle);
+					if (payload.handle !== undefined && !node) throw new Error('Tree item has retired');
+					const token = call.cancellationToken;
+					if (payload.method === 'children') {
+						const elements = (await provider.getChildren(node?.element, token)) ?? [];
+						if (!Array.isArray(elements) || elements.length > 10000)
+							throw new TypeError('Tree children must be a bounded array');
+						const result = [];
+						const handles = new Set();
+						const pendingNodes = new Map();
+						const pendingIdentities = new Map();
+						for (const element of elements) {
+							const item = await provider.getTreeItem(element, token);
+							if (disposed || token.isCancellationRequested)
+								throw new Error('Tree request was cancelled');
+							if (!item || typeof item !== 'object') throw new TypeError('Invalid tree item');
+							const label =
+								(typeof item.label === 'string' ? item.label : item.label?.label) ??
+								item.resourceUri?.path?.split('/').pop();
+							if (typeof label !== 'string' || label.length > 4096)
+								throw new TypeError('Tree item requires a bounded label');
+							const handle =
+								item.id ??
+								identities.get(element) ??
+								pendingIdentities.get(element) ??
+								`node.${++sequence}`;
+							if (
+								typeof handle !== 'string' ||
+								!handle ||
+								handle.length > 1024 ||
+								handles.has(handle) ||
+								handle === payload.handle
+							)
+								throw new TypeError('Invalid or duplicate tree item ID');
+							const previous = nodes.get(handle);
+							if (previous && previous.parent !== payload.handle)
+								throw new TypeError('A tree item must have one parent');
+							const collapsibleState = item.collapsibleState ?? 0;
+							if (![0, 1, 2].includes(collapsibleState))
+								throw new TypeError('Invalid tree collapse state');
+							const description =
+								item.description === true
+									? item.resourceUri?.path
+									: item.description === false
+										? undefined
+										: item.description;
+							const tooltip = typeof item.tooltip === 'string' ? item.tooltip : undefined;
+							for (const text of [description, tooltip]) {
+								if (text !== undefined && (typeof text !== 'string' || text.length > 4096))
+									throw new TypeError('Invalid tree description or tooltip');
+							}
+							if (
+								item.checkboxState !== undefined &&
+								(![0, 1].includes(item.checkboxState) ||
+									typeof provider.setCheckboxState !== 'function')
+							)
+								throw new TypeError('Tree checkboxes require a state and callback');
+							let command;
+							if (item.command) {
+								if (
+									typeof item.command.command !== 'string' ||
+									!item.command.command ||
+									item.command.command.length > 256 ||
+									(item.command.arguments !== undefined &&
+										(!Array.isArray(item.command.arguments) ||
+											item.command.arguments.length > 1024))
+								)
+									throw new TypeError('Invalid tree command');
+								command = { id: item.command.command, arguments: item.command.arguments ?? [] };
+							}
+							pendingNodes.set(handle, { element, parent: payload.handle });
+							pendingIdentities.set(element, handle);
+							handles.add(handle);
+							result.push({
+								handle,
+								label,
+								collapsibleState,
+								...(description === undefined ? {} : { description }),
+								...(tooltip === undefined ? {} : { tooltip }),
+								...(item.checkboxState === undefined ? {} : { checkboxState: item.checkboxState }),
+								editable: item.editable === true && typeof provider.rename === 'function',
+								...(command ? { command } : {}),
+							});
+						}
+						// Validate the complete read before changing handle ownership or retiring old nodes.
+						const removed = new Set();
+						const collectRemoved = handle => {
+							removed.add(handle);
+							for (const child of children.get(handle) ?? []) collectRemoved(child);
+						};
+						for (const handle of children.get(payload.handle) ?? [])
+							if (!handles.has(handle)) collectRemoved(handle);
+						if (
+							nodes.size - removed.size + [...handles].filter(handle => !nodes.has(handle)).length >
+							10000
+						)
+							throw new RangeError('Tree node quota exceeded');
+						for (const handle of children.get(payload.handle) ?? [])
+							if (!handles.has(handle)) retire(handle);
+						for (const [handle, next] of pendingNodes) {
+							const previous = nodes.get(handle);
+							if (previous) identities.delete(previous.element);
+							identities.set(next.element, handle);
+							nodes.set(handle, next);
+						}
+						children.set(payload.handle, handles);
+						return result;
 					}
-					if (item.checkboxState !== undefined && (![0, 1].includes(item.checkboxState) || typeof provider.setCheckboxState !== 'function')) throw new TypeError('Tree checkboxes require a state and callback');
-					let command;
-					if (item.command) {
-						if (typeof item.command.command !== 'string' || !item.command.command || item.command.command.length > 256 || item.command.arguments !== undefined && (!Array.isArray(item.command.arguments) || item.command.arguments.length > 1024)) throw new TypeError('Invalid tree command');
-						command = { id: item.command.command, arguments: item.command.arguments ?? [] };
+					if (!node) throw new Error('Tree operation requires an item');
+					if (
+						payload.method === 'checkbox' &&
+						typeof provider.setCheckboxState === 'function' &&
+						typeof payload.isChecked === 'boolean'
+					) {
+						await provider.setCheckboxState(node.element, payload.isChecked ? 1 : 0, token);
+						return null;
 					}
-					pendingNodes.set(handle, { element, parent: payload.handle });
-					pendingIdentities.set(element, handle);
-					handles.add(handle);
-					result.push({
-						handle, label, collapsibleState,
-						...(description === undefined ? {} : { description }), ...(tooltip === undefined ? {} : { tooltip }),
-						...(item.checkboxState === undefined ? {} : { checkboxState: item.checkboxState }),
-						editable: item.editable === true && typeof provider.rename === 'function', ...(command ? { command } : {})
-					});
-				}
-				// Validate the complete read before changing handle ownership or retiring old nodes.
-				const removed = new Set();
-				const collectRemoved = handle => {
-					removed.add(handle);
-					for (const child of children.get(handle) ?? []) collectRemoved(child);
-				};
-				for (const handle of children.get(payload.handle) ?? []) if (!handles.has(handle)) collectRemoved(handle);
-				if (nodes.size - removed.size + [...handles].filter(handle => !nodes.has(handle)).length > 10000) throw new RangeError('Tree node quota exceeded');
-				for (const handle of children.get(payload.handle) ?? []) if (!handles.has(handle)) retire(handle);
-				for (const [handle, next] of pendingNodes) {
-					const previous = nodes.get(handle);
-					if (previous) identities.delete(previous.element);
-					identities.set(next.element, handle);
-					nodes.set(handle, next);
-				}
-				children.set(payload.handle, handles);
-				return result;
-			}
-			if (!node) throw new Error('Tree operation requires an item');
-			if (payload.method === 'checkbox' && typeof provider.setCheckboxState === 'function' && typeof payload.isChecked === 'boolean') { await provider.setCheckboxState(node.element, payload.isChecked ? 1 : 0, token); return null; }
-			if (payload.method === 'rename' && typeof provider.rename === 'function' && typeof payload.value === 'string' && payload.value.length <= 32768) { await provider.rename(node.element, payload.value, token); return null; }
-			if (payload.method === 'selection') { await provider.onDidChangeSelection?.(node.element); return null; }
-			throw new TypeError('Unsupported tree operation');
-		}));
+					if (
+						payload.method === 'rename' &&
+						typeof provider.rename === 'function' &&
+						typeof payload.value === 'string' &&
+						payload.value.length <= 32768
+					) {
+						await provider.rename(node.element, payload.value, token);
+						return null;
+					}
+					if (payload.method === 'selection') {
+						await provider.onDidChangeSelection?.(node.element);
+						return null;
+					}
+					throw new TypeError('Unsupported tree operation');
+				}),
+		);
 		let queued = false;
 		const changed = provider.onDidChangeTreeData?.(() => {
 			if (disposed || queued) return;
 			queued = true;
-			const update = Promise.resolve().then(() => { queued = false; if (!disposed) return request({ operation: 'editorOperation', payload: { method: 'treeViewChanged', registrationId } }, 'value'); });
-			update.catch(error => { if (!disposed) console.error('Tree refresh failed', error); });
+			const update = Promise.resolve().then(() => {
+				queued = false;
+				if (!disposed)
+					return request(
+						{ operation: 'editorOperation', payload: { method: 'treeViewChanged', registrationId } },
+						'value',
+					);
+			});
+			update.catch(error => {
+				if (!disposed) console.error('Tree refresh failed', error);
+			});
 		});
-		const lifetime = new Disposable(() => { disposed = true; changed?.dispose(); registration.dispose(); nodes.clear(); identities.clear(); children.clear(); });
+		const lifetime = new Disposable(() => {
+			disposed = true;
+			changed?.dispose();
+			registration.dispose();
+			nodes.clear();
+			identities.clear();
+			children.clear();
+		});
 		subscriptions.push(lifetime);
 		return lifetime;
 	}
-	class SnippetString { constructor(value = '') { this.value = value; } }
+	class SnippetString {
+		constructor(value = '') {
+			this.value = value;
+		}
+	}
 	class TreeItem {
 		constructor(labelOrResource, collapsibleState = 0) {
 			if (labelOrResource instanceof Uri) this.resourceUri = labelOrResource;
@@ -1534,24 +2972,35 @@ export function createApi(configuration, initialization) {
 	function localizeMessage(messageOrOptions, ...parameters) {
 		const message = typeof messageOrOptions === 'string' ? messageOrOptions : messageOrOptions?.message;
 		if (typeof message !== 'string') throw new TypeError('Localization requires a message');
-		let values = parameters.length === 1 && parameters[0] && typeof parameters[0] === 'object' ? parameters[0] : parameters;
+		let values =
+			parameters.length === 1 && parameters[0] && typeof parameters[0] === 'object' ? parameters[0] : parameters;
 		let key = message;
 		if (typeof messageOrOptions !== 'string') {
 			values = messageOrOptions.args ?? {};
-			const comment = Array.isArray(messageOrOptions.comment) ? messageOrOptions.comment.join('') : messageOrOptions.comment;
+			const comment = Array.isArray(messageOrOptions.comment)
+				? messageOrOptions.comment.join('')
+				: messageOrOptions.comment;
 			if (comment) key += '/' + comment;
 		}
 		const bundle = localization?.bundle;
 		const translated = bundle && Object.hasOwn(bundle, key) ? bundle[key] : message;
-		return translated.replace(/\{([^}]+)\}/g, (placeholder, name) => Object.hasOwn(values, name) ? String(values[name]) : placeholder);
+		return translated.replace(/\{([^}]+)\}/g, (placeholder, name) =>
+			Object.hasOwn(values, name) ? String(values[name]) : placeholder,
+		);
 	}
-	const scmBridge = createSCMApi(ashRuntime, request, invoke, promise => serviceOwner()?.push(promise), async (operation, resultKind) => {
-		// Provider state belongs to the incarnation, even when a short-lived read callback triggers it.
-		if (typeof globalThis.__ashBackgroundRequest !== 'function') return request(operation, resultKind);
-		const result = JSON.parse(await globalThis.__ashBackgroundRequest(JSON.stringify(operation)));
-		if (result.result !== resultKind) throw new Error(`Invalid result for ${operation.operation}`);
-		return result;
-	});
+	const scmBridge = createSCMApi(
+		ashRuntime,
+		request,
+		invoke,
+		promise => serviceOwner()?.push(promise),
+		async (operation, resultKind) => {
+			// Provider state belongs to the incarnation, even when a short-lived read callback triggers it.
+			if (typeof globalThis.__ashBackgroundRequest !== 'function') return request(operation, resultKind);
+			const result = JSON.parse(await globalThis.__ashBackgroundRequest(JSON.stringify(operation)));
+			if (result.result !== resultKind) throw new Error(`Invalid result for ${operation.operation}`);
+			return result;
+		},
+	);
 	let outputSequence = 0;
 	const logChannels = new Map();
 	const outputFlushes = new Set();
@@ -1559,40 +3008,74 @@ export function createApi(configuration, initialization) {
 	const LogLevel = Object.freeze({ Trace: 1, Debug: 2, Info: 3, Warning: 4, Error: 5, Off: 0 });
 	function ensureOutputEvents() {
 		if (!outputEvents) {
-			outputEvents = ashRuntime.registerContribution({ kind: 'outputEvents', registrationId: 'ash.output.events' }, 'outputEvent', (_call, event) => invoke(() => {
-				if (!event || typeof event.channelId !== 'string' || !Number.isInteger(event.level) || event.level < 0 || event.level > 5) throw new TypeError('Invalid output log level');
-				logChannels.get(event.channelId)?.(event.level);
-			}));
+			outputEvents = ashRuntime.registerContribution(
+				{ kind: 'outputEvents', registrationId: 'ash.output.events' },
+				'outputEvent',
+				(_call, event) =>
+					invoke(() => {
+						if (
+							!event ||
+							typeof event.channelId !== 'string' ||
+							!Number.isInteger(event.level) ||
+							event.level < 0 ||
+							event.level > 5
+						)
+							throw new TypeError('Invalid output log level');
+						logChannels.get(event.channelId)?.(event.level);
+					}),
+			);
 			subscriptions.push(outputEvents);
 		}
 	}
 
 	function createOutputChannel(name, options) {
-		if (typeof name !== 'string' || !name.trim() || name.length > 512 || name.includes('\0')) throw new TypeError('Invalid output channel label');
+		if (typeof name !== 'string' || !name.trim() || name.length > 512 || name.includes('\0'))
+			throw new TypeError('Invalid output channel label');
 		name = name.trim();
 		const logging = typeof options === 'object' && options !== null && options.log === true;
-		if (options !== undefined && !logging && (typeof options !== 'string' || !options.trim() || options.length > 256 || options.includes('\0'))) throw new TypeError('Invalid output channel options');
+		if (
+			options !== undefined &&
+			!logging &&
+			(typeof options !== 'string' || !options.trim() || options.length > 256 || options.includes('\0'))
+		)
+			throw new TypeError('Invalid output channel options');
 		const channelId = `output.${++outputSequence}`;
 		let disposed = false;
 		let level = LogLevel.Info;
 		const changed = logging ? new EventEmitter() : undefined;
 
-		if (logging) logChannels.set(channelId, next => {
-			if (level === next) return;
-			level = next;
-			changed.fire(level);
-		});
+		if (logging)
+			logChannels.set(channelId, next => {
+				if (level === next) return;
+				level = next;
+				changed.fire(level);
+			});
 		let pending = Promise.resolve();
 		const send = operation => {
-			pending = pending.catch(() => undefined).then(() => request({ operation: 'editorOperation', payload: { method: 'output', channelId, ...operation } }, 'value'));
+			pending = pending
+				.catch(() => undefined)
+				.then(() =>
+					request(
+						{ operation: 'editorOperation', payload: { method: 'output', channelId, ...operation } },
+						'value',
+					),
+				);
 			// Retain the entire queue before a callback returns, including chained writes.
-			const settled = pending.then(() => undefined, () => undefined);
+			const settled = pending.then(
+				() => undefined,
+				() => undefined,
+			);
 			outputFlushes.add(settled);
 			void settled.then(() => outputFlushes.delete(settled));
 			serviceOwner()?.push(settled);
 			void pending.catch(error => console.error('Output channel failed', error));
 		};
-		send({ action: 'create', label: name, kind: logging ? 'log' : 'output', ...(typeof options === 'string' ? { languageId: options } : {}) });
+		send({
+			action: 'create',
+			label: name,
+			kind: logging ? 'log' : 'output',
+			...(typeof options === 'string' ? { languageId: options } : {}),
+		});
 		const writeLog = (severity, message, args) => {
 			if (disposed) return;
 			if (message instanceof Error) message = message.stack ?? message.message;
@@ -1603,24 +3086,66 @@ export function createApi(configuration, initialization) {
 				const value = args.shift();
 				return token === '%j' ? JSON.stringify(value) : token === '%d' ? String(Number(value)) : String(value);
 			});
-			send({ action: 'log', severity, text: [formatted, ...args.map(value => typeof value === 'string' ? value : value instanceof Error ? value.stack ?? value.message : JSON.stringify(value))].join(' ') });
+			send({
+				action: 'log',
+				severity,
+				text: [
+					formatted,
+					...args.map(value =>
+						typeof value === 'string'
+							? value
+							: value instanceof Error
+								? (value.stack ?? value.message)
+								: JSON.stringify(value),
+					),
+				].join(' '),
+			});
 		};
 		const channel = {
 			name,
-			append(text) { if (!disposed) send({ action: 'append', text: String(text) }); },
-			appendLine(text) { if (!disposed) send({ action: 'append', text: String(text) + '\n' }); },
-			replace(text) { if (!disposed) send({ action: 'replace', text: String(text) }); },
-			clear() { if (!disposed) send({ action: 'clear' }); },
-			show(preserveFocus = false) { if (!disposed) send({ action: 'show', preserveFocus: typeof preserveFocus === 'number' ? arguments[1] === true : preserveFocus === true }); },
-			hide() { if (!disposed) send({ action: 'hide' }); },
-			...(logging ? {
-				onDidChangeLogLevel: changed.event,
-				trace(message, ...args) { writeLog('trace', message, args); },
-				debug(message, ...args) { writeLog('debug', message, args); },
-				info(message, ...args) { writeLog('information', message, args); },
-				warn(message, ...args) { writeLog('warning', message, args); },
-				error(message, ...args) { writeLog('error', message, args); },
-			} : {}),
+			append(text) {
+				if (!disposed) send({ action: 'append', text: String(text) });
+			},
+			appendLine(text) {
+				if (!disposed) send({ action: 'append', text: String(text) + '\n' });
+			},
+			replace(text) {
+				if (!disposed) send({ action: 'replace', text: String(text) });
+			},
+			clear() {
+				if (!disposed) send({ action: 'clear' });
+			},
+			show(preserveFocus = false) {
+				if (!disposed)
+					send({
+						action: 'show',
+						preserveFocus:
+							typeof preserveFocus === 'number' ? arguments[1] === true : preserveFocus === true,
+					});
+			},
+			hide() {
+				if (!disposed) send({ action: 'hide' });
+			},
+			...(logging
+				? {
+						onDidChangeLogLevel: changed.event,
+						trace(message, ...args) {
+							writeLog('trace', message, args);
+						},
+						debug(message, ...args) {
+							writeLog('debug', message, args);
+						},
+						info(message, ...args) {
+							writeLog('information', message, args);
+						},
+						warn(message, ...args) {
+							writeLog('warning', message, args);
+						},
+						error(message, ...args) {
+							writeLog('error', message, args);
+						},
+					}
+				: {}),
 			dispose() {
 				if (disposed) return;
 				disposed = true;
@@ -1644,22 +3169,69 @@ export function createApi(configuration, initialization) {
 		speech: Object.freeze({
 			registerSpeechProvider(identifier, provider) {
 				if (!speechAdmitted) throw new Error('Speech providers require the admitted speechProvider capability');
-				const registration = ashSpeech.registerSpeechProvider(`ash.speech.${++providerSequence}`, identifier, provider);
+				const registration = ashSpeech.registerSpeechProvider(
+					`ash.speech.${++providerSequence}`,
+					identifier,
+					provider,
+				);
 				subscriptions.push(registration);
 				return registration;
-			}
+			},
 		}),
-		TerminalCompletionItem: class TerminalCompletionItem { constructor(label, replacementRange, kind) { this.label = label; this.replacementRange = replacementRange; this.kind = kind; } },
-		TerminalCompletionList: class TerminalCompletionList { constructor(items, resourceOptions) { this.items = items; this.resourceOptions = resourceOptions; } },
-		TerminalCompletionItemKind: Object.freeze({ File: 0, Folder: 1, Method: 2, Alias: 3, Argument: 4, Option: 5, OptionValue: 6, Flag: 7, SymbolicLinkFile: 8, SymbolicLinkFolder: 9, ScmCommit: 10, ScmBranch: 11, ScmTag: 12, ScmStash: 13, ScmRemote: 14, PullRequest: 15, PullRequestDone: 16 }),
-		TerminalQuickFixTerminalCommand: class TerminalQuickFixTerminalCommand { constructor(terminalCommand, shouldExecute) { this.terminalCommand = terminalCommand; this.shouldExecute = shouldExecute; } },
-		TerminalQuickFixOpener: class TerminalQuickFixOpener { constructor(uri) { this.uri = uri; } },
+		TerminalCompletionItem: class TerminalCompletionItem {
+			constructor(label, replacementRange, kind) {
+				this.label = label;
+				this.replacementRange = replacementRange;
+				this.kind = kind;
+			}
+		},
+		TerminalCompletionList: class TerminalCompletionList {
+			constructor(items, resourceOptions) {
+				this.items = items;
+				this.resourceOptions = resourceOptions;
+			}
+		},
+		TerminalCompletionItemKind: Object.freeze({
+			File: 0,
+			Folder: 1,
+			Method: 2,
+			Alias: 3,
+			Argument: 4,
+			Option: 5,
+			OptionValue: 6,
+			Flag: 7,
+			SymbolicLinkFile: 8,
+			SymbolicLinkFolder: 9,
+			ScmCommit: 10,
+			ScmBranch: 11,
+			ScmTag: 12,
+			ScmStash: 13,
+			ScmRemote: 14,
+			PullRequest: 15,
+			PullRequestDone: 16,
+		}),
+		TerminalQuickFixTerminalCommand: class TerminalQuickFixTerminalCommand {
+			constructor(terminalCommand, shouldExecute) {
+				this.terminalCommand = terminalCommand;
+				this.shouldExecute = shouldExecute;
+			}
+		},
+		TerminalQuickFixOpener: class TerminalQuickFixOpener {
+			constructor(uri) {
+				this.uri = uri;
+			}
+		},
 		TerminalOutputAnchor: Object.freeze({ Top: 0, Bottom: 1 }),
-		TerminalProfile: class TerminalProfile { constructor(options) { this.options = options; } },
+		TerminalProfile: class TerminalProfile {
+			constructor(options) {
+				this.options = options;
+			}
+		},
 		scm: scmBridge.api,
 		files: Object.freeze({
 			readTextFile(path) {
-				if (typeof path !== 'string' || !path || path.length > 32768 || path.includes('\0')) throw new TypeError('A workspace file requires a valid path');
+				if (typeof path !== 'string' || !path || path.length > 32768 || path.includes('\0'))
+					throw new TypeError('A workspace file requires a valid path');
 				if (ashRuntime.isDisposed || statusDisposed) throw new Error('Ash extension is not active');
 				const id = globalThis.__ashInvocation();
 				if (!pending.has(id)) throw new Error('Ash file requests require an active callback');
@@ -1669,26 +3241,57 @@ export function createApi(configuration, initialization) {
 				});
 			},
 		}),
-		env: contract('env', { get language() { return windowFacts().language ?? 'en'; } }),
+		env: contract('env', {
+			get language() {
+				return windowFacts().language ?? 'en';
+			},
+		}),
 		l10n: contract('l10n', {
 			t: localizeMessage,
 			bundle: localization?.bundle,
 			uri: localization?.uri ? Uri.parse(localization.uri) : undefined,
 		}),
-		TreeItem, TreeItemCollapsibleState: Object.freeze({ None: 0, Collapsed: 1, Expanded: 2 }), TreeItemCheckboxState: Object.freeze({ Unchecked: 0, Checked: 1 }),
-		Task, TaskGroup, ProcessExecution, ShellExecution, CustomExecution, EventEmitter, CancellationTokenSource, DebugConsoleMode: Object.freeze({ Separate: 0, MergeWithParent: 1 }), DebugAdapterExecutable, DebugAdapterServer, DebugAdapterNamedPipeServer, DebugAdapterInlineImplementation,
-		TaskScope: Object.freeze({ Global: 1, Workspace: 2 }), TaskPanelKind, TaskRevealKind,
+		TreeItem,
+		TreeItemCollapsibleState: Object.freeze({ None: 0, Collapsed: 1, Expanded: 2 }),
+		TreeItemCheckboxState: Object.freeze({ Unchecked: 0, Checked: 1 }),
+		Task,
+		TaskGroup,
+		ProcessExecution,
+		ShellExecution,
+		CustomExecution,
+		EventEmitter,
+		CancellationTokenSource,
+		DebugConsoleMode: Object.freeze({ Separate: 0, MergeWithParent: 1 }),
+		DebugAdapterExecutable,
+		DebugAdapterServer,
+		DebugAdapterNamedPipeServer,
+		DebugAdapterInlineImplementation,
+		TaskScope: Object.freeze({ Global: 1, Workspace: 2 }),
+		TaskPanelKind,
+		TaskRevealKind,
 		ShellQuoting: Object.freeze({ Escape: 1, Strong: 2, Weak: 3 }),
 		tasks: contract('tasks', {
-			get taskExecutions() { return [...activeTaskExecutions.values()]; },
+			get taskExecutions() {
+				return [...activeTaskExecutions.values()];
+			},
 			onDidStartTask: (listener, thisArg, disposables) => listenTask('start', listener, thisArg, disposables),
 			onDidEndTask: (listener, thisArg, disposables) => listenTask('end', listener, thisArg, disposables),
-			onDidStartTaskProcess: (listener, thisArg, disposables) => listenTask('processStart', listener, thisArg, disposables),
-			onDidEndTaskProcess: (listener, thisArg, disposables) => listenTask('processEnd', listener, thisArg, disposables),
+			onDidStartTaskProcess: (listener, thisArg, disposables) =>
+				listenTask('processStart', listener, thisArg, disposables),
+			onDidEndTaskProcess: (listener, thisArg, disposables) =>
+				listenTask('processEnd', listener, thisArg, disposables),
 			async fetchTasks(filter = {}) {
-				if (filter.version !== undefined && typeof filter.version !== 'string' || filter.type !== undefined && typeof filter.type !== 'string') throw new TypeError('Invalid task filter');
-				const result = await request({ operation: 'fetchTasks', version: filter.version ?? null, taskType: filter.type ?? null }, 'tasks');
-				if (!Array.isArray(result.tasks) || !Array.isArray(result.executions)) throw new TypeError('Invalid task catalog');
+				if (
+					(filter.version !== undefined && typeof filter.version !== 'string') ||
+					(filter.type !== undefined && typeof filter.type !== 'string')
+				)
+					throw new TypeError('Invalid task filter');
+				const result = await request(
+					{ operation: 'fetchTasks', version: filter.version ?? null, taskType: filter.type ?? null },
+					'tasks',
+				);
+				if (!Array.isArray(result.tasks) || !Array.isArray(result.executions))
+					throw new TypeError('Invalid task catalog');
 				applyTaskSnapshot(result.executions, result.sequence);
 				return result.tasks.map(decodeTask);
 			},
@@ -1696,24 +3299,38 @@ export function createApi(configuration, initialization) {
 				if (!(task instanceof Task)) throw new TypeError('executeTask requires a Task');
 				let fetchedId = fetchedTaskIds.get(task);
 				const fetched = fetchedTaskSnapshots.get(task);
-				if (fetchedId && (fetched.signature !== taskFingerprint(task) || task.execution instanceof CustomExecution && (fetched.execution !== task.execution || fetched.callback !== task.execution.callback))) {
+				if (
+					fetchedId &&
+					(fetched.signature !== taskFingerprint(task) ||
+						(task.execution instanceof CustomExecution &&
+							(fetched.execution !== task.execution || fetched.callback !== task.execution.callback)))
+				) {
 					// Changed metadata becomes an explicit execution; the original custom
 					// callback stays with its provider and is selected separately below.
 					fetchedTaskIds.delete(task);
 					fetchedTaskSnapshots.delete(task);
 					fetchedId = undefined;
 				}
-				if (!fetchedId && !providedTaskIds.has(task)) providedTaskIds.set(task, `provided.${++providedTaskSequence}`);
+				if (!fetchedId && !providedTaskIds.has(task))
+					providedTaskIds.set(task, `provided.${++providedTaskSequence}`);
 				const taskId = fetchedId ?? providedTaskIds.get(task);
 				const customId = fetchedCustomExecutions.get(task.execution);
-				const originalCustom = customId && typeof task.execution.callback !== 'function' ? { id: customId, execution: task.execution } : undefined;
-				const provided = fetchedId ? null : encodeTask(task, taskId, providedCustomExecutions, originalCustom?.execution);
+				const originalCustom =
+					customId && typeof task.execution.callback !== 'function'
+						? { id: customId, execution: task.execution }
+						: undefined;
+				const provided = fetchedId
+					? null
+					: encodeTask(task, taskId, providedCustomExecutions, originalCustom?.execution);
 				const pending = pendingTaskExecutions.get(taskId) ?? { task, count: 0 };
 				pending.count++;
 				pendingTaskExecutions.set(taskId, pending);
 				let result;
 				try {
-					result = await request({ operation: 'executeTask', taskId: fetchedId ?? originalCustom?.id ?? null, task: provided }, 'taskExecution');
+					result = await request(
+						{ operation: 'executeTask', taskId: fetchedId ?? originalCustom?.id ?? null, task: provided },
+						'taskExecution',
+					);
 					return decodeTaskExecution(result.execution, task, result.sequence);
 				} finally {
 					if (--pending.count === 0) pendingTaskExecutions.delete(taskId);
@@ -1721,7 +3338,10 @@ export function createApi(configuration, initialization) {
 						providedCustomExecutions.delete(taskId);
 						for (const [id, handle] of taskExecutionHandles) {
 							const key = fetchedTaskIds.get(handle.task) ?? providedTaskIds.get(handle.task);
-							if (key === taskId && !activeTaskExecutions.has(id)) { taskExecutionHandles.delete(id); taskStateSequences.delete(id); }
+							if (key === taskId && !activeTaskExecutions.has(id)) {
+								taskExecutionHandles.delete(id);
+								taskStateSequences.delete(id);
+							}
 						}
 					}
 				}
@@ -1734,165 +3354,437 @@ export function createApi(configuration, initialization) {
 				const customExecutions = new Map();
 				let sequence = 0;
 				const handle = ashTasks.registerTaskProvider(registrationId, type, {
-					provideTasks: context => invoke(async () => {
-						const tasks = await provider.provideTasks(context.cancellationToken) ?? [];
-						if (!Array.isArray(tasks) || tasks.length > 10000) throw new TypeError('Invalid task list');
-						const current = new Set(tasks.map(task => JSON.stringify([task.definition, task.name])));
-						for (const [key, id] of ids) if (!current.has(key)) { ids.delete(key); customExecutions.delete(id); }
-						return tasks.map(task => {
-							const key = JSON.stringify([task.definition, task.name]);
-							if (!ids.has(key)) ids.set(key, `task.${++sequence}`);
-							return encodeTask(task, ids.get(key), customExecutions);
-						});
-					}),
-					resolveTask: (context, value) => invoke(async () => {
-						if (!provider.resolveTask) return undefined;
-						const task = decodeTask(value);
-						const resolved = await provider.resolveTask(task, context.cancellationToken);
-						if (resolved === undefined) return undefined;
-						if (resolved.definition !== task.definition) throw new Error('resolveTask must retain the exact TaskDefinition');
-						return encodeTask(resolved, value.id, customExecutions);
-					}),
-					createTaskTerminal: (_context, executionId, definition) => invoke(async () => {
-						const execution = customExecutions.get(executionId);
-						if (!execution) throw new Error('Custom task is no longer provided');
-						return await execution.callback(definition);
-					}),
+					provideTasks: context =>
+						invoke(async () => {
+							const tasks = (await provider.provideTasks(context.cancellationToken)) ?? [];
+							if (!Array.isArray(tasks) || tasks.length > 10000) throw new TypeError('Invalid task list');
+							const current = new Set(tasks.map(task => JSON.stringify([task.definition, task.name])));
+							for (const [key, id] of ids)
+								if (!current.has(key)) {
+									ids.delete(key);
+									customExecutions.delete(id);
+								}
+							return tasks.map(task => {
+								const key = JSON.stringify([task.definition, task.name]);
+								if (!ids.has(key)) ids.set(key, `task.${++sequence}`);
+								return encodeTask(task, ids.get(key), customExecutions);
+							});
+						}),
+					resolveTask: (context, value) =>
+						invoke(async () => {
+							if (!provider.resolveTask) return undefined;
+							const task = decodeTask(value);
+							const resolved = await provider.resolveTask(task, context.cancellationToken);
+							if (resolved === undefined) return undefined;
+							if (resolved.definition !== task.definition)
+								throw new Error('resolveTask must retain the exact TaskDefinition');
+							return encodeTask(resolved, value.id, customExecutions);
+						}),
+					createTaskTerminal: (_context, executionId, definition) =>
+						invoke(async () => {
+							const execution = customExecutions.get(executionId);
+							if (!execution) throw new Error('Custom task is no longer provided');
+							return await execution.callback(definition);
+						}),
 				});
 				taskTypes.add(type);
-				return new Disposable(() => { try { handle.dispose(); } finally { ids.clear(); customExecutions.clear(); taskTypes.delete(type); } });
+				return new Disposable(() => {
+					try {
+						handle.dispose();
+					} finally {
+						ids.clear();
+						customExecutions.clear();
+						taskTypes.delete(type);
+					}
+				});
 			},
 		}),
 		debug: contract('debug', {
-			get activeDebugSession() { return activeDebugSession; },
-			get activeStackItem() { return activeStackItem; },
-			onDidChangeActiveStackItem: (listener, thisArg, disposables) => listenDebug('stackItem', listener, thisArg, disposables),
+			get activeDebugSession() {
+				return activeDebugSession;
+			},
+			get activeStackItem() {
+				return activeStackItem;
+			},
+			onDidChangeActiveStackItem: (listener, thisArg, disposables) =>
+				listenDebug('stackItem', listener, thisArg, disposables),
 			asDebugSourceUri(source, session = activeDebugSession) {
-				if (!source || typeof source !== 'object' || Array.isArray(source)) throw new TypeError('Invalid debug source');
+				if (!source || typeof source !== 'object' || Array.isArray(source))
+					throw new TypeError('Invalid debug source');
 				if (source.sourceReference !== undefined && source.sourceReference > 0) {
-					if (!Number.isSafeInteger(source.sourceReference) || !/^[A-Za-z0-9._-]{1,256}$/.test(session?.id ?? '')) throw new TypeError('A debug source reference requires a session');
+					if (
+						!Number.isSafeInteger(source.sourceReference) ||
+						!/^[A-Za-z0-9._-]{1,256}$/.test(session?.id ?? '')
+					)
+						throw new TypeError('A debug source reference requires a session');
 					const path = source.path || source.name || `source-${source.sourceReference}`;
-					if (typeof path !== 'string' || path.includes('\0') || path.length > 32768) throw new TypeError('Invalid debug source path');
-					return Uri.from({ scheme: 'debug', path: path.startsWith('/') ? path : '/' + path, query: `session=${session.id}&ref=${source.sourceReference}` });
+					if (typeof path !== 'string' || path.includes('\0') || path.length > 32768)
+						throw new TypeError('Invalid debug source path');
+					return Uri.from({
+						scheme: 'debug',
+						path: path.startsWith('/') ? path : '/' + path,
+						query: `session=${session.id}&ref=${source.sourceReference}`,
+					});
 				}
-				if (typeof source.path !== 'string' || !source.path || source.path.includes('\0') || source.path.length > 32768) throw new TypeError('A debug source requires a path or reference');
-				const path = /^(?:[a-z]:[\\/]|\\\\)/i.test(source.path) ? source.path.replaceAll('\\', '/') : source.path;
+				if (
+					typeof source.path !== 'string' ||
+					!source.path ||
+					source.path.includes('\0') ||
+					source.path.length > 32768
+				)
+					throw new TypeError('A debug source requires a path or reference');
+				const path = /^(?:[a-z]:[\\/]|\\\\)/i.test(source.path)
+					? source.path.replaceAll('\\', '/')
+					: source.path;
 				if (path.startsWith('//')) {
 					const slash = path.indexOf('/', 2);
-					return Uri.from({ scheme: 'file', authority: slash < 0 ? path.slice(2) : path.slice(2, slash), path: slash < 0 ? '/' : path.slice(slash) });
+					return Uri.from({
+						scheme: 'file',
+						authority: slash < 0 ? path.slice(2) : path.slice(2, slash),
+						path: slash < 0 ? '/' : path.slice(slash),
+					});
 				}
 				return Uri.from({ scheme: 'file', path: path.startsWith('/') ? path : '/' + path });
 			},
-			get breakpoints() { return Object.freeze([...debugBreakpoints.values()]); },
-			onDidChangeBreakpoints: (listener, thisArg, disposables) => listenDebug('breakpoints', listener, thisArg, disposables),
+			get breakpoints() {
+				return Object.freeze([...debugBreakpoints.values()]);
+			},
+			onDidChangeBreakpoints: (listener, thisArg, disposables) =>
+				listenDebug('breakpoints', listener, thisArg, disposables),
 			addBreakpoints: points => changeBreakpoints(points, false),
 			removeBreakpoints: points => changeBreakpoints(points, true),
-			onDidStartDebugSession: (listener, thisArg, disposables) => listenDebug('start', listener, thisArg, disposables),
-			onDidTerminateDebugSession: (listener, thisArg, disposables) => listenDebug('end', listener, thisArg, disposables),
-			onDidChangeActiveDebugSession: (listener, thisArg, disposables) => listenDebug('active', listener, thisArg, disposables),
-			onDidReceiveDebugSessionCustomEvent: (listener, thisArg, disposables) => listenDebug('custom', listener, thisArg, disposables),
+			onDidStartDebugSession: (listener, thisArg, disposables) =>
+				listenDebug('start', listener, thisArg, disposables),
+			onDidTerminateDebugSession: (listener, thisArg, disposables) =>
+				listenDebug('end', listener, thisArg, disposables),
+			onDidChangeActiveDebugSession: (listener, thisArg, disposables) =>
+				listenDebug('active', listener, thisArg, disposables),
+			onDidReceiveDebugSessionCustomEvent: (listener, thisArg, disposables) =>
+				listenDebug('custom', listener, thisArg, disposables),
 			startDebugging(folder, nameOrConfiguration, options) {
-				if (options && typeof options.id === 'string' && debugSessions.get(options.id)?.handle === options) options = { parentSession: options };
+				if (options && typeof options.id === 'string' && debugSessions.get(options.id)?.handle === options)
+					options = { parentSession: options };
 				let encoded;
 				if (options !== undefined) {
-					if (!options || typeof options !== 'object' || Array.isArray(options) || Object.keys(options).some(key => !['parentSession', 'lifecycleManagedByParent', 'consoleMode', 'noDebug', 'suppressSaveBeforeStart'].includes(key)) || [options.noDebug, options.lifecycleManagedByParent, options.suppressSaveBeforeStart].some(value => value !== undefined && typeof value !== 'boolean') || options.consoleMode !== undefined && ![0, 1].includes(options.consoleMode)) throw new TypeError('Invalid Debug session options');
-					if (options.parentSession !== undefined && debugSessions.get(options.parentSession?.id)?.handle !== options.parentSession) throw new TypeError('Invalid parent Debug session');
+					if (
+						!options ||
+						typeof options !== 'object' ||
+						Array.isArray(options) ||
+						Object.keys(options).some(
+							key =>
+								![
+									'parentSession',
+									'lifecycleManagedByParent',
+									'consoleMode',
+									'noDebug',
+									'suppressSaveBeforeStart',
+								].includes(key),
+						) ||
+						[options.noDebug, options.lifecycleManagedByParent, options.suppressSaveBeforeStart].some(
+							value => value !== undefined && typeof value !== 'boolean',
+						) ||
+						(options.consoleMode !== undefined && ![0, 1].includes(options.consoleMode))
+					)
+						throw new TypeError('Invalid Debug session options');
+					if (
+						options.parentSession !== undefined &&
+						debugSessions.get(options.parentSession?.id)?.handle !== options.parentSession
+					)
+						throw new TypeError('Invalid parent Debug session');
 					const { parentSession, ...values } = options;
-					encoded = { ...values, ...(parentSession === undefined ? {} : { parentSessionId: parentSession.id }) };
+					encoded = {
+						...values,
+						...(parentSession === undefined ? {} : { parentSessionId: parentSession.id }),
+					};
 				}
-				if (typeof nameOrConfiguration !== 'string' && (!nameOrConfiguration || typeof nameOrConfiguration !== 'object')) throw new TypeError('Debugging requires a name or configuration');
-				return request({ operation: 'startDebugging', folder: folder?.uri?.toString() ?? null, configuration: nameOrConfiguration, ...(encoded === undefined ? {} : { options: encoded }) }, 'debugStarted').then(result => result.started);
+				if (
+					typeof nameOrConfiguration !== 'string' &&
+					(!nameOrConfiguration || typeof nameOrConfiguration !== 'object')
+				)
+					throw new TypeError('Debugging requires a name or configuration');
+				return request(
+					{
+						operation: 'startDebugging',
+						folder: folder?.uri?.toString() ?? null,
+						configuration: nameOrConfiguration,
+						...(encoded === undefined ? {} : { options: encoded }),
+					},
+					'debugStarted',
+				).then(result => result.started);
 			},
 			stopDebugging(session) {
-				if (session !== undefined && typeof session.id !== 'string') throw new TypeError('Invalid debug session');
-				return request({ operation: 'stopDebugging', sessionId: session?.id ?? null }, 'done').then(() => undefined);
+				if (session !== undefined && typeof session.id !== 'string')
+					throw new TypeError('Invalid debug session');
+				return request({ operation: 'stopDebugging', sessionId: session?.id ?? null }, 'done').then(
+					() => undefined,
+				);
 			},
 			registerDebugConfigurationProvider(type, provider, triggerKind = 1) {
-				const methods = ['provideDebugConfigurations', 'resolveDebugConfiguration', 'resolveDebugConfigurationWithSubstitutedVariables'];
-				if (!provider || !methods.some(method => typeof provider[method] === 'function') || methods.some(method => provider[method] !== undefined && typeof provider[method] !== 'function')) throw new TypeError('Debug configuration provider requires callbacks');
+				const methods = [
+					'provideDebugConfigurations',
+					'resolveDebugConfiguration',
+					'resolveDebugConfigurationWithSubstitutedVariables',
+				];
+				if (
+					!provider ||
+					!methods.some(method => typeof provider[method] === 'function') ||
+					methods.some(method => provider[method] !== undefined && typeof provider[method] !== 'function')
+				)
+					throw new TypeError('Debug configuration provider requires callbacks');
 				const folder = value => {
 					if (value === undefined) return undefined;
-					if (typeof value?.uri !== 'string' || typeof value.name !== 'string' || !Number.isSafeInteger(value.index) || value.index < 0) throw new TypeError('Invalid Debug workspace folder');
+					if (
+						typeof value?.uri !== 'string' ||
+						typeof value.name !== 'string' ||
+						!Number.isSafeInteger(value.index) ||
+						value.index < 0
+					)
+						throw new TypeError('Invalid Debug workspace folder');
 					return Object.freeze({ uri: Uri.parse(value.uri), name: value.name, index: value.index });
 				};
 				const callbacks = {};
-				if (provider.provideDebugConfigurations) callbacks.provideDebugConfigurations = (context, value) => invoke(() => provider.provideDebugConfigurations(folder(value), context.cancellationToken));
-				if (provider.resolveDebugConfiguration) callbacks.resolveDebugConfiguration = (context, value, config) => invoke(() => provider.resolveDebugConfiguration(folder(value), config, context.cancellationToken));
-				if (provider.resolveDebugConfigurationWithSubstitutedVariables) callbacks.resolveDebugConfigurationWithSubstitutedVariables = (context, value, config) => invoke(() => provider.resolveDebugConfigurationWithSubstitutedVariables(folder(value), config, context.cancellationToken));
-				return ashDebug.registerDebugConfigurationProvider(`ash.debugConfiguration.${++providerSequence}`, type, callbacks, triggerKind);
+				if (provider.provideDebugConfigurations)
+					callbacks.provideDebugConfigurations = (context, value) =>
+						invoke(() => provider.provideDebugConfigurations(folder(value), context.cancellationToken));
+				if (provider.resolveDebugConfiguration)
+					callbacks.resolveDebugConfiguration = (context, value, config) =>
+						invoke(() =>
+							provider.resolveDebugConfiguration(folder(value), config, context.cancellationToken),
+						);
+				if (provider.resolveDebugConfigurationWithSubstitutedVariables)
+					callbacks.resolveDebugConfigurationWithSubstitutedVariables = (context, value, config) =>
+						invoke(() =>
+							provider.resolveDebugConfigurationWithSubstitutedVariables(
+								folder(value),
+								config,
+								context.cancellationToken,
+							),
+						);
+				return ashDebug.registerDebugConfigurationProvider(
+					`ash.debugConfiguration.${++providerSequence}`,
+					type,
+					callbacks,
+					triggerKind,
+				);
 			},
 			registerDebugAdapterTrackerFactory(type, factory) {
-				if (typeof type !== 'string' || !type || typeof factory?.createDebugAdapterTracker !== 'function') { throw new TypeError('Invalid Debug Adapter tracker factory'); }
+				if (typeof type !== 'string' || !type || typeof factory?.createDebugAdapterTracker !== 'function') {
+					throw new TypeError('Invalid Debug Adapter tracker factory');
+				}
 				return ashDebug.registerDebugAdapterTrackerFactory(`ash.debugTracker.${++providerSequence}`, type, {
-					createDebugAdapterTracker: (_context, snapshot) => invoke(async () => {
-						const tracker = await factory.createDebugAdapterTracker(debugSession(snapshot));
-						if (!tracker) { return undefined; }
-						const callbacks = {};
-						for (const operation of ['onWillStartSession', 'onWillReceiveMessage', 'onDidSendMessage', 'onWillStopSession', 'onError', 'onExit']) {
-							if (tracker[operation] === undefined) { continue; }
-							if (typeof tracker[operation] !== 'function') { throw new TypeError('Invalid Debug Adapter tracker callback'); }
-							callbacks[operation] = (_context, ...args) => invoke(() => tracker[operation].apply(tracker, args));
-						}
-						return callbacks;
-					}),
+					createDebugAdapterTracker: (_context, snapshot) =>
+						invoke(async () => {
+							const tracker = await factory.createDebugAdapterTracker(debugSession(snapshot));
+							if (!tracker) {
+								return undefined;
+							}
+							const callbacks = {};
+							for (const operation of [
+								'onWillStartSession',
+								'onWillReceiveMessage',
+								'onDidSendMessage',
+								'onWillStopSession',
+								'onError',
+								'onExit',
+							]) {
+								if (tracker[operation] === undefined) {
+									continue;
+								}
+								if (typeof tracker[operation] !== 'function') {
+									throw new TypeError('Invalid Debug Adapter tracker callback');
+								}
+								callbacks[operation] = (_context, ...args) =>
+									invoke(() => tracker[operation].apply(tracker, args));
+							}
+							return callbacks;
+						}),
 				});
 			},
 			registerDebugAdapterDescriptorFactory(type, factory) {
-				if (!debuggerTypes.has(type) || registeredDebuggerTypes.has(type)) throw new Error(`Debug adapter type '${type}' is undeclared or already registered`);
+				if (!debuggerTypes.has(type) || registeredDebuggerTypes.has(type))
+					throw new Error(`Debug adapter type '${type}' is undeclared or already registered`);
 				const handle = ashDebug.registerDebugAdapterDescriptorFactory(`ash.debug.${++providerSequence}`, type, {
-					createDebugAdapterDescriptor: (_context, value, session, executable) => invoke(async () => {
-						const descriptor = await factory.createDebugAdapterDescriptor(debugSession({ ...session, type: value.type, name: value.name, configuration: value }), executable === undefined ? undefined : new DebugAdapterExecutable(executable.program, executable.arguments, { ...(executable.cwd === undefined ? {} : { cwd: executable.cwd }), ...(executable.env === undefined ? {} : { env: executable.env }) }));
-						if (descriptor === undefined || descriptor === null) return descriptor;
-						if (descriptor instanceof DebugAdapterInlineImplementation) {
-							const implementation = descriptor.implementation;
-							if (typeof implementation?.handleMessage !== 'function' || typeof implementation.onDidSendMessage !== 'function' || typeof implementation.dispose !== 'function') { throw new TypeError('Invalid inline Debug Adapter implementation'); }
-							return {
-								implementation: {
-									handleMessage: (_context, message) => invoke(() => implementation.handleMessage(message)),
-									onDidSendMessage: listener => implementation.onDidSendMessage(listener),
-									dispose: context => context ? invoke(() => implementation.dispose()) : implementation.dispose(),
+					createDebugAdapterDescriptor: (_context, value, session, executable) =>
+						invoke(async () => {
+							const descriptor = await factory.createDebugAdapterDescriptor(
+								debugSession({ ...session, type: value.type, name: value.name, configuration: value }),
+								executable === undefined
+									? undefined
+									: new DebugAdapterExecutable(executable.program, executable.arguments, {
+											...(executable.cwd === undefined ? {} : { cwd: executable.cwd }),
+											...(executable.env === undefined ? {} : { env: executable.env }),
+										}),
+							);
+							if (descriptor === undefined || descriptor === null) return descriptor;
+							if (descriptor instanceof DebugAdapterInlineImplementation) {
+								const implementation = descriptor.implementation;
+								if (
+									typeof implementation?.handleMessage !== 'function' ||
+									typeof implementation.onDidSendMessage !== 'function' ||
+									typeof implementation.dispose !== 'function'
+								) {
+									throw new TypeError('Invalid inline Debug Adapter implementation');
 								}
+								return {
+									implementation: {
+										handleMessage: (_context, message) =>
+											invoke(() => implementation.handleMessage(message)),
+										onDidSendMessage: listener => implementation.onDidSendMessage(listener),
+										dispose: context =>
+											context ? invoke(() => implementation.dispose()) : implementation.dispose(),
+									},
+								};
+							}
+							if (descriptor instanceof DebugAdapterServer) {
+								return {
+									connection: {
+										type: 'server',
+										port: descriptor.port,
+										...(descriptor.host === undefined ? {} : { host: descriptor.host }),
+									},
+								};
+							}
+							if (descriptor instanceof DebugAdapterNamedPipeServer) {
+								return { connection: { type: 'namedPipe', path: descriptor.path } };
+							}
+							if (!(descriptor instanceof DebugAdapterExecutable))
+								return unsupported('Debug adapter descriptor');
+							return {
+								program: descriptor.command,
+								arguments: descriptor.args,
+								...(descriptor.options?.cwd === undefined ? {} : { cwd: descriptor.options.cwd }),
+								...(descriptor.options?.env === undefined ? {} : { env: descriptor.options.env }),
 							};
-						}
-						if (descriptor instanceof DebugAdapterServer) { return { connection: { type: 'server', port: descriptor.port, ...(descriptor.host === undefined ? {} : { host: descriptor.host }) } }; }
-						if (descriptor instanceof DebugAdapterNamedPipeServer) { return { connection: { type: 'namedPipe', path: descriptor.path } }; }
-						if (!(descriptor instanceof DebugAdapterExecutable)) return unsupported('Debug adapter descriptor');
-						return { program: descriptor.command, arguments: descriptor.args, ...(descriptor.options?.cwd === undefined ? {} : { cwd: descriptor.options.cwd }), ...(descriptor.options?.env === undefined ? {} : { env: descriptor.options.env }) };
-					}),
+						}),
 				});
 				registeredDebuggerTypes.add(type);
-				return new Disposable(() => { handle.dispose(); registeredDebuggerTypes.delete(type); });
+				return new Disposable(() => {
+					handle.dispose();
+					registeredDebuggerTypes.delete(type);
+				});
 			},
 		}),
 		StatusBarAlignment: Object.freeze({ Left: 1, Right: 2 }),
 		DebugConfigurationProviderTriggerKind: Object.freeze({ Initial: 1, Dynamic: 2 }),
 		ExtensionMode: Object.freeze({ Production: 1, Development: 2, Test: 3 }),
 		ExtensionKind: Object.freeze({ UI: 1, Workspace: 2 }),
-		ResolvedAuthority, ManagedResolvedAuthority, RemoteAuthorityResolverError, WorkspaceEdit,
+		ResolvedAuthority,
+		ManagedResolvedAuthority,
+		RemoteAuthorityResolverError,
+		WorkspaceEdit,
 		FileType: Object.freeze({ Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 }),
-		SymbolKind: Object.freeze({ File: 0, Module: 1, Namespace: 2, Package: 3, Class: 4, Method: 5, Property: 6, Field: 7, Constructor: 8, Enum: 9, Interface: 10, Function: 11, Variable: 12, Constant: 13, String: 14, Number: 15, Boolean: 16, Array: 17, Object: 18, Key: 19, Null: 20, EnumMember: 21, Struct: 22, Event: 23, Operator: 24, TypeParameter: 25 }),
-		CodeActionKind: class CodeActionKind { constructor(value) { this.value = value; } },
-		Disposable, Position, Range, Location, Breakpoint, SourceBreakpoint, FunctionBreakpoint, DebugThread, DebugStackFrame, Uri, Diagnostic, SnippetString,
+		SymbolKind: Object.freeze({
+			File: 0,
+			Module: 1,
+			Namespace: 2,
+			Package: 3,
+			Class: 4,
+			Method: 5,
+			Property: 6,
+			Field: 7,
+			Constructor: 8,
+			Enum: 9,
+			Interface: 10,
+			Function: 11,
+			Variable: 12,
+			Constant: 13,
+			String: 14,
+			Number: 15,
+			Boolean: 16,
+			Array: 17,
+			Object: 18,
+			Key: 19,
+			Null: 20,
+			EnumMember: 21,
+			Struct: 22,
+			Event: 23,
+			Operator: 24,
+			TypeParameter: 25,
+		}),
+		CodeActionKind: class CodeActionKind {
+			constructor(value) {
+				this.value = value;
+			}
+		},
+		Disposable,
+		Position,
+		Range,
+		Location,
+		Breakpoint,
+		SourceBreakpoint,
+		FunctionBreakpoint,
+		DebugThread,
+		DebugStackFrame,
+		Uri,
+		Diagnostic,
+		SnippetString,
 		DiagnosticSeverity: Object.freeze({ Error: 0, Warning: 1, Information: 2, Hint: 3 }),
-		CompletionItemKind: Object.freeze(Object.fromEntries(completionNames.flatMap((name, index) => completionKinds[index] ? [[name, index]] : []))),
+		CompletionItemKind: Object.freeze(
+			Object.fromEntries(
+				completionNames.flatMap((name, index) => (completionKinds[index] ? [[name, index]] : [])),
+			),
+		),
 		CompletionTriggerKind: Object.freeze({ Invoke: 0, TriggerCharacter: 1, TriggerForIncompleteCompletions: 2 }),
-		CompletionItem: class CompletionItem { constructor(label, kind) { this.label = label; this.kind = kind; } },
-		CompletionList: class CompletionList { constructor(items = [], isIncomplete = false) { this.items = items; this.isIncomplete = isIncomplete; } },
-		TextEdit: class TextEdit { constructor(range, newText) { this.range = range; this.newText = newText; } static replace(range, newText) { return new this(range, newText); } static insert(position, newText) { return new this(new Range(position, position), newText); } static delete(range) { return new this(range, ''); } },
-		Hover: class Hover { constructor(contents, range) { this.contents = Array.isArray(contents) ? contents : [contents]; this.range = range; } },
+		CompletionItem: class CompletionItem {
+			constructor(label, kind) {
+				this.label = label;
+				this.kind = kind;
+			}
+		},
+		CompletionList: class CompletionList {
+			constructor(items = [], isIncomplete = false) {
+				this.items = items;
+				this.isIncomplete = isIncomplete;
+			}
+		},
+		TextEdit: class TextEdit {
+			constructor(range, newText) {
+				this.range = range;
+				this.newText = newText;
+			}
+			static replace(range, newText) {
+				return new this(range, newText);
+			}
+			static insert(position, newText) {
+				return new this(new Range(position, position), newText);
+			}
+			static delete(range) {
+				return new this(range, '');
+			}
+		},
+		Hover: class Hover {
+			constructor(contents, range) {
+				this.contents = Array.isArray(contents) ? contents : [contents];
+				this.range = range;
+			}
+		},
 		MarkdownString: class MarkdownString {
-			constructor(value = '') { this.value = value; }
-			appendText(value) { this.value += value.replace(/[\\`*_{}[\]()#+.!-]/g, '\\$&'); return this; }
-			appendMarkdown(value) { this.value += value; return this; }
+			constructor(value = '') {
+				this.value = value;
+			}
+			appendText(value) {
+				this.value += value.replace(/[\\`*_{}[\]()#+.!-]/g, '\\$&');
+				return this;
+			}
+			appendMarkdown(value) {
+				this.value += value;
+				return this;
+			}
 		},
 		commands: contract('commands', {
 			async execute(command, ...args) {
-				if (typeof command !== 'string' || !command || command.includes('\0')) throw new TypeError('execute requires a command ID');
+				if (typeof command !== 'string' || !command || command.includes('\0'))
+					throw new TypeError('execute requires a command ID');
 				if (command === 'ash.openWith') {
 					const [resource, viewType, options] = args;
 					const editor = editorContexts.get(globalThis.__ashInvocation(false));
 					command = '_workbench.openWith';
-					args = [resource.toJSON(), viewType, [typeof options === 'number' ? options : options?.viewColumn ?? -1], editor?.groupId];
+					args = [
+						resource.toJSON(),
+						viewType,
+						[typeof options === 'number' ? options : (options?.viewColumn ?? -1)],
+						editor?.groupId,
+					];
 				}
 				if (command === 'reopenActiveEditorWith' && args.length === 1) {
 					const editor = editorContexts.get(globalThis.__ashInvocation(false));
@@ -1902,152 +3794,327 @@ export function createApi(configuration, initialization) {
 				return result.hasValue === false ? undefined : result.value;
 			},
 			register(command, callback, thisArg) {
-				if (typeof callback !== 'function' || !titles.has(command)) throw new TypeError('Command must be declared in package.json');
-				const contribution = configuration.manifest?.contributes?.commands?.find(entry => entry.command === command) ?? configuration.commands.find(entry => entry.command === command);
-				const menus = Object.entries(configuration.manifest?.contributes?.menus ?? {}).flatMap(([menu, entries]) => entries.filter(entry => entry.command === command).map(({ command: _command, ...entry }) => ({ menu, ...entry })));
-				return ashRuntime.registerContribution({ kind: 'command', registrationId: command, command, title: titles.get(command), ...(contribution.category !== undefined ? { category: contribution.category } : {}), ...(contribution.enablement !== undefined ? { enablement: contribution.enablement } : {}), ...(contribution.icon ? { icon: contribution.icon.slice(2, -1) } : {}), ...(menus.length ? { menus } : {}) }, 'execute', (_call, payload) => invoke(() => {
-					const editor = payload.activeEditor;
-					editorContexts.set(globalThis.__ashInvocation(false), editor);
-					activeEditor = editor ? { document: { uri: Uri.from(editor.resource) }, viewColumn: undefined } : undefined;
-					return callback.apply(thisArg, payload.arguments);
-				}));
+				if (typeof callback !== 'function' || !titles.has(command))
+					throw new TypeError('Command must be declared in package.json');
+				const contribution =
+					configuration.manifest?.contributes?.commands?.find(entry => entry.command === command) ??
+					configuration.commands.find(entry => entry.command === command);
+				const menus = Object.entries(configuration.manifest?.contributes?.menus ?? {}).flatMap(
+					([menu, entries]) =>
+						entries
+							.filter(entry => entry.command === command)
+							.map(({ command: _command, ...entry }) => ({ menu, ...entry })),
+				);
+				return ashRuntime.registerContribution(
+					{
+						kind: 'command',
+						registrationId: command,
+						command,
+						title: titles.get(command),
+						...(contribution.category !== undefined ? { category: contribution.category } : {}),
+						...(contribution.enablement !== undefined ? { enablement: contribution.enablement } : {}),
+						...(contribution.icon ? { icon: contribution.icon.slice(2, -1) } : {}),
+						...(menus.length ? { menus } : {}),
+					},
+					'execute',
+					(_call, payload) =>
+						invoke(() => {
+							const editor = payload.activeEditor;
+							editorContexts.set(globalThis.__ashInvocation(false), editor);
+							activeEditor = editor
+								? { document: { uri: Uri.from(editor.resource) }, viewColumn: undefined }
+								: undefined;
+							return callback.apply(thisArg, payload.arguments);
+						}),
+				);
 			},
 		}),
 		window: contract('window', {
 			async openComparison(input, options, sideBySide = false) {
-				if (!input || typeof input !== 'object' || Array.isArray(input) || !['diff', 'binaryDiff', 'multiDiff'].includes(input.kind)) throw new TypeError('A comparison requires a diff, binaryDiff or multiDiff input');
+				if (
+					!input ||
+					typeof input !== 'object' ||
+					Array.isArray(input) ||
+					!['diff', 'binaryDiff', 'multiDiff'].includes(input.kind)
+				)
+					throw new TypeError('A comparison requires a diff, binaryDiff or multiDiff input');
 				if (typeof sideBySide !== 'boolean') throw new TypeError('Comparison sideBySide must be a boolean');
-				await request({ operation: 'editorOperation', payload: { method: 'open', input, ...(options === undefined ? {} : { options }), sideBySide } }, 'value');
+				await request(
+					{
+						operation: 'editorOperation',
+						payload: { method: 'open', input, ...(options === undefined ? {} : { options }), sideBySide },
+					},
+					'value',
+				);
 			},
 			registerTerminalCompletionProvider(provider, ...triggerCharacters) {
-				if (!terminalCompletionsAdmitted) throw new Error('Terminal completions require the admitted terminalCompletionProvider capability');
-				if (typeof provider?.provideTerminalCompletions !== 'function') throw new TypeError('Invalid terminal completion provider');
+				if (!terminalCompletionsAdmitted)
+					throw new Error('Terminal completions require the admitted terminalCompletionProvider capability');
+				if (typeof provider?.provideTerminalCompletions !== 'function')
+					throw new TypeError('Invalid terminal completion provider');
 				const terminals = new Map();
-				const registration = ashTerminals.registerTerminalCompletionProvider(`ash.terminalCompletions.${++providerSequence}`, triggerCharacters, (context, payload) => invoke(async () => {
-					let entry = terminals.get(payload.terminal.id);
-					if (!entry) {
-						entry = { snapshot: payload.terminal };
-						entry.terminal = contract('Terminal', { get name() { return entry.snapshot.name; }, get processId() { return Promise.resolve(entry.snapshot.processId ?? undefined); } });
-						terminals.set(payload.terminal.id, entry);
-						if (terminals.size > 256) terminals.delete(terminals.keys().next().value);
-					}
-					entry.snapshot = payload.terminal;
-					const result = await provider.provideTerminalCompletions(entry.terminal, { commandLine: payload.commandLine, cursorIndex: payload.cursorIndex }, context.cancellationToken);
-					if (!result?.resourceOptions) return result;
-					return { items: result.items, resourceOptions: { ...result.resourceOptions, cwd: result.resourceOptions.cwd.toString() } };
-				}));
-				return new Disposable(() => { registration.dispose(); terminals.clear(); });
+				const registration = ashTerminals.registerTerminalCompletionProvider(
+					`ash.terminalCompletions.${++providerSequence}`,
+					triggerCharacters,
+					(context, payload) =>
+						invoke(async () => {
+							let entry = terminals.get(payload.terminal.id);
+							if (!entry) {
+								entry = { snapshot: payload.terminal };
+								entry.terminal = contract('Terminal', {
+									get name() {
+										return entry.snapshot.name;
+									},
+									get processId() {
+										return Promise.resolve(entry.snapshot.processId ?? undefined);
+									},
+								});
+								terminals.set(payload.terminal.id, entry);
+								if (terminals.size > 256) terminals.delete(terminals.keys().next().value);
+							}
+							entry.snapshot = payload.terminal;
+							const result = await provider.provideTerminalCompletions(
+								entry.terminal,
+								{ commandLine: payload.commandLine, cursorIndex: payload.cursorIndex },
+								context.cancellationToken,
+							);
+							if (!result?.resourceOptions) return result;
+							return {
+								items: result.items,
+								resourceOptions: {
+									...result.resourceOptions,
+									cwd: result.resourceOptions.cwd.toString(),
+								},
+							};
+						}),
+				);
+				return new Disposable(() => {
+					registration.dispose();
+					terminals.clear();
+				});
 			},
 			registerTerminalQuickFixProvider(id, provider) {
-				if (!terminalQuickFixesAdmitted) throw new Error('Terminal quick fixes require the admitted terminalQuickFixProvider capability');
-				const selector = configuration.manifest?.contributes?.terminalQuickFixes?.find(value => value.id === id);
-				if (!selector || typeof provider?.provideTerminalQuickFixes !== 'function') throw new TypeError('Terminal quick fixes require a declared selector and provider');
-				return ashTerminals.registerTerminalQuickFixProvider(`ash.terminalQuickFixes.${++providerSequence}`, id, selector,
-					(context, match) => invoke(() => provider.provideTerminalQuickFixes(match, context.cancellationToken)),
-					(_context, command) => invoke(() => api.commands.execute(command.command, ...(command.arguments ?? []))));
+				if (!terminalQuickFixesAdmitted)
+					throw new Error('Terminal quick fixes require the admitted terminalQuickFixProvider capability');
+				const selector = configuration.manifest?.contributes?.terminalQuickFixes?.find(
+					value => value.id === id,
+				);
+				if (!selector || typeof provider?.provideTerminalQuickFixes !== 'function')
+					throw new TypeError('Terminal quick fixes require a declared selector and provider');
+				return ashTerminals.registerTerminalQuickFixProvider(
+					`ash.terminalQuickFixes.${++providerSequence}`,
+					id,
+					selector,
+					(context, match) =>
+						invoke(() => provider.provideTerminalQuickFixes(match, context.cancellationToken)),
+					(_context, command) =>
+						invoke(() => api.commands.execute(command.command, ...(command.arguments ?? []))),
+				);
 			},
 			registerTerminalLinkProvider(provider) {
-				if (!terminalLinksAdmitted) throw new Error('Terminal link providers require the admitted terminalLinkProvider capability');
-				if (typeof provider?.provideTerminalLinks !== 'function' || typeof provider?.handleTerminalLink !== 'function') throw new TypeError('Invalid terminal link provider');
+				if (!terminalLinksAdmitted)
+					throw new Error('Terminal link providers require the admitted terminalLinkProvider capability');
+				if (
+					typeof provider?.provideTerminalLinks !== 'function' ||
+					typeof provider?.handleTerminalLink !== 'function'
+				)
+					throw new TypeError('Invalid terminal link provider');
 				const terminals = new Map();
 				const handle = ashTerminals.registerTerminalLinkProvider(`ash.terminalLinks.${++providerSequence}`, {
-					provideTerminalLinks: (context, payload) => invoke(() => {
-						// Preserve the public object identity for repeated requests from one
-						// terminal without retaining an unbounded set of closed terminals.
-						let entry = terminals.get(payload.terminal.id);
-						if (!entry) {
-							entry = { snapshot: payload.terminal, processId: Promise.resolve(payload.terminal.processId ?? undefined) };
-							entry.terminal = contract('Terminal', { get name() { return entry.snapshot.name; }, get processId() { return entry.processId; } });
-							terminals.set(payload.terminal.id, entry);
-							if (terminals.size > 256) terminals.delete(terminals.keys().next().value);
-						}
-						if (entry.snapshot.processId !== payload.terminal.processId) entry.processId = Promise.resolve(payload.terminal.processId ?? undefined);
-						entry.snapshot = payload.terminal;
-						return provider.provideTerminalLinks({ line: payload.line, terminal: entry.terminal }, context.cancellationToken);
-					}),
+					provideTerminalLinks: (context, payload) =>
+						invoke(() => {
+							// Preserve the public object identity for repeated requests from one
+							// terminal without retaining an unbounded set of closed terminals.
+							let entry = terminals.get(payload.terminal.id);
+							if (!entry) {
+								entry = {
+									snapshot: payload.terminal,
+									processId: Promise.resolve(payload.terminal.processId ?? undefined),
+								};
+								entry.terminal = contract('Terminal', {
+									get name() {
+										return entry.snapshot.name;
+									},
+									get processId() {
+										return entry.processId;
+									},
+								});
+								terminals.set(payload.terminal.id, entry);
+								if (terminals.size > 256) terminals.delete(terminals.keys().next().value);
+							}
+							if (entry.snapshot.processId !== payload.terminal.processId)
+								entry.processId = Promise.resolve(payload.terminal.processId ?? undefined);
+							entry.snapshot = payload.terminal;
+							return provider.provideTerminalLinks(
+								{ line: payload.line, terminal: entry.terminal },
+								context.cancellationToken,
+							);
+						}),
 					handleTerminalLink: (_context, link) => invoke(() => provider.handleTerminalLink(link)),
 				});
-				return new Disposable(() => { handle.dispose(); terminals.clear(); });
+				return new Disposable(() => {
+					handle.dispose();
+					terminals.clear();
+				});
 			},
 			registerTerminalProfileProvider(id, provider) {
 				const declaration = terminalProfiles.find(profile => profile.id === id);
-				if (!declaration || typeof provider?.provideTerminalProfile !== 'function') throw new TypeError('Terminal profile requires a declared ID and provideTerminalProfile callback');
-				const handle = ashTerminals.registerTerminalProfileProvider(`ash.terminalProfile.${++providerSequence}`, id, declaration.title, {
-					createTerminalProfile: context => invoke(async () => {
-						const profile = await provider.provideTerminalProfile(context.cancellationToken);
-						if (profile === undefined || profile === null) return undefined;
-						const options = profile.options;
-						if (!options || typeof options !== 'object') throw new TypeError('provideTerminalProfile must return a TerminalProfile');
-						const result = { name: options.name ?? declaration.title };
-						if (options.pty) result.pty = options.pty;
-						else {
-							if (options.shellPath !== undefined) {
-								if (typeof options.shellPath !== 'string' || !options.shellPath) throw new TypeError('Terminal profile shellPath must be a nonempty string');
-								result.shellPath = options.shellPath;
-							}
-							if (options.shellArgs !== undefined && typeof options.shellArgs !== 'string' && !Array.isArray(options.shellArgs)) throw new TypeError('Terminal profile shellArgs must be a string or array');
-							if (options.shellArgs !== undefined) result.shellArgs = options.shellArgs;
-							if (options.cwd !== undefined) result.cwd = typeof options.cwd === 'string' ? options.cwd : options.cwd.fsPath;
-							if (options.env !== undefined) result.env = options.env;
-						}
-						if (options.iconPath?.id) result.icon = options.iconPath.id;
-						if (options.color?.id) result.color = options.color.id;
-						return result;
-					}),
-				});
+				if (!declaration || typeof provider?.provideTerminalProfile !== 'function')
+					throw new TypeError('Terminal profile requires a declared ID and provideTerminalProfile callback');
+				const handle = ashTerminals.registerTerminalProfileProvider(
+					`ash.terminalProfile.${++providerSequence}`,
+					id,
+					declaration.title,
+					{
+						createTerminalProfile: context =>
+							invoke(async () => {
+								const profile = await provider.provideTerminalProfile(context.cancellationToken);
+								if (profile === undefined || profile === null) return undefined;
+								const options = profile.options;
+								if (!options || typeof options !== 'object')
+									throw new TypeError('provideTerminalProfile must return a TerminalProfile');
+								const result = { name: options.name ?? declaration.title };
+								if (options.pty) result.pty = options.pty;
+								else {
+									if (options.shellPath !== undefined) {
+										if (typeof options.shellPath !== 'string' || !options.shellPath)
+											throw new TypeError('Terminal profile shellPath must be a nonempty string');
+										result.shellPath = options.shellPath;
+									}
+									if (
+										options.shellArgs !== undefined &&
+										typeof options.shellArgs !== 'string' &&
+										!Array.isArray(options.shellArgs)
+									)
+										throw new TypeError('Terminal profile shellArgs must be a string or array');
+									if (options.shellArgs !== undefined) result.shellArgs = options.shellArgs;
+									if (options.cwd !== undefined)
+										result.cwd = typeof options.cwd === 'string' ? options.cwd : options.cwd.fsPath;
+									if (options.env !== undefined) result.env = options.env;
+								}
+								if (options.iconPath?.id) result.icon = options.iconPath.id;
+								if (options.color?.id) result.color = options.color.id;
+								return result;
+							}),
+					},
+				);
 				return new Disposable(() => handle.dispose());
 			},
 			createOutputChannel,
-			get activeTextEditor() { return activeEditor; },
+			get activeTextEditor() {
+				return activeEditor;
+			},
 			registerCustomEditorProvider,
 			registerImageEditorProvider,
 			registerCanvasProvider,
 			async showImageEditor(viewType, options) {
 				if (!imageEditorAdmitted) throw new Error('Image editors require the admitted imageEditor capability');
-				if (typeof viewType !== 'string' || !['screen', 'selection'].includes(options?.source)) throw new TypeError('Invalid image editor request');
-				await request({ operation: 'editorOperation', payload: { method: 'showImageEditor', viewType, source: options.source } }, 'value');
+				if (typeof viewType !== 'string' || !['screen', 'selection'].includes(options?.source))
+					throw new TypeError('Invalid image editor request');
+				await request(
+					{
+						operation: 'editorOperation',
+						payload: { method: 'showImageEditor', viewType, source: options.source },
+					},
+					'value',
+				);
 			},
 			createStatusBarItem,
 			showInformationMessage: (text, ...items) => message('information', text, ...items),
 			showWarningMessage: (text, ...items) => message('warning', text, ...items),
 			showErrorMessage: (text, ...items) => message('error', text, ...items),
 			async showQuickPick(items, options = {}) {
-				if (!Array.isArray(items) || options.canPickMany) return unsupported('window.showQuickPick input/multi-select');
-				if (options.placeHolder !== undefined && typeof options.placeHolder !== 'string' || items.some(item => typeof item !== 'string' && (!item || typeof item.label !== 'string' || item.description !== undefined && typeof item.description !== 'string' || item.detail !== undefined && typeof item.detail !== 'string'))) throw new TypeError('Invalid Quick Pick item or placeholder');
-				const entries = items.map(item => typeof item === 'string' ? { label: item } : {
-					label: item.label,
-					...(item.description === undefined ? {} : { description: item.description }),
-					...(item.detail === undefined ? {} : { detail: item.detail }),
-				});
-				const { index } = await request({ operation: 'showQuickPick', items: entries, placeholder: options.placeHolder ?? '' }, 'selection');
+				if (!Array.isArray(items) || options.canPickMany)
+					return unsupported('window.showQuickPick input/multi-select');
+				if (
+					(options.placeHolder !== undefined && typeof options.placeHolder !== 'string') ||
+					items.some(
+						item =>
+							typeof item !== 'string' &&
+							(!item ||
+								typeof item.label !== 'string' ||
+								(item.description !== undefined && typeof item.description !== 'string') ||
+								(item.detail !== undefined && typeof item.detail !== 'string')),
+					)
+				)
+					throw new TypeError('Invalid Quick Pick item or placeholder');
+				const entries = items.map(item =>
+					typeof item === 'string'
+						? { label: item }
+						: {
+								label: item.label,
+								...(item.description === undefined ? {} : { description: item.description }),
+								...(item.detail === undefined ? {} : { detail: item.detail }),
+							},
+				);
+				const { index } = await request(
+					{ operation: 'showQuickPick', items: entries, placeholder: options.placeHolder ?? '' },
+					'selection',
+				);
 				return index === null ? undefined : items[index];
 			},
 		}),
 		workspace: contract('workspace', {
 			fs: contract('workspace.fs', {
-				async readFile(uri) { return Uint8Array.from((await request({ operation: 'readResourceFile', uri: uri.toString() }, 'resourceFile')).bytes); },
-				async stat(uri) { const value = await request({ operation: 'statResource', uri: uri.toString() }, 'resourceStat'); return { type: value.fileType, size: value.size, mtime: value.mtime, ctime: 0 }; },
-				async readDirectory(uri) { return (await request({ operation: 'readResourceDirectory', uri: uri.toString() }, 'resourceDirectory')).entries; },
+				async readFile(uri) {
+					return Uint8Array.from(
+						(await request({ operation: 'readResourceFile', uri: uri.toString() }, 'resourceFile')).bytes,
+					);
+				},
+				async stat(uri) {
+					const value = await request({ operation: 'statResource', uri: uri.toString() }, 'resourceStat');
+					return { type: value.fileType, size: value.size, mtime: value.mtime, ctime: 0 };
+				},
+				async readDirectory(uri) {
+					return (
+						await request({ operation: 'readResourceDirectory', uri: uri.toString() }, 'resourceDirectory')
+					).entries;
+				},
 			}),
 			async applyEdit(edit) {
 				const changes = await encodeWorkspaceEdit(edit);
-				if (changes.entries.some(entry => entry.kind !== 'textDocument')) return unsupported('workspace.applyEdit file operations');
-				const values = changes.entries.map(entry => ({ uri: entry.resource, version: documents.get(entry.resource)?.snapshot.version, edits: entry.edits.map(edit => ({ start: edit.range.start, end: edit.range.end, text: edit.text })) }));
+				if (changes.entries.some(entry => entry.kind !== 'textDocument'))
+					return unsupported('workspace.applyEdit file operations');
+				const values = changes.entries.map(entry => ({
+					uri: entry.resource,
+					version: documents.get(entry.resource)?.snapshot.version,
+					edits: entry.edits.map(edit => ({ start: edit.range.start, end: edit.range.end, text: edit.text })),
+				}));
 				return (await request({ operation: 'applyEdit', documents: values }, 'applied')).applied;
 			},
-			registerRemoteAuthorityResolver: (prefix, resolver) => ashWorkspace.registerRemoteAuthorityResolver(prefix, resolver, Uri),
-			onDidChangeConfiguration: (listener, thisArg, disposables) => listenWorkspace('configuration', listener, thisArg, disposables),
-			onDidChangeWorkspaceFolders: (listener, thisArg, disposables) => listenWorkspace('workspace', listener, thisArg, disposables),
-			get workspaceFolders() { return getWorkspaceFolders(); },
-			get name() { return windowFacts().workspaceName ?? getWorkspaceFolders()?.[0]?.name; },
-			get workspaceFile() { const uri = windowFacts().workspaceFile; return uri === null ? undefined : Uri.parse(uri); },
-			get rootPath() { return getWorkspaceFolders()?.[0]?.uri.fsPath; },
+			registerRemoteAuthorityResolver: (prefix, resolver) =>
+				ashWorkspace.registerRemoteAuthorityResolver(prefix, resolver, Uri),
+			onDidChangeConfiguration: (listener, thisArg, disposables) =>
+				listenWorkspace('configuration', listener, thisArg, disposables),
+			onDidChangeWorkspaceFolders: (listener, thisArg, disposables) =>
+				listenWorkspace('workspace', listener, thisArg, disposables),
+			get workspaceFolders() {
+				return getWorkspaceFolders();
+			},
+			get name() {
+				return windowFacts().workspaceName ?? getWorkspaceFolders()?.[0]?.name;
+			},
+			get workspaceFile() {
+				const uri = windowFacts().workspaceFile;
+				return uri === null ? undefined : Uri.parse(uri);
+			},
+			get rootPath() {
+				return getWorkspaceFolders()?.[0]?.uri.fsPath;
+			},
 			getWorkspaceFolder: resource => workspaceFolder(resource),
 			getConfiguration: (section, scope) => getConfiguration(section, scope),
-			get textDocuments() { return [...documents.values()].map(state => { observeDocument(state.snapshot); return state.value; }); },
-			onDidOpenTextDocument: (listener, thisArg, disposables) => listenDocument('open', listener, thisArg, disposables),
-			onDidChangeTextDocument: (listener, thisArg, disposables) => listenDocument('change', listener, thisArg, disposables),
-			onDidCloseTextDocument: (listener, thisArg, disposables) => listenDocument('close', listener, thisArg, disposables),
+			get textDocuments() {
+				return [...documents.values()].map(state => {
+					observeDocument(state.snapshot);
+					return state.value;
+				});
+			},
+			onDidOpenTextDocument: (listener, thisArg, disposables) =>
+				listenDocument('open', listener, thisArg, disposables),
+			onDidChangeTextDocument: (listener, thisArg, disposables) =>
+				listenDocument('change', listener, thisArg, disposables),
+			onDidCloseTextDocument: (listener, thisArg, disposables) =>
+				listenDocument('close', listener, thisArg, disposables),
 			async openTextDocument(uri) {
 				if (typeof uri === 'string') uri = Uri.file(uri);
 				if (!(uri instanceof Uri)) return unsupported('workspace.openTextDocument overload');
@@ -2057,49 +4124,112 @@ export function createApi(configuration, initialization) {
 		}),
 		languages: contract('languages', {
 			createDiagnosticCollection: diagnosticCollection,
-			registerDocumentFormattingEditProvider: (selector, provider) => registerLanguageOperation(selector, 'formatting', provider, 'provideDocumentFormattingEdits'),
-			onDidChangeJsonSchemas: (listener, thisArg, disposables) => listenWorkspace('jsonSchemas', listener, thisArg, disposables),
+			registerDocumentFormattingEditProvider: (selector, provider) =>
+				registerLanguageOperation(selector, 'formatting', provider, 'provideDocumentFormattingEdits'),
+			onDidChangeJsonSchemas: (listener, thisArg, disposables) =>
+				listenWorkspace('jsonSchemas', listener, thisArg, disposables),
 			async getJsonSchemaContributions() {
-				const result = await request({ operation: 'editorOperation', payload: { method: 'jsonSchemaContributions' } }, 'value');
+				const result = await request(
+					{ operation: 'editorOperation', payload: { method: 'jsonSchemaContributions' } },
+					'value',
+				);
 				const values = jsonValue(result.value);
-				if (!Array.isArray(values) || values.length > 4096 || values.some(value => !value || typeof value.uri !== 'string' || !Array.isArray(value.fileMatch) || value.fileMatch.some(pattern => typeof pattern !== 'string') || !value.schema || typeof value.schema !== 'object' || Array.isArray(value.schema))) throw new TypeError('Invalid JSON schema contributions');
+				if (
+					!Array.isArray(values) ||
+					values.length > 4096 ||
+					values.some(
+						value =>
+							!value ||
+							typeof value.uri !== 'string' ||
+							!Array.isArray(value.fileMatch) ||
+							value.fileMatch.some(pattern => typeof pattern !== 'string') ||
+							!value.schema ||
+							typeof value.schema !== 'object' ||
+							Array.isArray(value.schema),
+					)
+				)
+					throw new TypeError('Invalid JSON schema contributions');
 				return values;
 			},
-			registerDefinitionProvider: (selector, provider) => registerLanguageOperation(selector, 'definition', provider, 'provideDefinition'),
-			registerReferenceProvider: (selector, provider) => registerLanguageOperation(selector, 'references', provider, 'provideReferences'),
-			registerRenameProvider: (selector, provider) => registerLanguageOperation(selector, 'rename', provider, 'provideRenameEdits'),
-			registerDocumentSymbolProvider: (selector, provider) => registerLanguageOperation(selector, 'documentSymbols', provider, 'provideDocumentSymbols'),
-			registerFoldingRangeProvider: (selector, provider) => registerLanguageOperation(selector, 'foldingRanges', provider, 'provideFoldingRanges'),
-			registerDocumentLinkProvider: (selector, provider) => registerLanguageOperation(selector, 'documentLinks', provider, 'provideDocumentLinks'),
-			registerCodeActionsProvider: (selector, provider) => registerLanguageOperation(selector, 'codeAction', provider, 'provideCodeActions'),
-			registerSelectionRangeProvider: (selector, provider) => registerLanguageOperation(selector, 'selectionRanges', provider, 'provideSelectionRanges'),
-			registerWorkspaceSymbolProvider: provider => registerLanguageOperation(['*'], 'workspaceSymbols', provider, 'provideWorkspaceSymbols'),
-			registerDocumentHighlightProvider: (selector, provider) => registerLanguageOperation(selector, 'documentHighlights', provider, 'provideDocumentHighlights'),
+			registerDefinitionProvider: (selector, provider) =>
+				registerLanguageOperation(selector, 'definition', provider, 'provideDefinition'),
+			registerReferenceProvider: (selector, provider) =>
+				registerLanguageOperation(selector, 'references', provider, 'provideReferences'),
+			registerRenameProvider: (selector, provider) =>
+				registerLanguageOperation(selector, 'rename', provider, 'provideRenameEdits'),
+			registerDocumentSymbolProvider: (selector, provider) =>
+				registerLanguageOperation(selector, 'documentSymbols', provider, 'provideDocumentSymbols'),
+			registerFoldingRangeProvider: (selector, provider) =>
+				registerLanguageOperation(selector, 'foldingRanges', provider, 'provideFoldingRanges'),
+			registerDocumentLinkProvider: (selector, provider) =>
+				registerLanguageOperation(selector, 'documentLinks', provider, 'provideDocumentLinks'),
+			registerCodeActionsProvider: (selector, provider) =>
+				registerLanguageOperation(selector, 'codeAction', provider, 'provideCodeActions'),
+			registerSelectionRangeProvider: (selector, provider) =>
+				registerLanguageOperation(selector, 'selectionRanges', provider, 'provideSelectionRanges'),
+			registerWorkspaceSymbolProvider: provider =>
+				registerLanguageOperation(['*'], 'workspaceSymbols', provider, 'provideWorkspaceSymbols'),
+			registerDocumentHighlightProvider: (selector, provider) =>
+				registerLanguageOperation(selector, 'documentHighlights', provider, 'provideDocumentHighlights'),
 			registerCompletionItemProvider(selector, provider, ...triggerCharacters) {
 				ensureDocumentEvents();
 				const entries = Array.isArray(selector) ? selector : [selector];
-				if (entries.some(entry => typeof entry !== 'string')) return unsupported('languages.registerCompletionItemProvider selector filters');
-				if (typeof provider?.provideCompletionItems !== 'function' || provider.resolveCompletionItem !== undefined) return unsupported('CompletionItemProvider missing provideCompletionItems/resolveCompletionItem');
-				const registration = ashLanguages.registerCompletionProvider(`ash.completion.${++providerSequence}`, entries, {
-					provideCompletionItems: (call, snapshot, coordinate, context) => invoke(async () => {
-						const value = document(snapshot);
-						const position = new Position(coordinate.line, coordinate.character);
-						const result = await provider.provideCompletionItems(value, position, call.cancellationToken, { triggerKind: context.kind === 'triggerCharacter' ? 1 : context.kind === 'incompleteRefresh' ? 2 : 0, triggerCharacter: context.triggerCharacter });
-						return completionResult(result, value, position);
-					}),
-				}, triggerCharacters);
+				if (entries.some(entry => typeof entry !== 'string'))
+					return unsupported('languages.registerCompletionItemProvider selector filters');
+				if (
+					typeof provider?.provideCompletionItems !== 'function' ||
+					provider.resolveCompletionItem !== undefined
+				)
+					return unsupported('CompletionItemProvider missing provideCompletionItems/resolveCompletionItem');
+				const registration = ashLanguages.registerCompletionProvider(
+					`ash.completion.${++providerSequence}`,
+					entries,
+					{
+						provideCompletionItems: (call, snapshot, coordinate, context) =>
+							invoke(async () => {
+								const value = document(snapshot);
+								const position = new Position(coordinate.line, coordinate.character);
+								const result = await provider.provideCompletionItems(
+									value,
+									position,
+									call.cancellationToken,
+									{
+										triggerKind:
+											context.kind === 'triggerCharacter'
+												? 1
+												: context.kind === 'incompleteRefresh'
+													? 2
+													: 0,
+										triggerCharacter: context.triggerCharacter,
+									},
+								);
+								return completionResult(result, value, position);
+							}),
+					},
+					triggerCharacters,
+				);
 				subscriptions.push(registration);
 				return registration;
 			},
 			registerHoverProvider(selector, provider) {
 				const entries = Array.isArray(selector) ? selector : [selector];
-				if (entries.some(entry => typeof entry !== 'string')) return unsupported('languages.registerHoverProvider selector filters');
+				if (entries.some(entry => typeof entry !== 'string'))
+					return unsupported('languages.registerHoverProvider selector filters');
 				const registration = ashLanguages.registerHoverProvider(`ash.hover.${++providerSequence}`, entries, {
-					provideHover: (call, snapshot, position) => invoke(async () => {
-						const hover = await provider.provideHover(document(snapshot), new Position(position.line, position.character),
-							call.cancellationToken);
-						return hover == null ? undefined : { contents: hover.contents, ...(hover.range === undefined ? {} : { range: hover.range }) };
-					}),
+					provideHover: (call, snapshot, position) =>
+						invoke(async () => {
+							const hover = await provider.provideHover(
+								document(snapshot),
+								new Position(position.line, position.character),
+								call.cancellationToken,
+							);
+							return hover == null
+								? undefined
+								: {
+										contents: hover.contents,
+										...(hover.range === undefined ? {} : { range: hover.range }),
+									};
+						}),
 				});
 				subscriptions.push(registration);
 				return registration;
@@ -2119,57 +4249,70 @@ export function createApi(configuration, initialization) {
 			imageEditorAdmitted = capabilities.includes('imageEditor');
 			canvasAdmitted = capabilities.includes('dataChannel');
 			treeAdmitted = capabilities.includes('treeView');
-			if (environmentAdmitted) subscriptions.push(ashTerminals.registerEnvironmentVariableCollection('ash.terminalEnvironment', snapshotEnvironment));
+			if (environmentAdmitted)
+				subscriptions.push(
+					ashTerminals.registerEnvironmentVariableCollection('ash.terminalEnvironment', snapshotEnvironment),
+				);
 			if (initialization) subscriptions.push(ensureWorkspaceEvents());
 			// The supervisor supplies the admitted ceiling. Optional API observers must
 			// not turn an unrelated command into a rejected registration handshake.
 			if (capabilities.includes('taskProvider')) ensureTaskEvents();
 			if (capabilities.includes('debugAdapter')) ensureDebugEvents();
-			if (capabilities.includes('statusBar')) subscriptions.push(ashWindow.registerStatusBar(statusRegistrationId, statusSnapshot));
-			subscriptions.push(new Disposable(() => {
-				environmentAdmitted = false;
-				speechAdmitted = false;
-				imageEditorAdmitted = false;
-				canvasAdmitted = false;
-				treeAdmitted = false;
-				environmentMutators.clear();
-				scmBridge.dispose();
-				statusDisposed = true;
-				statusActive = false;
-				for (const item of [...statusItems.values()]) item.dispose();
-				statusFlushes.clear();
-				activeTaskExecutions.clear();
-				activeStackItem = undefined;
-				taskExecutionHandles.clear();
-				pendingTaskExecutions.clear();
-				providedCustomExecutions.clear();
-				taskStateSequences.clear();
-				for (const listeners of Object.values(taskListeners)) listeners.clear();
-				for (const listeners of Object.values(debugListeners)) listeners.clear();
-				for (const listeners of Object.values(workspaceListeners)) listeners.clear();
-				debugSessions.clear();
-				debugBreakpoints.clear();
-				activeDebugSession = undefined;
-			}));
+			if (capabilities.includes('statusBar'))
+				subscriptions.push(ashWindow.registerStatusBar(statusRegistrationId, statusSnapshot));
+			subscriptions.push(
+				new Disposable(() => {
+					environmentAdmitted = false;
+					speechAdmitted = false;
+					imageEditorAdmitted = false;
+					canvasAdmitted = false;
+					treeAdmitted = false;
+					environmentMutators.clear();
+					scmBridge.dispose();
+					statusDisposed = true;
+					statusActive = false;
+					for (const item of [...statusItems.values()]) item.dispose();
+					statusFlushes.clear();
+					activeTaskExecutions.clear();
+					activeStackItem = undefined;
+					taskExecutionHandles.clear();
+					pendingTaskExecutions.clear();
+					providedCustomExecutions.clear();
+					taskStateSequences.clear();
+					for (const listeners of Object.values(taskListeners)) listeners.clear();
+					for (const listeners of Object.values(debugListeners)) listeners.clear();
+					for (const listeners of Object.values(workspaceListeners)) listeners.clear();
+					debugSessions.clear();
+					debugBreakpoints.clear();
+					activeDebugSession = undefined;
+				}),
+			);
 			// Keep the runtime subscription array: host retirement disposes this exact owner.
 			const publicContext = Object.freeze({
 				subscriptions,
-				storage, secrets,
+				storage,
+				secrets,
 				environmentVariableCollection,
 				extensionUri,
 				extensionPath: extensionUri.fsPath,
 				extensionMode: 1,
 				extension,
-				asAbsolutePath(relativePath) { return Uri.joinPath(extensionUri, relativePath).fsPath; },
+				asAbsolutePath(relativePath) {
+					return Uri.joinPath(extensionUri, relativePath).fsPath;
+				},
 			});
-			activationPromise = Promise.resolve().then(() => callback.call(receiver, publicContext)).then(async result => {
-				while (outputFlushes.size) await Promise.all([...outputFlushes]);
-				activationExports = result;
-				statusActive = true;
-				return result;
-			});
+			activationPromise = Promise.resolve()
+				.then(() => callback.call(receiver, publicContext))
+				.then(async result => {
+					while (outputFlushes.size) await Promise.all([...outputFlushes]);
+					activationExports = result;
+					statusActive = true;
+					return result;
+				});
 			return activationPromise;
 		},
-		deactivate() { statusActive = false; },
+		deactivate() {
+			statusActive = false;
+		},
 	});
 }

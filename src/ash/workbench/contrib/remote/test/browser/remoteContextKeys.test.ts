@@ -1,18 +1,31 @@
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
-import { Emitter } from "../../../../../base/common/event.js";
-import { Disposable } from "../../../../../base/common/lifecycle.js";
-import { isMenuItem, MenuId, MenusRegistry } from "../../../../../platform/actions/common/actions.js";
-import type { RemoteConnectionState } from "../../../../../platform/remote/common/remote.js";
-import type { RemoteAgentConnection } from "../../../../../platform/remote/common/remoteAgentApi.js";
-import { IRemoteConnectionApi, RemoteConnectionService } from "../../../../../platform/remote/common/remoteConnectionService.js";
-import { ContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
-import { ConnectToRemoteCommandId, ManageRemoteConnectionsCommandId, ReconnectRemoteCommandId, RollbackRemoteRuntimeCommandId } from "../../browser/remoteActions.js";
-import { RemoteConnectionKindContext, RemoteConnectionsAvailableContext, RemoteConnectionStateContext, RemoteContextKeys } from "../../browser/remoteContextKeys.js";
-import type { IAppServerRemoteAgentService } from "../../../../services/remote/common/appServerRemoteAgentService.js";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
+import { Emitter } from '../../../../../base/common/event.js';
+import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { isMenuItem, MenuId, MenusRegistry } from '../../../../../platform/actions/common/actions.js';
+import type { RemoteConnectionState } from '../../../../../platform/remote/common/remote.js';
+import type { RemoteAgentConnection } from '../../../../../platform/remote/common/remoteAgentApi.js';
+import {
+	IRemoteConnectionApi,
+	RemoteConnectionService,
+} from '../../../../../platform/remote/common/remoteConnectionService.js';
+import { ContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import {
+	ConnectToRemoteCommandId,
+	ManageRemoteConnectionsCommandId,
+	ReconnectRemoteCommandId,
+	RollbackRemoteRuntimeCommandId,
+} from '../../browser/remoteActions.js';
+import {
+	RemoteConnectionKindContext,
+	RemoteConnectionsAvailableContext,
+	RemoteConnectionStateContext,
+	RemoteContextKeys,
+} from '../../browser/remoteContextKeys.js';
+import type { IAppServerRemoteAgentService } from '../../../../services/remote/common/appServerRemoteAgentService.js';
 
-test("Remote context keys track sanitized connection kind and lifecycle", () => {
+test('Remote context keys track sanitized connection kind and lifecycle', () => {
 	using contextKeyService = new ContextKeyService();
 	using remoteAgentService = new TestRemoteAgentService();
 	using services = new InstantiationService();
@@ -20,31 +33,35 @@ test("Remote context keys track sanitized connection kind and lifecycle", () => 
 	using remoteConnectionService = services.createInstance(RemoteConnectionService);
 	using contribution = new RemoteContextKeys({ contextKeyService, remoteAgentService, remoteConnectionService });
 
-	assert.equal(contextKeyService.contextMatchesRules(RemoteConnectionKindContext.isEqualTo("ssh")), false);
-	remoteAgentService.emit({ kind: "ssh", generation: 4, authority: "ssh+work-server", host: "work-server" });
-	assert.equal(contextKeyService.contextMatchesRules(RemoteConnectionKindContext.isEqualTo("ssh")), true);
-	remoteAgentService.emitState("disconnected");
-	assert.equal(contextKeyService.contextMatchesRules(RemoteConnectionStateContext.isEqualTo("disconnected")), true);
-	remoteAgentService.emit({ kind: "local", generation: 5 });
-	assert.equal(contextKeyService.contextMatchesRules(RemoteConnectionKindContext.isEqualTo("local")), true);
+	assert.equal(contextKeyService.contextMatchesRules(RemoteConnectionKindContext.isEqualTo('ssh')), false);
+	remoteAgentService.emit({ kind: 'ssh', generation: 4, authority: 'ssh+work-server', host: 'work-server' });
+	assert.equal(contextKeyService.contextMatchesRules(RemoteConnectionKindContext.isEqualTo('ssh')), true);
+	remoteAgentService.emitState('disconnected');
+	assert.equal(contextKeyService.contextMatchesRules(RemoteConnectionStateContext.isEqualTo('disconnected')), true);
+	remoteAgentService.emit({ kind: 'local', generation: 5 });
+	assert.equal(contextKeyService.contextMatchesRules(RemoteConnectionKindContext.isEqualTo('local')), true);
 });
 
-test("Remote reconnect appears only for a disconnected SSH context", () => {
-	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(candidate => isMenuItem(candidate) && candidate.command.id === ReconnectRemoteCommandId);
+test('Remote reconnect appears only for a disconnected SSH context', () => {
+	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(
+		candidate => isMenuItem(candidate) && candidate.command.id === ReconnectRemoteCommandId,
+	);
 	assert.ok(item && isMenuItem(item));
 	using contextKeyService = new ContextKeyService();
 
-	contextKeyService.setContext(RemoteConnectionKindContext.key, "ssh");
-	contextKeyService.setContext(RemoteConnectionStateContext.key, "connected");
+	contextKeyService.setContext(RemoteConnectionKindContext.key, 'ssh');
+	contextKeyService.setContext(RemoteConnectionStateContext.key, 'connected');
 	assert.equal(contextKeyService.contextMatchesRules(item.when), false);
-	contextKeyService.setContext(RemoteConnectionStateContext.key, "disconnected");
+	contextKeyService.setContext(RemoteConnectionStateContext.key, 'disconnected');
 	assert.equal(contextKeyService.contextMatchesRules(item.when), true);
-	contextKeyService.setContext(RemoteConnectionKindContext.key, "local");
+	contextKeyService.setContext(RemoteConnectionKindContext.key, 'local');
 	assert.equal(contextKeyService.contextMatchesRules(item.when), false);
 });
 
-test("Remote connection selection appears only when the renderer has a native connection host", () => {
-	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(candidate => isMenuItem(candidate) && candidate.command.id === ConnectToRemoteCommandId);
+test('Remote connection selection appears only when the renderer has a native connection host', () => {
+	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(
+		candidate => isMenuItem(candidate) && candidate.command.id === ConnectToRemoteCommandId,
+	);
 	assert.ok(item && isMenuItem(item));
 	using contextKeyService = new ContextKeyService();
 
@@ -53,8 +70,10 @@ test("Remote connection selection appears only when the renderer has a native co
 	assert.equal(contextKeyService.contextMatchesRules(item.when), true);
 });
 
-test("Remote connection management appears only when the renderer has a native connection host", () => {
-	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(candidate => isMenuItem(candidate) && candidate.command.id === ManageRemoteConnectionsCommandId);
+test('Remote connection management appears only when the renderer has a native connection host', () => {
+	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(
+		candidate => isMenuItem(candidate) && candidate.command.id === ManageRemoteConnectionsCommandId,
+	);
 	assert.ok(item && isMenuItem(item));
 	using contextKeyService = new ContextKeyService();
 
@@ -63,13 +82,15 @@ test("Remote connection management appears only when the renderer has a native c
 	assert.equal(contextKeyService.contextMatchesRules(item.when), true);
 });
 
-test("Remote runtime rollback appears in the Command Palette only for SSH context", () => {
-	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(candidate => isMenuItem(candidate) && candidate.command.id === RollbackRemoteRuntimeCommandId);
+test('Remote runtime rollback appears in the Command Palette only for SSH context', () => {
+	const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(
+		candidate => isMenuItem(candidate) && candidate.command.id === RollbackRemoteRuntimeCommandId,
+	);
 	assert.ok(item && isMenuItem(item));
 	using contextKeyService = new ContextKeyService();
 
 	assert.equal(contextKeyService.contextMatchesRules(item.when), false);
-	contextKeyService.setContext(RemoteConnectionKindContext.key, "ssh");
+	contextKeyService.setContext(RemoteConnectionKindContext.key, 'ssh');
 	assert.equal(contextKeyService.contextMatchesRules(item.when), true);
 });
 
@@ -81,8 +102,12 @@ class TestRemoteAgentService extends Disposable implements IAppServerRemoteAgent
 	readonly onDidChangeConnectionState = this.stateEmitter.event;
 	readonly onDidChangeConnection = this.connectionEmitter.event;
 
-	async reconnect() { return { kind: "reconnected" } as const; }
-	async rollbackRuntime() { return { kind: "rolledBack" } as const; }
+	async reconnect() {
+		return { kind: 'reconnected' } as const;
+	}
+	async rollbackRuntime() {
+		return { kind: 'rolledBack' } as const;
+	}
 
 	emit(connection: RemoteAgentConnection): void {
 		this.connection = connection;
@@ -101,5 +126,5 @@ const TestRemoteConnectionApi: IRemoteConnectionApi = {
 	save: async connection => connection,
 	update: async (_originalName, connection) => connection,
 	remove: async () => undefined,
-	connect: async () => { },
+	connect: async () => {},
 };

@@ -12,7 +12,7 @@ import type { Workbench } from '../../automation/workbench.ts';
 import type { RunnerOptions } from './options.ts';
 import { seedScenarioProfile } from './profileFixture.ts';
 
-export type JSONValue = string | number | boolean | null | JSONValue[] | { readonly [key: string]: JSONValue; };
+export type JSONValue = string | number | boolean | null | JSONValue[] | { readonly [key: string]: JSONValue };
 
 export interface ApplicationLaunchOptions {
 	readonly runPath: string;
@@ -44,7 +44,7 @@ const videoSize = { width: 1440, height: 900 } as const;
 export class ApplicationService {
 	private running: RunningApplication | undefined;
 
-	constructor(private readonly options: RunnerOptions) { }
+	constructor(private readonly options: RunnerOptions) {}
 
 	get application(): RunningApplication | undefined {
 		return this.running;
@@ -75,7 +75,8 @@ export class ApplicationService {
 	private async startDesktop(options: ApplicationLaunchOptions, videoDirectory: string): Promise<RunningApplication> {
 		const userDataDirectory = await mkdtemp(join(tmpdir(), 'ash-scenario-'));
 		try {
-			if (options.profileFixturePath) await seedScenarioProfile(options.profileFixturePath, join(userDataDirectory, 'profile'));
+			if (options.profileFixturePath)
+				await seedScenarioProfile(options.profileFixturePath, join(userDataDirectory, 'profile'));
 			if (options.userSettings) {
 				const settingsPath = join(userDataDirectory, 'profile', 'settings.json');
 				await mkdir(dirname(settingsPath), { recursive: true });
@@ -118,15 +119,24 @@ export class ApplicationService {
 		}
 		const port = await availablePort();
 		const baseURL = `http://127.0.0.1:${port}/`;
-		const server = spawn(process.execPath, [
-			join(repositoryRoot, 'build/desktop/launch/web.ts'),
-			join(repositoryRoot, '.build/desktop/renderer/ash'),
-			String(port),
-		], { cwd: repositoryRoot, env: { ...process.env, ASH_WEB_APP_SERVER: '0' }, stdio: ['ignore', 'ignore', 'pipe'], detached: process.platform !== 'win32' });
+		const server = spawn(
+			process.execPath,
+			[
+				join(repositoryRoot, 'build/desktop/launch/web.ts'),
+				join(repositoryRoot, '.build/desktop/renderer/ash'),
+				String(port),
+			],
+			{
+				cwd: repositoryRoot,
+				env: { ...process.env, ASH_WEB_APP_SERVER: '0' },
+				stdio: ['ignore', 'ignore', 'pipe'],
+				detached: process.platform !== 'win32',
+			},
+		);
 		const serverRun = new ProcessRun(repositoryRoot, undefined, 5_000);
 		await serverRun.own(server);
 		let serverErrors = '';
-		server.stderr?.on('data', chunk => serverErrors = `${serverErrors}${String(chunk)}`.slice(-16_384));
+		server.stderr?.on('data', chunk => (serverErrors = `${serverErrors}${String(chunk)}`.slice(-16_384)));
 		try {
 			await waitForServer(baseURL, server);
 			const launched = await launchBrowser({
@@ -148,7 +158,9 @@ export class ApplicationService {
 			});
 		} catch (error) {
 			await serverRun.stop('SIGTERM');
-			throw new Error(`${String(error)}${serverErrors ? `\nWeb server:\n${serverErrors}` : ''}`, { cause: error });
+			throw new Error(`${String(error)}${serverErrors ? `\nWeb server:\n${serverErrors}` : ''}`, {
+				cause: error,
+			});
 		}
 	}
 }
@@ -169,7 +181,8 @@ function createRunningApplication(input: {
 		const video = page.video();
 		if (video) videos.add(video);
 		page.on('console', message => {
-			if (message.type() === 'error' || message.type() === 'warning') diagnosticMessages.push(`[console:${message.type()}] ${message.text()}`);
+			if (message.type() === 'error' || message.type() === 'warning')
+				diagnosticMessages.push(`[console:${message.type()}] ${message.text()}`);
 		});
 		page.on('pageerror', error => diagnosticMessages.push(`[pageerror] ${error.stack ?? error.message}`));
 		page.on('crash', () => diagnosticMessages.push('[crash] Workbench page crashed'));
@@ -210,7 +223,7 @@ async function availablePort(): Promise<number> {
 				reject(new Error('Could not reserve a Web scenario port.'));
 				return;
 			}
-			server.close(error => error ? reject(error) : resolvePort(address.port));
+			server.close(error => (error ? reject(error) : resolvePort(address.port)));
 		});
 	});
 }
@@ -218,11 +231,12 @@ async function availablePort(): Promise<number> {
 async function waitForServer(url: string, process: ChildProcess): Promise<void> {
 	const deadline = Date.now() + 120_000;
 	while (Date.now() < deadline) {
-		if (process.exitCode !== null || process.signalCode !== null) throw new Error(`Web server exited with code ${process.exitCode}.`);
+		if (process.exitCode !== null || process.signalCode !== null)
+			throw new Error(`Web server exited with code ${process.exitCode}.`);
 		try {
 			const response = await fetch(url, { signal: AbortSignal.timeout(1_000) });
 			if (response.ok) return;
-		} catch { }
+		} catch {}
 		await new Promise(resolveWait => setTimeout(resolveWait, 100));
 	}
 	throw new Error(`Web server did not become ready at ${url}.`);

@@ -1,14 +1,22 @@
 import type { URI } from '../../../../base/common/uri.js';
 import type { LanguageTextDocumentEdit } from '../../../../editor/common/languages.js';
 import { WorkspaceEditConflictError } from '../../../../editor/browser/services/bulkEditService.js';
-import type { ITextModelResourceService, TextModelReference } from '../../../services/textmodelResolver/common/textModelResourceService.js';
+import type {
+	ITextModelResourceService,
+	TextModelReference,
+} from '../../../services/textmodelResolver/common/textModelResourceService.js';
 import type { TextModelEditSource } from '../../../../editor/common/textModelEditSource.js';
 import type { DisposableMap } from '../../../../base/common/lifecycle.js';
 import type { TextModelUndoRedoSnapshot } from '../../../../editor/common/model/textModel.js';
 
 interface TextOperation {
 	readonly entry: LanguageTextDocumentEdit;
-	readonly model: { readonly reference: TextModelReference; readonly wasOpen: boolean; version: number; undoRedoSnapshot?: TextModelUndoRedoSnapshot; };
+	readonly model: {
+		readonly reference: TextModelReference;
+		readonly wasOpen: boolean;
+		version: number;
+		undoRedoSnapshot?: TextModelUndoRedoSnapshot;
+	};
 	readonly before: string;
 	readonly after: string;
 }
@@ -23,7 +31,7 @@ export class BulkTextEdits {
 		private readonly signal: AbortSignal,
 		private readonly reason: TextModelEditSource | undefined,
 		private readonly skipSave: boolean,
-	) { }
+	) {}
 
 	public async apply(): Promise<readonly URI[]> {
 		const { entry, model, before, after } = this.operation;
@@ -31,7 +39,9 @@ export class BulkTextEdits {
 			throw new WorkspaceEditConflictError(`Workspace edit for '${entry.resource.toString()}' is stale`);
 		}
 		if (model.reference.model.getText() !== before) {
-			throw new WorkspaceEditConflictError(`Workspace edit content for '${entry.resource.toString()}' changed during application`);
+			throw new WorkspaceEditConflictError(
+				`Workspace edit content for '${entry.resource.toString()}' changed during application`,
+			);
 		}
 		if (before === after) {
 			return [];
@@ -52,7 +62,9 @@ export class BulkTextEdits {
 			}
 		}
 		if (model.reference.model.getText() !== after) {
-			throw new WorkspaceEditConflictError(`Workspace edit for '${entry.resource.toString()}' produced an inconsistent result`);
+			throw new WorkspaceEditConflictError(
+				`Workspace edit for '${entry.resource.toString()}' produced an inconsistent result`,
+			);
 		}
 		return [entry.resource];
 	}
@@ -66,10 +78,14 @@ export class BulkTextEdits {
 			reference.model.restoreUndoRedoSnapshot(snapshot);
 		}
 		if (reference.model.getText() !== after || reference.model.getAlternativeVersionId() !== appliedVersion) {
-			throw new WorkspaceEditConflictError(`Workspace edit target '${entry.resource.toString()}' changed before replacement`);
+			throw new WorkspaceEditConflictError(
+				`Workspace edit target '${entry.resource.toString()}' changed before replacement`,
+			);
 		}
 		if (!reference.model.undo() || reference.model.getText() !== before) {
-			throw new WorkspaceEditConflictError(`Workspace edit for '${entry.resource.toString()}' is no longer the latest undo step`);
+			throw new WorkspaceEditConflictError(
+				`Workspace edit for '${entry.resource.toString()}' is no longer the latest undo step`,
+			);
 		}
 		if (!model.wasOpen && !this.skipSave) {
 			await reference.save(new AbortController().signal, { skipSaveParticipants: true });

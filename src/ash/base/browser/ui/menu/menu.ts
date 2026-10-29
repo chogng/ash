@@ -1,17 +1,28 @@
 import type { IButtonStyles } from '../button/button.js';
 import type { IKeybindingLabelStyles } from '../keybindinglabel/keybindinglabel.js';
-import { type IAction, type IActionRunner, Separator, SubmenuAction } from "../../../common/actions.js";
-import { RunOnceScheduler } from "../../../common/async.js";
-import { addDisposableListener, isNode, h } from "../../dom.js";
-import { FocusNavigationBoundary, FocusNavigationDirection, focusFirst, focusLast, moveFocus } from "../../focus.js";
-import { isModifierKey } from "../../keyboardEvent.js";
-import type { ResolvedKeybinding } from "../../../common/keybindings.js";
-import { Disposable, toDisposable } from "../../../common/lifecycle.js";
-import { Lxicon } from "../../../common/lxicons.js";
-import { ActionViewItem, ButtonActionViewItem, SeparatorActionViewItem, type ActionViewItemOptions } from "../actionbar/actionViewItems.js";
-import { AnchorAxisAlignment, AnchorPosition, ContextView, ContextViewFocusRestore, ContextViewHideReason } from "../contextview/contextview.js";
-import { appendIcon } from "../lxicons/lxicon.js";
-import { KeybindingLabel } from "../keybindinglabel/keybindinglabel.js";
+import { type IAction, type IActionRunner, Separator, SubmenuAction } from '../../../common/actions.js';
+import { RunOnceScheduler } from '../../../common/async.js';
+import { addDisposableListener, isNode, h } from '../../dom.js';
+import { FocusNavigationBoundary, FocusNavigationDirection, focusFirst, focusLast, moveFocus } from '../../focus.js';
+import { isModifierKey } from '../../keyboardEvent.js';
+import type { ResolvedKeybinding } from '../../../common/keybindings.js';
+import { Disposable, toDisposable } from '../../../common/lifecycle.js';
+import { Lxicon } from '../../../common/lxicons.js';
+import {
+	ActionViewItem,
+	ButtonActionViewItem,
+	SeparatorActionViewItem,
+	type ActionViewItemOptions,
+} from '../actionbar/actionViewItems.js';
+import {
+	AnchorAxisAlignment,
+	AnchorPosition,
+	ContextView,
+	ContextViewFocusRestore,
+	ContextViewHideReason,
+} from '../contextview/contextview.js';
+import { appendIcon } from '../lxicons/lxicon.js';
+import { KeybindingLabel } from '../keybindinglabel/keybindinglabel.js';
 
 export interface MenuActionViewItemOptions extends ActionViewItemOptions {
 	readonly menuStyles?: IMenuStyles;
@@ -21,28 +32,23 @@ export interface MenuActionViewItemOptions extends ActionViewItemOptions {
 	readonly submenuLayer?: number;
 	readonly contextViewContainer?: HTMLElement;
 	readonly keybinding?: ResolvedKeybinding;
-	readonly getKeybinding?: (
-		action: IAction,
-	) => ResolvedKeybinding | undefined;
+	readonly getKeybinding?: (action: IAction) => ResolvedKeybinding | undefined;
 	readonly actionRunner?: IActionRunner;
 	readonly actionContext?: unknown;
-	readonly checkedActionRepresentation?: "radio" | "checkbox";
+	readonly checkedActionRepresentation?: 'radio' | 'checkbox';
 	readonly onWillOpenSubmenu?: (item: ActionViewItem) => void;
 	readonly openSubmenusImmediatelyOnHover?: boolean;
 }
 
-function prependMenuLeadingSlot(
-	button: HTMLButtonElement,
-	checked: boolean | undefined,
-): void {
-	const slot = h(button.ownerDocument, "span");
-	slot.className = "ash-menu-leading-slot";
-	slot.setAttribute("aria-hidden", "true");
+function prependMenuLeadingSlot(button: HTMLButtonElement, checked: boolean | undefined): void {
+	const slot = h(button.ownerDocument, 'span');
+	slot.className = 'ash-menu-leading-slot';
+	slot.setAttribute('aria-hidden', 'true');
 	// Keep IconLabel's icon node so Button.icon updates still reach the menu slot.
-	const icon = button.querySelector<HTMLElement>(":scope > .ash-button-content > .ash-icon-label-icon");
+	const icon = button.querySelector<HTMLElement>(':scope > .ash-button-content > .ash-icon-label-icon');
 	if (icon) slot.append(icon);
 	if (checked !== undefined) {
-		slot.classList.add("ash-menu-leading-check");
+		slot.classList.add('ash-menu-leading-check');
 		appendIcon(Lxicon.check, slot);
 	}
 	button.prepend(slot);
@@ -50,7 +56,7 @@ function prependMenuLeadingSlot(
 
 /** Menus use the action label for accessibility without opening a tooltip. */
 abstract class MenuButtonActionViewItem extends ButtonActionViewItem {
-	protected override setupTooltip(): void { }
+	protected override setupTooltip(): void {}
 }
 
 /** Button view item for an action presented inside a menu. */
@@ -60,7 +66,7 @@ class MenuActionViewItem extends MenuButtonActionViewItem {
 	private readonly keybinding: ResolvedKeybinding | undefined;
 	private readonly actionRunner: IActionRunner | undefined;
 	private readonly actionContext: unknown;
-	private readonly checkedActionRepresentation: "radio" | "checkbox";
+	private readonly checkedActionRepresentation: 'radio' | 'checkbox';
 
 	constructor(
 		action: IAction,
@@ -72,7 +78,7 @@ class MenuActionViewItem extends MenuButtonActionViewItem {
 		this.keybinding = options.keybinding;
 		this.actionRunner = options.actionRunner;
 		this.actionContext = options.actionContext;
-		this.checkedActionRepresentation = options.checkedActionRepresentation ?? "checkbox";
+		this.checkedActionRepresentation = options.checkedActionRepresentation ?? 'checkbox';
 	}
 
 	override render(container: HTMLElement): void {
@@ -82,39 +88,34 @@ class MenuActionViewItem extends MenuButtonActionViewItem {
 			this.button.domNode.setAttribute('aria-description', this.ariaDescription);
 		}
 		if (this.action.checked === undefined) {
-			this.button.domNode.setAttribute("role", "menuitem");
+			this.button.domNode.setAttribute('role', 'menuitem');
 		} else {
 			this.button.domNode.setAttribute(
-				"role",
-				this.checkedActionRepresentation === "radio"
-					? "menuitemradio"
-					: "menuitemcheckbox",
+				'role',
+				this.checkedActionRepresentation === 'radio' ? 'menuitemradio' : 'menuitemcheckbox',
 			);
-			this.button.domNode.setAttribute(
-				"aria-checked",
-				String(this.action.checked),
-			);
-			this.button.domNode.removeAttribute("aria-pressed");
+			this.button.domNode.setAttribute('aria-checked', String(this.action.checked));
+			this.button.domNode.removeAttribute('aria-pressed');
 		}
 		if (this.action.badge) {
-			const badge = h(container.ownerDocument, "span");
-			badge.className = "ash-menu-badge";
+			const badge = h(container.ownerDocument, 'span');
+			badge.className = 'ash-menu-badge';
 			badge.textContent = this.action.badge;
 			this.button.domNode.append(badge);
 		}
 		if (!this.keybinding) return;
-		const label = this._register(new KeybindingLabel(this.button.domNode, {
-			...this.options.keybindingLabelStyles,
-			keybinding: this.keybinding,
-		}));
-		label.element.classList.add("ash-menu-keybinding");
+		const label = this._register(
+			new KeybindingLabel(this.button.domNode, {
+				...this.options.keybindingLabelStyles,
+				keybinding: this.keybinding,
+			}),
+		);
+		label.element.classList.add('ash-menu-keybinding');
 	}
 
 	protected override runAction(): unknown {
 		try {
-			return this.actionRunner
-				? this.actionRunner.run(this.action, this.actionContext)
-				: super.runAction();
+			return this.actionRunner ? this.actionRunner.run(this.action, this.actionContext) : super.runAction();
 		} finally {
 			this.onDidSelect?.();
 		}
@@ -127,25 +128,27 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 	private readonly onDidSelect: (() => void) | undefined;
 	private readonly submenuLayer: number;
 	private readonly contextViewContainer: HTMLElement | undefined;
-	private readonly getKeybinding:
-		| ((action: IAction) => ResolvedKeybinding | undefined)
-		| undefined;
+	private readonly getKeybinding: ((action: IAction) => ResolvedKeybinding | undefined) | undefined;
 	private readonly actionRunner: IActionRunner | undefined;
 	private readonly actionContext: unknown;
 	private readonly onWillOpenSubmenu: ((item: ActionViewItem) => void) | undefined;
 	private readonly openImmediatelyOnHover: boolean;
-	private readonly showScheduler = this._register(new RunOnceScheduler(() => {
-		if (this.pointerInside) this.openSubmenu(false);
-	}, 250));
-	private readonly hideScheduler = this._register(new RunOnceScheduler(() => {
-		const activeElement = this.button.domNode.ownerDocument.activeElement;
-		if (this.ownsTrigger(activeElement) || (isNode(activeElement) && this.contains(activeElement))) return;
-		this.close();
-	}, 750));
+	private readonly showScheduler = this._register(
+		new RunOnceScheduler(() => {
+			if (this.pointerInside) this.openSubmenu(false);
+		}, 250),
+	);
+	private readonly hideScheduler = this._register(
+		new RunOnceScheduler(() => {
+			const activeElement = this.button.domNode.ownerDocument.activeElement;
+			if (this.ownsTrigger(activeElement) || (isNode(activeElement) && this.contains(activeElement))) return;
+			this.close();
+		}, 750),
+	);
 	private contextView: ContextView | undefined;
 	private menu: Menu | undefined;
 	private pointerInside = false;
-	private lastPointerPosition: { x: number; y: number; } | undefined;
+	private lastPointerPosition: { x: number; y: number } | undefined;
 
 	constructor(
 		action: SubmenuAction,
@@ -167,69 +170,87 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 		super.render(container);
 		prependMenuLeadingSlot(this.button.domNode, undefined);
 		const ownerDocument = container.ownerDocument;
-		if (
-			this.contextViewContainer &&
-			this.contextViewContainer.ownerDocument !== ownerDocument
-		) {
-			throw new Error("Context view container belongs to another document");
+		if (this.contextViewContainer && this.contextViewContainer.ownerDocument !== ownerDocument) {
+			throw new Error('Context view container belongs to another document');
 		}
-		this.contextView = this._register(new ContextView(
-			this.contextViewContainer ?? container.closest<HTMLElement>('dialog, [data-color-scheme]') ?? ownerDocument.body,
-		));
-		this.menu = this._register(new Menu(this.contextView.element, {
-			buttonStyles: this.options.buttonStyles,
-			keybindingLabelStyles: this.options.keybindingLabelStyles,
-			actions: this.submenuAction.actions,
-			contextViewContainer: this.contextViewContainer,
-			layer: this.submenuLayer,
-			getKeybinding: this.getKeybinding,
-			actionRunner: this.actionRunner,
-			actionContext: this.actionContext,
-			onDidSelect: () => {
-				this.close();
-				this.onDidSelect?.();
-			},
-			onDidRequestClose: () => {
-				this.close();
-				this.button.focus();
-			},
-		}, this.options.menuStyles));
-		this._register(this.contextView.onDidHide((reason) => {
-			this.showScheduler.cancel();
-			this.hideScheduler.cancel();
-			this.menu?.closeSubmenus();
-			this.button.domNode.setAttribute("aria-expanded", "false");
-			if (reason === ContextViewHideReason.Escape) this.button.focus();
-		}));
-		this.button.domNode.setAttribute("role", "menuitem");
-		this.button.domNode.setAttribute("aria-haspopup", "menu");
-		this.button.domNode.setAttribute("aria-expanded", "false");
-		const indicator = h(ownerDocument, "span");
-		indicator.className = "ash-submenu-indicator";
+		this.contextView = this._register(
+			new ContextView(
+				this.contextViewContainer ??
+					container.closest<HTMLElement>('dialog, [data-color-scheme]') ??
+					ownerDocument.body,
+			),
+		);
+		this.menu = this._register(
+			new Menu(
+				this.contextView.element,
+				{
+					buttonStyles: this.options.buttonStyles,
+					keybindingLabelStyles: this.options.keybindingLabelStyles,
+					actions: this.submenuAction.actions,
+					contextViewContainer: this.contextViewContainer,
+					layer: this.submenuLayer,
+					getKeybinding: this.getKeybinding,
+					actionRunner: this.actionRunner,
+					actionContext: this.actionContext,
+					onDidSelect: () => {
+						this.close();
+						this.onDidSelect?.();
+					},
+					onDidRequestClose: () => {
+						this.close();
+						this.button.focus();
+					},
+				},
+				this.options.menuStyles,
+			),
+		);
+		this._register(
+			this.contextView.onDidHide(reason => {
+				this.showScheduler.cancel();
+				this.hideScheduler.cancel();
+				this.menu?.closeSubmenus();
+				this.button.domNode.setAttribute('aria-expanded', 'false');
+				if (reason === ContextViewHideReason.Escape) this.button.focus();
+			}),
+		);
+		this.button.domNode.setAttribute('role', 'menuitem');
+		this.button.domNode.setAttribute('aria-haspopup', 'menu');
+		this.button.domNode.setAttribute('aria-expanded', 'false');
+		const indicator = h(ownerDocument, 'span');
+		indicator.className = 'ash-submenu-indicator';
 		appendIcon(Lxicon.menuSubmenu, indicator);
 		this.button.domNode.append(indicator);
-		this._register(addDisposableListener(container, "mouseenter", (event) => {
-			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
-		}));
-		this._register(addDisposableListener(container, "mousemove", (event) => {
-			const previous = this.lastPointerPosition;
-			// Some input paths report zero deltas, so compare positions before ignoring movement.
-			const moved = Boolean(
-				event.movementX || event.movementY ||
-				(previous && (previous.x !== event.clientX || previous.y !== event.clientY))
-			);
-			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
-			if (moved) this.openFromPointer();
-		}));
-		this._register(addDisposableListener(container, "mouseleave", () => {
-			this.pointerInside = false;
-			this.lastPointerPosition = undefined;
-			this.showScheduler.cancel();
-		}));
-		this._register(addDisposableListener(container, "focusout", () => this.hideScheduler.schedule()));
-		this._register(addDisposableListener(this.contextView.element, "focusout", () => this.hideScheduler.schedule()));
-		this._register(addDisposableListener(container, "focusin", () => this.hideScheduler.cancel()));
-		this._register(addDisposableListener(this.contextView.element, "focusin", () => this.hideScheduler.cancel()));
+		this._register(
+			addDisposableListener(container, 'mouseenter', event => {
+				this.lastPointerPosition = { x: event.clientX, y: event.clientY };
+			}),
+		);
+		this._register(
+			addDisposableListener(container, 'mousemove', event => {
+				const previous = this.lastPointerPosition;
+				// Some input paths report zero deltas, so compare positions before ignoring movement.
+				const moved = Boolean(
+					event.movementX ||
+					event.movementY ||
+					(previous && (previous.x !== event.clientX || previous.y !== event.clientY)),
+				);
+				this.lastPointerPosition = { x: event.clientX, y: event.clientY };
+				if (moved) this.openFromPointer();
+			}),
+		);
+		this._register(
+			addDisposableListener(container, 'mouseleave', () => {
+				this.pointerInside = false;
+				this.lastPointerPosition = undefined;
+				this.showScheduler.cancel();
+			}),
+		);
+		this._register(addDisposableListener(container, 'focusout', () => this.hideScheduler.schedule()));
+		this._register(
+			addDisposableListener(this.contextView.element, 'focusout', () => this.hideScheduler.schedule()),
+		);
+		this._register(addDisposableListener(container, 'focusin', () => this.hideScheduler.cancel()));
+		this._register(addDisposableListener(this.contextView.element, 'focusin', () => this.hideScheduler.cancel()));
 	}
 
 	protected override runAction(): void {
@@ -253,13 +274,13 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 				anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
 				anchorPosition: AnchorPosition.Below,
 				gap: 2,
-				presentation: "menu",
+				presentation: 'menu',
 				layer: this.submenuLayer,
 				focusRestore: ContextViewFocusRestore.None,
-				isTargetWithin: (target) => this.menu?.contains(target) ?? false,
+				isTargetWithin: target => this.menu?.contains(target) ?? false,
 			});
 			if (!shown) return;
-			this.button.domNode.setAttribute("aria-expanded", "true");
+			this.button.domNode.setAttribute('aria-expanded', 'true');
 		}
 		if (focusFirst) this.menu.focusFirst();
 	}
@@ -271,8 +292,7 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 	}
 
 	contains(target: Node): boolean {
-		return this.contextView?.element.contains(target) === true ||
-			this.menu?.contains(target) === true;
+		return this.contextView?.element.contains(target) === true || this.menu?.contains(target) === true;
 	}
 
 	ownsTrigger(target: Element | null): boolean {
@@ -289,10 +309,7 @@ class SubmenuMenuActionViewItem extends MenuButtonActionViewItem {
 }
 
 /** Creates the menu representation for an action. */
-function createMenuActionViewItem(
-	action: IAction,
-	options: MenuActionViewItemOptions = {},
-): ActionViewItem {
+function createMenuActionViewItem(action: IAction, options: MenuActionViewItemOptions = {}): ActionViewItem {
 	if (action instanceof Separator) {
 		return new SeparatorActionViewItem(action);
 	}
@@ -323,9 +340,7 @@ export interface MenuOptions {
 	readonly contextViewContainer?: HTMLElement;
 	readonly onDidSelect?: () => void;
 	readonly onDidRequestClose?: () => void;
-	readonly getKeybinding?: (
-		action: IAction,
-	) => ResolvedKeybinding | undefined;
+	readonly getKeybinding?: (action: IAction) => ResolvedKeybinding | undefined;
 	readonly layer?: number;
 	readonly actionRunner?: IActionRunner;
 	readonly actionContext?: unknown;
@@ -334,9 +349,7 @@ export interface MenuOptions {
 		action: IAction,
 		options: MenuActionViewItemOptions,
 	) => ActionViewItem | undefined;
-	readonly getCheckedActionsRepresentation?: (
-		action: IAction,
-	) => "radio" | "checkbox";
+	readonly getCheckedActionsRepresentation?: (action: IAction) => 'radio' | 'checkbox';
 }
 
 interface MenuEntry {
@@ -351,18 +364,16 @@ export class Menu extends Disposable {
 	private readonly submenus: SubmenuMenuActionViewItem[] = [];
 	private readonly entries: MenuEntry[] = [];
 	private focusedEntry: MenuEntry | undefined;
-	private lastPointerPosition: { x: number; y: number; } | undefined;
+	private lastPointerPosition: { x: number; y: number } | undefined;
 
 	constructor(container: HTMLElement, options: MenuOptions, styles?: IMenuStyles) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		const element = h(ownerDocument, "div");
+		const element = h(ownerDocument, 'div');
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
-		element.className = options.className
-			? `ash-menu ${options.className}`
-			: "ash-menu";
-		element.setAttribute("role", "menu");
+		element.className = options.className ? `ash-menu ${options.className}` : 'ash-menu';
+		element.setAttribute('role', 'menu');
 		element.tabIndex = -1;
 		if (styles) {
 			const colors = {
@@ -379,18 +390,27 @@ export class Menu extends Disposable {
 			}
 			if (container.classList.contains('ash-context-view')) {
 				// ContextView owns the popup shell; restore its presentation when this menu releases it.
-				const previous = new Map(Object.keys(colors).map(property => [property, {
-					value: container.style.getPropertyValue(property), priority: container.style.getPropertyPriority(property),
-				}]));
+				const previous = new Map(
+					Object.keys(colors).map(property => [
+						property,
+						{
+							value: container.style.getPropertyValue(property),
+							priority: container.style.getPropertyPriority(property),
+						},
+					]),
+				);
 				for (const [property, value] of Object.entries(colors)) {
 					if (value !== undefined) container.style.setProperty(property, value);
 				}
-				this._register(toDisposable(() => {
-					for (const [property, original] of previous) {
-						if (original.value) container.style.setProperty(property, original.value, original.priority);
-						else container.style.removeProperty(property);
-					}
-				}));
+				this._register(
+					toDisposable(() => {
+						for (const [property, original] of previous) {
+							if (original.value)
+								container.style.setProperty(property, original.value, original.priority);
+							else container.style.removeProperty(property);
+						}
+					}),
+				);
 			}
 		}
 		container.append(element);
@@ -410,122 +430,145 @@ export class Menu extends Disposable {
 				actionRunner: options.actionRunner,
 				actionContext: options.actionContext,
 				checkedActionRepresentation: options.getCheckedActionsRepresentation?.(action),
-				onWillOpenSubmenu: (submenu) => {
+				onWillOpenSubmenu: submenu => {
 					this.closeSubmenus(submenu);
-					this.setFocusedEntry(this.entries.find((entry) => entry.item === submenu), true);
+					this.setFocusedEntry(
+						this.entries.find(entry => entry.item === submenu),
+						true,
+					);
 				},
 			};
 			const item = this._register(
-				options.actionViewItemProvider?.(action, itemOptions) ??
-				createMenuActionViewItem(action, itemOptions),
+				options.actionViewItemProvider?.(action, itemOptions) ?? createMenuActionViewItem(action, itemOptions),
 			);
 			if (item instanceof SubmenuMenuActionViewItem) {
 				this.submenus.push(item);
 			}
-			const container = h(ownerDocument, "div");
-			container.className = "ash-action-view-item";
+			const container = h(ownerDocument, 'div');
+			container.className = 'ash-action-view-item';
 			container.dataset.actionId = action.id;
-			container.setAttribute("role", "presentation");
+			container.setAttribute('role', 'presentation');
 			element.append(container);
 			item.render(container);
 			this.entries.push({ action, container, item });
 		}
-		this._register(addDisposableListener(element, "focusin", (event) => {
-			const entry = this.findEntry(event.target);
-			if (entry?.action.enabled) this.setFocusedEntry(entry);
-		}));
-		this._register(addDisposableListener(element, "focusout", (event) => {
-			if (isNode(event.relatedTarget) && this.contains(event.relatedTarget)) return;
-			this.setFocusedEntry(undefined);
-		}));
+		this._register(
+			addDisposableListener(element, 'focusin', event => {
+				const entry = this.findEntry(event.target);
+				if (entry?.action.enabled) this.setFocusedEntry(entry);
+			}),
+		);
+		this._register(
+			addDisposableListener(element, 'focusout', event => {
+				if (isNode(event.relatedTarget) && this.contains(event.relatedTarget)) return;
+				this.setFocusedEntry(undefined);
+			}),
+		);
 		// Keyboard input may come from a sibling filter or an open submenu before focus returns here.
-		this._register(addDisposableListener(ownerDocument, "keydown", event => {
-			if (event.isComposing || isModifierKey(event)) return;
-			element.classList.remove("pointer-navigation");
-		}, true));
-		this._register(addDisposableListener(element, "pointerdown", () => {
-			element.classList.add("pointer-navigation");
-		}));
-		this._register(addDisposableListener(element, "mouseover", (event) => {
-			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
-		}));
-		this._register(addDisposableListener(element, "mousemove", (event) => {
-			const previous = this.lastPointerPosition;
-			const moved = Boolean(event.movementX || event.movementY ||
-				(previous && (previous.x !== event.clientX || previous.y !== event.clientY)));
-			this.lastPointerPosition = { x: event.clientX, y: event.clientY };
-			// Showing a menu under a resting pointer must not select an action.
-			if (!moved) return;
-			element.classList.add("pointer-navigation");
-			const entry = this.findEntry(event.target);
-			this.setFocusedEntry(entry?.action.enabled ? entry : undefined, true);
-		}));
-		this._register(addDisposableListener(element, "mouseout", (event) => {
-			if (isNode(event.relatedTarget) && this.contains(event.relatedTarget)) return;
-			this.lastPointerPosition = undefined;
-			this.setFocusedEntry(undefined);
-		}));
-		this._register(addDisposableListener(container, "scroll", (event) => {
-			if (isNode(event.target) && event.target.contains(this.element)) {
-				this.closeSubmenus();
-			}
-		}, true));
-		this._register(addDisposableListener(element, "keydown", (event) => {
-			if (event.isComposing) return;
-			let handled = true;
-			switch (event.key) {
-				case "ArrowDown":
-					this.closeSubmenus();
-					moveFocus(
-						element,
-						FocusNavigationDirection.Forward,
-						FocusNavigationBoundary.Wrap,
-					);
-					break;
-				case "ArrowUp":
-					this.closeSubmenus();
-					moveFocus(
-						element,
-						FocusNavigationDirection.Backward,
-						FocusNavigationBoundary.Wrap,
-					);
-					break;
-				case "Home":
-					this.closeSubmenus();
-					focusFirst(element);
-					break;
-				case "End":
-					this.closeSubmenus();
-					focusLast(element);
-					break;
-				case "ArrowRight":
-					{
-						const activeElement = element.ownerDocument.activeElement;
-						const submenu = this.submenus.find((item) =>
-							item.ownsTrigger(activeElement)
-						);
-						if (submenu) submenu.openFromKeyboard();
-						else handled = false;
+		this._register(
+			addDisposableListener(
+				ownerDocument,
+				'keydown',
+				event => {
+					if (event.isComposing || isModifierKey(event)) return;
+					element.classList.remove('pointer-navigation');
+				},
+				true,
+			),
+		);
+		this._register(
+			addDisposableListener(element, 'pointerdown', () => {
+				element.classList.add('pointer-navigation');
+			}),
+		);
+		this._register(
+			addDisposableListener(element, 'mouseover', event => {
+				this.lastPointerPosition = { x: event.clientX, y: event.clientY };
+			}),
+		);
+		this._register(
+			addDisposableListener(element, 'mousemove', event => {
+				const previous = this.lastPointerPosition;
+				const moved = Boolean(
+					event.movementX ||
+					event.movementY ||
+					(previous && (previous.x !== event.clientX || previous.y !== event.clientY)),
+				);
+				this.lastPointerPosition = { x: event.clientX, y: event.clientY };
+				// Showing a menu under a resting pointer must not select an action.
+				if (!moved) return;
+				element.classList.add('pointer-navigation');
+				const entry = this.findEntry(event.target);
+				this.setFocusedEntry(entry?.action.enabled ? entry : undefined, true);
+			}),
+		);
+		this._register(
+			addDisposableListener(element, 'mouseout', event => {
+				if (isNode(event.relatedTarget) && this.contains(event.relatedTarget)) return;
+				this.lastPointerPosition = undefined;
+				this.setFocusedEntry(undefined);
+			}),
+		);
+		this._register(
+			addDisposableListener(
+				container,
+				'scroll',
+				event => {
+					if (isNode(event.target) && event.target.contains(this.element)) {
+						this.closeSubmenus();
 					}
-					break;
-				case "ArrowLeft":
-					options.onDidRequestClose?.();
-					handled = options.onDidRequestClose !== undefined;
-					break;
-				default:
-					handled = false;
-			}
-			if (!handled) return;
-			event.preventDefault();
-			event.stopPropagation();
-		}));
+				},
+				true,
+			),
+		);
+		this._register(
+			addDisposableListener(element, 'keydown', event => {
+				if (event.isComposing) return;
+				let handled = true;
+				switch (event.key) {
+					case 'ArrowDown':
+						this.closeSubmenus();
+						moveFocus(element, FocusNavigationDirection.Forward, FocusNavigationBoundary.Wrap);
+						break;
+					case 'ArrowUp':
+						this.closeSubmenus();
+						moveFocus(element, FocusNavigationDirection.Backward, FocusNavigationBoundary.Wrap);
+						break;
+					case 'Home':
+						this.closeSubmenus();
+						focusFirst(element);
+						break;
+					case 'End':
+						this.closeSubmenus();
+						focusLast(element);
+						break;
+					case 'ArrowRight':
+						{
+							const activeElement = element.ownerDocument.activeElement;
+							const submenu = this.submenus.find(item => item.ownsTrigger(activeElement));
+							if (submenu) submenu.openFromKeyboard();
+							else handled = false;
+						}
+						break;
+					case 'ArrowLeft':
+						options.onDidRequestClose?.();
+						handled = options.onDidRequestClose !== undefined;
+						break;
+					default:
+						handled = false;
+				}
+				if (!handled) return;
+				event.preventDefault();
+				event.stopPropagation();
+			}),
+		);
 	}
 
 	/** Menu focus and action focus are separate so opening need not highlight a row. */
 	public focus(selectFirst?: boolean): void;
 	public focus(index?: number): void;
 	public focus(target: boolean | number = true): void {
-		if (typeof target === "number") {
+		if (typeof target === 'number') {
 			const entry = this.entries[target];
 			if (entry?.action.enabled) {
 				entry.item.focus();
@@ -550,33 +593,24 @@ export class Menu extends Disposable {
 	}
 
 	contains(target: Node): boolean {
-		return this.element.contains(target) ||
-			this.submenus.some((submenu) => submenu.contains(target));
+		return this.element.contains(target) || this.submenus.some(submenu => submenu.contains(target));
 	}
 
 	private findEntry(target: EventTarget | null): MenuEntry | undefined {
 		if (!isNode(target)) return undefined;
-		const targetElement = target.nodeType === 1
-			? target as Element
-			: target.parentElement;
-		const container = targetElement?.closest<HTMLElement>(
-			".ash-action-view-item",
-		);
+		const targetElement = target.nodeType === 1 ? (target as Element) : target.parentElement;
+		const container = targetElement?.closest<HTMLElement>('.ash-action-view-item');
 		if (container?.parentElement !== this.element) return undefined;
-		return this.entries.find((entry) => entry.container === container);
+		return this.entries.find(entry => entry.container === container);
 	}
 
 	private setFocusedEntry(entry: MenuEntry | undefined, focus = false): void {
 		if (entry !== this.focusedEntry) {
-			this.focusedEntry?.container.classList.remove("focused");
+			this.focusedEntry?.container.classList.remove('focused');
 			this.focusedEntry = entry;
-			entry?.container.classList.add("focused");
+			entry?.container.classList.add('focused');
 		}
-		if (
-			focus &&
-			entry &&
-			!entry.container.contains(this.element.ownerDocument.activeElement)
-		) {
+		if (focus && entry && !entry.container.contains(this.element.ownerDocument.activeElement)) {
 			entry.item.focus();
 		}
 	}

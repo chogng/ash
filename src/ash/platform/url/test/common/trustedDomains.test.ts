@@ -45,13 +45,32 @@ suite('Trusted domain rules', () => {
 			assert.equal(isURLDomainTrusted(URI.parse(target), normalized), expected);
 		});
 	}
-	for (const pattern of ['ftp://example.test', 'example.test@evil.test', 'example.test?q=1', 'example.test#x', 'example.test\\evil.test', 'example.test:65536', 'example.test/docs/../', 'example.test/docs/%2e%2e/', ' example.test', '']) {
-		test(`rejects invalid rule ${JSON.stringify(pattern)}`, () => assert.throws(() => normalizeURLPattern(pattern), TypeError));
+	for (const pattern of [
+		'ftp://example.test',
+		'example.test@evil.test',
+		'example.test?q=1',
+		'example.test#x',
+		'example.test\\evil.test',
+		'example.test:65536',
+		'example.test/docs/../',
+		'example.test/docs/%2e%2e/',
+		' example.test',
+		'',
+	]) {
+		test(`rejects invalid rule ${JSON.stringify(pattern)}`, () =>
+			assert.throws(() => normalizeURLPattern(pattern), TypeError));
 	}
 	test('malformed rules cannot turn a domain comparison into an allow', () => {
-		assert.equal(isURLDomainTrusted(URI.parse('https://outside.test'), ['http://[', 'https://outside.test@evil.test']), false);
+		assert.equal(
+			isURLDomainTrusted(URI.parse('https://outside.test'), ['http://[', 'https://outside.test@evil.test']),
+			false,
+		);
 		assert.equal(isURLSafeForTrust(URI.parse('https://example.test/%00')), false);
-		for (const target of ['https://user:secret@example.test', 'https://example.test@evil.test', 'https://[invalid']) {
+		for (const target of [
+			'https://user:secret@example.test',
+			'https://example.test@evil.test',
+			'https://[invalid',
+		]) {
 			assert.throws(() => URI.parse(target), TypeError);
 		}
 	});

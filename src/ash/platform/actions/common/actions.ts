@@ -1,48 +1,27 @@
-import {
-	SubmenuAction,
-	type IAction,
-} from "../../../base/common/actions.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import type { Icon } from "../../../base/common/icon.js";
-import type { Keybinding } from "../../../base/common/keybindings.js";
-import {
-	DisposableStore,
-	type IDisposable,
-	toDisposable,
-} from "../../../base/common/lifecycle.js";
-import { getOrSet } from "../../../base/common/map.js";
-import { operatingSystem, OperatingSystem } from "../../../base/common/platform.js";
+import { SubmenuAction, type IAction } from '../../../base/common/actions.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import type { Icon } from '../../../base/common/icon.js';
+import type { Keybinding } from '../../../base/common/keybindings.js';
+import { DisposableStore, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { getOrSet } from '../../../base/common/map.js';
+import { operatingSystem, OperatingSystem } from '../../../base/common/platform.js';
 import {
 	commandActionLabel,
 	type CommandActionTitle,
 	type ICommandAction,
 	isCommandActionToggleInfo,
-} from "../../action/common/action.js";
-import {
-	CommandsRegistry,
-	type ICommandService,
-} from "../../commands/common/commands.js";
-import type {
-	ContextKeyExpression,
-	IContextKeyService,
-} from "../../contextkey/common/contextkey.js";
-import {
-	ContextKeyExpr,
-} from "../../contextkey/common/contextkey.js";
-import {
-	createServiceIdentifier,
-	type ServicesAccessor,
-} from "../../instantiation/common/instantiation.js";
-import {
-	KeybindingsRegistry,
-	type KeybindingSource,
-} from "../../keybinding/common/keybindingsRegistry.js";
+} from '../../action/common/action.js';
+import { CommandsRegistry, type ICommandService } from '../../commands/common/commands.js';
+import type { ContextKeyExpression, IContextKeyService } from '../../contextkey/common/contextkey.js';
+import { ContextKeyExpr } from '../../contextkey/common/contextkey.js';
+import { createServiceIdentifier, type ServicesAccessor } from '../../instantiation/common/instantiation.js';
+import { KeybindingsRegistry, type KeybindingSource } from '../../keybinding/common/keybindingsRegistry.js';
 
 export interface IMenuItem {
 	readonly command: ICommandAction;
 	readonly alt?: ICommandAction;
 	readonly when?: ContextKeyExpression;
-	readonly group?: "navigation" | string;
+	readonly group?: 'navigation' | string;
 	readonly order?: number;
 }
 
@@ -52,83 +31,79 @@ export interface ISubmenuItem {
 	readonly title: CommandActionTitle;
 	readonly submenu: MenuId;
 	readonly when?: ContextKeyExpression;
-	readonly group?: "navigation" | string;
+	readonly group?: 'navigation' | string;
 	readonly order?: number;
 }
 
 export type MenuRegistryItem = IMenuItem | ISubmenuItem;
 
 export function isMenuItem(item: MenuRegistryItem): item is IMenuItem {
-	return "command" in item;
+	return 'command' in item;
 }
 
 /** Identifies an action contribution location, regardless of its final UI. */
 export class MenuId {
 	private static readonly instances = new Map<string, MenuId>();
 
-	static readonly CommandPalette = new MenuId("CommandPalette");
-	static readonly CommandCenter = new MenuId("CommandCenter");
-	static readonly GlobalActivity = new MenuId("GlobalActivity");
+	static readonly CommandPalette = new MenuId('CommandPalette');
+	static readonly CommandCenter = new MenuId('CommandCenter');
+	static readonly GlobalActivity = new MenuId('GlobalActivity');
 	static readonly SidebarTitle = new MenuId('SidebarTitle');
 	static readonly ViewContainerTitle = new MenuId('ViewContainerTitle');
 	static readonly ViewContainerTitleContext = new MenuId('ViewContainerTitleContext');
 	static readonly ActivityBarPositionMenu = new MenuId('ActivityBarPositionMenu');
-	static readonly TitleBar = new MenuId("TitleBar");
+	static readonly TitleBar = new MenuId('TitleBar');
 	static readonly NotificationsCenterPositionMenu = new MenuId('NotificationsCenterPositionMenu');
-	static readonly LayoutControlMenu = new MenuId("LayoutControlMenu");
-	static readonly TitleBarLeft = new MenuId("TitleBarLeft");
-	static readonly TitleBarAdjacentCenter = new MenuId("TitleBarAdjacentCenter");
-	static readonly EditorTitle = new MenuId("EditorTitle");
+	static readonly LayoutControlMenu = new MenuId('LayoutControlMenu');
+	static readonly TitleBarLeft = new MenuId('TitleBarLeft');
+	static readonly TitleBarAdjacentCenter = new MenuId('TitleBarAdjacentCenter');
+	static readonly EditorTitle = new MenuId('EditorTitle');
 	static readonly ModalEditorTitle = new MenuId('ModalEditorTitle');
-	static readonly CompactWindowEditorTitle = new MenuId("CompactWindowEditorTitle");
+	static readonly CompactWindowEditorTitle = new MenuId('CompactWindowEditorTitle');
 	static readonly DiffEditorViewSubmenu = new MenuId('DiffEditorViewSubmenu');
-	static readonly EditorTitleContext = new MenuId("EditorTitleContext");
+	static readonly EditorTitleContext = new MenuId('EditorTitleContext');
 	static readonly EditorSplitMoveSubmenu = new MenuId('EditorSplitMoveSubmenu');
-	static readonly TouchBarContext = new MenuId("TouchBarContext");
-	static readonly EditorContext = new MenuId("EditorContext");
+	static readonly TouchBarContext = new MenuId('TouchBarContext');
+	static readonly EditorContext = new MenuId('EditorContext');
 	static readonly EditorContextPeek = new MenuId('EditorContextPeek');
-	static readonly StickyScrollContext = new MenuId("StickyScrollContext");
-	static readonly SimpleEditorContext = new MenuId("SimpleEditorContext");
-	static readonly EditorContextCopy = new MenuId("EditorContextCopy");
-	static readonly EditorContextShare = new MenuId("EditorContextShare");
-	static readonly ExplorerContext = new MenuId("ExplorerContext");
-	static readonly ExplorerContextShare = new MenuId("ExplorerContextShare");
-	static readonly MenubarCopy = new MenuId("MenubarCopy");
-	static readonly MultiDiffEditorFileToolbar = new MenuId("MultiDiffEditorFileToolbar");
+	static readonly StickyScrollContext = new MenuId('StickyScrollContext');
+	static readonly SimpleEditorContext = new MenuId('SimpleEditorContext');
+	static readonly EditorContextCopy = new MenuId('EditorContextCopy');
+	static readonly EditorContextShare = new MenuId('EditorContextShare');
+	static readonly ExplorerContext = new MenuId('ExplorerContext');
+	static readonly ExplorerContextShare = new MenuId('ExplorerContextShare');
+	static readonly MenubarCopy = new MenuId('MenubarCopy');
+	static readonly MultiDiffEditorFileToolbar = new MenuId('MultiDiffEditorFileToolbar');
 	static readonly DiffEditorHunkToolbar = new MenuId('DiffEditorHunkToolbar');
 	static readonly DiffEditorSelectionToolbar = new MenuId('DiffEditorSelectionToolbar');
-	static readonly ChatTitle = new MenuId("ChatTitle");
-	static readonly ChatTitleLayout = new MenuId("ChatTitleLayout");
+	static readonly ChatTitle = new MenuId('ChatTitle');
+	static readonly ChatTitleLayout = new MenuId('ChatTitleLayout');
 	static readonly ChatInputSecondary = new MenuId('ChatInputSecondary');
 	static readonly ChatInputStatus = new MenuId('ChatInputStatus');
 	static readonly ChatInputResourceAttachmentContext = new MenuId('ChatInputResourceAttachmentContext');
 	static readonly ChatInputSymbolAttachmentContext = new MenuId('ChatInputSymbolAttachmentContext');
-	static readonly AgentSidebarTitle = new MenuId("AgentSidebarTitle");
+	static readonly AgentSidebarTitle = new MenuId('AgentSidebarTitle');
 	static readonly SCMTitle = new MenuId('SCMTitle');
 	static readonly SCMInputBox = new MenuId('SCMInputBox');
 	static readonly SCMResourceGroupContext = new MenuId('SCMResourceGroupContext');
 	static readonly SCMHistoryTitle = new MenuId('SCMHistoryTitle');
-	static readonly SCMHistoryItemContext = new MenuId("SCMHistoryItemContext");
-	static readonly SCMHistoryItemRefContext = new MenuId("SCMHistoryItemRefContext");
-	static readonly SCMHistoryItemChangeContext = new MenuId("SCMHistoryItemChangeContext");
-	static readonly PanelTitle = new MenuId("PanelTitle");
+	static readonly SCMHistoryItemContext = new MenuId('SCMHistoryItemContext');
+	static readonly SCMHistoryItemRefContext = new MenuId('SCMHistoryItemRefContext');
+	static readonly SCMHistoryItemChangeContext = new MenuId('SCMHistoryItemChangeContext');
+	static readonly PanelTitle = new MenuId('PanelTitle');
 	static readonly AuxiliaryBarTitle = new MenuId('AuxiliaryBarTitle');
-	static readonly TerminalTitle = new MenuId("TerminalTitle");
-	static readonly TerminalNewDropdownContext = new MenuId("TerminalNewDropdownContext");
+	static readonly TerminalTitle = new MenuId('TerminalTitle');
+	static readonly TerminalNewDropdownContext = new MenuId('TerminalNewDropdownContext');
 	static readonly TerminalInstanceContext = new MenuId('TerminalInstanceContext');
-	static readonly MenubarMainMenu = new MenuId("MenubarMainMenu");
-	static readonly MenubarFileMenu = new MenuId("MenubarFileMenu");
-	static readonly MenubarEditMenu = new MenuId("MenubarEditMenu");
-	static readonly MenubarSelectionMenu = new MenuId(
-		"MenubarSelectionMenu",
-	);
-	static readonly MenubarViewMenu = new MenuId("MenubarViewMenu");
-	static readonly MenubarGoMenu = new MenuId("MenubarGoMenu");
-	static readonly MenubarRunMenu = new MenuId("MenubarRunMenu");
-	static readonly MenubarTerminalMenu = new MenuId(
-		"MenubarTerminalMenu",
-	);
-	static readonly MenubarHelpMenu = new MenuId("MenubarHelpMenu");
+	static readonly MenubarMainMenu = new MenuId('MenubarMainMenu');
+	static readonly MenubarFileMenu = new MenuId('MenubarFileMenu');
+	static readonly MenubarEditMenu = new MenuId('MenubarEditMenu');
+	static readonly MenubarSelectionMenu = new MenuId('MenubarSelectionMenu');
+	static readonly MenubarViewMenu = new MenuId('MenubarViewMenu');
+	static readonly MenubarGoMenu = new MenuId('MenubarGoMenu');
+	static readonly MenubarRunMenu = new MenuId('MenubarRunMenu');
+	static readonly MenubarTerminalMenu = new MenuId('MenubarTerminalMenu');
+	static readonly MenubarHelpMenu = new MenuId('MenubarHelpMenu');
 
 	static for(identifier: string): MenuId {
 		return this.instances.get(identifier) ?? new MenuId(identifier);
@@ -138,9 +113,7 @@ export class MenuId {
 
 	constructor(identifier: string) {
 		if (MenuId.instances.has(identifier)) {
-			throw new TypeError(
-				`MenuId '${identifier}' already exists; use MenuId.for()`,
-			);
+			throw new TypeError(`MenuId '${identifier}' already exists; use MenuId.for()`);
 		}
 		this.id = identifier;
 		MenuId.instances.set(identifier, this);
@@ -162,16 +135,13 @@ export class MenuRegistry {
 	private readonly items = new Map<MenuId, MenuContribution[]>();
 	private readonly _onDidChangeMenu = new Emitter<IMenuRegistryChangeEvent>();
 
-	readonly onDidChangeMenu: Event<IMenuRegistryChangeEvent> =
-		this._onDidChangeMenu.event;
+	readonly onDidChangeMenu: Event<IMenuRegistryChangeEvent> = this._onDidChangeMenu.event;
 
 	appendMenuItem(id: MenuId, item: MenuRegistryItem): IDisposable {
 		return this.appendMenuItems([{ id, item }]);
 	}
 
-	appendMenuItems(
-		entries: Iterable<{ readonly id: MenuId; readonly item: MenuRegistryItem; }>,
-	): IDisposable {
+	appendMenuItems(entries: Iterable<{ readonly id: MenuId; readonly item: MenuRegistryItem }>): IDisposable {
 		const contributions = Array.from(entries, ({ id, item }) => ({ id, item }));
 		const changed = new Set<MenuId>();
 		for (const contribution of contributions) {
@@ -211,10 +181,7 @@ export interface IMenuActionOptions {
 	readonly preserveEmptySubmenus?: boolean;
 }
 
-export type MenuActionGroup = readonly [
-	group: string,
-	actions: readonly IAction[],
-];
+export type MenuActionGroup = readonly [group: string, actions: readonly IAction[]];
 
 export interface IMenuChangeEvent {
 	readonly isStructuralChange: boolean;
@@ -229,10 +196,7 @@ export interface IMenu extends IDisposable {
 }
 
 export interface IMenuService {
-	createMenu(
-		id: MenuId,
-		contextKeyService?: IContextKeyService,
-	): IMenu;
+	createMenu(id: MenuId, contextKeyService?: IContextKeyService): IMenu;
 
 	getMenuActions(
 		id: MenuId,
@@ -241,8 +205,7 @@ export interface IMenuService {
 	): readonly MenuActionGroup[];
 }
 
-export const IMenuService =
-	createServiceIdentifier<IMenuService>("menuService");
+export const IMenuService = createServiceIdentifier<IMenuService>('menuService');
 
 /** A command contribution resolved into a runnable UI action. */
 export class MenuItemAction implements IAction {
@@ -265,19 +228,16 @@ export class MenuItemAction implements IAction {
 		this.options = options;
 		this.commandService = commandService;
 		this.id = item.id;
-		this.label = options?.renderShortTitle && item.shortTitle
-			? commandActionLabel(item.shortTitle)
-			: commandActionLabel(item.title);
-		this.tooltip = item.tooltip
-			? commandActionLabel(item.tooltip)
-			: this.label;
+		this.label =
+			options?.renderShortTitle && item.shortTitle
+				? commandActionLabel(item.shortTitle)
+				: commandActionLabel(item.title);
+		this.tooltip = item.tooltip ? commandActionLabel(item.tooltip) : this.label;
 		this.icon = item.icon;
 		this.enabled = contextKeyService.contextMatchesRules(item.precondition);
 
 		if (item.toggled) {
-			const toggled = isCommandActionToggleInfo(item.toggled)
-				? item.toggled
-				: { condition: item.toggled };
+			const toggled = isCommandActionToggleInfo(item.toggled) ? item.toggled : { condition: item.toggled };
 			this.checked = contextKeyService.contextMatchesRules(toggled.condition);
 			if (this.checked) {
 				if (toggled.title) this.label = commandActionLabel(toggled.title);
@@ -293,7 +253,7 @@ export class MenuItemAction implements IAction {
 		const commandArgs: unknown[] = [];
 		if (this.options?.args) {
 			commandArgs.push(...this.options.args);
-		} else if (this.options && "arg" in this.options) {
+		} else if (this.options && 'arg' in this.options) {
 			commandArgs.push(this.options.arg);
 		}
 		if (this.options?.shouldForwardArgs) commandArgs.push(...args);
@@ -335,7 +295,7 @@ export interface IAction2Options extends ICommandAction {
 	readonly menu?: OneOrMany<{
 		readonly id: MenuId;
 		readonly when?: ContextKeyExpression;
-		readonly group?: "navigation" | string;
+		readonly group?: 'navigation' | string;
 		readonly order?: number;
 	}>;
 	readonly keybinding?: OneOrMany<IAction2KeybindingOptions>;
@@ -344,12 +304,9 @@ export interface IAction2Options extends ICommandAction {
 
 /** Base class for a statically declared command and its UI contributions. */
 export abstract class Action2 {
-	constructor(readonly desc: Readonly<IAction2Options>) { }
+	constructor(readonly desc: Readonly<IAction2Options>) {}
 
-	abstract run(
-		accessor: ServicesAccessor,
-		...args: readonly unknown[]
-	): unknown;
+	abstract run(accessor: ServicesAccessor, ...args: readonly unknown[]): unknown;
 }
 
 /**
@@ -358,18 +315,20 @@ export abstract class Action2 {
  * Static contribution modules intentionally keep registrations for the realm
  * lifetime. Dynamic callers must retain and dispose the returned registration.
  */
-export function registerAction2(
-	ctor: new () => Action2,
-): IDisposable {
+export function registerAction2(ctor: new () => Action2): IDisposable {
 	const action = new ctor();
 	const registrations = new DisposableStore();
 
 	try {
-		registrations.add(CommandsRegistry.registerMany([{
-			id: action.desc.id,
-			handler: (accessor, ...args) => action.run(accessor, ...args),
-			metadata: action.desc.metadata ?? { description: action.desc.title },
-		}]));
+		registrations.add(
+			CommandsRegistry.registerMany([
+				{
+					id: action.desc.id,
+					handler: (accessor, ...args) => action.run(accessor, ...args),
+					metadata: action.desc.metadata ?? { description: action.desc.title },
+				},
+			]),
+		);
 
 		for (const contribution of toArray(action.desc.keybinding)) {
 			const platformContribution = getPlatformKeybinding(contribution);
@@ -377,34 +336,28 @@ export function registerAction2(
 				platformContribution?.primary ?? contribution.primary,
 				...(platformContribution?.secondary ?? contribution.secondary ?? []),
 			];
-			const when = ContextKeyExpr.and(
-				action.desc.precondition,
-				contribution.when,
-			);
+			const when = ContextKeyExpr.and(action.desc.precondition, contribution.when);
 			for (const keybinding of keybindings) {
 				// Numeric zero explicitly disables a shortcut on the selected platform.
 				if (keybinding === 0) continue;
-				registrations.add(KeybindingsRegistry.registerKeybindingRule({
-					command: action.desc.id,
-					keybinding,
-					when,
-					args: contribution.args,
-					source: contribution.source,
-					priority: contribution.priority ?? contribution.weight,
-				}));
+				registrations.add(
+					KeybindingsRegistry.registerKeybindingRule({
+						command: action.desc.id,
+						keybinding,
+						when,
+						args: contribution.args,
+						source: contribution.source,
+						priority: contribution.priority ?? contribution.weight,
+					}),
+				);
 			}
 		}
 
-		const menuItems: Array<{ id: MenuId; item: MenuRegistryItem; }> = [];
+		const menuItems: Array<{ id: MenuId; item: MenuRegistryItem }> = [];
 		for (const placement of toArray(action.desc.menu)) {
 			menuItems.push({
 				id: placement.id,
-				item: {
-					command: action.desc,
-					when: placement.when,
-					group: placement.group,
-					order: placement.order,
-				},
+				item: { command: action.desc, when: placement.when, group: placement.group, order: placement.order },
 			});
 		}
 

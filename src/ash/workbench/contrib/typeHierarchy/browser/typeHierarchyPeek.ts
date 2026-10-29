@@ -25,7 +25,9 @@ export class TypeHierarchyTreePeekWidget extends PeekViewWidget {
 	private model: TypeHierarchyModel | undefined;
 	private currentDirection = TypeHierarchyDirection.Subtypes;
 
-	public get direction(): TypeHierarchyDirection { return this.currentDirection; }
+	public get direction(): TypeHierarchyDirection {
+		return this.currentDirection;
+	}
 
 	constructor(editor: ICodeEditor, onError: (error: unknown) => void) {
 		super(editor);
@@ -43,58 +45,78 @@ export class TypeHierarchyTreePeekWidget extends PeekViewWidget {
 			[TypeHierarchyDirection.Supertypes, localize('hierarchy.supertypes', 'Supertypes')],
 		];
 		this.buttons = directions.map(([direction, label]) => {
-			const button = this._register(new Button(toolbar, {
-				...defaultButtonStyles,
-				label,
-				checked: direction === this.currentDirection,
-				presentation: 'quiet',
-				size: 'small',
-				onClick: () => { void this.expandDirection(direction).catch(onError); },
-			}));
+			const button = this._register(
+				new Button(toolbar, {
+					...defaultButtonStyles,
+					label,
+					checked: direction === this.currentDirection,
+					presentation: 'quiet',
+					size: 'small',
+					onClick: () => {
+						void this.expandDirection(direction).catch(onError);
+					},
+				}),
+			);
 			button.domNode.classList.add('stanza-editor-language-hierarchy-expand');
 			return button;
 		});
-		this.tree = this._register(new AsyncDataTree<TypeHierarchyModel, Type>(treeContainer, new DataSource(() => this.direction), {
-			styles: defaultListStyles,
-			findWidgetStyles: defaultFindWidgetStyles,
-			ariaLabel: localize('typeHierarchy.title', 'Type Hierarchy'),
-			onDidRemoveRow: row => {
-				for (const [node, button] of this.rows) {
-					if (row.contains(button.domNode)) { this.rows.deleteAndDispose(node); }
+		this.tree = this._register(
+			new AsyncDataTree<TypeHierarchyModel, Type>(treeContainer, new DataSource(() => this.direction), {
+				styles: defaultListStyles,
+				findWidgetStyles: defaultFindWidgetStyles,
+				ariaLabel: localize('typeHierarchy.title', 'Type Hierarchy'),
+				onDidRemoveRow: row => {
+					for (const [node, button] of this.rows) {
+						if (row.contains(button.domNode)) {
+							this.rows.deleteAndDispose(node);
+						}
+					}
+				},
+				expandOnlyOnTwistieClick: true,
+				collapseByDefault: () => true,
+				keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: node => node.item.name },
+				renderElement: node => {
+					this.rows.deleteAndDispose(node);
+					const button = new Button(treeContainer, {
+						...defaultButtonStyles,
+						label: node.item.detail ? node.item.name + ' — ' + node.item.detail : node.item.name,
+						title: node.item.resource.path,
+						presentation: 'quiet',
+						size: 'small',
+						onClick: () => this.selected.fire(node.item),
+					});
+					this.rows.set(node, button);
+					button.domNode.classList.add('stanza-editor-language-hierarchy-item');
+					return button.domNode;
+				},
+			}),
+		);
+		this._register(
+			this.tree.onDidError(event => {
+				if (!this.isDisposed) {
+					onError(event.error);
 				}
-			},
-			expandOnlyOnTwistieClick: true,
-			collapseByDefault: () => true,
-			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: node => node.item.name },
-			renderElement: node => {
-				this.rows.deleteAndDispose(node);
-				const button = new Button(treeContainer, {
-					...defaultButtonStyles,
-					label: node.item.detail ? node.item.name + ' — ' + node.item.detail : node.item.name,
-					title: node.item.resource.path,
-					presentation: 'quiet',
-					size: 'small',
-					onClick: () => this.selected.fire(node.item),
-				});
-				this.rows.set(node, button);
-				button.domNode.classList.add('stanza-editor-language-hierarchy-item');
-				return button.domNode;
-			},
-		}));
-		this._register(this.tree.onDidError(event => {
-			if (!this.isDisposed) { onError(event.error); }
-		}));
+			}),
+		);
 		this._register(this.tree.onDidAccept(event => this.selected.fire(event.element.item)));
 	}
 
 	public async showModel(model: TypeHierarchyModel): Promise<void> {
 		this.model = model;
 		await this.tree.setInput(model);
-		if (this.isDisposed) { return; }
+		if (this.isDisposed) {
+			return;
+		}
 		const first = this.tree.getVisibleElements()[0];
-		if (first) { this.tree.setFocus(first); }
-		this.buttons.forEach(button => button.domNode.setAttribute('aria-label',
-			localize('hierarchy.directionFor', '{0} for {1}', button.label, model.roots[0]!.name)));
+		if (first) {
+			this.tree.setFocus(first);
+		}
+		this.buttons.forEach(button =>
+			button.domNode.setAttribute(
+				'aria-label',
+				localize('hierarchy.directionFor', '{0} for {1}', button.label, model.roots[0]!.name),
+			),
+		);
 	}
 
 	public async updateDirection(direction: TypeHierarchyDirection): Promise<void> {
@@ -105,8 +127,12 @@ export class TypeHierarchyTreePeekWidget extends PeekViewWidget {
 	}
 
 	private async expandDirection(direction: TypeHierarchyDirection): Promise<void> {
-		if (direction !== this.direction) { await this.updateDirection(direction); }
+		if (direction !== this.direction) {
+			await this.updateDirection(direction);
+		}
 		const root = this.tree.getVisibleElements()[0];
-		if (root) { await this.tree.expand(root); }
+		if (root) {
+			await this.tree.expand(root);
+		}
 	}
 }

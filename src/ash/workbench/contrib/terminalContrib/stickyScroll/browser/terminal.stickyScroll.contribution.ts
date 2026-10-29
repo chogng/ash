@@ -8,17 +8,22 @@ import { TerminalStickyScrollContribution } from './terminalStickyScrollContribu
 
 registerTerminalContribution(TerminalStickyScrollContribution.ID, TerminalStickyScrollContribution);
 
-registerAction2(class TerminalToggleStickyScrollAction extends Action2 {
-	constructor() {
-		super({
-			id: 'workbench.action.terminal.toggleStickyScroll',
-			title: localize2('terminal.stickyScroll.toggle', 'Terminal: Toggle Sticky Scroll'),
-			f1: true,
-		});
-	}
+registerAction2(
+	class TerminalToggleStickyScrollAction extends Action2 {
+		constructor() {
+			super({
+				id: 'workbench.action.terminal.toggleStickyScroll',
+				title: localize2('terminal.stickyScroll.toggle', 'Terminal: Toggle Sticky Scroll'),
+				f1: true,
+			});
+		}
 
-	public override run(accessor: ServicesAccessor): Promise<void> {
-		const configuration = accessor.get(IConfigurationService);
-		return configuration.updateValue(TerminalStickyScrollSettingId.Enabled, !configuration.getValue<boolean>(TerminalStickyScrollSettingId.Enabled));
-	}
-});
+		public override run(accessor: ServicesAccessor): Promise<void> {
+			const configuration = accessor.get(IConfigurationService);
+			return configuration.updateValue(
+				TerminalStickyScrollSettingId.Enabled,
+				!configuration.getValue<boolean>(TerminalStickyScrollSettingId.Enabled),
+			);
+		}
+	},
+);

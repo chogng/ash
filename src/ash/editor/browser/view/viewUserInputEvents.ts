@@ -4,7 +4,13 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { type ICoordinatesConverter } from '../../common/coordinatesConverter.js';
 import { Position } from '../../common/core/position.js';
-import { type IEditorMouseEvent, type IMouseTarget, type IMouseTargetViewZoneData, type IPartialEditorMouseEvent, MouseTargetType } from '../editorBrowser.js';
+import {
+	type IEditorMouseEvent,
+	type IMouseTarget,
+	type IMouseTargetViewZoneData,
+	type IPartialEditorMouseEvent,
+	MouseTargetType,
+} from '../editorBrowser.js';
 
 export class ViewUserInputEvents extends Disposable {
 	private readonly keyDownEmitter = this._register(new Emitter<IKeyboardEvent>());
@@ -30,7 +36,9 @@ export class ViewUserInputEvents extends Disposable {
 	public readonly onMouseDropCanceled = this.mouseDropCanceledEmitter.event;
 	public readonly onMouseWheel = this.mouseWheelEmitter.event;
 
-	constructor(private readonly coordinatesConverter: ICoordinatesConverter) { super(); }
+	constructor(private readonly coordinatesConverter: ICoordinatesConverter) {
+		super();
+	}
 
 	public emitKeyDown(event: IKeyboardEvent): void {
 		this.keyDownEmitter.fire(event);
@@ -78,7 +86,9 @@ export class ViewUserInputEvents extends Disposable {
 
 	private convertViewToModelMouseEvent(event: IEditorMouseEvent): IEditorMouseEvent;
 	private convertViewToModelMouseEvent(event: IPartialEditorMouseEvent): IPartialEditorMouseEvent;
-	private convertViewToModelMouseEvent(event: IEditorMouseEvent | IPartialEditorMouseEvent): IEditorMouseEvent | IPartialEditorMouseEvent {
+	private convertViewToModelMouseEvent(
+		event: IEditorMouseEvent | IPartialEditorMouseEvent,
+	): IEditorMouseEvent | IPartialEditorMouseEvent {
 		return event.target === null
 			? event
 			: { event: event.event, target: this.convertViewToModelMouseTarget(event.target) };
@@ -88,8 +98,13 @@ export class ViewUserInputEvents extends Disposable {
 		return ViewUserInputEvents.convertViewToModelMouseTarget(target, this.coordinatesConverter);
 	}
 
-	public static convertViewToModelMouseTarget(target: IMouseTarget, coordinatesConverter: ICoordinatesConverter): IMouseTarget {
-		const position = target.position ? coordinatesConverter.convertViewPositionToModelPosition(target.position) : null;
+	public static convertViewToModelMouseTarget(
+		target: IMouseTarget,
+		coordinatesConverter: ICoordinatesConverter,
+	): IMouseTarget {
+		const position = target.position
+			? coordinatesConverter.convertViewPositionToModelPosition(target.position)
+			: null;
 		const range = target.range ? coordinatesConverter.convertViewRangeToModelRange(target.range) : null;
 		if (target.type === MouseTargetType.GUTTER_VIEW_ZONE || target.type === MouseTargetType.CONTENT_VIEW_ZONE) {
 			return {
@@ -102,13 +117,22 @@ export class ViewUserInputEvents extends Disposable {
 		return { ...target, position, range } as IMouseTarget;
 	}
 
-	private static convertViewToModelViewZoneData(data: IMouseTargetViewZoneData, coordinatesConverter: ICoordinatesConverter): IMouseTargetViewZoneData {
+	private static convertViewToModelViewZoneData(
+		data: IMouseTargetViewZoneData,
+		coordinatesConverter: ICoordinatesConverter,
+	): IMouseTargetViewZoneData {
 		return {
 			viewZoneId: data.viewZoneId,
-			positionBefore: data.positionBefore ? coordinatesConverter.convertViewPositionToModelPosition(data.positionBefore) : null,
-			positionAfter: data.positionAfter ? coordinatesConverter.convertViewPositionToModelPosition(data.positionAfter) : null,
+			positionBefore: data.positionBefore
+				? coordinatesConverter.convertViewPositionToModelPosition(data.positionBefore)
+				: null,
+			positionAfter: data.positionAfter
+				? coordinatesConverter.convertViewPositionToModelPosition(data.positionAfter)
+				: null,
 			position: coordinatesConverter.convertViewPositionToModelPosition(data.position),
-			afterLineNumber: coordinatesConverter.convertViewPositionToModelPosition(new Position(data.afterLineNumber, 1)).lineNumber,
+			afterLineNumber: coordinatesConverter.convertViewPositionToModelPosition(
+				new Position(data.afterLineNumber, 1),
+			).lineNumber,
 		};
 	}
 }

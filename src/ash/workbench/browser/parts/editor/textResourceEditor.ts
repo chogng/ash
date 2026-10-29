@@ -6,50 +6,82 @@ import { CancellationError, isCancellationError } from '../../../../base/common/
 import { TextResourceEditorInput } from '../../../common/editor/textResourceEditorInput.js';
 import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
 import type { IModelContentChangedEvent } from '../../../../editor/common/textModelEvents.js';
-import { addDisposableListener, stopEvent, h } from "../../../../base/browser/dom.js";
-import { type IDimension } from "../../../../base/browser/dom.js";
-import { throwIfCancelled } from "../../../../base/common/cancellation.js";
-import { Disposable, DisposableStore, MutableDisposable, type IDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { assertDefined } from "../../../../base/common/types.js";
+import { addDisposableListener, stopEvent, h } from '../../../../base/browser/dom.js';
+import { type IDimension } from '../../../../base/browser/dom.js';
+import { throwIfCancelled } from '../../../../base/common/cancellation.js';
+import {
+	Disposable,
+	DisposableStore,
+	MutableDisposable,
+	type IDisposable,
+	toDisposable,
+} from '../../../../base/common/lifecycle.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { assertDefined } from '../../../../base/common/types.js';
 import * as strings from '../../../../base/common/strings.js';
-import type { URI } from "../../../../base/common/uri.js";
+import type { URI } from '../../../../base/common/uri.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { IConfigurationService, type IConfigurationOverrides } from '../../../../platform/configuration/common/configuration.js';
-import { EditorPaneSelectionChangeReason, type IEditorPaneWithSelection, type IResourceEditorInput, type ISaveOptions, type EditorPaneStatus } from '../../../common/editor.js';
+import {
+	IConfigurationService,
+	type IConfigurationOverrides,
+} from '../../../../platform/configuration/common/configuration.js';
+import {
+	EditorPaneSelectionChangeReason,
+	type IEditorPaneWithSelection,
+	type IResourceEditorInput,
+	type ISaveOptions,
+	type EditorPaneStatus,
+} from '../../../common/editor.js';
 import { TextEditorSelectionSource } from '../../../../platform/editor/common/editor.js';
-import { type ITextResourceStore } from "../../../services/textmodelResolver/common/textResourceStore.js";
-import { CodeEditorWidget, type CodeEditorWidgetOptions } from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
-import { type ICodeEditorViewState, type IEditorDecorationsCollection } from '../../../../editor/common/editorCommon.js';
-import { ITextModelResourceService, type TextModelReference } from "../../../services/textmodelResolver/common/textModelResourceService.js";
-import { type EditorTextDirection } from "../../../../editor/browser/view.js";
-import { EditorLineWrapping, type ConfigurationChangedEvent, type EditorLayoutInfo, type IEditorOptions } from "../../../../editor/common/config/editorOptions.js";
+import { type ITextResourceStore } from '../../../services/textmodelResolver/common/textResourceStore.js';
+import {
+	CodeEditorWidget,
+	type CodeEditorWidgetOptions,
+} from '../../../../editor/browser/widget/codeEditor/codeEditorWidget.js';
+import {
+	type ICodeEditorViewState,
+	type IEditorDecorationsCollection,
+} from '../../../../editor/common/editorCommon.js';
+import {
+	ITextModelResourceService,
+	type TextModelReference,
+} from '../../../services/textmodelResolver/common/textModelResourceService.js';
+import { type EditorTextDirection } from '../../../../editor/browser/view.js';
+import {
+	EditorLineWrapping,
+	type ConfigurationChangedEvent,
+	type EditorLayoutInfo,
+	type IEditorOptions,
+} from '../../../../editor/common/config/editorOptions.js';
 import { EditorMinimapConfiguration } from '../../../../editor/common/config/editorConfigurationSchema.js';
-import { type IWorkingCopy, type IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
-import { type Range } from "../../../../editor/common/core/range.js";
-import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
-import { type ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
-import type { Selection } from "../../../../editor/common/core/selection.js";
+import {
+	type IWorkingCopy,
+	type IWorkingCopyService,
+} from '../../../services/workingCopy/common/workingCopyService.js';
+import { type Range } from '../../../../editor/common/core/range.js';
+import { type LanguageLocation, type LanguageWorkspaceEdit } from '../../../../editor/common/languages.js';
+import { type ILanguageDiagnosticsService } from '../../../services/language/common/languageDiagnosticsService.js';
+import type { Selection } from '../../../../editor/common/core/selection.js';
 import { TextModel } from '../../../../editor/common/model/textModel.js';
 import type { IModelDeltaDecoration } from '../../../../editor/common/model.js';
 import type { IViewZoneChangeAccessor } from '../../../../editor/browser/editorBrowser.js';
-import type { ICursorSelectionChangedEvent } from "../../../../editor/common/cursorEvents.js";
+import type { ICursorSelectionChangedEvent } from '../../../../editor/common/cursorEvents.js';
 
-import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
+import type { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import { AbstractTextCodeEditor, type ITextCodeEditorControl } from './textCodeEditor.js';
 import { toEditorPaneSelectionChangeReason } from './textEditor.js';
 
-const lineNumbersConfiguration = "editor.lineNumbers";
-const wordWrapConfiguration = "editor.wordWrap";
-const renderWhitespaceConfiguration = "editor.renderWhitespace";
-const renderControlCharactersConfiguration = "editor.renderControlCharacters";
+const lineNumbersConfiguration = 'editor.lineNumbers';
+const wordWrapConfiguration = 'editor.wordWrap';
+const renderWhitespaceConfiguration = 'editor.renderWhitespace';
+const renderControlCharactersConfiguration = 'editor.renderControlCharacters';
 
 export { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 import { CODE_EDITOR_ID } from '../../../common/editor/codeEditorId.js';
 
 export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 	readonly onDidChangeModelContent: Event<IModelContentChangedEvent>;
-	readonly onDidScrollChange: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean; }>;
+	readonly onDidScrollChange: Event<{ readonly scrollTopChanged: boolean; readonly scrollLeftChanged: boolean }>;
 	readonly onDidChangeConfiguration: Event<ConfigurationChangedEvent>;
 	readonly onDidLayoutChange: Event<EditorLayoutInfo>;
 	readonly onDidChangeCursorSelection: Event<ICursorSelectionChangedEvent>;
@@ -69,7 +101,7 @@ export interface EditorPanePart extends IDisposable, ITextCodeEditorControl {
 	setScrollTop(scrollTop: number): void;
 	setScrollLeft(scrollLeft: number): void;
 	changeViewZones(callback: (accessor: IViewZoneChangeAccessor) => void): void;
-	executeEdits(source: string, edits: { range: Range; text: string; }[]): boolean;
+	executeEdits(source: string, edits: { range: Range; text: string }[]): boolean;
 	updateOptions(options: Readonly<IEditorOptions>): void;
 	revealRange?(range: Range): void;
 	saveViewState?(): ICodeEditorViewState | null;
@@ -93,8 +125,8 @@ export interface EditorPaneOptions {
 	readonly fontSize?: number;
 	readonly lineHeight?: number;
 	readonly fontLigatures?: boolean;
-	readonly experimentalGpuAcceleration?: CodeEditorWidgetOptions["experimentalGpuAcceleration"];
-	readonly minimap?: CodeEditorWidgetOptions["minimap"];
+	readonly experimentalGpuAcceleration?: CodeEditorWidgetOptions['experimentalGpuAcceleration'];
+	readonly minimap?: CodeEditorWidgetOptions['minimap'];
 	readonly renderLineHighlight?: CodeEditorWidgetOptions['renderLineHighlight'];
 	readonly renderLineHighlightOnlyWhenFocus?: CodeEditorWidgetOptions['renderLineHighlightOnlyWhenFocus'];
 	readonly cursorStyle?: CodeEditorWidgetOptions['cursorStyle'];
@@ -105,25 +137,28 @@ export interface EditorPaneOptions {
 	readonly lineNumbers?: CodeEditorWidgetOptions['lineNumbers'];
 	readonly guides?: CodeEditorWidgetOptions['guides'];
 	readonly bracketPairColorization?: CodeEditorWidgetOptions['bracketPairColorization'];
-	readonly matchBrackets?: CodeEditorWidgetOptions["matchBrackets"];
+	readonly matchBrackets?: CodeEditorWidgetOptions['matchBrackets'];
 	readonly stickyScroll?: CodeEditorWidgetOptions['stickyScroll'];
-	readonly suggestions?: CodeEditorWidgetOptions["suggestions"];
-	readonly inlineCompletions?: CodeEditorWidgetOptions["inlineCompletions"];
+	readonly suggestions?: CodeEditorWidgetOptions['suggestions'];
+	readonly inlineCompletions?: CodeEditorWidgetOptions['inlineCompletions'];
 	readonly parameterHints?: boolean;
 	readonly inlayHints?: CodeEditorWidgetOptions['inlayHints'];
 	readonly codeLens?: boolean;
-	readonly colorDecorators?: CodeEditorWidgetOptions["colorDecorators"];
-	readonly colorDecoratorsActivatedOn?: CodeEditorWidgetOptions["colorDecoratorsActivatedOn"];
-	readonly colorDecoratorsLimit?: CodeEditorWidgetOptions["colorDecoratorsLimit"];
-	readonly defaultColorDecorators?: CodeEditorWidgetOptions["defaultColorDecorators"];
+	readonly colorDecorators?: CodeEditorWidgetOptions['colorDecorators'];
+	readonly colorDecoratorsActivatedOn?: CodeEditorWidgetOptions['colorDecoratorsActivatedOn'];
+	readonly colorDecoratorsLimit?: CodeEditorWidgetOptions['colorDecoratorsLimit'];
+	readonly defaultColorDecorators?: CodeEditorWidgetOptions['defaultColorDecorators'];
 	readonly formatOnSave?: boolean;
-	readonly find?: CodeEditorWidgetOptions["find"];
-	readonly indentation?: CodeEditorWidgetOptions["indentation"];
+	readonly find?: CodeEditorWidgetOptions['find'];
+	readonly indentation?: CodeEditorWidgetOptions['indentation'];
 	/** Browser paragraph direction forwarded to every created editor part. */
 	readonly textDirection?: EditorTextDirection;
-	readonly onExecuteEditorCommand?: CodeEditorWidgetOptions["onExecuteEditorCommand"];
+	readonly onExecuteEditorCommand?: CodeEditorWidgetOptions['onExecuteEditorCommand'];
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
-	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>;
+	readonly onApplyWorkspaceEdit?: (
+		edit: LanguageWorkspaceEdit,
+		options?: IBulkEditOptions,
+	) => void | boolean | Promise<void | boolean>;
 	readonly placeholder?: string;
 	readonly showUnicodeHighlights?: boolean;
 	readonly onSave?: () => Promise<void | boolean>;
@@ -134,7 +169,7 @@ export interface EditorPaneOptions {
 /** Workbench pane that composes the text model, input, view, and language services. */
 export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> implements IEditorPaneWithSelection {
 	readonly id = CODE_EDITOR_ID;
-	readonly viewStateTypeId = "stanza.code.textView";
+	readonly viewStateTypeId = 'stanza.code.textView';
 	private readonly selectionChangeEmitter = this._register(new Emitter<EditorPaneSelectionChangeReason>());
 	readonly onDidChangeSelection = this.selectionChangeEmitter.event;
 	private readonly providedModel = this._register(new MutableDisposable<TextResourceEditorInput>());
@@ -177,89 +212,143 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		@IStorageService storageService: IStorageService,
 	) {
 		super(CODE_EDITOR_ID, themeService, storageService);
-		if (!resourceStore || typeof resourceStore.resolve !== "function" || typeof resourceStore.save !== "function" || typeof resourceStore.onDidChange !== "function") {
+		if (
+			!resourceStore ||
+			typeof resourceStore.resolve !== 'function' ||
+			typeof resourceStore.save !== 'function' ||
+			typeof resourceStore.onDidChange !== 'function'
+		) {
 			this.dispose();
-			throw new TypeError("Code editor pane requires a text resource store");
+			throw new TypeError('Code editor pane requires a text resource store');
 		}
-		this.createPart = options.createPart ?? (partOptions => this.instantiationService.createInstance(CodeEditorWidget, partOptions));
-		this._register(this.configurationService.onDidChangeConfiguration(event => {
-			const part = this.part.value;
-			if (!part) return;
-			const model = part.getModel();
-			const fontOverrides = model ? { resource: model.uri, overrideIdentifier: model.getLanguageId() } : {};
+		this.createPart =
+			options.createPart ??
+			(partOptions => this.instantiationService.createInstance(CodeEditorWidget, partOptions));
+		this._register(
+			this.configurationService.onDidChangeConfiguration(event => {
+				const part = this.part.value;
+				if (!part) return;
+				const model = part.getModel();
+				const fontOverrides = model ? { resource: model.uri, overrideIdentifier: model.getLanguageId() } : {};
 
-			const update: {
-				fontFamily?: IEditorOptions['fontFamily'];
-				fontSize?: IEditorOptions['fontSize'];
-				lineHeight?: IEditorOptions['lineHeight'];
-				fontLigatures?: IEditorOptions['fontLigatures'];
-				lineNumbers?: IEditorOptions['lineNumbers'];
-				wordWrap?: IEditorOptions['wordWrap'];
-				wordWrapColumn?: IEditorOptions['wordWrapColumn'];
-				minimap?: IEditorOptions['minimap'];
-				renderWhitespace?: IEditorOptions['renderWhitespace'];
-				renderControlCharacters?: IEditorOptions['renderControlCharacters'];
-				selectionClipboard?: IEditorOptions['selectionClipboard'];
-				find?: IEditorOptions['find'];
-				formatOnType?: boolean;
-				colorDecorators?: boolean;
-				colorDecoratorsLimit?: number;
-				folding?: boolean;
-				foldingMaximumRegions?: number;
-				foldingStrategy?: IEditorOptions['foldingStrategy'];
-			} = {};
-			if (event.affectsConfiguration('editor.colorDecorators', fontOverrides)) update.colorDecorators = this.configurationService.getValue('editor.colorDecorators', fontOverrides);
-			if (event.affectsConfiguration('editor.colorDecoratorsLimit', fontOverrides)) update.colorDecoratorsLimit = this.configurationService.getValue('editor.colorDecoratorsLimit', fontOverrides);
-			if (event.affectsConfiguration('editor.folding', fontOverrides)) update.folding = this.configurationService.getValue('editor.folding', fontOverrides);
-			if (event.affectsConfiguration('editor.foldingMaximumRegions', fontOverrides)) update.foldingMaximumRegions = this.configurationService.getValue('editor.foldingMaximumRegions', fontOverrides);
-			if (event.affectsConfiguration('editor.foldingStrategy', fontOverrides)) update.foldingStrategy = this.configurationService.getValue('editor.foldingStrategy', fontOverrides);
-			if (event.affectsConfiguration('editor.formatOnType', fontOverrides)) {
-				update.formatOnType = this.configurationService.getValue<boolean>('editor.formatOnType', fontOverrides);
-			}
-			if (this.options.fontFamily === undefined && event.affectsConfiguration('editor.fontFamily', fontOverrides)) {
-				update.fontFamily = this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined;
-			}
-			if (this.options.fontSize === undefined && event.affectsConfiguration('editor.fontSize', fontOverrides)) {
-				update.fontSize = this.configurationService.getValue('editor.fontSize', fontOverrides);
-			}
-			if (this.options.lineHeight === undefined && event.affectsConfiguration('editor.lineHeight')) {
-				update.lineHeight = this.configurationService.getValue('editor.lineHeight');
-			}
-			if (this.options.fontLigatures === undefined && event.affectsConfiguration('editor.fontLigatures')) {
-				update.fontLigatures = this.configurationService.getValue('editor.fontLigatures');
-			}
-			if (this.options.lineNumbers === undefined && event.affectsConfiguration(lineNumbersConfiguration)) {
-				update.lineNumbers = this.configurationService.getValue<boolean>(lineNumbersConfiguration) ? 'on' : 'off';
-			}
-			if (this.options.lineWrapping === undefined && event.affectsConfiguration(wordWrapConfiguration, fontOverrides)) {
-				update.wordWrap = this.configurationService.getValue(wordWrapConfiguration, fontOverrides);
-			}
-			if (event.affectsConfiguration('editor.wordWrapColumn', fontOverrides)) {
-				update.wordWrapColumn = this.configurationService.getValue('editor.wordWrapColumn', fontOverrides);
-			}
-			if (this.options.minimap === undefined && Object.values(EditorMinimapConfiguration).some(key => event.affectsConfiguration(key, fontOverrides))) {
-				update.minimap = this.readMinimapOptions(fontOverrides);
-			}
-			if (event.affectsConfiguration(renderWhitespaceConfiguration)) {
-				update.renderWhitespace = this.configurationService.getValue(renderWhitespaceConfiguration);
-			}
-			if (event.affectsConfiguration(renderControlCharactersConfiguration)) {
-				update.renderControlCharacters = this.configurationService.getValue(renderControlCharactersConfiguration);
-			}
-			if (event.affectsConfiguration('editor.find')) {
-				update.find = this.readFindOptions();
-			}
-			if (event.affectsConfiguration('editor.selectionClipboard')) {
-				update.selectionClipboard = this.configurationService.getValue<boolean>('editor.selectionClipboard');
-			}
-			if (Object.keys(update).length > 0) part.updateOptions(update);
-		}));
+				const update: {
+					fontFamily?: IEditorOptions['fontFamily'];
+					fontSize?: IEditorOptions['fontSize'];
+					lineHeight?: IEditorOptions['lineHeight'];
+					fontLigatures?: IEditorOptions['fontLigatures'];
+					lineNumbers?: IEditorOptions['lineNumbers'];
+					wordWrap?: IEditorOptions['wordWrap'];
+					wordWrapColumn?: IEditorOptions['wordWrapColumn'];
+					minimap?: IEditorOptions['minimap'];
+					renderWhitespace?: IEditorOptions['renderWhitespace'];
+					renderControlCharacters?: IEditorOptions['renderControlCharacters'];
+					selectionClipboard?: IEditorOptions['selectionClipboard'];
+					find?: IEditorOptions['find'];
+					formatOnType?: boolean;
+					colorDecorators?: boolean;
+					colorDecoratorsLimit?: number;
+					folding?: boolean;
+					foldingMaximumRegions?: number;
+					foldingStrategy?: IEditorOptions['foldingStrategy'];
+				} = {};
+				if (event.affectsConfiguration('editor.colorDecorators', fontOverrides))
+					update.colorDecorators = this.configurationService.getValue(
+						'editor.colorDecorators',
+						fontOverrides,
+					);
+				if (event.affectsConfiguration('editor.colorDecoratorsLimit', fontOverrides))
+					update.colorDecoratorsLimit = this.configurationService.getValue(
+						'editor.colorDecoratorsLimit',
+						fontOverrides,
+					);
+				if (event.affectsConfiguration('editor.folding', fontOverrides))
+					update.folding = this.configurationService.getValue('editor.folding', fontOverrides);
+				if (event.affectsConfiguration('editor.foldingMaximumRegions', fontOverrides))
+					update.foldingMaximumRegions = this.configurationService.getValue(
+						'editor.foldingMaximumRegions',
+						fontOverrides,
+					);
+				if (event.affectsConfiguration('editor.foldingStrategy', fontOverrides))
+					update.foldingStrategy = this.configurationService.getValue(
+						'editor.foldingStrategy',
+						fontOverrides,
+					);
+				if (event.affectsConfiguration('editor.formatOnType', fontOverrides)) {
+					update.formatOnType = this.configurationService.getValue<boolean>(
+						'editor.formatOnType',
+						fontOverrides,
+					);
+				}
+				if (
+					this.options.fontFamily === undefined &&
+					event.affectsConfiguration('editor.fontFamily', fontOverrides)
+				) {
+					update.fontFamily =
+						this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined;
+				}
+				if (
+					this.options.fontSize === undefined &&
+					event.affectsConfiguration('editor.fontSize', fontOverrides)
+				) {
+					update.fontSize = this.configurationService.getValue('editor.fontSize', fontOverrides);
+				}
+				if (this.options.lineHeight === undefined && event.affectsConfiguration('editor.lineHeight')) {
+					update.lineHeight = this.configurationService.getValue('editor.lineHeight');
+				}
+				if (this.options.fontLigatures === undefined && event.affectsConfiguration('editor.fontLigatures')) {
+					update.fontLigatures = this.configurationService.getValue('editor.fontLigatures');
+				}
+				if (this.options.lineNumbers === undefined && event.affectsConfiguration(lineNumbersConfiguration)) {
+					update.lineNumbers = this.configurationService.getValue<boolean>(lineNumbersConfiguration)
+						? 'on'
+						: 'off';
+				}
+				if (
+					this.options.lineWrapping === undefined &&
+					event.affectsConfiguration(wordWrapConfiguration, fontOverrides)
+				) {
+					update.wordWrap = this.configurationService.getValue(wordWrapConfiguration, fontOverrides);
+				}
+				if (event.affectsConfiguration('editor.wordWrapColumn', fontOverrides)) {
+					update.wordWrapColumn = this.configurationService.getValue('editor.wordWrapColumn', fontOverrides);
+				}
+				if (
+					this.options.minimap === undefined &&
+					Object.values(EditorMinimapConfiguration).some(key =>
+						event.affectsConfiguration(key, fontOverrides),
+					)
+				) {
+					update.minimap = this.readMinimapOptions(fontOverrides);
+				}
+				if (event.affectsConfiguration(renderWhitespaceConfiguration)) {
+					update.renderWhitespace = this.configurationService.getValue(renderWhitespaceConfiguration);
+				}
+				if (event.affectsConfiguration(renderControlCharactersConfiguration)) {
+					update.renderControlCharacters = this.configurationService.getValue(
+						renderControlCharactersConfiguration,
+					);
+				}
+				if (event.affectsConfiguration('editor.find')) {
+					update.find = this.readFindOptions();
+				}
+				if (event.affectsConfiguration('editor.selectionClipboard')) {
+					update.selectionClipboard =
+						this.configurationService.getValue<boolean>('editor.selectionClipboard');
+				}
+				if (Object.keys(update).length > 0) part.updateOptions(update);
+			}),
+		);
 	}
 
 	private readFindOptions(): IEditorOptions['find'] {
 		return {
-			seedSearchStringFromSelection: this.configurationService.getValue<boolean>('editor.find.seedSearchStringFromSelection') === false ? 'never' : 'always',
-			autoFindInSelection: this.configurationService.getValue<boolean>('editor.find.autoFindInSelection') ? 'always' : 'never',
+			seedSearchStringFromSelection:
+				this.configurationService.getValue<boolean>('editor.find.seedSearchStringFromSelection') === false
+					? 'never'
+					: 'always',
+			autoFindInSelection: this.configurationService.getValue<boolean>('editor.find.autoFindInSelection')
+				? 'always'
+				: 'never',
 			globalFindClipboard: this.configurationService.getValue<boolean>('editor.find.globalFindClipboard'),
 			loop: this.configurationService.getValue<boolean>('editor.find.loop'),
 			...this.options.find,
@@ -269,44 +358,71 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 	private readMinimapOptions(overrides: IConfigurationOverrides): IEditorOptions['minimap'] {
 		return {
 			enabled: this.configurationService.getValue(EditorMinimapConfiguration.enabled, overrides),
-			renderCharacters: this.configurationService.getValue(EditorMinimapConfiguration.renderCharacters, overrides),
+			renderCharacters: this.configurationService.getValue(
+				EditorMinimapConfiguration.renderCharacters,
+				overrides,
+			),
 			size: this.configurationService.getValue(EditorMinimapConfiguration.size, overrides),
 			showSlider: this.configurationService.getValue(EditorMinimapConfiguration.showSlider, overrides),
 			side: this.configurationService.getValue(EditorMinimapConfiguration.side, overrides),
 			maxColumn: this.configurationService.getValue(EditorMinimapConfiguration.maxColumn, overrides),
 			scale: this.configurationService.getValue(EditorMinimapConfiguration.scale, overrides),
 			autohide: this.configurationService.getValue(EditorMinimapConfiguration.autohide, overrides),
-			showRegionSectionHeaders: this.configurationService.getValue(EditorMinimapConfiguration.showRegionSectionHeaders, overrides),
-			showMarkSectionHeaders: this.configurationService.getValue(EditorMinimapConfiguration.showMarkSectionHeaders, overrides),
-			markSectionHeaderRegex: this.configurationService.getValue(EditorMinimapConfiguration.markSectionHeaderRegex, overrides),
-			sectionHeaderFontSize: this.configurationService.getValue(EditorMinimapConfiguration.sectionHeaderFontSize, overrides),
-			sectionHeaderLetterSpacing: this.configurationService.getValue(EditorMinimapConfiguration.sectionHeaderLetterSpacing, overrides),
+			showRegionSectionHeaders: this.configurationService.getValue(
+				EditorMinimapConfiguration.showRegionSectionHeaders,
+				overrides,
+			),
+			showMarkSectionHeaders: this.configurationService.getValue(
+				EditorMinimapConfiguration.showMarkSectionHeaders,
+				overrides,
+			),
+			markSectionHeaderRegex: this.configurationService.getValue(
+				EditorMinimapConfiguration.markSectionHeaderRegex,
+				overrides,
+			),
+			sectionHeaderFontSize: this.configurationService.getValue(
+				EditorMinimapConfiguration.sectionHeaderFontSize,
+				overrides,
+			),
+			sectionHeaderLetterSpacing: this.configurationService.getValue(
+				EditorMinimapConfiguration.sectionHeaderLetterSpacing,
+				overrides,
+			),
 		};
 	}
 
 	public override create(parent: HTMLElement): void {
-		if (this.container) throw new ReferenceError("EditorPane has already been created");
-		const container = h(parent.ownerDocument, "div");
-		container.className = "stanza-editor-pane";
+		if (this.container) throw new ReferenceError('EditorPane has already been created');
+		const container = h(parent.ownerDocument, 'div');
+		container.className = 'stanza-editor-pane';
 		parent.append(container);
 		super.create(container);
 		this.container = container;
-		this._register(addDisposableListener<KeyboardEvent>(container, "keydown", event => this.handleSaveKeydown(event)));
-		this._register(toDisposable(() => {
-			container.remove();
-			this.container = undefined;
-		}));
+		this._register(
+			addDisposableListener<KeyboardEvent>(container, 'keydown', event => this.handleSaveKeydown(event)),
+		);
+		this._register(
+			toDisposable(() => {
+				container.remove();
+				this.container = undefined;
+			}),
+		);
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
 		const container = this.requireContainer();
-		throwIfCancelled(signal, "Code editor input loading was cancelled");
-		const isProvidedResource = input.resource.scheme !== Schemas.file && this.textModelService.canHandleResource(input.resource);
+		throwIfCancelled(signal, 'Code editor input loading was cancelled');
+		const isProvidedResource =
+			input.resource.scheme !== Schemas.file && this.textModelService.canHandleResource(input.resource);
 		// Requests can be shared by groups. Each pane owns its resolved input so closing
 		// one view releases only that view's reference, including an unfinished load.
-		const providedInput = isProvidedResource ? this.instantiationService.createInstance(TextResourceEditorInput, input.resource, input.label) : undefined;
+		const providedInput = isProvidedResource
+			? this.instantiationService.createInstance(TextResourceEditorInput, input.resource, input.label)
+			: undefined;
 		this.loadingProvidedInput.value = providedInput;
-		using cancellationListener = providedInput ? addDisposableListener(signal, 'abort', () => providedInput.dispose(), { once: true }) : undefined;
+		using cancellationListener = providedInput
+			? addDisposableListener(signal, 'abort', () => providedInput.dispose(), { once: true })
+			: undefined;
 		let modelReference: TextModelReference | undefined;
 		let resolvedModel: TextModel;
 		let part: EditorPanePart | undefined;
@@ -315,7 +431,7 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		try {
 			modelReference = isProvidedResource ? undefined : await this.modelService.acquire(input, signal);
 			const model = providedInput ? (await providedInput.resolve()).textEditorModel : modelReference!.model;
-			throwIfCancelled(signal, "Code editor input loading was cancelled");
+			throwIfCancelled(signal, 'Code editor input loading was cancelled');
 			if (!(model instanceof TextModel)) throw new TypeError('Text resource editor requires a TextModel');
 			resolvedModel = model;
 			const fontOverrides = { resource: model.uri, overrideIdentifier: model.getLanguageId() };
@@ -327,14 +443,21 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				languageDiagnosticsService: this.options.languageDiagnosticsService,
 				accessibilityService: this.options.accessibilityService,
 				lineWrapping: this.options.lineWrapping,
-				wordWrap: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration, fontOverrides),
+				wordWrap:
+					this.options.lineWrapping ??
+					this.configurationService.getValue(wordWrapConfiguration, fontOverrides),
 				wordWrapColumn: this.configurationService.getValue('editor.wordWrapColumn', fontOverrides),
 				formatOnType: this.configurationService.getValue<boolean>('editor.formatOnType', fontOverrides),
 				wrappingIndent: this.options.wrappingIndent,
-				fontFamily: this.options.fontFamily ?? (this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined),
-				fontSize: this.options.fontSize ?? this.configurationService.getValue<number>('editor.fontSize', fontOverrides),
+				fontFamily:
+					this.options.fontFamily ??
+					(this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined),
+				fontSize:
+					this.options.fontSize ??
+					this.configurationService.getValue<number>('editor.fontSize', fontOverrides),
 				lineHeight: this.options.lineHeight ?? this.configurationService.getValue<number>('editor.lineHeight'),
-				fontLigatures: this.options.fontLigatures ?? this.configurationService.getValue<boolean>('editor.fontLigatures'),
+				fontLigatures:
+					this.options.fontLigatures ?? this.configurationService.getValue<boolean>('editor.fontLigatures'),
 				experimentalGpuAcceleration: this.options.experimentalGpuAcceleration,
 				minimap: this.options.minimap ?? this.readMinimapOptions(fontOverrides),
 				renderWhitespace: this.configurationService.getValue(renderWhitespaceConfiguration),
@@ -346,21 +469,27 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				cursorSmoothCaretAnimation: this.options.cursorSmoothCaretAnimation,
 				cursorWidth: this.options.cursorWidth,
 				cursorHeight: this.options.cursorHeight,
-				lineNumbers: this.options.lineNumbers ?? (this.configurationService.getValue<boolean>(lineNumbersConfiguration) ? 'on' : 'off'),
+				lineNumbers:
+					this.options.lineNumbers ??
+					(this.configurationService.getValue<boolean>(lineNumbersConfiguration) ? 'on' : 'off'),
 				guides: this.options.guides,
 				bracketPairColorization: this.options.bracketPairColorization,
 				matchBrackets: this.options.matchBrackets,
 				stickyScroll: this.options.stickyScroll,
 				suggestions: this.options.suggestions,
 				inlineCompletions: this.options.inlineCompletions,
-				parameterHints: this.options.parameterHints === undefined ? undefined : { enabled: this.options.parameterHints },
+				parameterHints:
+					this.options.parameterHints === undefined ? undefined : { enabled: this.options.parameterHints },
 				inlayHints: this.options.inlayHints,
 				codeLens: this.options.codeLens,
 				colorDecorators: this.options.colorDecorators,
 				colorDecoratorsActivatedOn: this.options.colorDecoratorsActivatedOn,
 				colorDecoratorsLimit: this.configurationService.getValue('editor.colorDecoratorsLimit', fontOverrides),
 				folding: this.configurationService.getValue('editor.folding', fontOverrides),
-				foldingMaximumRegions: this.configurationService.getValue('editor.foldingMaximumRegions', fontOverrides),
+				foldingMaximumRegions: this.configurationService.getValue(
+					'editor.foldingMaximumRegions',
+					fontOverrides,
+				),
 				foldingStrategy: this.configurationService.getValue('editor.foldingStrategy', fontOverrides),
 				defaultColorDecorators: this.options.defaultColorDecorators,
 				formatOnSave: this.options.formatOnSave,
@@ -373,21 +502,24 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				onApplyWorkspaceEdit: this.options.onApplyWorkspaceEdit,
 				placeholder: this.options.placeholder,
 				showUnicodeHighlights: this.options.showUnicodeHighlights,
-				registerBeforeSave: isProvidedResource ? undefined : hook => {
-					beforeSaveHooks.push(hook);
-					return toDisposable(() => {
-						const index = beforeSaveHooks.indexOf(hook);
-						if (index >= 0) beforeSaveHooks.splice(index, 1);
-					});
-				},
+				registerBeforeSave: isProvidedResource
+					? undefined
+					: hook => {
+							beforeSaveHooks.push(hook);
+							return toDisposable(() => {
+								const index = beforeSaveHooks.indexOf(hook);
+								if (index >= 0) beforeSaveHooks.splice(index, 1);
+							});
+						},
 			});
-			if (modelReference) workingCopy = new EditorWorkingCopy(
-				modelReference,
-				input,
-				this.options.workingCopyService,
-				input.resource.scheme === "untitled" ? this.options.onSave : undefined,
-			);
-			throwIfCancelled(signal, "Code editor input loading was cancelled");
+			if (modelReference)
+				workingCopy = new EditorWorkingCopy(
+					modelReference,
+					input,
+					this.options.workingCopyService,
+					input.resource.scheme === 'untitled' ? this.options.onSave : undefined,
+				);
+			throwIfCancelled(signal, 'Code editor input loading was cancelled');
 		} catch (error) {
 			part?.dispose();
 			workingCopy?.dispose();
@@ -406,34 +538,57 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 		const statusListeners = new DisposableStore();
 		statusListeners.add(part.onDidScrollChange(() => this.scrollChangeEmitter.fire()));
 		// Declarative language registration can finish after a file has opened.
-		statusListeners.add(resolvedModel.onDidChangeLanguage(() => {
-			this.languageId = resolvedModel.getLanguageId();
-			const fontOverrides = { resource: resolvedModel.uri, overrideIdentifier: this.languageId };
-			part.updateOptions({
-				minimap: this.options.minimap ?? this.readMinimapOptions(fontOverrides),
-				colorDecoratorsLimit: this.configurationService.getValue('editor.colorDecoratorsLimit', fontOverrides),
-				foldingMaximumRegions: this.configurationService.getValue('editor.foldingMaximumRegions', fontOverrides),
-				fontFamily: this.options.fontFamily ?? (this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined),
-				fontSize: this.options.fontSize ?? this.configurationService.getValue<number>('editor.fontSize', fontOverrides),
-				wordWrap: this.options.lineWrapping ?? this.configurationService.getValue(wordWrapConfiguration, fontOverrides),
-				wordWrapColumn: this.configurationService.getValue('editor.wordWrapColumn', fontOverrides),
-				formatOnType: this.configurationService.getValue<boolean>('editor.formatOnType', fontOverrides),
-			});
-			this.statusChangeEmitter.fire();
-		}));
-		statusListeners.add(part.onDidChangeCursorSelection(event => {
-			this.statusChangeEmitter.fire();
-			this.selectionChangeEmitter.fire(toEditorPaneSelectionChangeReason(event.source));
-		}));
-		statusListeners.add(part.onDidChangeModelContent(() => {
-			this.statusChangeEmitter.fire();
-			this.selectionChangeEmitter.fire(EditorPaneSelectionChangeReason.EDIT);
-		}));
-		if (modelReference) statusListeners.add(modelReference.onDidChangeExternalChange(() => {
-			if (modelReference.hasExternalChange) part.announceAccessibilityStatus?.("File changed on disk. Local edits are preserved.");
-			this.statusChangeEmitter.fire();
-		}));
-		if (input.onDidChangeLabel) statusListeners.add(input.onDidChangeLabel(() => part.updateOptions({ ariaLabel: input.label })));
+		statusListeners.add(
+			resolvedModel.onDidChangeLanguage(() => {
+				this.languageId = resolvedModel.getLanguageId();
+				const fontOverrides = { resource: resolvedModel.uri, overrideIdentifier: this.languageId };
+				part.updateOptions({
+					minimap: this.options.minimap ?? this.readMinimapOptions(fontOverrides),
+					colorDecoratorsLimit: this.configurationService.getValue(
+						'editor.colorDecoratorsLimit',
+						fontOverrides,
+					),
+					foldingMaximumRegions: this.configurationService.getValue(
+						'editor.foldingMaximumRegions',
+						fontOverrides,
+					),
+					fontFamily:
+						this.options.fontFamily ??
+						(this.configurationService.getValue<string>('editor.fontFamily', fontOverrides) || undefined),
+					fontSize:
+						this.options.fontSize ??
+						this.configurationService.getValue<number>('editor.fontSize', fontOverrides),
+					wordWrap:
+						this.options.lineWrapping ??
+						this.configurationService.getValue(wordWrapConfiguration, fontOverrides),
+					wordWrapColumn: this.configurationService.getValue('editor.wordWrapColumn', fontOverrides),
+					formatOnType: this.configurationService.getValue<boolean>('editor.formatOnType', fontOverrides),
+				});
+				this.statusChangeEmitter.fire();
+			}),
+		);
+		statusListeners.add(
+			part.onDidChangeCursorSelection(event => {
+				this.statusChangeEmitter.fire();
+				this.selectionChangeEmitter.fire(toEditorPaneSelectionChangeReason(event.source));
+			}),
+		);
+		statusListeners.add(
+			part.onDidChangeModelContent(() => {
+				this.statusChangeEmitter.fire();
+				this.selectionChangeEmitter.fire(EditorPaneSelectionChangeReason.EDIT);
+			}),
+		);
+		if (modelReference)
+			statusListeners.add(
+				modelReference.onDidChangeExternalChange(() => {
+					if (modelReference.hasExternalChange)
+						part.announceAccessibilityStatus?.('File changed on disk. Local edits are preserved.');
+					this.statusChangeEmitter.fire();
+				}),
+			);
+		if (input.onDidChangeLabel)
+			statusListeners.add(input.onDidChangeLabel(() => part.updateOptions({ ariaLabel: input.label })));
 		this.statusListener.value = statusListeners;
 		part.layout(this.dimension);
 		if (shouldRestoreFocus && !container.hidden) {
@@ -483,15 +638,23 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 				for (const hook of [...this.beforeSaveHooks]) await hook();
 			}
 			// A participant may await while this pane is reused for another input.
-			if (this.workingCopy !== workingCopy) { throw new CancellationError(); }
+			if (this.workingCopy !== workingCopy) {
+				throw new CancellationError();
+			}
 			await workingCopy?.save(new AbortController().signal, options);
 		} catch (error) {
-			if (isCancellationError(error)) { throw error; }
+			if (isCancellationError(error)) {
+				throw error;
+			}
 			const recovered = await this.handleSaveError(error);
-			if (recovered === true) { return; }
+			if (recovered === true) {
+				return;
+			}
 			// A presented failure remains a rejected save. Commands suppress cancellation so
 			// dismissing its recovery dialog does not present the same failure a second time.
-			if (recovered === false) { throw new CancellationError(undefined, error); }
+			if (recovered === false) {
+				throw new CancellationError(undefined, error);
+			}
 			throw error;
 		}
 	}
@@ -506,39 +669,50 @@ export class TextResourceEditor extends AbstractTextCodeEditor<EditorPanePart> i
 	}
 
 	private handleSaveKeydown(event: KeyboardEvent): void {
-		if (this.providedModel.value || event.defaultPrevented || event.isComposing || event.getModifierState("AltGraph")) return;
-		if ((!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== "s") return;
+		if (
+			this.providedModel.value ||
+			event.defaultPrevented ||
+			event.isComposing ||
+			event.getModifierState('AltGraph')
+		)
+			return;
+		if ((!event.ctrlKey && !event.metaKey) || event.shiftKey || event.altKey || event.key.toLowerCase() !== 's')
+			return;
 		stopEvent(event);
 		if (this.saving) return;
 		this.saving = true;
-		void this.save().then(() => {
-			this.part.value?.announceAccessibilityStatus?.("Saved");
-		}).catch(error => {
-			const message = error instanceof Error && error.message.trim().length > 0 ? error.message.trim() : "unknown error";
-			this.part.value?.announceAccessibilityStatus?.(`Save failed: ${message}`);
-		}).finally(() => {
-			this.saving = false;
-		});
+		void this.save()
+			.then(() => {
+				this.part.value?.announceAccessibilityStatus?.('Saved');
+			})
+			.catch(error => {
+				const message =
+					error instanceof Error && error.message.trim().length > 0 ? error.message.trim() : 'unknown error';
+				this.part.value?.announceAccessibilityStatus?.(`Save failed: ${message}`);
+			})
+			.finally(() => {
+				this.saving = false;
+			});
 	}
 
 	private requireContainer(): HTMLDivElement {
-		assertDefined(this.container, new ReferenceError("EditorPane has not been created"));
+		assertDefined(this.container, new ReferenceError('EditorPane has not been created'));
 		return this.container;
 	}
 }
 
 function reportSaveError(error: unknown): void {
-	console.error("Code editor save failed", error);
+	console.error('Code editor save failed', error);
 }
 
 export class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 	readonly resource: URI;
-	readonly backupKind = "text" as const;
+	readonly backupKind = 'text' as const;
 	readonly backupLanguageId: string | undefined;
 	readonly backupContentType: string | undefined;
-	readonly onDidChangeDirty: IWorkingCopy["onDidChangeDirty"];
-	readonly onDidChangeExternalChange: IWorkingCopy["onDidChangeExternalChange"];
-	readonly onDidChangeContent: IWorkingCopy["onDidChangeContent"];
+	readonly onDidChangeDirty: IWorkingCopy['onDidChangeDirty'];
+	readonly onDidChangeExternalChange: IWorkingCopy['onDidChangeExternalChange'];
+	readonly onDidChangeContent: IWorkingCopy['onDidChangeContent'];
 
 	constructor(
 		private readonly reference: TextModelReference,
@@ -578,8 +752,8 @@ export class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 	}
 
 	save(signal: AbortSignal, options?: ISaveOptions): Promise<void> {
-		throwIfCancelled(signal, "Code editor working-copy save was cancelled");
-		if (this.resource.scheme === "untitled") return this.saveUntitledDocument();
+		throwIfCancelled(signal, 'Code editor working-copy save was cancelled');
+		if (this.resource.scheme === 'untitled') return this.saveUntitledDocument();
 		return this.reference.save(signal, options);
 	}
 
@@ -594,6 +768,6 @@ export class EditorWorkingCopy extends Disposable implements IWorkingCopy {
 	private async saveUntitledDocument(): Promise<void> {
 		const result = await this.saveUntitled?.();
 		if (result === false) return;
-		if (!this.saveUntitled) throw new Error("Untitled code editor has no save handler");
+		if (!this.saveUntitled) throw new Error('Untitled code editor has no save handler');
 	}
 }

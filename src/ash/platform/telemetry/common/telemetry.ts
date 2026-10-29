@@ -25,9 +25,15 @@ export interface ITelemetryService {
 	readonly msftInternal?: boolean;
 	readonly sendErrorTelemetry: boolean;
 	publicLog(eventName: string, data?: ITelemetryData): void;
-	publicLog2<E extends ClassifiedEvent<OmitMetadata<T>> = never, T extends IGDPRProperty = never>(eventName: string, data?: StrictPropertyCheck<T, E>): void;
+	publicLog2<E extends ClassifiedEvent<OmitMetadata<T>> = never, T extends IGDPRProperty = never>(
+		eventName: string,
+		data?: StrictPropertyCheck<T, E>,
+	): void;
 	publicLogError(eventName: string, data?: ITelemetryData): void;
-	publicLogError2<E extends ClassifiedEvent<OmitMetadata<T>> = never, T extends IGDPRProperty = never>(eventName: string, data?: StrictPropertyCheck<T, E>): void;
+	publicLogError2<E extends ClassifiedEvent<OmitMetadata<T>> = never, T extends IGDPRProperty = never>(
+		eventName: string,
+		data?: StrictPropertyCheck<T, E>,
+	): void;
 	setExperimentProperty(name: string, value: string): void;
 	setCommonProperty(name: string, value: string | boolean | undefined): void;
 }

@@ -87,21 +87,29 @@ export class FontMeasurementsImpl extends Disposable {
 		this.cacheFor(targetWindow).values.set(key.getId(), value);
 		if (value.isTrusted || this._eviction.has(targetWindow)) return;
 		const eviction = this._eviction.set(targetWindow, new DisposableStore());
-		eviction.add(addDisposableListener(targetWindow, 'pagehide', () => {
-			this._cache.delete(targetWindow);
-			this._eviction.deleteAndDispose(targetWindow);
-		}));
-		eviction.add(disposableWindowTimeout(targetWindow, () => {
-			this._eviction.deleteAndDispose(targetWindow);
-			const cache = this.cacheFor(targetWindow).values;
-			let changed = false;
-			for (const [id, fontInfo] of cache) {
-				if (fontInfo.isTrusted) continue;
-				cache.delete(id);
-				changed = true;
-			}
-			if (changed) this._onDidChange.fire();
-		}, 5_000));
+		eviction.add(
+			addDisposableListener(targetWindow, 'pagehide', () => {
+				this._cache.delete(targetWindow);
+				this._eviction.deleteAndDispose(targetWindow);
+			}),
+		);
+		eviction.add(
+			disposableWindowTimeout(
+				targetWindow,
+				() => {
+					this._eviction.deleteAndDispose(targetWindow);
+					const cache = this.cacheFor(targetWindow).values;
+					let changed = false;
+					for (const [id, fontInfo] of cache) {
+						if (fontInfo.isTrusted) continue;
+						cache.delete(id);
+						changed = true;
+					}
+					if (changed) this._onDidChange.fire();
+				},
+				5_000,
+			),
+		);
 	}
 
 	private measure(targetWindow: Window, bareFontInfo: BareFontInfo): FontInfo {
@@ -129,38 +137,51 @@ export class FontMeasurementsImpl extends Disposable {
 		readCharWidths(targetWindow, bareFontInfo, requests);
 		const referenceWidth = monospace[0]!.width;
 		// Symbol fallback fonts can have different advances without changing ASCII spacing.
-		const isMonospace = bareFontInfo.fontFeatureSettings === EditorFontLigatures.OFF
-			&& monospace.every(request => Math.abs(request.width - referenceWidth) <= 0.001);
-		const canUseHalfwidthRightwardsArrow = (!isMonospace || halfArrow.width === referenceWidth)
-			&& halfArrow.width <= arrow.width;
-		return new FontInfo({
-			pixelRatio: PixelRatio.getInstance(targetWindow).value,
-			fontFamily: bareFontInfo.fontFamily,
-			fontWeight: bareFontInfo.fontWeight,
-			fontSize: bareFontInfo.fontSize,
-			fontFeatureSettings: bareFontInfo.fontFeatureSettings,
-			fontVariationSettings: bareFontInfo.fontVariationSettings,
-			lineHeight: bareFontInfo.lineHeight,
-			letterSpacing: bareFontInfo.letterSpacing,
-			isMonospace,
-			typicalHalfwidthCharacterWidth: halfwidth.width,
-			typicalFullwidthCharacterWidth: fullwidth.width,
-			canUseHalfwidthRightwardsArrow,
-			spaceWidth: space.width,
-			middotWidth: middot.width,
-			wsmiddotWidth: wordSeparatorMiddot.width,
-			maxDigitWidth: Math.max(...digits.map(request => request.width)),
-		}, true);
+		const isMonospace =
+			bareFontInfo.fontFeatureSettings === EditorFontLigatures.OFF &&
+			monospace.every(request => Math.abs(request.width - referenceWidth) <= 0.001);
+		const canUseHalfwidthRightwardsArrow =
+			(!isMonospace || halfArrow.width === referenceWidth) && halfArrow.width <= arrow.width;
+		return new FontInfo(
+			{
+				pixelRatio: PixelRatio.getInstance(targetWindow).value,
+				fontFamily: bareFontInfo.fontFamily,
+				fontWeight: bareFontInfo.fontWeight,
+				fontSize: bareFontInfo.fontSize,
+				fontFeatureSettings: bareFontInfo.fontFeatureSettings,
+				fontVariationSettings: bareFontInfo.fontVariationSettings,
+				lineHeight: bareFontInfo.lineHeight,
+				letterSpacing: bareFontInfo.letterSpacing,
+				isMonospace,
+				typicalHalfwidthCharacterWidth: halfwidth.width,
+				typicalFullwidthCharacterWidth: fullwidth.width,
+				canUseHalfwidthRightwardsArrow,
+				spaceWidth: space.width,
+				middotWidth: middot.width,
+				wsmiddotWidth: wordSeparatorMiddot.width,
+				maxDigitWidth: Math.max(...digits.map(request => request.width)),
+			},
+			true,
+		);
 	}
 }
 
 function isSerializedFontInfo(value: unknown): value is ISerializedFontInfo {
 	if (!isRecord(value) || value.version !== SERIALIZED_FONT_INFO_VERSION) return false;
-	if (typeof value.isMonospace !== 'boolean' || typeof value.canUseHalfwidthRightwardsArrow !== 'boolean') return false;
+	if (typeof value.isMonospace !== 'boolean' || typeof value.canUseHalfwidthRightwardsArrow !== 'boolean')
+		return false;
 	for (const key of ['fontFamily', 'fontWeight', 'fontFeatureSettings', 'fontVariationSettings']) {
 		if (typeof value[key] !== 'string') return false;
 	}
-	for (const key of ['pixelRatio', 'fontSize', 'lineHeight', 'typicalHalfwidthCharacterWidth', 'typicalFullwidthCharacterWidth', 'spaceWidth', 'maxDigitWidth']) {
+	for (const key of [
+		'pixelRatio',
+		'fontSize',
+		'lineHeight',
+		'typicalHalfwidthCharacterWidth',
+		'typicalFullwidthCharacterWidth',
+		'spaceWidth',
+		'maxDigitWidth',
+	]) {
 		if (typeof value[key] !== 'number' || !Number.isFinite(value[key]) || value[key] <= 0) return false;
 	}
 	for (const key of ['middotWidth', 'wsmiddotWidth']) {
@@ -170,19 +191,27 @@ function isSerializedFontInfo(value: unknown): value is ISerializedFontInfo {
 }
 
 function minimumWidth(fontInfo: FontInfo): number {
-	return Math.min(fontInfo.typicalHalfwidthCharacterWidth, fontInfo.typicalFullwidthCharacterWidth, fontInfo.spaceWidth, fontInfo.maxDigitWidth);
+	return Math.min(
+		fontInfo.typicalHalfwidthCharacterWidth,
+		fontInfo.typicalFullwidthCharacterWidth,
+		fontInfo.spaceWidth,
+		fontInfo.maxDigitWidth,
+	);
 }
 
 function clampUnreliableFontInfo(fontInfo: FontInfo): FontInfo {
-	return new FontInfo({
-		...fontInfo,
-		typicalHalfwidthCharacterWidth: Math.max(5, fontInfo.typicalHalfwidthCharacterWidth),
-		typicalFullwidthCharacterWidth: Math.max(5, fontInfo.typicalFullwidthCharacterWidth),
-		spaceWidth: Math.max(5, fontInfo.spaceWidth),
-		middotWidth: Math.max(5, fontInfo.middotWidth),
-		wsmiddotWidth: Math.max(5, fontInfo.wsmiddotWidth),
-		maxDigitWidth: Math.max(5, fontInfo.maxDigitWidth),
-	}, false);
+	return new FontInfo(
+		{
+			...fontInfo,
+			typicalHalfwidthCharacterWidth: Math.max(5, fontInfo.typicalHalfwidthCharacterWidth),
+			typicalFullwidthCharacterWidth: Math.max(5, fontInfo.typicalFullwidthCharacterWidth),
+			spaceWidth: Math.max(5, fontInfo.spaceWidth),
+			middotWidth: Math.max(5, fontInfo.middotWidth),
+			wsmiddotWidth: Math.max(5, fontInfo.wsmiddotWidth),
+			maxDigitWidth: Math.max(5, fontInfo.maxDigitWidth),
+		},
+		false,
+	);
 }
 
 export const FontMeasurements = new FontMeasurementsImpl();

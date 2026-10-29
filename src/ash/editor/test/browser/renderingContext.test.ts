@@ -4,7 +4,14 @@ import { Position } from '../../common/core/position.js';
 import { Range } from '../../common/core/range.js';
 import { type IViewLayout } from '../../common/viewModel.js';
 import { type ViewportData } from '../../common/viewLayout/viewLinesViewportData.js';
-import { HorizontalPosition, HorizontalRange, LineVisibleRanges, RenderingContext, RestrictedRenderingContext, type IViewLines } from '../../browser/view/renderingContext.js';
+import {
+	HorizontalPosition,
+	HorizontalRange,
+	LineVisibleRanges,
+	RenderingContext,
+	RestrictedRenderingContext,
+	type IViewLines,
+} from '../../browser/view/renderingContext.js';
 
 const visibleRange = new Range(2, 1, 4, 8);
 const viewportData = {
@@ -25,25 +32,28 @@ const viewLayout = {
 } as unknown as IViewLayout;
 
 test('RestrictedRenderingContext exposes the immutable viewport contract', () => {
-	const context = new class extends RestrictedRenderingContext { }(viewLayout, viewportData);
+	const context = new (class extends RestrictedRenderingContext {})(viewLayout, viewportData);
 
-	assert.deepEqual({
-		scrollWidth: context.scrollWidth,
-		scrollHeight: context.scrollHeight,
-		scrollLeft: context.scrollLeft,
-		scrollTop: context.scrollTop,
-		viewportWidth: context.viewportWidth,
-		viewportHeight: context.viewportHeight,
-		bigNumbersDelta: context.bigNumbersDelta,
-	}, {
-		scrollWidth: 800,
-		scrollHeight: 1_200,
-		scrollLeft: 30,
-		scrollTop: 240,
-		viewportWidth: 600,
-		viewportHeight: 400,
-		bigNumbersDelta: 100,
-	});
+	assert.deepEqual(
+		{
+			scrollWidth: context.scrollWidth,
+			scrollHeight: context.scrollHeight,
+			scrollLeft: context.scrollLeft,
+			scrollTop: context.scrollTop,
+			viewportWidth: context.viewportWidth,
+			viewportHeight: context.viewportHeight,
+			bigNumbersDelta: context.bigNumbersDelta,
+		},
+		{
+			scrollWidth: 800,
+			scrollHeight: 1_200,
+			scrollLeft: 30,
+			scrollTop: 240,
+			viewportWidth: 600,
+			viewportHeight: 400,
+			bigNumbersDelta: 100,
+		},
+	);
 	assert.equal(context.visibleRange, visibleRange);
 	assert.equal(context.getScrolledTopFromAbsoluteTop(300), 60);
 	assert.equal(context.getVerticalOffsetForLineNumber(3), 60);
@@ -62,7 +72,10 @@ test('RenderingContext combines DOM and GPU line geometry', () => {
 	};
 	const context = new RenderingContext(viewLayout, viewportData, domLines, gpuLines);
 
-	assert.deepEqual(context.linesVisibleRangesForRange(visibleRange, true)?.map(range => range.lineNumber), [2, 4]);
+	assert.deepEqual(
+		context.linesVisibleRangesForRange(visibleRange, true)?.map(range => range.lineNumber),
+		[2, 4],
+	);
 	assert.deepEqual(context.visibleRangeForPosition(new Position(2, 1)), new HorizontalPosition(false, 12.6));
 });
 

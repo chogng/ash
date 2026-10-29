@@ -14,6 +14,16 @@ export interface ITextEditingPolicy {
 	readonly typeWithInterceptors: typeof TypeOperations.typeWithInterceptors;
 	readonly compositionEndWithInterceptors: typeof TypeOperations.compositionEndWithInterceptors;
 	readonly isAutoClosingPairDelete: typeof DeleteOperations.isAutoClosingPairDelete;
-	deleteAutoClosedPair(config: CursorConfiguration, model: ICursorSimpleModel, selections: Selection[], autoClosedCharacters: Range[]): [boolean, Array<ICommand | null>] | undefined;
-	getEnterAction(strategy: EditorAutoIndentStrategy, model: ITextModel, range: Range, configurations: ILanguageConfigurationService): CompleteEnterAction | null;
+	deleteAutoClosedPair(
+		config: CursorConfiguration,
+		model: ICursorSimpleModel,
+		selections: Selection[],
+		autoClosedCharacters: Range[],
+	): [boolean, Array<ICommand | null>] | undefined;
+	getEnterAction(
+		strategy: EditorAutoIndentStrategy,
+		model: ITextModel,
+		range: Range,
+		configurations: ILanguageConfigurationService,
+	): CompleteEnterAction | null;
 }

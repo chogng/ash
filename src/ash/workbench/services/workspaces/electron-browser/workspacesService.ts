@@ -4,7 +4,14 @@ import type { URI } from '../../../../base/common/uri.js';
 import { IMainProcessService } from '../../../../platform/ipc/common/mainProcessService.js';
 import type { IChannel } from '../../../../base/parts/ipc/common/ipc.js';
 import { IStorageService, StorageScope } from '../../../../platform/storage/common/storage.js';
-import { IWorkspacesService, LEGACY_RECENT_WORKSPACES_STORAGE_KEY, restoreRecentlyOpened, toStoreData, type IRecent, type IRecentlyOpened } from '../../../../platform/workspaces/common/workspaces.js';
+import {
+	IWorkspacesService,
+	LEGACY_RECENT_WORKSPACES_STORAGE_KEY,
+	restoreRecentlyOpened,
+	toStoreData,
+	type IRecent,
+	type IRecentlyOpened,
+} from '../../../../platform/workspaces/common/workspaces.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 
 /** Desktop windows consume the shared history and import their old Welcome records once. */
@@ -14,7 +21,10 @@ export class ElectronWorkspacesService extends Disposable implements IWorkspaces
 	private migration: Promise<void> | undefined;
 	private readonly history: IChannel;
 
-	constructor(@IStorageService private readonly storage: IStorageService, @IMainProcessService mainProcessService: IMainProcessService) {
+	constructor(
+		@IStorageService private readonly storage: IStorageService,
+		@IMainProcessService mainProcessService: IMainProcessService,
+	) {
 		super();
 		this.history = mainProcessService.getChannel('workspaces');
 		const subscription = this.history.listen('onDidChangeRecentlyOpened')(() => this.changed.fire());
@@ -33,7 +43,10 @@ export class ElectronWorkspacesService extends Disposable implements IWorkspaces
 
 	public async removeRecentlyOpened(paths: readonly URI[]): Promise<void> {
 		await this.migrate();
-		await this.history.call('removeRecentlyOpened', paths.map(path => path.toString()));
+		await this.history.call(
+			'removeRecentlyOpened',
+			paths.map(path => path.toString()),
+		);
 	}
 
 	public async clearRecentlyOpened(): Promise<void> {

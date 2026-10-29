@@ -1,6 +1,6 @@
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { URI } from "../../../../base/common/uri.js";
-import { type IWorkingCopyBackupService, type WorkingCopyBackup } from "../common/workingCopyBackupService.js";
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { URI } from '../../../../base/common/uri.js';
+import { type IWorkingCopyBackupService, type WorkingCopyBackup } from '../common/workingCopyBackupService.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { type IBackupWorkspace, BackupError } from '../../../../platform/backup/common/backup.js';
 
@@ -8,7 +8,7 @@ interface StoredBackup {
 	readonly key: string;
 	readonly workspaceId: string;
 	readonly resource: string;
-	readonly kind: WorkingCopyBackup["kind"];
+	readonly kind: WorkingCopyBackup['kind'];
 	readonly content: string;
 	readonly updatedAt: number;
 	readonly revision?: string;
@@ -17,9 +17,9 @@ interface StoredBackup {
 	readonly label?: string;
 }
 
-const DATABASE_NAME = "ash-working-copy-backups";
+const DATABASE_NAME = 'ash-working-copy-backups';
 const DATABASE_VERSION = 1;
-const STORE_NAME = "backups";
+const STORE_NAME = 'backups';
 
 /** IndexedDB-backed backups for browser and disconnected UI runtimes. */
 export class IndexedDbWorkingCopyBackupService extends Disposable implements IWorkingCopyBackupService {
@@ -27,20 +27,33 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 	private readonly fallback = new Map<string, StoredBackup>();
 	private readonly observed = new Map<string, StoredBackup>();
 	private readonly snapshots = new WeakMap<WorkingCopyBackup, StoredBackup>();
-	private movedRecords: { readonly workspaceId: string; readonly records: readonly StoredBackup[]; } | undefined;
+	private movedRecords: { readonly workspaceId: string; readonly records: readonly StoredBackup[] } | undefined;
 
-	constructor(private workspaceId: string, factory: IDBFactory | undefined = globalThis.indexedDB) {
+	constructor(
+		private workspaceId: string,
+		factory: IDBFactory | undefined = globalThis.indexedDB,
+	) {
 		super();
-		if (!workspaceId.trim()) throw new TypeError("Working-copy backup service requires a workspace id");
+		if (!workspaceId.trim()) throw new TypeError('Working-copy backup service requires a workspace id');
 		this.database = factory ? openDatabase(factory) : Promise.resolve(undefined);
-		this._register(toDisposable(() => { void this.database.then(database => database?.close()).catch(() => undefined); }));
+		this._register(
+			toDisposable(() => {
+				void this.database.then(database => database?.close()).catch(() => undefined);
+			}),
+		);
 	}
 
 	async list(): Promise<readonly WorkingCopyBackup[]> {
 		const workspaceId = this.workspaceId;
 		const database = await this.database;
 		const records = database
-			? await request<StoredBackup[]>(database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).index("workspaceId").getAll(workspaceId))
+			? await request<StoredBackup[]>(
+					database
+						.transaction(STORE_NAME, 'readonly')
+						.objectStore(STORE_NAME)
+						.index('workspaceId')
+						.getAll(workspaceId),
+				)
 			: [...this.fallback.values()].filter(record => record.workspaceId === workspaceId);
 		const result = deserialize(records);
 		const byResource = new Map(records.map(record => [record.resource, record]));
@@ -58,7 +71,18 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 		const key = backupKey(workspaceId, backup.resource);
 		const expected = this.observed.get(key);
 		const database = await this.database;
-		const record = { key, workspaceId, resource: backup.resource.toString(), kind: backup.kind, content: backup.content, updatedAt: backup.updatedAt, revision: generateUuid(), ...(backup.languageId ? { languageId: backup.languageId } : {}), ...(backup.contentType ? { contentType: backup.contentType } : {}), ...(backup.label ? { label: backup.label } : {}) } satisfies StoredBackup;
+		const record = {
+			key,
+			workspaceId,
+			resource: backup.resource.toString(),
+			kind: backup.kind,
+			content: backup.content,
+			updatedAt: backup.updatedAt,
+			revision: generateUuid(),
+			...(backup.languageId ? { languageId: backup.languageId } : {}),
+			...(backup.contentType ? { contentType: backup.contentType } : {}),
+			...(backup.label ? { label: backup.label } : {}),
+		} satisfies StoredBackup;
 		if (!database) {
 			if (!sameVersion(this.fallback.get(key), expected)) throw new BackupError('conflict');
 			this.fallback.set(key, record);
@@ -75,8 +99,12 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 				}
 				store.put(record);
 			};
-			try { await transactionDone(transaction); }
-			catch (error) { if (conflict) throw new BackupError('conflict'); throw error; }
+			try {
+				await transactionDone(transaction);
+			} catch (error) {
+				if (conflict) throw new BackupError('conflict');
+				throw error;
+			}
 		}
 		this.observed.set(key, record);
 	}
@@ -87,7 +115,6 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 		if (expected) await this.deleteRecordIfUnchanged(expected);
 	}
 
-
 	/** Move only observed source versions; conflicting target drafts abort the whole transaction. */
 	async moveBackups(target: IBackupWorkspace): Promise<void> {
 		const sourceId = this.workspaceId;
@@ -95,12 +122,19 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 		const prepare = (source: readonly StoredBackup[], destination: readonly StoredBackup[]): StoredBackup[] => {
 			const current = new Map(source.map(record => [record.key, record]));
 			for (const [key, expected] of this.observed) {
-				if (expected.workspaceId === sourceId && !sameVersion(current.get(key), expected)) throw new BackupError('conflict');
+				if (expected.workspaceId === sourceId && !sameVersion(current.get(key), expected))
+					throw new BackupError('conflict');
 			}
 			const existing = new Set(destination.map(record => record.resource));
 			return source.map(record => {
-				if (!sameVersion(record, this.observed.get(record.key)) || existing.has(record.resource)) throw new BackupError('conflict');
-				return { ...record, key: backupKey(target.id, URI.parse(record.resource)), workspaceId: target.id, revision: generateUuid() };
+				if (!sameVersion(record, this.observed.get(record.key)) || existing.has(record.resource))
+					throw new BackupError('conflict');
+				return {
+					...record,
+					key: backupKey(target.id, URI.parse(record.resource)),
+					workspaceId: target.id,
+					revision: generateUuid(),
+				};
 			});
 		};
 		const database = await this.database;
@@ -109,7 +143,7 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 			const records = [...this.fallback.values()];
 			const source = records.filter(record => record.workspaceId === sourceId);
 			const destination = records.filter(record => record.workspaceId === target.id);
-			const moved = movedRecords = prepare(source, destination);
+			const moved = (movedRecords = prepare(source, destination));
 			for (const record of moved) this.fallback.set(record.key, record);
 			for (const record of source) this.fallback.delete(record.key);
 		} else {
@@ -122,31 +156,43 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 			const loaded = () => {
 				if (++completed !== 2) return;
 				try {
-					const moved = movedRecords = prepare(source.result, destination.result);
+					const moved = (movedRecords = prepare(source.result, destination.result));
 					for (const record of moved) store.put(record);
 					for (const record of source.result) store.delete(record.key);
-				} catch (error) { failure = error; transaction.abort(); }
+				} catch (error) {
+					failure = error;
+					transaction.abort();
+				}
 			};
 			source.onsuccess = loaded;
 			destination.onsuccess = loaded;
-			try { await transactionDone(transaction); }
-			catch (error) { throw failure ?? error; }
+			try {
+				await transactionDone(transaction);
+			} catch (error) {
+				throw failure ?? error;
+			}
 		}
 		for (const [key, record] of this.observed) if (record.workspaceId === sourceId) this.observed.delete(key);
 		this.movedRecords = { workspaceId: target.id, records: movedRecords };
 	}
 
 	switchWorkspace(workspaceId: string): void {
-		if (!workspaceId.trim()) throw new TypeError("Working-copy backup service requires a workspace id");
+		if (!workspaceId.trim()) throw new TypeError('Working-copy backup service requires a workspace id');
 		this.workspaceId = workspaceId;
 		this.observed.clear();
-		if (this.movedRecords?.workspaceId === workspaceId) for (const record of this.movedRecords.records) this.observed.set(record.key, record);
+		if (this.movedRecords?.workspaceId === workspaceId)
+			for (const record of this.movedRecords.records) this.observed.set(record.key, record);
 		this.movedRecords = undefined;
 	}
 
 	/** Migration may remove only the source version acknowledged by the new storage owner. */
 	async deleteIfUnchanged(backup: WorkingCopyBackup): Promise<void> {
-		const expected = this.snapshots.get(backup) ?? { ...backup, key: backupKey(this.workspaceId, backup.resource), workspaceId: this.workspaceId, resource: backup.resource.toString() };
+		const expected = this.snapshots.get(backup) ?? {
+			...backup,
+			key: backupKey(this.workspaceId, backup.resource),
+			workspaceId: this.workspaceId,
+			resource: backup.resource.toString(),
+		};
 		await this.deleteRecordIfUnchanged(expected);
 	}
 
@@ -176,8 +222,15 @@ export class IndexedDbWorkingCopyBackupService extends Disposable implements IWo
 
 function sameVersion(record: StoredBackup | undefined, expected: StoredBackup | undefined): boolean {
 	if (!record || !expected) return record === expected;
-	return record.revision === expected.revision && record.kind === expected.kind && record.content === expected.content && record.updatedAt === expected.updatedAt
-		&& record.languageId === expected.languageId && record.contentType === expected.contentType && record.label === expected.label;
+	return (
+		record.revision === expected.revision &&
+		record.kind === expected.kind &&
+		record.content === expected.content &&
+		record.updatedAt === expected.updatedAt &&
+		record.languageId === expected.languageId &&
+		record.contentType === expected.contentType &&
+		record.label === expected.label
+	);
 }
 
 function backupKey(workspaceId: string, resource: URI): string {
@@ -189,11 +242,13 @@ function openDatabase(factory: IDBFactory): Promise<IDBDatabase> {
 		const opening = factory.open(DATABASE_NAME, DATABASE_VERSION);
 		opening.onupgradeneeded = () => {
 			if (opening.result.objectStoreNames.contains(STORE_NAME)) return;
-			opening.result.createObjectStore(STORE_NAME, { keyPath: "key" }).createIndex("workspaceId", "workspaceId", { unique: false });
+			opening.result
+				.createObjectStore(STORE_NAME, { keyPath: 'key' })
+				.createIndex('workspaceId', 'workspaceId', { unique: false });
 		};
 		opening.onsuccess = () => resolve(opening.result);
-		opening.onerror = () => reject(opening.error ?? new Error("Failed to open working-copy backup database"));
-		opening.onblocked = () => reject(new Error("Working-copy backup database upgrade is blocked"));
+		opening.onerror = () => reject(opening.error ?? new Error('Failed to open working-copy backup database'));
+		opening.onblocked = () => reject(new Error('Working-copy backup database upgrade is blocked'));
 	});
 }
 
@@ -201,7 +256,17 @@ function deserialize(records: readonly StoredBackup[]): readonly WorkingCopyBack
 	const backups: WorkingCopyBackup[] = [];
 	for (const record of [...records].sort((left, right) => left.updatedAt - right.updatedAt)) {
 		try {
-			backups.push(Object.freeze({ resource: URI.parse(record.resource), kind: record.kind, content: record.content, updatedAt: record.updatedAt, ...(record.languageId ? { languageId: record.languageId } : {}), ...(record.contentType ? { contentType: record.contentType } : {}), ...(record.label ? { label: record.label } : {}) }));
+			backups.push(
+				Object.freeze({
+					resource: URI.parse(record.resource),
+					kind: record.kind,
+					content: record.content,
+					updatedAt: record.updatedAt,
+					...(record.languageId ? { languageId: record.languageId } : {}),
+					...(record.contentType ? { contentType: record.contentType } : {}),
+					...(record.label ? { label: record.label } : {}),
+				}),
+			);
 		} catch (error) {
 			console.error(`Ignoring invalid working-copy backup '${record.resource}'`, error);
 		}
@@ -212,20 +277,24 @@ function deserialize(records: readonly StoredBackup[]): readonly WorkingCopyBack
 function request<T>(value: IDBRequest<T>): Promise<T> {
 	return new Promise((resolve, reject) => {
 		value.onsuccess = () => resolve(value.result);
-		value.onerror = () => reject(value.error ?? new Error("Working-copy backup database request failed"));
+		value.onerror = () => reject(value.error ?? new Error('Working-copy backup database request failed'));
 	});
 }
 
 function transactionDone(transaction: IDBTransaction): Promise<void> {
 	return new Promise((resolve, reject) => {
 		transaction.oncomplete = () => resolve();
-		transaction.onerror = () => reject(transaction.error ?? new Error("Working-copy backup transaction failed"));
-		transaction.onabort = () => reject(transaction.error ?? new Error("Working-copy backup transaction was aborted"));
+		transaction.onerror = () => reject(transaction.error ?? new Error('Working-copy backup transaction failed'));
+		transaction.onabort = () =>
+			reject(transaction.error ?? new Error('Working-copy backup transaction was aborted'));
 	});
 }
 
 function validateBackup(backup: WorkingCopyBackup): void {
-	if (!backup.resource || typeof backup.content !== "string") throw new TypeError("Working-copy backup requires a resource and serialized content");
-	if (backup.kind !== "text" && backup.kind !== "structuredDocument") throw new TypeError("Working-copy backup kind is invalid");
-	if (!Number.isSafeInteger(backup.updatedAt) || backup.updatedAt < 0) throw new RangeError("Working-copy backup timestamp is invalid");
+	if (!backup.resource || typeof backup.content !== 'string')
+		throw new TypeError('Working-copy backup requires a resource and serialized content');
+	if (backup.kind !== 'text' && backup.kind !== 'structuredDocument')
+		throw new TypeError('Working-copy backup kind is invalid');
+	if (!Number.isSafeInteger(backup.updatedAt) || backup.updatedAt < 0)
+		throw new RangeError('Working-copy backup timestamp is invalid');
 }

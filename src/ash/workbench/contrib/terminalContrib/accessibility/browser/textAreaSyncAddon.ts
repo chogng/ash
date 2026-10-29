@@ -1,7 +1,10 @@
 import type { ITerminalAddon, Terminal } from '@xterm/xterm';
 import { Disposable, MutableDisposable } from '../../../../../base/common/lifecycle.js';
 import { IAccessibilityService } from '../../../../../platform/accessibility/common/accessibility.js';
-import { TerminalCapability, type ITerminalCapabilityStore } from '../../../../../platform/terminal/common/capabilities/capabilities.js';
+import {
+	TerminalCapability,
+	type ITerminalCapabilityStore,
+} from '../../../../../platform/terminal/common/capabilities/capabilities.js';
 import type { IPromptInputModel } from '../../../../../platform/terminal/common/capabilities/commandDetection/promptInputModel.js';
 
 /** Exposes the shell's parsed input and cursor to a screen reader without sending input. */

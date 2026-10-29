@@ -8,9 +8,11 @@ import { ModelPickerDetailsMenu } from '../../browser/widget/input/modelPicker/m
 const environment = new JSDOM('<!doctype html><body></body>');
 suiteTeardown(() => environment.window.close());
 const entry: ModelCatalogEntry = {
-	model: { provider: 'openai', model: 'test-model' }, displayName: 'Test Model',
+	model: { provider: 'openai', model: 'test-model' },
+	displayName: 'Test Model',
 	description: 'For demanding coding tasks.\nSupports images and tools.',
-	longContext: false, accelerationOptions: [{ id: 'priority', name: 'Fast', description: 'Faster responses, increased usage' }],
+	longContext: false,
+	accelerationOptions: [{ id: 'priority', name: 'Fast', description: 'Faster responses, increased usage' }],
 };
 
 test('Model card displays the provider description verbatim and exposes it to keyboard users', () => {
@@ -18,11 +20,22 @@ test('Model card displays the provider description verbatim and exposes it to ke
 	card.update(entry);
 	environment.window.document.body.append(card.domNode);
 	card.focus();
-	assert.deepEqual({
-		text: card.domNode.textContent, label: card.domNode.getAttribute('aria-label'),
-		description: card.domNode.getAttribute('aria-description'), focused: environment.window.document.activeElement === card.domNode,
-		controls: card.domNode.querySelectorAll('input, button').length,
-	}, { text: entry.description, label: entry.displayName, description: entry.description, focused: true, controls: 0 });
+	assert.deepEqual(
+		{
+			text: card.domNode.textContent,
+			label: card.domNode.getAttribute('aria-label'),
+			description: card.domNode.getAttribute('aria-description'),
+			focused: environment.window.document.activeElement === card.domNode,
+			controls: card.domNode.querySelectorAll('input, button').length,
+		},
+		{
+			text: entry.description,
+			label: entry.displayName,
+			description: entry.description,
+			focused: true,
+			controls: 0,
+		},
+	);
 });
 
 test('Model card updates retained description text safely without losing keyboard focus', () => {
@@ -54,9 +67,19 @@ test('Model details hides missing descriptions and shows the next model without 
 			assert.equal(details.domNode.hidden, true);
 			assert.equal(details.domNode.textContent, '');
 		}
-		details.show({ ...entry, model: { provider: 'custom', model: 'other' }, displayName: 'Other model', description: 'Other description' }, row);
+		details.show(
+			{
+				...entry,
+				model: { provider: 'custom', model: 'other' },
+				displayName: 'Other model',
+				description: 'Other description',
+			},
+			row,
+		);
 		details.focus();
 		assert.equal(details.domNode.textContent, 'Other description');
 		assert.equal(document.activeElement?.getAttribute('aria-label'), 'Other model');
-	} finally { picker.remove(); }
+	} finally {
+		picker.remove();
+	}
 });

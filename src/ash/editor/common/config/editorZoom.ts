@@ -12,7 +12,7 @@ const MIN_ZOOM_LEVEL = -5;
 const MAX_ZOOM_LEVEL = 20;
 
 /** Realm-wide editor zoom state, matching VS Code's zoom-level semantics. */
-export const EditorZoom: IEditorZoom = new class implements IEditorZoom {
+export const EditorZoom: IEditorZoom = new (class implements IEditorZoom {
 	private zoomLevel = 0;
 	private readonly changeEmitter = new Emitter<number>();
 
@@ -31,4 +31,4 @@ export const EditorZoom: IEditorZoom = new class implements IEditorZoom {
 		this.zoomLevel = nextZoomLevel;
 		this.changeEmitter.fire(nextZoomLevel);
 	}
-};
+})();

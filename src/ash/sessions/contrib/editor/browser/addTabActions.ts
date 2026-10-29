@@ -32,21 +32,23 @@ export function registerAddTabActions(
 	];
 	for (const [order, action] of actions.entries()) {
 		registrations.add(CommandsRegistry.register(action.id, action.run));
-		registrations.add(MenusRegistry.appendMenuItems([
-			{
-				id: Menus.CodeAddTab,
-				item: { command: { id: action.id, title: action.title, icon: action.icon }, order },
-			},
-			...([MenuId.CommandPalette, MenuId.MenubarViewMenu].map(id => ({
-				id,
-				item: {
-					command: { id: action.id, title: action.title, category: SessionsCategories.Sessions },
-					when,
-					order: order + 4,
-					group: '2_code_layout',
+		registrations.add(
+			MenusRegistry.appendMenuItems([
+				{
+					id: Menus.CodeAddTab,
+					item: { command: { id: action.id, title: action.title, icon: action.icon }, order },
 				},
-			}))),
-		]));
+				...[MenuId.CommandPalette, MenuId.MenubarViewMenu].map(id => ({
+					id,
+					item: {
+						command: { id: action.id, title: action.title, category: SessionsCategories.Sessions },
+						when,
+						order: order + 4,
+						group: '2_code_layout',
+					},
+				})),
+			]),
+		);
 	}
 	return registrations;
 }

@@ -1,5 +1,4 @@
 export class FastDomNode<T extends HTMLElement> {
-
 	private _maxWidth: string = '';
 	private _width: string = '';
 	private _height: string = '';
@@ -30,9 +29,7 @@ export class FastDomNode<T extends HTMLElement> {
 	private _contain: 'none' | 'strict' | 'content' | 'size' | 'layout' | 'style' | 'paint' = 'none';
 	private _boxShadow: string = '';
 
-	constructor(
-		public readonly domNode: T
-	) { }
+	constructor(public readonly domNode: T) {}
 
 	public focus(): void {
 		this.domNode.focus();
@@ -315,7 +312,7 @@ export class FastDomNode<T extends HTMLElement> {
 }
 
 function numberAsPixels(value: number | string): string {
-	return (typeof value === 'number' ? `${value}px` : value);
+	return typeof value === 'number' ? `${value}px` : value;
 }
 
 export function createFastDomNode<T extends HTMLElement>(domNode: T): FastDomNode<T> {

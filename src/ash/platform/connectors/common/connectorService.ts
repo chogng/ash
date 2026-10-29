@@ -1,14 +1,14 @@
-import type { Event } from "../../../base/common/event.js";
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import type { Event } from '../../../base/common/event.js';
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export type ConnectorAccount = { readonly id: string; readonly displayName: string; };
+export type ConnectorAccount = { readonly id: string; readonly displayName: string };
 
 export type ConnectorState =
-	| { readonly status: "disconnected"; }
-	| { readonly status: "connecting"; }
-	| { readonly status: "connected"; readonly account: ConnectorAccount; }
-	| { readonly status: "unavailable"; readonly reason: string; }
-	| { readonly status: "reauthorizationRequired"; readonly account: ConnectorAccount; };
+	| { readonly status: 'disconnected' }
+	| { readonly status: 'connecting' }
+	| { readonly status: 'connected'; readonly account: ConnectorAccount }
+	| { readonly status: 'unavailable'; readonly reason: string }
+	| { readonly status: 'reauthorizationRequired'; readonly account: ConnectorAccount };
 
 export interface ConnectorView {
 	readonly id: string;
@@ -21,7 +21,7 @@ export interface ConnectorView {
 	/** Saved connection intent; account authorization and credentials survive disconnection. */
 	readonly enabled: boolean;
 	readonly state: ConnectorState;
-	readonly oauthMethods: readonly ("browser" | "device")[];
+	readonly oauthMethods: readonly ('browser' | 'device')[];
 	readonly canConnectApiToken: boolean;
 	readonly canConnectOAuth: boolean;
 	readonly canDisconnect: boolean;
@@ -51,4 +51,4 @@ export interface IConnectorService {
 	revokeOAuth(connector: ConnectorView, catalogGeneration: number): Promise<void>;
 }
 
-export const IConnectorService = createServiceIdentifier<IConnectorService>("connectorService");
+export const IConnectorService = createServiceIdentifier<IConnectorService>('connectorService');

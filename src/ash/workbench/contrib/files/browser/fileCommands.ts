@@ -15,26 +15,46 @@ import { VIEW_ID } from '../common/files.js';
 import { EditorResourceAccessor, SideBySideEditor } from '../../../common/editor.js';
 import { extractSelection } from '../../../../platform/opener/common/opener.js';
 
-export async function copyFilePath(accessor: ServicesAccessor, resourceArgument?: unknown, selectedResources?: unknown): Promise<void> {
-	const paths = resolveCopyResources(accessor, resourceArgument, selectedResources).map(resource => resource.scheme === Schemas.file ? resource.fsPath : getRemoteWorkspacePath(resource));
+export async function copyFilePath(
+	accessor: ServicesAccessor,
+	resourceArgument?: unknown,
+	selectedResources?: unknown,
+): Promise<void> {
+	const paths = resolveCopyResources(accessor, resourceArgument, selectedResources).map(resource =>
+		resource.scheme === Schemas.file ? resource.fsPath : getRemoteWorkspacePath(resource),
+	);
 	await accessor.get(IClipboardService).writeText(paths.join(isWindows ? '\r\n' : '\n'));
 }
 
-export async function copyRelativeFilePath(accessor: ServicesAccessor, resourceArgument?: unknown, selectedResources?: unknown): Promise<void> {
+export async function copyRelativeFilePath(
+	accessor: ServicesAccessor,
+	resourceArgument?: unknown,
+	selectedResources?: unknown,
+): Promise<void> {
 	const workspace = accessor.get(IWorkspaceContextService);
 	const paths = resolveCopyResources(accessor, resourceArgument, selectedResources).map(resource => {
 		const folder = workspace.getWorkspaceFolder(resource);
 		if (!folder) {
-			throw new Error(localize({ bundle: 'ash', key: 'workbench.copyRelativePathOutsideWorkspace' }, 'The file is outside the current workspace.'));
+			throw new Error(
+				localize(
+					{ bundle: 'ash', key: 'workbench.copyRelativePathOutsideWorkspace' },
+					'The file is outside the current workspace.',
+				),
+			);
 		}
 		return workspaceRelativePath(folder.uri, resource);
 	});
 	await accessor.get(IClipboardService).writeText(paths.join(isWindows ? '\r\n' : '\n'));
 }
 
-function resolveCopyResources(accessor: ServicesAccessor, argument: unknown, selectedResources: unknown): readonly URI[] {
+function resolveCopyResources(
+	accessor: ServicesAccessor,
+	argument: unknown,
+	selectedResources: unknown,
+): readonly URI[] {
 	if (selectedResources !== undefined) {
-		if (!Array.isArray(selectedResources) || !selectedResources.every(resource => resource instanceof URI)) throw new TypeError('File command requires resource URIs');
+		if (!Array.isArray(selectedResources) || !selectedResources.every(resource => resource instanceof URI))
+			throw new TypeError('File command requires resource URIs');
 		return selectedResources.map(resource => resolveFileResource(accessor, resource));
 	}
 	if (argument === undefined || argument instanceof URI) {
@@ -48,8 +68,16 @@ function resolveCopyResources(accessor: ServicesAccessor, argument: unknown, sel
 		return [resolveFileResource(accessor, argument)];
 	}
 	const context = resolveCommandsContext([argument], accessor.get(IEditorGroupsService));
-	if (context.groupedEditors.length === 0) throw new TypeError('File command requires a resource URI or editor context');
-	return context.groupedEditors.flatMap(({ editors }) => editors.map(editor => resolveFileResource(accessor, EditorResourceAccessor.getOriginalUri(editor, { supportSideBySide: SideBySideEditor.PRIMARY }))));
+	if (context.groupedEditors.length === 0)
+		throw new TypeError('File command requires a resource URI or editor context');
+	return context.groupedEditors.flatMap(({ editors }) =>
+		editors.map(editor =>
+			resolveFileResource(
+				accessor,
+				EditorResourceAccessor.getOriginalUri(editor, { supportSideBySide: SideBySideEditor.PRIMARY }),
+			),
+		),
+	);
 }
 
 export function resolveFileResource(accessor: ServicesAccessor, resourceArgument: unknown): URI {
@@ -57,16 +85,24 @@ export function resolveFileResource(accessor: ServicesAccessor, resourceArgument
 	if (resourceArgument instanceof URI) {
 		resource = resourceArgument;
 	} else if (resourceArgument === undefined) {
-		resource = EditorResourceAccessor.getOriginalUri(accessor.get(IEditorService).activeEditor, { supportSideBySide: SideBySideEditor.PRIMARY });
+		resource = EditorResourceAccessor.getOriginalUri(accessor.get(IEditorService).activeEditor, {
+			supportSideBySide: SideBySideEditor.PRIMARY,
+		});
 	} else {
-		resource = EditorResourceAccessor.getOriginalUri(resolveCommandsContext([resourceArgument], accessor.get(IEditorGroupsService)).groupedEditors[0]?.editors[0], { supportSideBySide: SideBySideEditor.PRIMARY });
+		resource = EditorResourceAccessor.getOriginalUri(
+			resolveCommandsContext([resourceArgument], accessor.get(IEditorGroupsService)).groupedEditors[0]
+				?.editors[0],
+			{ supportSideBySide: SideBySideEditor.PRIMARY },
+		);
 		if (!resource) throw new TypeError('File command requires a resource URI or editor context');
 	}
 	if (!resource) {
 		throw new Error(localize({ bundle: 'ash', key: 'workbench.copyPathNoFile' }, 'Open a file to copy its path.'));
 	}
 	if (resource.scheme !== Schemas.file && !isRemoteResource(resource)) {
-		throw new Error(localize({ bundle: 'ash', key: 'workbench.copyPathUnsupported' }, 'This editor does not have a file path.'));
+		throw new Error(
+			localize({ bundle: 'ash', key: 'workbench.copyPathUnsupported' }, 'This editor does not have a file path.'),
+		);
 	}
 	return extractSelection(resource).uri;
 }

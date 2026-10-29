@@ -5,7 +5,10 @@ import { suite, test } from 'mocha';
 import { CommandsRegistry } from '../../../../../platform/commands/common/commands.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IStorageService } from '../../../../../platform/storage/common/storage.js';
-import { ISessionsLayoutService, type ISessionsEntry } from '../../../../services/layout/common/sessionsLayoutService.js';
+import {
+	ISessionsLayoutService,
+	type ISessionsEntry,
+} from '../../../../services/layout/common/sessionsLayoutService.js';
 import { ISessionsService } from '../../../../services/sessions/browser/sessionsService.js';
 import { SessionsViewRegistry } from '../../../../common/views.js';
 import { MenusRegistry } from '../../../../../platform/actions/common/actions.js';
@@ -14,8 +17,15 @@ import '../../browser/trace.contribution.js';
 
 function registerHosts(services: InstantiationService, opened: ISessionsEntry[], stored: Map<string, string>): void {
 	services.registerInstance(IContextKeyService, new ContextKeyService());
-	services.registerInstance(IStorageService, { get: (key: string) => stored.get(key), store: (key: string, value: string) => stored.set(key, value) } as unknown as IStorageService);
-	services.registerInstance(ISessionsLayoutService, { openEntry: async (entry: ISessionsEntry) => { opened.push(entry); } } as unknown as ISessionsLayoutService);
+	services.registerInstance(IStorageService, {
+		get: (key: string) => stored.get(key),
+		store: (key: string, value: string) => stored.set(key, value),
+	} as unknown as IStorageService);
+	services.registerInstance(ISessionsLayoutService, {
+		openEntry: async (entry: ISessionsEntry) => {
+			opened.push(entry);
+		},
+	} as unknown as ISessionsLayoutService);
 }
 
 suite('Sessions Execution Trace entry', () => {
@@ -25,10 +35,34 @@ suite('Sessions Execution Trace entry', () => {
 			const opened: ISessionsEntry[] = [];
 			const stored = new Map([['agentTrace.lastResource', 'ash-agent-trace:/previous']]);
 			registerHosts(services, opened, stored);
-			services.registerInstance(ISessionsService, { activeSelection: { kind: 'session', active: { threadId: 'child', session: { sessionId: 'session', agentTree: [{ threadId: 'root', currentTurnId: 'root-turn', children: [{ threadId: 'child', currentTurnId: turnId, children: [] }] }] } } } } as unknown as ISessionsService);
+			services.registerInstance(ISessionsService, {
+				activeSelection: {
+					kind: 'session',
+					active: {
+						threadId: 'child',
+						session: {
+							sessionId: 'session',
+							agentTree: [
+								{
+									threadId: 'root',
+									currentTurnId: 'root-turn',
+									children: [{ threadId: 'child', currentTurnId: turnId, children: [] }],
+								},
+							],
+						},
+					},
+				},
+			} as unknown as ISessionsService);
 			await services.invokeFunction(CommandsRegistry.getCommand('sessions.trace.open')!);
 			const resource = 'ash-agent-trace:/session?threadId=child' + (turnId ? '&turnId=child-turn' : '');
-			assert.deepEqual(opened.map(entry => ({ id: entry.id, content: entry.content, resource: entry.editorInput?.resource.toString() })), [{ id: 'trace', content: 'editor', resource }]);
+			assert.deepEqual(
+				opened.map(entry => ({
+					id: entry.id,
+					content: entry.content,
+					resource: entry.editorInput?.resource.toString(),
+				})),
+				[{ id: 'trace', content: 'editor', resource }],
+			);
 			assert.equal(stored.get('agentTrace.lastResource'), resource);
 			assert.equal(SessionsViewRegistry.getViewContainer('sessions.navigation.trace'), undefined);
 		});
@@ -46,19 +80,58 @@ suite('Sessions Execution Trace entry', () => {
 
 suite('Sessions Trace commands', () => {
 	test('keeps Trace out of the Activity Bar', () => {
-		assert.equal(MenusRegistry.getMenuItems(Menus.ActivityBar).some(item => 'command' in item && item.command.id === 'sessions.open.trace'), false);
+		assert.equal(
+			MenusRegistry.getMenuItems(Menus.ActivityBar).some(
+				item => 'command' in item && item.command.id === 'sessions.open.trace',
+			),
+			false,
+		);
 	});
-	for (const saved of [undefined, 'ash-agent-trace:/previous?threadId=old-thread&turnId=old-turn', 'https://example.test/invalid']) {
+	for (const saved of [
+		undefined,
+		'ash-agent-trace:/previous?threadId=old-thread&turnId=old-turn',
+		'https://example.test/invalid',
+	]) {
 		test(`opens a retained Trace entry instead of the conversation ${String(saved)}`, async () => {
 			using services = new InstantiationService();
 			const opened: ISessionsEntry[] = [];
 			const stored = new Map<string, string>(saved ? [['agentTrace.lastResource', saved]] : []);
 			registerHosts(services, opened, stored);
-			services.registerInstance(ISessionsService, { activeSelection: { kind: 'session', active: { threadId: 'current', session: { sessionId: 'current-session', agentTree: [{ threadId: 'current', currentTurnId: 'current-turn', children: [] }] } } } } as unknown as ISessionsService);
+			services.registerInstance(ISessionsService, {
+				activeSelection: {
+					kind: 'session',
+					active: {
+						threadId: 'current',
+						session: {
+							sessionId: 'current-session',
+							agentTree: [{ threadId: 'current', currentTurnId: 'current-turn', children: [] }],
+						},
+					},
+				},
+			} as unknown as ISessionsService);
 			const command = CommandsRegistry.getCommand('sessions.open.trace');
 			assert.ok(command, 'Trace must remain accessible from the command palette');
 			await services.invokeFunction(command);
-			assert.deepEqual(opened.map(entry => ({ id: entry.id, content: entry.content, sidebar: entry.sidebarContainerId, restore: entry.restoreCommand, resource: entry.editorInput?.resource.toString() })), [{ id: 'trace', content: 'editor', sidebar: undefined, restore: 'sessions.open.trace', resource: saved?.startsWith('ash-agent-trace:') ? saved : 'ash-agent-trace:/current-session?threadId=current&turnId=current-turn' }]);
+			assert.deepEqual(
+				opened.map(entry => ({
+					id: entry.id,
+					content: entry.content,
+					sidebar: entry.sidebarContainerId,
+					restore: entry.restoreCommand,
+					resource: entry.editorInput?.resource.toString(),
+				})),
+				[
+					{
+						id: 'trace',
+						content: 'editor',
+						sidebar: undefined,
+						restore: 'sessions.open.trace',
+						resource: saved?.startsWith('ash-agent-trace:')
+							? saved
+							: 'ash-agent-trace:/current-session?threadId=current&turnId=current-turn',
+					},
+				],
+			);
 		});
 	}
 

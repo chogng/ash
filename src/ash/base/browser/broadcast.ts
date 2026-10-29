@@ -9,7 +9,10 @@ export class BroadcastDataChannel<T> extends Disposable {
 	private readonly channel: BroadcastChannel | undefined;
 	private readonly storageKey: string;
 
-	constructor(channelName: string, private readonly ownerWindow: Window = window) {
+	constructor(
+		channelName: string,
+		private readonly ownerWindow: Window = window,
+	) {
 		super();
 		this.storageKey = `ash.broadcast.${channelName}`;
 		try {
@@ -21,15 +24,27 @@ export class BroadcastDataChannel<T> extends Disposable {
 		if (this.channel) {
 			const channel = this.channel;
 			this._register(toDisposable(() => channel.close()));
-			this._register(addDisposableListener(channel, 'message', event => this.received.fire((event as MessageEvent<T>).data)));
+			this._register(
+				addDisposableListener(channel, 'message', event => this.received.fire((event as MessageEvent<T>).data)),
+			);
 		} else {
-			this._register(addDisposableListener(ownerWindow, 'storage', event => {
-				const changed = event as StorageEvent;
-				if (changed.key !== this.storageKey || changed.newValue === null || changed.storageArea !== ownerWindow.localStorage) {
-					return;
-				}
-				try { this.received.fire((JSON.parse(changed.newValue) as { data: T; }).data); } catch { /* Ignore data from older or unrelated clients. */ }
-			}));
+			this._register(
+				addDisposableListener(ownerWindow, 'storage', event => {
+					const changed = event as StorageEvent;
+					if (
+						changed.key !== this.storageKey ||
+						changed.newValue === null ||
+						changed.storageArea !== ownerWindow.localStorage
+					) {
+						return;
+					}
+					try {
+						this.received.fire((JSON.parse(changed.newValue) as { data: T }).data);
+					} catch {
+						/* Ignore data from older or unrelated clients. */
+					}
+				}),
+			);
 		}
 	}
 
@@ -40,7 +55,10 @@ export class BroadcastDataChannel<T> extends Disposable {
 			return;
 		}
 		// A fresh envelope delivers consecutive equal values without retaining a message history.
-		try { this.ownerWindow.localStorage.setItem(this.storageKey, JSON.stringify({ id: crypto.randomUUID(), data })); }
-		catch { /* A denied storage area cannot undo the caller's already committed operation. */ }
+		try {
+			this.ownerWindow.localStorage.setItem(this.storageKey, JSON.stringify({ id: crypto.randomUUID(), data }));
+		} catch {
+			/* A denied storage area cannot undo the caller's already committed operation. */
+		}
 	}
 }

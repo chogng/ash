@@ -7,7 +7,8 @@ export const enum WorkspaceOpenTargetKind {
 }
 
 export interface ILocalWorkspaceOpenTarget {
-	readonly kind: WorkspaceOpenTargetKind.Automatic | WorkspaceOpenTargetKind.Folder | WorkspaceOpenTargetKind.Workspace;
+	readonly kind:
+		WorkspaceOpenTargetKind.Automatic | WorkspaceOpenTargetKind.Folder | WorkspaceOpenTargetKind.Workspace;
 	readonly path: string;
 }
 

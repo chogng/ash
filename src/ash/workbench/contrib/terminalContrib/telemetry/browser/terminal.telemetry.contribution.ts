@@ -2,5 +2,6 @@ import { IInstantiationService } from '../../../../../platform/instantiation/com
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../../common/contributions.js';
 import { TerminalTelemetryContribution } from './terminalTelemetry.js';
 
-registerWorkbenchContribution(TerminalTelemetryContribution.ID, WorkbenchPhase.AfterRestored,
-	accessor => accessor.get(IInstantiationService).createInstance(TerminalTelemetryContribution));
+registerWorkbenchContribution(TerminalTelemetryContribution.ID, WorkbenchPhase.AfterRestored, accessor =>
+	accessor.get(IInstantiationService).createInstance(TerminalTelemetryContribution),
+);

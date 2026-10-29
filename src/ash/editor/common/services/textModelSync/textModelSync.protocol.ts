@@ -29,8 +29,18 @@ export interface WorkerTextModelCodec<TLane extends string, TPayload, TResult> {
 	createResultStore?(): WorkerTextModelResultStore<TLane, TResult>;
 	encodePayload(lane: TLane, payload: TPayload): unknown;
 	decodePayload(lane: TLane, value: unknown, snapshot: TextSnapshot): TPayload;
-	encodeResult(lane: TLane, result: TResult, snapshot: TextSnapshot, base: WorkerTextModelResult<TResult> | undefined): unknown;
-	decodeResult(lane: TLane, value: unknown, snapshot: TextSnapshot, base: WorkerTextModelResult<TResult> | undefined): TResult;
+	encodeResult(
+		lane: TLane,
+		result: TResult,
+		snapshot: TextSnapshot,
+		base: WorkerTextModelResult<TResult> | undefined,
+	): unknown;
+	decodeResult(
+		lane: TLane,
+		value: unknown,
+		snapshot: TextSnapshot,
+		base: WorkerTextModelResult<TResult> | undefined,
+	): TResult;
 }
 
 export interface WorkerTextModelResultStore<TLane extends string, TResult> {

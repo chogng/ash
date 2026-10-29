@@ -17,7 +17,8 @@ export async function seedScenarioProfile(fixturePath: string, profilePath: stri
 	const files = ['state.sqlite3', 'config.toml', 'settings.json'] as const;
 	for (const file of files) {
 		const stat = await lstat(join(source, file));
-		if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Scenario fixture '${file}' must be a regular file.`);
+		if (!stat.isFile() || stat.isSymbolicLink())
+			throw new Error(`Scenario fixture '${file}' must be a regular file.`);
 	}
 	await mkdir(profilePath, { recursive: true });
 	for (const file of files) await copyFile(join(source, file), join(profilePath, file));

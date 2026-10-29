@@ -5,7 +5,11 @@ import { CancellationTokenSource } from '../../../../../base/common/cancellation
 import { isCancellationError } from '../../../../../base/common/errors.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { IFileSearchService, type FileSearchDirectory, type FileSearchResult } from '../../../../../platform/search/common/fileSearch.js';
+import {
+	IFileSearchService,
+	type FileSearchDirectory,
+	type FileSearchResult,
+} from '../../../../../platform/search/common/fileSearch.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { QueryBuilder } from '../../../search/common/queryBuilder.js';
@@ -28,7 +32,9 @@ test('Agent Host filename search cancels before an uncooperative backend complet
 			started.complete(signal!);
 			return response.p;
 		},
-		async glob() { assert.fail('fuzzy query'); },
+		async glob() {
+			assert.fail('fuzzy query');
+		},
 	});
 	using provider = services.createInstance(AgentHostFileSearchProvider);
 	using cancellation = new CancellationTokenSource();
@@ -52,8 +58,13 @@ test('Agent Host filename provider disposal retires pending queries without disp
 	const response = new DeferredPromise<FileSearchResult>();
 	const started = new DeferredPromise<AbortSignal>();
 	const backend: IFileSearchService = {
-		async fuzzy(_directory, _query, signal) { started.complete(signal!); return response.p; },
-		async glob() { assert.fail('fuzzy query'); },
+		async fuzzy(_directory, _query, signal) {
+			started.complete(signal!);
+			return response.p;
+		},
+		async glob() {
+			assert.fail('fuzzy query');
+		},
 	};
 	services.registerInstance(IFileSearchService, backend);
 	using provider = services.createInstance(AgentHostFileSearchProvider);
@@ -78,13 +89,18 @@ test('Agent Host filename search rejects unavailable dependencies and unauthoriz
 	services.registerInstance(IWorkspaceContextService, workspace);
 	assert.throws(() => services.createInstance(AgentHostFileSearchProvider), /fileSearchService/);
 	services.registerInstance(IFileSearchService, {
-		async fuzzy() { assert.fail('invalid roots must not start backend work'); },
-		async glob() { assert.fail('invalid roots must not start backend work'); },
+		async fuzzy() {
+			assert.fail('invalid roots must not start backend work');
+		},
+		async glob() {
+			assert.fail('invalid roots must not start backend work');
+		},
 	});
 	using provider = services.createInstance(AgentHostFileSearchProvider);
-	await assert.rejects(provider.fileSearch(new QueryBuilder().file([folder.uri, URI.parse('ash-remote://other/workspace')])));
+	await assert.rejects(
+		provider.fileSearch(new QueryBuilder().file([folder.uri, URI.parse('ash-remote://other/workspace')])),
+	);
 });
-
 
 for (const kind of ['fuzzy', 'glob'] as const) {
 	for (const late of ['success', 'error'] as const) {
@@ -97,15 +113,28 @@ for (const kind of ['fuzzy', 'glob'] as const) {
 			const oldStarted = new DeferredPromise<AbortSignal>();
 			const newStarted = new DeferredPromise<AbortSignal>();
 			// The fuzzy case changes the grant identity without changing the root URI.
-			const replacement = { ...folder, id: 'replacement', uri: kind === 'fuzzy' ? folder.uri : URI.parse('ash-remote://host/next') };
+			const replacement = {
+				...folder,
+				id: 'replacement',
+				uri: kind === 'fuzzy' ? folder.uri : URI.parse('ash-remote://host/next'),
+			};
 			let calls = 0;
-			const search = (directory: FileSearchDirectory, signal: AbortSignal | undefined): Promise<FileSearchResult> => {
+			const search = (
+				directory: FileSearchDirectory,
+				signal: AbortSignal | undefined,
+			): Promise<FileSearchResult> => {
 				if (++calls === 1) {
-					assert.deepEqual(directory, { resource: folder.uri, target: { type: 'workspace', dirId: folder.id } });
+					assert.deepEqual(directory, {
+						resource: folder.uri,
+						target: { type: 'workspace', dirId: folder.id },
+					});
 					oldStarted.complete(signal!);
 					return oldResponse.p;
 				}
-				assert.deepEqual(directory, { resource: replacement.uri, target: { type: 'workspace', dirId: replacement.id } });
+				assert.deepEqual(directory, {
+					resource: replacement.uri,
+					target: { type: 'workspace', dirId: replacement.id },
+				});
 				newStarted.complete(signal!);
 				return newResponse.p;
 			};
@@ -126,7 +155,10 @@ for (const kind of ['fuzzy', 'glob'] as const) {
 				const newQuery = provider.fileSearch(query(replacement.uri));
 				const newSignal = await newStarted.p;
 				if (late === 'success') {
-					oldResponse.complete({ matches: [{ resource: URI.joinPath(folder.uri, 'old.ts'), path: 'old.ts' }], totalMatches: 1 });
+					oldResponse.complete({
+						matches: [{ resource: URI.joinPath(folder.uri, 'old.ts'), path: 'old.ts' }],
+						totalMatches: 1,
+					});
 				} else {
 					oldResponse.error(new Error('Retired backend failed'));
 				}
@@ -145,7 +177,6 @@ for (const kind of ['fuzzy', 'glob'] as const) {
 	}
 }
 
-
 for (const nested of [false, true]) {
 	test(`Agent Host workspace retirement preserves replacement queries from ${nested ? 'nested changes in an' : 'an'} earlier listener`, async () => {
 		using services = new InstantiationService();
@@ -162,17 +193,26 @@ for (const nested of [false, true]) {
 					oldStarted.complete(signal!);
 					return oldResponse.p;
 				}
-				assert.deepEqual(directory, { resource: replacement.uri, target: { type: 'workspace', dirId: replacement.id } });
+				assert.deepEqual(directory, {
+					resource: replacement.uri,
+					target: { type: 'workspace', dirId: replacement.id },
+				});
 				newStarted.complete(signal!);
 				return newResponse.p;
 			},
-			async glob() { assert.fail('fuzzy query'); },
+			async glob() {
+				assert.fail('fuzzy query');
+			},
 		});
 		let provider: AgentHostFileSearchProvider;
 		let replacementQuery: ReturnType<AgentHostFileSearchProvider['fileSearch']> | undefined;
 		using earlier = workspace.onDidChangeWorkspace(() => {
-			if (replacementQuery) { return; }
-			if (nested) { workspace.updateWorkspace({ id: 'remote', folders: [replacement] }); }
+			if (replacementQuery) {
+				return;
+			}
+			if (nested) {
+				workspace.updateWorkspace({ id: 'remote', folders: [replacement] });
+			}
 			replacementQuery = provider.fileSearch(new QueryBuilder().file([replacement.uri]));
 		});
 		using owner = services.createInstance(AgentHostFileSearchProvider);
@@ -181,7 +221,10 @@ for (const nested of [false, true]) {
 		const rejected = assert.rejects(oldQuery, isCancellationError);
 		const oldSignal = await oldStarted.p;
 		try {
-			workspace.updateWorkspace({ id: 'remote', folders: [nested ? { ...folder, id: 'intermediate' } : replacement] });
+			workspace.updateWorkspace({
+				id: 'remote',
+				folders: [nested ? { ...folder, id: 'intermediate' } : replacement],
+			});
 			const newSignal = await newStarted.p;
 			await rejected;
 			assert.equal(oldSignal.aborted, true);

@@ -11,21 +11,36 @@ export class PartialCommandDetectionCapability extends Disposable implements IPa
 	private readonly lifetimes = this._register(new DisposableMap<number, DisposableStore>());
 	private readonly finished = this._register(new Emitter<Marker>());
 	readonly onCommandFinished = this.finished.event;
-	get commands(): readonly Marker[] { return [...this.markers.values()]; }
+	get commands(): readonly Marker[] {
+		return [...this.markers.values()];
+	}
 
-	constructor(private readonly terminal: {
-		readonly buffer: { readonly active: { readonly type: string; readonly cursorX: number; readonly baseY: number; }; };
-		onData(listener: (data: string) => void): { dispose(): void; };
-		registerMarker(offset: number): Marker | undefined;
-		readonly parser: { registerCsiHandler(id: { final: string; }, handler: (params: (number | number[])[]) => boolean): { dispose(): void; }; };
-	}, onDidExecuteText: Event<void> | undefined) {
+	constructor(
+		private readonly terminal: {
+			readonly buffer: {
+				readonly active: { readonly type: string; readonly cursorX: number; readonly baseY: number };
+			};
+			onData(listener: (data: string) => void): { dispose(): void };
+			registerMarker(offset: number): Marker | undefined;
+			readonly parser: {
+				registerCsiHandler(
+					id: { final: string },
+					handler: (params: (number | number[])[]) => boolean,
+				): { dispose(): void };
+			};
+		},
+		onDidExecuteText: Event<void> | undefined,
+	) {
 		super();
-		const input = terminal.onData(data => { if (data === '\r') this.recordEnter(); });
+		const input = terminal.onData(data => {
+			if (data === '\r') this.recordEnter();
+		});
 		this._register(toDisposable(() => input.dispose()));
 		const erase = terminal.parser.registerCsiHandler({ final: 'J' }, params => {
 			if (params[0] === 2 || params[0] === 3) {
 				for (const marker of this.commands) {
-					if (params[0] === 3 || marker.line >= terminal.buffer.active.baseY) this.lifetimes.deleteAndDispose(marker.id);
+					if (params[0] === 3 || marker.line >= terminal.buffer.active.baseY)
+						this.lifetimes.deleteAndDispose(marker.id);
 				}
 			}
 			return false;
@@ -48,5 +63,7 @@ export class PartialCommandDetectionCapability extends Disposable implements IPa
 		this.finished.fire(marker);
 	}
 
-	clearCommands(): void { this.lifetimes.clearAndDisposeAll(); }
+	clearCommands(): void {
+		this.lifetimes.clearAndDisposeAll();
+	}
 }

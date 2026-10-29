@@ -8,7 +8,11 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/
 import { IConfigurationService } from '../../../../../../platform/configuration/common/configuration.js';
 import { InstantiationService } from '../../../../../../platform/instantiation/common/instantiationService.js';
 import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
-import type { ITerminalInstance, IXtermTerminal, TerminalInstanceState } from '../../../../terminal/browser/terminal.js';
+import type {
+	ITerminalInstance,
+	IXtermTerminal,
+	TerminalInstanceState,
+} from '../../../../terminal/browser/terminal.js';
 import { TerminalExtensionsRegistry } from '../../../../terminal/browser/terminalExtensions.js';
 import { TerminalWidgetManager } from '../../../../terminal/browser/widgets/widgetManager.js';
 import { TerminalResizeDimensionsOverlaySettingId } from '../../common/terminalResizeDimensionsOverlayConfiguration.js';
@@ -23,20 +27,24 @@ function fixture(resources: DisposableStore) {
 	const element = dom.window.document.querySelector<HTMLDivElement>('#screen')!;
 	const widgets = resources.add(new TerminalWidgetManager());
 	widgets.attachToElement(element);
-	const resized = resources.add(new Emitter<{ cols: number; rows: number; }>());
+	const resized = resources.add(new Emitter<{ cols: number; rows: number }>());
 	const state = resources.add(new Emitter<TerminalInstanceState>());
 	const configuration = resources.add(new TestConfigurationService());
 	const services = resources.add(new InstantiationService());
 	services.registerInstance(IConfigurationService, configuration);
 	const screen = {
-		element, raw: { onResize: resized.event }, isDisposed: false,
+		element,
+		raw: { onResize: resized.event },
+		isDisposed: false,
 		attachWidget: widgets.attachWidget.bind(widgets),
 	} as unknown as IXtermTerminal;
-	const definition = TerminalExtensionsRegistry.getTerminalContributions().find(value => value.id === 'terminal.resizeDimensionsOverlay');
+	const definition = TerminalExtensionsRegistry.getTerminalContributions().find(
+		value => value.id === 'terminal.resizeDimensionsOverlay',
+	);
 	assert.ok(definition);
-	const contribution = resources.add(services.createInstance(definition.ctor, {
-		instance: { onDidChangeState: state.event } as ITerminalInstance,
-	}));
+	const contribution = resources.add(
+		services.createInstance(definition.ctor, { instance: { onDidChangeState: state.event } as ITerminalInstance }),
+	);
 	contribution.xtermReady!(screen);
 	const label = () => element.querySelector<HTMLSpanElement>('.ash-terminal-resize-dimensions-overlay');
 	return { dom, element, resized, state, configuration, contribution, label };
@@ -67,7 +75,9 @@ test('Terminal dimensions overlay follows committed grid changes after startup a
 		assert.equal(label()?.hidden, false);
 		mock.timers.tick(1);
 		assert.equal(label()?.hidden, true);
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('Terminal dimensions overlay setting releases its widget and listener immediately and can be enabled again', async () => {
@@ -93,7 +103,9 @@ test('Terminal dimensions overlay setting releases its widget and listener immed
 		assert.equal(resized.hasListeners(), false);
 		mock.timers.tick(1000);
 		assert.equal(label(), null);
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('Terminal dimensions overlay ignores hidden-screen restoration and reconnect startup, and cancels delayed attachment on disposal', () => {
@@ -123,5 +135,7 @@ test('Terminal dimensions overlay ignores hidden-screen restoration and reconnec
 		mock.timers.tick(1000);
 		assert.equal(label(), null);
 		assert.equal(resized.hasListeners(), false);
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });

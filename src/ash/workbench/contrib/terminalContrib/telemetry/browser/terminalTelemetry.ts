@@ -23,7 +23,11 @@ export class TerminalTelemetryContribution extends Disposable implements IWorkbe
 		this._register(instantiation.createInstance(TerminalProfileConfigurationTelemetry));
 		this._register(terminals.onDidCreateInstance(instance => this.observe(instance)));
 		this._register(terminals.onDidDisposeInstance(instance => this.report(instance)));
-		this._register(lifecycle.onWillShutdown(() => { for (const instance of [...this.pending.keys()]) this.report(instance); }));
+		this._register(
+			lifecycle.onWillShutdown(() => {
+				for (const instance of [...this.pending.keys()]) this.report(instance);
+			}),
+		);
 		for (const instance of terminals.instances) this.observe(instance);
 	}
 

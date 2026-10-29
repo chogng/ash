@@ -5,7 +5,16 @@ import { SocketCloseEventType, type ISocket, type SocketCloseEvent } from '../..
 import { IRemoteSocketFactoryService } from '../../remote/common/remoteSocketFactoryService.js';
 import { RemoteConnectionType } from '../../remote/common/remoteAuthorityResolver.js';
 import type { IAddressProvider } from '../../remote/common/remoteAgentConnection.js';
-import { AppServerFrame, deferAppServerRead, type AppServerTransport, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_CLOSED_EVENT } from '../common/appServerTransport.js';
+import {
+	AppServerFrame,
+	deferAppServerRead,
+	type AppServerTransport,
+	WEB_APP_SERVER_CONNECT_EVENT,
+	WEB_APP_SERVER_CONNECTED_EVENT,
+	WEB_APP_SERVER_DISCONNECT_EVENT,
+	WEB_APP_SERVER_FRAME_EVENT,
+	WEB_APP_SERVER_CLOSED_EVENT,
+} from '../common/appServerTransport.js';
 
 const framePageBytes = 64 * 1024;
 const maxFrameBytes = 320 * 1024 * 1024;
@@ -26,12 +35,17 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 	private bufferedBytes = 0;
 	private pendingConsumption: Promise<void> | undefined;
 
-	constructor(private readonly connection: SocketConnection, @IRemoteSocketFactoryService private readonly factories: IRemoteSocketFactoryService) {
+	constructor(
+		private readonly connection: SocketConnection,
+		@IRemoteSocketFactoryService private readonly factories: IRemoteSocketFactoryService,
+	) {
 		super();
-		this._register(toDisposable(() => {
-			this.disconnect();
-			this.listeners.clear();
-		}));
+		this._register(
+			toDisposable(() => {
+				this.disconnect();
+				this.listeners.clear();
+			}),
+		);
 	}
 
 	public on(event: string, listener: (payload: unknown) => void): void {
@@ -57,7 +71,13 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 			this.disconnect();
 			return;
 		}
-		if (event !== WEB_APP_SERVER_FRAME_EVENT || !this.socket || !isRecord(payload) || typeof payload.frame !== 'string' || /[\r\n]/.test(payload.frame)) {
+		if (
+			event !== WEB_APP_SERVER_FRAME_EVENT ||
+			!this.socket ||
+			!isRecord(payload) ||
+			typeof payload.frame !== 'string' ||
+			/[\r\n]/.test(payload.frame)
+		) {
 			throw new Error('Invalid App Server transport frame');
 		}
 		this.socket.write(VSBuffer.fromString(`${payload.frame}${this.messageFraming ? '' : '\n'}`));
@@ -71,10 +91,20 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 		const revision = this.revision;
 		try {
 			const address = await this.connection.getAddress();
-			if (this.isDisposed || revision !== this.revision) { return; }
+			if (this.isDisposed || revision !== this.revision) {
+				return;
+			}
 			const isWebSocket = address.connectTo.type === RemoteConnectionType.WebSocket;
-			const query = isWebSocket && address.connectionToken ? `connectionToken=${encodeURIComponent(address.connectionToken)}` : '';
-			const socket = await this.factories.connect(address.connectTo, isWebSocket ? '/ash/app-server' : '', query, 'ash-app-server');
+			const query =
+				isWebSocket && address.connectionToken
+					? `connectionToken=${encodeURIComponent(address.connectionToken)}`
+					: '';
+			const socket = await this.factories.connect(
+				address.connectTo,
+				isWebSocket ? '/ash/app-server' : '',
+				query,
+				'ash-app-server',
+			);
 			if (this.isDisposed || revision !== this.revision) {
 				socket.dispose();
 				return;
@@ -86,23 +116,37 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 			this.connecting = false;
 			// The acquisition owner retains the carrier; this client closes its lease on disconnect.
 			resources.add(toDisposable(() => socket.dispose()));
-			resources.add(socket.onData(data => {
-				if (this.socket === socket) {
-					// WebSocket already owns the message boundary; stream carriers use JSONL.
-					if (isWebSocket) { this.acceptFrame(data); } else { this.acceptData(data); }
-					// Partial chunks arriving behind an asynchronous frame also retain
-					// credit, so the existing Main stdout pause reaches the slow consumer.
-					if (this.pendingConsumption) { deferAppServerRead(data, this.pendingConsumption); }
-				}
-			}));
-			resources.add(socket.onClose(event => {
-				if (this.socket === socket) {
-					this.closed(event);
-				}
-			}));
-			resources.add(socket.onEnd(() => {
-				if (this.socket === socket) { this.closed(undefined); }
-			}));
+			resources.add(
+				socket.onData(data => {
+					if (this.socket === socket) {
+						// WebSocket already owns the message boundary; stream carriers use JSONL.
+						if (isWebSocket) {
+							this.acceptFrame(data);
+						} else {
+							this.acceptData(data);
+						}
+						// Partial chunks arriving behind an asynchronous frame also retain
+						// credit, so the existing Main stdout pause reaches the slow consumer.
+						if (this.pendingConsumption) {
+							deferAppServerRead(data, this.pendingConsumption);
+						}
+					}
+				}),
+			);
+			resources.add(
+				socket.onClose(event => {
+					if (this.socket === socket) {
+						this.closed(event);
+					}
+				}),
+			);
+			resources.add(
+				socket.onEnd(() => {
+					if (this.socket === socket) {
+						this.closed(undefined);
+					}
+				}),
+			);
 			this.emit(WEB_APP_SERVER_CONNECTED_EVENT, this.connection.getMetadata());
 		} catch (error) {
 			if (!this.isDisposed && revision === this.revision) {
@@ -114,7 +158,7 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 
 	private acceptData(data: VSBuffer): void {
 		let start = 0;
-		for (; ;) {
+		for (;;) {
 			const index = data.buffer.indexOf(10, start);
 			if (index === -1) {
 				this.append(data.slice(start));
@@ -122,7 +166,9 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 			}
 			let bytes = data.slice(start, index);
 			if (this.bufferedBytes) {
-				if (!this.append(bytes)) { return; }
+				if (!this.append(bytes)) {
+					return;
+				}
 				const lastPageBytes = this.bufferedBytes % framePageBytes;
 				if (lastPageBytes) {
 					this.parts[this.parts.length - 1] = this.parts[this.parts.length - 1].slice(0, lastPageBytes);
@@ -132,7 +178,9 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 				this.bufferedBytes = 0;
 			}
 			// A complete frame in this callback is decoded before its input can be reused.
-			if (!this.acceptFrame(bytes)) { return; }
+			if (!this.acceptFrame(bytes)) {
+				return;
+			}
 			start = index + 1;
 		}
 	}
@@ -148,7 +196,9 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 		let offset = 0;
 		while (offset < data.byteLength) {
 			const pageOffset = this.bufferedBytes % framePageBytes;
-			if (pageOffset === 0) { this.parts.push(VSBuffer.alloc(framePageBytes)); }
+			if (pageOffset === 0) {
+				this.parts.push(VSBuffer.alloc(framePageBytes));
+			}
 			const length = Math.min(framePageBytes - pageOffset, data.byteLength - offset);
 			this.parts[this.parts.length - 1].buffer.set(data.buffer.subarray(offset, offset + length), pageOffset);
 			this.bufferedBytes += length;
@@ -171,8 +221,10 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 			const payload = new AppServerFrame(frame, bytes.byteLength);
 			this.emit(WEB_APP_SERVER_FRAME_EVENT, payload);
 			if (this.socket && payload.consumed) {
-				const consumed = this.pendingConsumption = payload.consumed;
-				void consumed.then(() => { if (this.pendingConsumption === consumed) this.pendingConsumption = undefined; });
+				const consumed = (this.pendingConsumption = payload.consumed);
+				void consumed.then(() => {
+					if (this.pendingConsumption === consumed) this.pendingConsumption = undefined;
+				});
 			}
 			return this.socket !== undefined;
 		} catch (error) {
@@ -194,7 +246,7 @@ export class AppServerSocketTransport extends Disposable implements AppServerTra
 		} else {
 			message = 'App Server connection closed';
 		}
-		const result: { intentional?: boolean; message: string | undefined; } = { message };
+		const result: { intentional?: boolean; message: string | undefined } = { message };
 		if (intentional) {
 			result.intentional = true;
 		}

@@ -13,10 +13,20 @@ import { INotificationService } from '../../../../platform/notification/common/n
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ActionListItemKind } from '../../../../platform/actionWidget/browser/actionList.js';
 import { IActionWidgetService } from '../../../../platform/actionWidget/browser/actionWidget.js';
-import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IContentWidgetPosition } from '../../../browser/editorBrowser.js';
+import {
+	ContentWidgetPositionPreference,
+	type ICodeEditor,
+	type IContentWidget,
+	type IContentWidgetPosition,
+} from '../../../browser/editorBrowser.js';
 import { IBulkEditService, ResourceFileEdit, ResourceTextEdit } from '../../../browser/services/bulkEditService.js';
 import { Range } from '../../../common/core/range.js';
-import { type DocumentDropEdit, type DocumentPasteEdit, type WorkspaceEdit, type WorkspaceEditEntry } from '../../../common/languages.js';
+import {
+	type DocumentDropEdit,
+	type DocumentPasteEdit,
+	type WorkspaceEdit,
+	type WorkspaceEditEntry,
+} from '../../../common/languages.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { CodeEditorStateFlag, EditorStateCancellationTokenSource } from '../../editorState/browser/editorState.js';
@@ -56,36 +66,51 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 		const document = editor.getDomNode()!.ownerDocument;
 		this.domNode = h(document, 'div');
 		this.domNode.className = 'stanza-editor-post-edit-selector';
-		this.actions = Separator.join(edits.allEdits.map((edit, index) => ({
-			id: `${id}.${index}`,
-			label: edit.title,
-			tooltip: edit.title,
-			enabled: true,
-			run: () => onSelect(index),
-		})), configureAction ? [{ ...configureAction, run: () => configureAction.run(editor) }] : []);
-		this.button = this._register(new Button(this.domNode, {
-			...defaultButtonStyles,
-			label: edits.allEdits[edits.activeEditIndex]!.title,
-			ariaLabel: label,
-			icon: Lxicon.chevronDown,
-			presentation: 'secondary',
-			size: 'small',
-			onClick: () => this.menuVisible ? this.hideSelector() : this.showSelector(),
-		}));
+		this.actions = Separator.join(
+			edits.allEdits.map((edit, index) => ({
+				id: `${id}.${index}`,
+				label: edit.title,
+				tooltip: edit.title,
+				enabled: true,
+				run: () => onSelect(index),
+			})),
+			configureAction ? [{ ...configureAction, run: () => configureAction.run(editor) }] : [],
+		);
+		this.button = this._register(
+			new Button(this.domNode, {
+				...defaultButtonStyles,
+				label: edits.allEdits[edits.activeEditIndex]!.title,
+				ariaLabel: label,
+				icon: Lxicon.chevronDown,
+				presentation: 'secondary',
+				size: 'small',
+				onClick: () => (this.menuVisible ? this.hideSelector() : this.showSelector()),
+			}),
+		);
 		this.button.domNode.setAttribute('aria-haspopup', 'menu');
 		this.button.domNode.setAttribute('aria-expanded', 'false');
-		this.button.domNode.setAttribute('aria-description', localize('dropOrPaste.selectorHelp', 'Press Down Arrow or Enter to open the options. Escape closes the menu; Escape on this button returns to the editor.'));
-		this._register(addDisposableListener<KeyboardEvent>(this.button.domNode, 'keydown', event => {
-			if (event.isComposing) { return; }
-			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-				stopEvent(event);
-				this.showSelector();
-			} else if (event.key === 'Escape') {
-				stopEvent(event);
-				onDismiss();
-				editor.focus();
-			}
-		}));
+		this.button.domNode.setAttribute(
+			'aria-description',
+			localize(
+				'dropOrPaste.selectorHelp',
+				'Press Down Arrow or Enter to open the options. Escape closes the menu; Escape on this button returns to the editor.',
+			),
+		);
+		this._register(
+			addDisposableListener<KeyboardEvent>(this.button.domNode, 'keydown', event => {
+				if (event.isComposing) {
+					return;
+				}
+				if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+					stopEvent(event);
+					this.showSelector();
+				} else if (event.key === 'Escape') {
+					stopEvent(event);
+					onDismiss();
+					editor.focus();
+				}
+			}),
+		);
 		this._register(toDisposable(() => this.hideSelector()));
 		editor.addContentWidget(this);
 		this._register(toDisposable(() => editor.removeContentWidget(this)));
@@ -93,8 +118,12 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 		editor.layoutContentWidget(this);
 	}
 
-	getId(): string { return this.id; }
-	getDomNode(): HTMLElement { return this.domNode; }
+	getId(): string {
+		return this.id;
+	}
+	getDomNode(): HTMLElement {
+		return this.domNode;
+	}
 	getPosition(): IContentWidgetPosition {
 		return {
 			position: this.range.getEndPosition(),
@@ -102,34 +131,44 @@ class PostEditWidget<T extends TransferEdit> extends Disposable implements ICont
 		};
 	}
 	showSelector(): void {
-		if (this.menuVisible) { return; }
+		if (this.menuVisible) {
+			return;
+		}
 		this.button.focus();
-		this.actionWidgetService.show(this.id, false, this.actions.map(action => ({
-			kind: action instanceof Separator ? ActionListItemKind.Separator : ActionListItemKind.Action,
-			item: action,
-			label: action.label,
-			disabled: !action.enabled,
-		})), {
-			onShow: () => {
-				this.menuVisible = true;
-				this.button.domNode.setAttribute('aria-expanded', 'true');
+		this.actionWidgetService.show(
+			this.id,
+			false,
+			this.actions.map(action => ({
+				kind: action instanceof Separator ? ActionListItemKind.Separator : ActionListItemKind.Action,
+				item: action,
+				label: action.label,
+				disabled: !action.enabled,
+			})),
+			{
+				onShow: () => {
+					this.menuVisible = true;
+					this.button.domNode.setAttribute('aria-expanded', 'true');
+				},
+				onSelect: async action => {
+					// Changing the edit disposes this widget during undo, so close its menu first.
+					this.hideSelector(false);
+					this.editor.focus();
+					await action.run();
+				},
+				onHide: () => {
+					this.menuVisible = false;
+					this.button.domNode.setAttribute('aria-expanded', 'false');
+				},
 			},
-			onSelect: async action => {
-				// Changing the edit disposes this widget during undo, so close its menu first.
-				this.hideSelector(false);
-				this.editor.focus();
-				await action.run();
-			},
-			onHide: () => {
-				this.menuVisible = false;
-				this.button.domNode.setAttribute('aria-expanded', 'false');
-			},
-		}, this.button.domNode);
+			this.button.domNode,
+		);
 	}
 
 	private hideSelector(didCancel = true): void {
 		// A replacement menu invokes onHide; disposal must not dismiss that new owner's menu.
-		if (this.menuVisible) { this.actionWidgetService.hide(didCancel); }
+		if (this.menuVisible) {
+			this.actionWidgetService.hide(didCancel);
+		}
 	}
 }
 
@@ -162,7 +201,9 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 		this.editSession.clear();
 		this.visible.set(false);
 	}
-	tryShowSelector(): void { this.widget.value?.showSelector(); }
+	tryShowSelector(): void {
+		this.widget.value?.showSelector();
+	}
 
 	async applyEditAndShowIfNeeded(
 		ranges: readonly Range[],
@@ -178,12 +219,20 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 		const candidate = edits.allEdits[edits.activeEditIndex];
 		if (!(model instanceof TextModel) || !candidate || ranges.length === 0 || token.isCancellationRequested) return;
 
-		const state = new EditorStateCancellationTokenSource(this.editor, CodeEditorStateFlag.Value | CodeEditorStateFlag.Selection, undefined, token);
+		const state = new EditorStateCancellationTokenSource(
+			this.editor,
+			CodeEditorStateFlag.Value | CodeEditorStateFlag.Selection,
+			undefined,
+			token,
+		);
 		let edit: T;
 		try {
 			edit = await resolve(candidate, state.token);
 		} catch (error) {
-			if (!state.token.isCancellationRequested) this.notifications.error(localize('dropOrPaste.resolveFailed', 'Could not resolve edit: {0}', String(error)));
+			if (!state.token.isCancellationRequested)
+				this.notifications.error(
+					localize('dropOrPaste.resolveFailed', 'Could not resolve edit: {0}', String(error)),
+				);
 			return;
 		} finally {
 			state.dispose();
@@ -193,27 +242,40 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 		let combined: WorkspaceEdit;
 		let snippet: Snippet | undefined;
 		try {
-			snippet = typeof edit.insertText === 'string'
-				? undefined
-				: parseSnippet(edit.insertText.snippet, { variables: createSnippetVariables(model.uri), allowUnresolvedVariables: true });
-			combined = createCombinedWorkspaceEdit(model.uri, ranges, snippet ? { ...edit, insertText: snippet.text } : edit);
+			snippet =
+				typeof edit.insertText === 'string'
+					? undefined
+					: parseSnippet(edit.insertText.snippet, {
+							variables: createSnippetVariables(model.uri),
+							allowUnresolvedVariables: true,
+						});
+			combined = createCombinedWorkspaceEdit(
+				model.uri,
+				ranges,
+				snippet ? { ...edit, insertText: snippet.text } : edit,
+			);
 		} catch (error) {
 			this.notifications.error(localize('dropOrPaste.invalidEdit', 'Could not prepare edit: {0}', String(error)));
 			return;
 		}
 		const snippetController = snippet?.placeholderGroups.length ? SnippetController2.get(this.editor) : undefined;
 		if (snippet?.placeholderGroups.length && !snippetController) {
-			this.notifications.error(localize('dropOrPaste.snippetUnavailable', 'Snippet navigation is unavailable in this editor.'));
+			this.notifications.error(
+				localize('dropOrPaste.snippetUnavailable', 'Snippet navigation is unavailable in this editor.'),
+			);
 			return;
 		}
 		const resourceEdits = combined.edits.map(entry => toResourceEdit(entry));
-		const tracking = model.deltaDecorations([], ranges.map(range => ({
-			range,
-			options: {
-				description: 'post-edit-selector-anchor',
-				stickiness: TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
-			},
-		})));
+		const tracking = model.deltaDecorations(
+			[],
+			ranges.map(range => ({
+				range,
+				options: {
+					description: 'post-edit-selector-anchor',
+					stickiness: TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
+				},
+			})),
+		);
 		let anchor: Range;
 		let insertionStarts: number[];
 		let undo: () => Promise<void>;
@@ -247,29 +309,49 @@ export class PostEditWidgetManager<T extends TransferEdit> extends Disposable {
 		if (!canShowWidget || (edits.allEdits.length < 2 && !this.configureAction())) return;
 		this.editSession.value = session?.take();
 		// The transient widget uses the current language, which may have changed since controller creation.
-		this.widget.value = this.instantiationService.createInstance(PostEditWidget<T>, this.editor, this.id, anchor, this.label(), edits, (newIndex: number) => {
-			if (newIndex === edits.activeEditIndex) return;
-			const nextSession = this.editSession.value?.take();
-			this.clear();
-			if (this.editor.getModel() !== model) { nextSession?.dispose(); return; }
-			snippetController?.cancel();
-			void (async () => {
-				try {
-					await undo();
-					await this.applyEditAndShowIfNeeded(ranges, { allEdits: edits.allEdits, activeEditIndex: newIndex }, canShowWidget, resolve, token, nextSession);
-				} catch (error) {
-					this.notifications.error(localize('dropOrPaste.switchFailed', 'Could not change edit: {0}', String(error)));
-				} finally {
+		this.widget.value = this.instantiationService.createInstance(
+			PostEditWidget<T>,
+			this.editor,
+			this.id,
+			anchor,
+			this.label(),
+			edits,
+			(newIndex: number) => {
+				if (newIndex === edits.activeEditIndex) return;
+				const nextSession = this.editSession.value?.take();
+				this.clear();
+				if (this.editor.getModel() !== model) {
 					nextSession?.dispose();
+					return;
 				}
-			})();
-		}, () => this.clear(), this.configureAction());
+				snippetController?.cancel();
+				void (async () => {
+					try {
+						await undo();
+						await this.applyEditAndShowIfNeeded(
+							ranges,
+							{ allEdits: edits.allEdits, activeEditIndex: newIndex },
+							canShowWidget,
+							resolve,
+							token,
+							nextSession,
+						);
+					} catch (error) {
+						this.notifications.error(
+							localize('dropOrPaste.switchFailed', 'Could not change edit: {0}', String(error)),
+						);
+					} finally {
+						nextSession?.dispose();
+					}
+				})();
+			},
+			() => this.clear(),
+			this.configureAction(),
+		);
 		this.visible.set(true);
 	}
 }
 
 function toResourceEdit(entry: WorkspaceEditEntry): ResourceTextEdit | ResourceFileEdit {
-	return 'textEdit' in entry
-		? ResourceTextEdit.lift(entry)
-		: ResourceFileEdit.lift(entry);
+	return 'textEdit' in entry ? ResourceTextEdit.lift(entry) : ResourceFileEdit.lift(entry);
 }

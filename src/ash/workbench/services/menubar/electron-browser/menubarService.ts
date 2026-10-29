@@ -23,8 +23,14 @@ class MenubarService extends Disposable implements IMenubarService {
 				return;
 			}
 			const { revision, id } = value;
-			if (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 0
-				|| typeof id !== 'string' || id.length === 0 || id.length > 128) {
+			if (
+				typeof revision !== 'number' ||
+				!Number.isSafeInteger(revision) ||
+				revision < 0 ||
+				typeof id !== 'string' ||
+				id.length === 0 ||
+				id.length > 128
+			) {
 				return;
 			}
 			this.selections.fire({ revision, id });

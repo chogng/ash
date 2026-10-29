@@ -14,7 +14,10 @@ import { ContextKeyService } from '../../../../../platform/contextkey/browser/co
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { createConfigurationSchema } from '../../../../../platform/configuration/common/configurationSchema.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { Extensions as JSONExtensions, type IJSONContributionRegistry } from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
+import {
+	Extensions as JSONExtensions,
+	type IJSONContributionRegistry,
+} from '../../../../../platform/jsonschemas/common/jsonContributionRegistry.js';
 import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
 import { WorkbenchContributionsRegistry, WorkbenchPhase } from '../../../../common/contributions.js';
 import { BrowserKeyboardLayoutService } from '../../../../services/keybinding/browser/keyboardLayoutService.js';
@@ -37,34 +40,75 @@ test('Code Action registration updates settings and command argument suggestions
 	using commands = new CommandService(services);
 	using notifications = new TestNotificationService();
 	using features = new LanguageFeaturesService();
-	using keybindings = new WorkbenchKeybindingService({
-		ownerDocument: dom.window.document, commandService: commands,
-		contextKeyService: contexts, keyboardLayoutService: layouts,
-	}, notifications, profile.files, profile.profiles);
+	using keybindings = new WorkbenchKeybindingService(
+		{
+			ownerDocument: dom.window.document,
+			commandService: commands,
+			contextKeyService: contexts,
+			keyboardLayoutService: layouts,
+		},
+		notifications,
+		profile.files,
+		profile.profiles,
+	);
 	services.registerInstance(ILanguageFeaturesService, features);
 	services.registerInstance(IKeybindingService, keybindings);
 	const provider = {
-		providedCodeActionKinds: ['quickfix', 'source.organizeImports', 'source.fixAll', 'refactor.extract', 'refactoring', 'source.organizeImports'],
-		provideCodeActions: () => { throw new Error('Schema suggestions must not query a document'); },
+		providedCodeActionKinds: [
+			'quickfix',
+			'source.organizeImports',
+			'source.fixAll',
+			'refactor.extract',
+			'refactoring',
+			'source.organizeImports',
+		],
+		provideCodeActions: () => {
+			throw new Error('Schema suggestions must not query a document');
+		},
 	};
 	using first = features.codeActionProvider.register('typescript', provider);
-	using host = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, [CodeActionsContribution.ID]);
+	using host = WorkbenchContributionsRegistry.createHost(
+		services,
+		error => {
+			throw error;
+		},
+		[CodeActionsContribution.ID],
+	);
 	host.advance(WorkbenchPhase.Eventually);
 	const settings = createConfigurationSchema();
 	const settingKinds = (): string[] => Object.keys(settings.properties!['editor.codeActionsOnSave'].properties!);
 	const shortcutKinds = (command: string): readonly unknown[] => {
 		const document = parseJsonDocument(JSON.stringify([{ command, args: { kind: '' } }]));
-		return jsonSchemaAtPath(jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings'], [0, 'args', 'kind'], document.root)!.anyOf![0].enum!;
+		return jsonSchemaAtPath(
+			jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings'],
+			[0, 'args', 'kind'],
+			document.root,
+		)!.anyOf![0].enum!;
 	};
 	assert.deepEqual(settingKinds(), ['source.organizeImports', 'source.fixAll']);
 	assert.deepEqual(Object.keys(settings.properties!['notebook.codeActionsOnSave'].properties!), settingKinds());
 	assert.deepEqual(shortcutKinds('editor.action.refactor'), ['refactor.extract']);
 	assert.deepEqual(shortcutKinds('editor.action.sourceAction'), ['source.organizeImports', 'source.fixAll']);
 	assert.deepEqual(shortcutKinds('editor.action.codeAction'), [...new Set(provider.providedCodeActionKinds)]);
-	assert.equal(validateJsonSchema(parseJsonDocument('[{"key":"ctrl+r","command":"editor.action.refactor","args":{"kind":"refactor.future"}}]'), jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']).length, 0);
-	assert.equal(validateJsonSchema(parseJsonDocument('[{"key":"ctrl+r","command":"editor.action.refactor","args":{"kind":42}}]'), jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']).length, 1);
+	assert.equal(
+		validateJsonSchema(
+			parseJsonDocument(
+				'[{"key":"ctrl+r","command":"editor.action.refactor","args":{"kind":"refactor.future"}}]',
+			),
+			jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings'],
+		).length,
+		0,
+	);
+	assert.equal(
+		validateJsonSchema(
+			parseJsonDocument('[{"key":"ctrl+r","command":"editor.action.refactor","args":{"kind":42}}]'),
+			jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings'],
+		).length,
+		1,
+	);
 	using second = features.codeActionProvider.register('python', {
-		providedCodeActionKinds: ['source.fixAll', 'source.python'], provideCodeActions: () => [],
+		providedCodeActionKinds: ['source.fixAll', 'source.python'],
+		provideCodeActions: () => [],
 	});
 	first.dispose();
 	assert.deepEqual(settingKinds(), ['source.fixAll', 'source.python']);
@@ -72,7 +116,10 @@ test('Code Action registration updates settings and command argument suggestions
 	second.dispose();
 	assert.deepEqual(settingKinds(), []);
 	host.dispose();
-	assert.deepEqual(jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']!.definitions!.commandsSchemas.allOf, []);
+	assert.deepEqual(
+		jsonRegistry.getSchemaContributions().schemas['ash://schemas/keybindings']!.definitions!.commandsSchemas.allOf,
+		[],
+	);
 	using afterClose = features.codeActionProvider.register('typescript', provider);
 	assert.deepEqual(settingKinds(), [], 'Disposed contributions must release their provider listeners');
 });
@@ -81,8 +128,16 @@ test('Code Action settings validate save modes, normalize old values and resolve
 	using configuration = new InMemoryConfigurationService();
 	const key = 'editor.codeActionsOnSave';
 	assert.deepEqual(configuration.getValue(key), {});
-	await configuration.updateValue(key, { 'source.future': 'always', 'source.fixAll': true, 'source.organizeImports': false });
-	assert.deepEqual(configuration.getValue(key), { 'source.future': 'always', 'source.fixAll': 'explicit', 'source.organizeImports': 'never' });
+	await configuration.updateValue(key, {
+		'source.future': 'always',
+		'source.fixAll': true,
+		'source.organizeImports': false,
+	});
+	assert.deepEqual(configuration.getValue(key), {
+		'source.future': 'always',
+		'source.fixAll': 'explicit',
+		'source.organizeImports': 'never',
+	});
 	await configuration.updateValue(key, { 'source.fixAll': 'never' }, { overrideIdentifier: 'typescript' });
 	assert.deepEqual(configuration.getValue(key, { overrideIdentifier: 'typescript' }), { 'source.fixAll': 'never' });
 	assert.equal(configuration.getValue<Record<string, string>>(key)['source.fixAll'], 'explicit');
@@ -93,10 +148,19 @@ test('Code Action settings validate save modes, normalize old values and resolve
 		await assert.rejects(configuration.updateValue(key, value), TypeError);
 		assert.ok(validateJsonSchema(parseJsonDocument(JSON.stringify({ [key]: value })), schema).length > 0);
 	}
-	await assert.rejects(configuration.updateValue('notebook.codeActionsOnSave', { 'notebook.source.fixAll': 'always' }), TypeError);
+	await assert.rejects(
+		configuration.updateValue('notebook.codeActionsOnSave', { 'notebook.source.fixAll': 'always' }),
+		TypeError,
+	);
 	await configuration.updateValue('notebook.codeActionsOnSave', { 'notebook.source.fixAll': true });
 	assert.deepEqual(configuration.getValue('notebook.codeActionsOnSave'), { 'notebook.source.fixAll': 'explicit' });
-	assert.deepEqual(validateJsonSchema(parseJsonDocument('{"editor.codeActionsOnSave":{"source.future":"always","source.fixAll":true}}'), schema), []);
+	assert.deepEqual(
+		validateJsonSchema(
+			parseJsonDocument('{"editor.codeActionsOnSave":{"source.future":"always","source.fixAll":true}}'),
+			schema,
+		),
+		[],
+	);
 });
 
 test('Code Action save mode descriptions use the Chinese language pack', () => {
@@ -106,6 +170,8 @@ test('Code Action save mode descriptions use the Chinese language pack', () => {
 	const schema = createConfigurationSchema().properties!['editor.codeActionsOnSave'];
 	assert.ok(schema.markdownDescription!.includes('保存文件'));
 	assert.deepEqual((schema.additionalProperties as JsonSchema).enumDescriptions!.slice(0, 3), [
-		'手动保存，以及因焦点或窗口切换而自动保存时运行。', '仅在手动保存时运行。', '保存时不运行。',
+		'手动保存，以及因焦点或窗口切换而自动保存时运行。',
+		'仅在手动保存时运行。',
+		'保存时不运行。',
 	]);
 });

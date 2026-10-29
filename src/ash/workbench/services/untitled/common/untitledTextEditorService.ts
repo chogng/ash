@@ -3,7 +3,10 @@ import { Disposable, DisposableMap, type IDisposable } from '../../../../base/co
 import { Schemas } from '../../../../base/common/network.js';
 import { basename, extUri } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
-import { createServiceIdentifier, IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import {
+	createServiceIdentifier,
+	IInstantiationService,
+} from '../../../../platform/instantiation/common/instantiation.js';
 import { IWorkingCopyService } from '../../workingCopy/common/workingCopyService.js';
 import { UntitledTextEditorModel, type IUntitledTextEditorModel } from './untitledTextEditorModel.js';
 
@@ -31,7 +34,8 @@ export interface IUntitledTextEditorService extends IDisposable {
 	reset(): void;
 }
 
-export const IUntitledTextEditorService = createServiceIdentifier<IUntitledTextEditorService>('untitledTextEditorService');
+export const IUntitledTextEditorService =
+	createServiceIdentifier<IUntitledTextEditorService>('untitledTextEditorService');
 
 export class UntitledTextEditorService extends Disposable implements IUntitledTextEditorService {
 	private readonly editors = this._register(new DisposableMap<string, UntitledTextEditorEntry>());
@@ -48,11 +52,13 @@ export class UntitledTextEditorService extends Disposable implements IUntitledTe
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
-		this._register(workingCopies.onDidUnregister(copy => {
-			if (this.isUntitled(copy.resource) && this.workingCopies.get(copy.resource).length === 0) {
-				this.release(extUri.getComparisonKey(copy.resource));
-			}
-		}));
+		this._register(
+			workingCopies.onDidUnregister(copy => {
+				if (this.isUntitled(copy.resource) && this.workingCopies.get(copy.resource).length === 0) {
+					this.release(extUri.getComparisonKey(copy.resource));
+				}
+			}),
+		);
 	}
 
 	public create(options: IExistingUntitledTextEditorOptions = {}): IUntitledTextEditorModel {
@@ -74,10 +80,19 @@ export class UntitledTextEditorService extends Disposable implements IUntitledTe
 			// Session restoration can open a draft through a resource input before this service creates its model.
 			do {
 				resource = URI.parse(`${Schemas.untitled}:/Untitled-${this.nextUntitledNumber++}`);
-			} while (this.editors.has(extUri.getComparisonKey(resource)) || this.workingCopies.get(resource).length > 0);
+			} while (
+				this.editors.has(extUri.getComparisonKey(resource)) ||
+				this.workingCopies.get(resource).length > 0
+			);
 		}
 		const name = options.label ?? (basename(resource) || resource.authority || resource.toString());
-		const model = this.instantiationService.createInstance(UntitledTextEditorModel, resource, name, options.initialValue ?? '', options.languageId);
+		const model = this.instantiationService.createInstance(
+			UntitledTextEditorModel,
+			resource,
+			name,
+			options.initialValue ?? '',
+			options.languageId,
+		);
 		const key = extUri.getComparisonKey(resource);
 		const entry = new UntitledTextEditorEntry(model, () => this.release(key));
 		this.editors.set(key, entry);
@@ -130,7 +145,10 @@ export class UntitledTextEditorService extends Disposable implements IUntitledTe
 }
 
 class UntitledTextEditorEntry extends Disposable {
-	constructor(public readonly model: UntitledTextEditorModel, onDispose: () => void) {
+	constructor(
+		public readonly model: UntitledTextEditorModel,
+		onDispose: () => void,
+	) {
 		super();
 		this._register(model);
 		this._register(model.onWillDispose(onDispose));

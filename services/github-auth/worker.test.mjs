@@ -15,22 +15,40 @@ const challenge = 'C'.repeat(43);
 test('token exchange cancels an oversized stream before consuming the remaining body', async () => {
 	let reads = 0;
 	let cancelled = false;
-	const body = new ReadableStream({
-		pull(controller) {
-			reads++;
-			controller.enqueue(new Uint8Array(1024));
+	const body = new ReadableStream(
+		{
+			pull(controller) {
+				reads++;
+				controller.enqueue(new Uint8Array(1024));
+			},
+			cancel() {
+				cancelled = true;
+			},
 		},
-		cancel() { cancelled = true; },
-	}, { highWaterMark: 0 });
-	const request = new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': '1' }, body, duplex: 'half' });
+		{ highWaterMark: 0 },
+	);
+	const request = new Request(`${origin}/v1/oauth/github/token`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': '1' },
+		body,
+		duplex: 'half',
+	});
 	assert.equal((await worker.fetch(request, environment)).status, 413);
 	assert.equal(reads, 9);
 	assert.equal(cancelled, true);
 });
 
 test('token request limit counts UTF-8 bytes and accepts exactly the byte limit', async () => {
-	for (const [body, status] of [['x'.repeat(8192), 400], ['x'.repeat(8193), 413], ['é'.repeat(4097), 413]]) {
-		const request = new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body });
+	for (const [body, status] of [
+		['x'.repeat(8192), 400],
+		['x'.repeat(8193), 413],
+		['é'.repeat(4097), 413],
+	]) {
+		const request = new Request(`${origin}/v1/oauth/github/token`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body,
+		});
 		assert.equal((await worker.fetch(request, environment)).status, status);
 	}
 });
@@ -44,7 +62,8 @@ function authorizationRequest(overrides = {}) {
 		code_challenge: challenge,
 		code_challenge_method: 'S256',
 		...overrides,
-	})) url.searchParams.set(key, value);
+	}))
+		url.searchParams.set(key, value);
 	return new Request(url);
 }
 
@@ -102,8 +121,21 @@ test('GitHub.com OAuth authorization requests notification scopes and exchanges 
 			assert.equal(body.get('redirect_uri'), `${origin}/v1/oauth/github/callback`);
 			return new Response(JSON.stringify({ access_token: 'oauth-user-token', token_type: 'bearer' }));
 		};
-		const form = new URLSearchParams({ client_id: oauth.GITHUB_CLIENT_ID, grant_type: 'authorization_code', code: 'oauth-code', code_verifier: 'D'.repeat(43), redirect_uri: redirectUri });
-		const response = await worker.fetch(new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form }), oauth);
+		const form = new URLSearchParams({
+			client_id: oauth.GITHUB_CLIENT_ID,
+			grant_type: 'authorization_code',
+			code: 'oauth-code',
+			code_verifier: 'D'.repeat(43),
+			redirect_uri: redirectUri,
+		});
+		const response = await worker.fetch(
+			new Request(`${origin}/v1/oauth/github/token`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: form,
+			}),
+			oauth,
+		);
 		assert.deepEqual(await response.json(), { access_token: 'oauth-user-token', token_type: 'bearer' });
 	} finally {
 		globalThis.fetch = originalFetch;
@@ -120,8 +152,21 @@ test('token exchange rejects upstream redirects without forwarding client creden
 			assert.equal(init.redirect, 'manual');
 			return new Response(null, { status: 302, headers: { Location: 'https://other.example/token' } });
 		};
-		const form = new URLSearchParams({ client_id: environment.GITHUB_CLIENT_ID, grant_type: 'authorization_code', code: 'private-code', code_verifier: 'D'.repeat(43), redirect_uri: redirectUri });
-		const response = await worker.fetch(new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form }), environment);
+		const form = new URLSearchParams({
+			client_id: environment.GITHUB_CLIENT_ID,
+			grant_type: 'authorization_code',
+			code: 'private-code',
+			code_verifier: 'D'.repeat(43),
+			redirect_uri: redirectUri,
+		});
+		const response = await worker.fetch(
+			new Request(`${origin}/v1/oauth/github/token`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: form,
+			}),
+			environment,
+		);
 		assert.equal(response.status, 502);
 		assert.equal(await response.text(), 'GitHub token exchange failed');
 		assert.equal(calls, 1);
@@ -131,7 +176,11 @@ test('token exchange rejects upstream redirects without forwarding client creden
 });
 
 test('authorization rejects unsafe or repeated callback parameters', async () => {
-	for (const unsafe of ['https://example.com/steal', 'http://localhost:58123/github-oauth/' + 'A'.repeat(43), 'http://127.0.0.1:58123/other']) {
+	for (const unsafe of [
+		'https://example.com/steal',
+		'http://localhost:58123/github-oauth/' + 'A'.repeat(43),
+		'http://127.0.0.1:58123/other',
+	]) {
 		assert.equal((await worker.fetch(authorizationRequest({ redirect_uri: unsafe }), environment)).status, 400);
 	}
 	const repeated = new URL(authorizationRequest().url);
@@ -144,30 +193,68 @@ test('token exchange keeps the client secret on the server and returns refresh e
 	const calls = [];
 	globalThis.fetch = async (url, init) => {
 		calls.push({ url, body: String(init.body) });
-		return new Response(JSON.stringify(calls.length === 1
-			? { access_token: 'private-access', refresh_token: 'private-refresh', expires_in: 28800, token_type: 'bearer' }
-			: { error: 'bad_refresh_token' }), { headers: { 'Content-Type': 'application/json' } });
+		return new Response(
+			JSON.stringify(
+				calls.length === 1
+					? {
+							access_token: 'private-access',
+							refresh_token: 'private-refresh',
+							expires_in: 28800,
+							token_type: 'bearer',
+						}
+					: { error: 'bad_refresh_token' },
+			),
+			{ headers: { 'Content-Type': 'application/json' } },
+		);
 	};
 	try {
-		const form = new URLSearchParams({ client_id: environment.GITHUB_CLIENT_ID, grant_type: 'authorization_code', code: 'private-code', code_verifier: 'D'.repeat(43), redirect_uri: redirectUri });
-		const request = new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form });
+		const form = new URLSearchParams({
+			client_id: environment.GITHUB_CLIENT_ID,
+			grant_type: 'authorization_code',
+			code: 'private-code',
+			code_verifier: 'D'.repeat(43),
+			redirect_uri: redirectUri,
+		});
+		const request = new Request(`${origin}/v1/oauth/github/token`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+			body: form,
+		});
 		const token = await worker.fetch(request, environment);
-		assert.deepEqual(await token.json(), { access_token: 'private-access', refresh_token: 'private-refresh', expires_in: 28800, token_type: 'bearer' });
+		assert.deepEqual(await token.json(), {
+			access_token: 'private-access',
+			refresh_token: 'private-refresh',
+			expires_in: 28800,
+			token_type: 'bearer',
+		});
 		assert.equal(calls.length, 1);
 		assert.equal(new URLSearchParams(calls[0].body).get('client_secret'), environment.GITHUB_CLIENT_SECRET);
 		assert.equal(new URLSearchParams(calls[0].body).get('redirect_uri'), `${origin}/v1/oauth/github/callback`);
-		const refresh = new URLSearchParams({ client_id: environment.GITHUB_CLIENT_ID, grant_type: 'refresh_token', refresh_token: 'private-refresh' });
-		const response = await worker.fetch(new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: refresh }), environment);
+		const refresh = new URLSearchParams({
+			client_id: environment.GITHUB_CLIENT_ID,
+			grant_type: 'refresh_token',
+			refresh_token: 'private-refresh',
+		});
+		const response = await worker.fetch(
+			new Request(`${origin}/v1/oauth/github/token`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: refresh,
+			}),
+			environment,
+		);
 		assert.deepEqual(await response.json(), { error: 'bad_refresh_token' });
 	} finally {
 		globalThis.fetch = originalFetch;
 	}
 });
 
-
 test('Enterprise authorization and token exchange stay on the configured host', async () => {
 	const enterprise = { ...environment, GITHUB_HOST: 'git.example.com', GITHUB_CLIENT_ID: 'enterpriseClient' };
-	const authorization = await worker.fetch(authorizationRequest({ client_id: enterprise.GITHUB_CLIENT_ID }), enterprise);
+	const authorization = await worker.fetch(
+		authorizationRequest({ client_id: enterprise.GITHUB_CLIENT_ID }),
+		enterprise,
+	);
 	const github = new URL(authorization.headers.get('Location'));
 	assert.equal(github.origin, 'https://git.example.com');
 	assert.equal(github.searchParams.get('scope'), 'read:user repo notifications');
@@ -183,10 +270,25 @@ test('Enterprise authorization and token exchange stay on the configured host', 
 			assert.equal(init.redirect, 'manual');
 			return new Response(JSON.stringify({ access_token: 'enterprise-token', token_type: 'bearer' }));
 		};
-		const form = new URLSearchParams({ client_id: enterprise.GITHUB_CLIENT_ID, grant_type: 'authorization_code', code: 'code', code_verifier: 'D'.repeat(43), redirect_uri: redirectUri });
-		const response = await worker.fetch(new Request(`${origin}/v1/oauth/github/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form }), enterprise);
+		const form = new URLSearchParams({
+			client_id: enterprise.GITHUB_CLIENT_ID,
+			grant_type: 'authorization_code',
+			code: 'code',
+			code_verifier: 'D'.repeat(43),
+			redirect_uri: redirectUri,
+		});
+		const response = await worker.fetch(
+			new Request(`${origin}/v1/oauth/github/token`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body: form,
+			}),
+			enterprise,
+		);
 		assert.equal((await response.json()).access_token, 'enterprise-token');
-	} finally { globalThis.fetch = originalFetch; }
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
 	for (const host of ['bad.example/path', 'user@host', 'host:443', 'https://host']) {
 		assert.equal((await worker.fetch(authorizationRequest(), { ...enterprise, GITHUB_HOST: host })).status, 503);
 	}

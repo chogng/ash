@@ -13,11 +13,16 @@ test('preparation receipts reuse content across processes and repair missing or 
 	const receipt = join(root, 'receipt.json');
 	await writeFile(source, 'first');
 	let calls = 0;
-	const prepare = () => new PreparedInputs(receipt).prepare(() => fingerprintPaths([source]), () => fingerprintPaths([output]), async () => {
-		calls++;
-		await writeFile(output, await readFile(source));
-		return true;
-	});
+	const prepare = () =>
+		new PreparedInputs(receipt).prepare(
+			() => fingerprintPaths([source]),
+			() => fingerprintPaths([output]),
+			async () => {
+				calls++;
+				await writeFile(output, await readFile(source));
+				return true;
+			},
+		);
 	assert.equal(await prepare(), true);
 	assert.equal(await prepare(), false);
 	assert.equal(calls, 1);
@@ -41,14 +46,19 @@ test('concurrent consumers share generation, but edits during generation are not
 	let calls = 0;
 	const started = Promise.withResolvers<void>();
 	const finish = Promise.withResolvers<void>();
-	const prepare = () => prepared.prepare(async () => input, async () => output, async () => {
-		calls++;
-		const snapshot = input;
-		started.resolve();
-		await finish.promise;
-		output = snapshot;
-		return true;
-	});
+	const prepare = () =>
+		prepared.prepare(
+			async () => input,
+			async () => output,
+			async () => {
+				calls++;
+				const snapshot = input;
+				started.resolve();
+				await finish.promise;
+				output = snapshot;
+				return true;
+			},
+		);
 	const first = prepare();
 	assert.equal(first, prepare());
 	await started.promise;

@@ -70,12 +70,7 @@ export class LinkedList<T> implements Iterable<T> {
 	}
 
 	private insert(value: T, atEnd: boolean): () => void {
-		const node: LinkedListNode<T> = {
-			value,
-			previous: undefined,
-			next: undefined,
-			attached: true,
-		};
+		const node: LinkedListNode<T> = { value, previous: undefined, next: undefined, attached: true };
 		if (!this.firstNode) {
 			this.firstNode = node;
 			this.lastNode = node;

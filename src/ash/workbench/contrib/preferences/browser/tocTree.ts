@@ -1,19 +1,33 @@
 import { defaultFindWidgetStyles, defaultListStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import { h } from '../../../../base/browser/dom.js';
-import { ObjectTree, type ObjectTreeCollapseStateChangeEvent, type ObjectTreeFindResult } from '../../../../base/browser/ui/tree/objectTree.js';
+import {
+	ObjectTree,
+	type ObjectTreeCollapseStateChangeEvent,
+	type ObjectTreeFindResult,
+} from '../../../../base/browser/ui/tree/objectTree.js';
 import type { ObjectTreeElement } from '../../../../base/browser/ui/tree/objectTreeModel.js';
 import { TreeFindMatchType, TreeFindMode } from '../../../../base/browser/ui/tree/tree.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { ISetting } from '../../../services/preferences/common/preferences.js';
-import { SettingsNavigation, type SettingsCategoryDescriptor, type SettingsCategoryGroupDescriptor, type SettingsNavigationDescriptor } from './settingsLayout.js';
+import {
+	SettingsNavigation,
+	type SettingsCategoryDescriptor,
+	type SettingsCategoryGroupDescriptor,
+	type SettingsNavigationDescriptor,
+} from './settingsLayout.js';
 import type { SettingsSectionReference, SettingsTreeModel } from './settingsTreeModels.js';
 
 export type SettingsTOCEntry =
-	| { readonly kind: 'group'; readonly id: string; readonly group: SettingsCategoryGroupDescriptor; }
-	| { readonly kind: 'category'; readonly id: string; readonly category: SettingsCategoryDescriptor; readonly searchKeywords: readonly string[]; };
+	| { readonly kind: 'group'; readonly id: string; readonly group: SettingsCategoryGroupDescriptor }
+	| {
+			readonly kind: 'category';
+			readonly id: string;
+			readonly category: SettingsCategoryDescriptor;
+			readonly searchKeywords: readonly string[];
+	  };
 
-export type SettingsTOCOpenEntry = Extract<SettingsTOCEntry, { readonly kind: 'category'; }>;
+export type SettingsTOCOpenEntry = Extract<SettingsTOCEntry, { readonly kind: 'category' }>;
 
 export interface TOCTreeOptions {
 	readonly ariaLabel: string;
@@ -25,7 +39,10 @@ export interface TOCTreeOptions {
 
 /** Projects the product hierarchy and contributed layout groups into Settings TOC entries. */
 export class TOCTreeModel {
-	constructor(private readonly content: SettingsTreeModel<ISetting | SettingsSectionReference>, private readonly navigation: () => readonly SettingsNavigationDescriptor[] = () => SettingsNavigation) { }
+	constructor(
+		private readonly content: SettingsTreeModel<ISetting | SettingsSectionReference>,
+		private readonly navigation: () => readonly SettingsNavigationDescriptor[] = () => SettingsNavigation,
+	) {}
 
 	public get isSearching(): boolean {
 		return this.content.isSearching;
@@ -60,7 +77,12 @@ export class TOCTreeModel {
 		const visit = (id: string): void => {
 			const node = this.content.getNode(id);
 			if (!node) return;
-			keywords.push(node.element.id, node.element.title, node.element.description, ...node.element.keywords ?? []);
+			keywords.push(
+				node.element.id,
+				node.element.title,
+				node.element.description,
+				...(node.element.keywords ?? []),
+			);
 			for (const child of node.children) visit(child.element.id);
 		};
 		visit(categoryId);
@@ -71,7 +93,12 @@ export class TOCTreeModel {
 		if (this.content.isSearching && this.content.countVisibleItems(category.id) === 0) return undefined;
 		// Page sections stay in the content pane; the sidebar stops at categories.
 		return {
-			element: { kind: 'category', id: category.id, category, searchKeywords: this.contentSearchKeywords(category.id) },
+			element: {
+				kind: 'category',
+				id: category.id,
+				category,
+				searchKeywords: this.contentSearchKeywords(category.id),
+			},
 			collapsible: false,
 		};
 	}
@@ -87,42 +114,47 @@ export class TOCTree extends Disposable {
 	public readonly onDidChangeCollapseState: Event<ObjectTreeCollapseStateChangeEvent<SettingsTOCEntry>>;
 	public readonly onDidChangeFind: Event<ObjectTreeFindResult<SettingsTOCEntry>>;
 
-	constructor(container: HTMLElement, private readonly model: TOCTreeModel, private readonly options: TOCTreeOptions) {
+	constructor(
+		container: HTMLElement,
+		private readonly model: TOCTreeModel,
+		private readonly options: TOCTreeOptions,
+	) {
 		super();
 		const document = container.ownerDocument;
-		this.tree = this._register(new ObjectTree(container, {
-			styles: defaultListStyles,
-			findWidgetStyles: defaultFindWidgetStyles,
-			ariaLabel: options.ariaLabel,
-			scrolling: 'external',
-			expandOnlyOnTwistieClick: false,
-			findMatchType: TreeFindMatchType.Contiguous,
-			findMode: TreeFindMode.Filter,
-			getHeight: () => 26,
-			indent: 12,
-			keyboardNavigationLabelProvider: {
-				getKeyboardNavigationLabel: entry => this.keyboardLabel(entry),
-			},
-			modelOptions: {
-				defaultCollapseState: 'collapsed',
-				identityProvider: { getId: entry => entry.id },
-			},
-			selectionPresentation: 'subtle',
-			renderElement: entry => this.renderEntry(document, entry),
-		}));
+		this.tree = this._register(
+			new ObjectTree(container, {
+				styles: defaultListStyles,
+				findWidgetStyles: defaultFindWidgetStyles,
+				ariaLabel: options.ariaLabel,
+				scrolling: 'external',
+				expandOnlyOnTwistieClick: false,
+				findMatchType: TreeFindMatchType.Contiguous,
+				findMode: TreeFindMode.Filter,
+				getHeight: () => 26,
+				indent: 12,
+				keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: entry => this.keyboardLabel(entry) },
+				modelOptions: { defaultCollapseState: 'collapsed', identityProvider: { getId: entry => entry.id } },
+				selectionPresentation: 'subtle',
+				renderElement: entry => this.renderEntry(document, entry),
+			}),
+		);
 		this.element = this.tree.element;
 		this.element.classList.add('ash-settings-navigation-tree', 'ash-settings-toc-tree');
 		this.tree.setChildren(model.children);
 		this.onDidChangeCollapseState = this.tree.onDidChangeCollapseState;
 		this.onDidChangeFind = this.tree.onDidChangeFind;
-		this._register(this.tree.onDidChangeSelection(({ elements, browserEvent }) => {
-			const entry = elements[0];
-			if (entry && entry.kind !== 'group' && browserEvent) this.openEmitter.fire(entry);
-		}));
-		this._register(this.tree.onDidAccept(({ element, node }) => {
-			if (node.collapsible) this.tree.toggleCollapsed(element.id);
-			if (element.kind !== 'group') this.openEmitter.fire(element);
-		}));
+		this._register(
+			this.tree.onDidChangeSelection(({ elements, browserEvent }) => {
+				const entry = elements[0];
+				if (entry && entry.kind !== 'group' && browserEvent) this.openEmitter.fire(entry);
+			}),
+		);
+		this._register(
+			this.tree.onDidAccept(({ element, node }) => {
+				if (node.collapsible) this.tree.toggleCollapsed(element.id);
+				if (element.kind !== 'group') this.openEmitter.fire(element);
+			}),
+		);
 	}
 
 	public get focus(): SettingsTOCEntry | undefined {
@@ -161,7 +193,8 @@ export class TOCTree extends Disposable {
 	}
 
 	private keyboardLabel(entry: SettingsTOCEntry): string {
-		if (entry.kind === 'group') return `${this.options.groupLabel(entry.group)} ${this.options.groupDescription(entry.group)}`;
+		if (entry.kind === 'group')
+			return `${this.options.groupLabel(entry.group)} ${this.options.groupDescription(entry.group)}`;
 		return [
 			this.options.categoryLabel(entry.category),
 			this.options.categoryDescription(entry.category),
@@ -175,9 +208,8 @@ export class TOCTree extends Disposable {
 		label.className = 'ash-settings-navigation-label';
 		if (entry.kind === 'group') label.dataset.settingsGroupId = entry.group.id;
 		else label.dataset.settingsCategoryId = entry.category.id;
-		label.textContent = entry.kind === 'group'
-			? this.options.groupLabel(entry.group)
-			: this.options.categoryLabel(entry.category);
+		label.textContent =
+			entry.kind === 'group' ? this.options.groupLabel(entry.group) : this.options.categoryLabel(entry.category);
 		return label;
 	}
 }

@@ -3,7 +3,11 @@ import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
 import { toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { CanvasInputController, CanvasPointerAction, type CanvasInputParticipant } from '../../browser/canvasInputController.js';
+import {
+	CanvasInputController,
+	CanvasPointerAction,
+	type CanvasInputParticipant,
+} from '../../browser/canvasInputController.js';
 import { CanvasViewport } from '../../common/canvasViewport.js';
 
 ensureNoDisposablesAreLeakedInTestSuite();
@@ -13,7 +17,9 @@ function createInputFixture() {
 	const domNode = browser.window.document.querySelector('div')!;
 	let captured: number | undefined;
 	const calls: string[] = [];
-	domNode.setPointerCapture = id => { captured = id; };
+	domNode.setPointerCapture = id => {
+		captured = id;
+	};
 	domNode.hasPointerCapture = id => captured === id;
 	domNode.releasePointerCapture = id => {
 		captured = undefined;
@@ -21,21 +27,44 @@ function createInputFixture() {
 	};
 	const participant: CanvasInputParticipant = {
 		begin: () => CanvasPointerAction.Edit,
-		update: input => { calls.push(`update:${input.world.x},${input.world.y}`); },
-		end: () => { calls.push('end'); },
-		cancel: () => { calls.push('cancel'); },
+		update: input => {
+			calls.push(`update:${input.world.x},${input.world.y}`);
+		},
+		end: () => {
+			calls.push('end');
+		},
+		cancel: () => {
+			calls.push('cancel');
+		},
 		canNavigate: () => true,
 	};
 	const viewport = new CanvasViewport();
 	viewport.panBy(10, 20);
 	viewport.zoomAt({ x: 10, y: 20 }, 2);
-	const input = new CanvasInputController({ domNode, focus: () => domNode.focus(), applyTransform: () => { } }, viewport, participant);
+	const input = new CanvasInputController(
+		{ domNode, focus: () => domNode.focus(), applyTransform: () => {} },
+		viewport,
+		participant,
+	);
 	return {
-		input, calls,
+		input,
+		calls,
 		fire(type: string, pointerId = 1): void {
-			domNode.dispatchEvent(new browser.window.PointerEvent(type, { pointerId, button: 0, isPrimary: true, clientX: 50, clientY: 60, cancelable: true }));
+			domNode.dispatchEvent(
+				new browser.window.PointerEvent(type, {
+					pointerId,
+					button: 0,
+					isPrimary: true,
+					clientX: 50,
+					clientY: 60,
+					cancelable: true,
+				}),
+			);
 		},
-		dispose: toDisposable(() => { input.dispose(); browser.window.close(); }),
+		dispose: toDisposable(() => {
+			input.dispose();
+			browser.window.close();
+		}),
 	};
 }
 
@@ -48,7 +77,10 @@ test('Canvas completes the captured edit once and ignores other pointers and cap
 	assert.equal(fixture.input.isGesturing, true);
 	fixture.fire('pointermove');
 	fixture.fire('pointerup');
-	assert.deepEqual({ calls: fixture.calls, active: fixture.input.isGesturing }, { calls: ['update:20,20', 'end'], active: false });
+	assert.deepEqual(
+		{ calls: fixture.calls, active: fixture.input.isGesturing },
+		{ calls: ['update:20,20', 'end'], active: false },
+	);
 });
 
 test('Canvas cancels captured editing and removes input listeners on disposal', () => {
@@ -62,5 +94,8 @@ test('Canvas cancels captured editing and removes input listeners on disposal', 
 	fixture.input.dispose();
 	fixture.fire('pointermove');
 	fixture.fire('pointerup');
-	assert.deepEqual({ calls: fixture.calls, active: fixture.input.isGesturing }, { calls: ['cancel', 'cancel'], active: false });
+	assert.deepEqual(
+		{ calls: fixture.calls, active: fixture.input.isGesturing },
+		{ calls: ['cancel', 'cancel'], active: false },
+	);
 });

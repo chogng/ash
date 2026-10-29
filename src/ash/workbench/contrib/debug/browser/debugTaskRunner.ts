@@ -26,14 +26,24 @@ export class DebugTaskRunner extends AbstractDisposable {
 		}
 	}
 
-	public async runTask(root: IWorkspace | IWorkspaceFolder | undefined, taskId: string | undefined, token = CancellationToken.None): Promise<IRunnerTaskSummary | null> {
+	public async runTask(
+		root: IWorkspace | IWorkspaceFolder | undefined,
+		taskId: string | undefined,
+		token = CancellationToken.None,
+	): Promise<IRunnerTaskSummary | null> {
 		this.assertNotDisposed();
 		throwIfCancelled(token);
 		if (!taskId) {
 			return null;
 		}
 		if (!root) {
-			throw new Error(localize('debug.taskFolderMissing', "The workspace folder for debug task '{0}' is no longer available.", taskId));
+			throw new Error(
+				localize(
+					'debug.taskFolderMissing',
+					"The workspace folder for debug task '{0}' is no longer available.",
+					taskId,
+				),
+			);
 		}
 		const controller = new AbortController();
 		this.pending.add(controller);
@@ -46,9 +56,10 @@ export class DebugTaskRunner extends AbstractDisposable {
 			await raceCancellationError(this.tasks.refresh(), controller.signal);
 			throwIfCancelled(controller.signal);
 			const folderId = 'folders' in root ? undefined : root.id;
-			const matches = this.tasks.tasks.filter(task =>
-				(task.id === taskId || task.label === taskId)
-				&& (folderId === undefined || task.dirId === undefined || task.dirId === folderId),
+			const matches = this.tasks.tasks.filter(
+				task =>
+					(task.id === taskId || task.label === taskId) &&
+					(folderId === undefined || task.dirId === undefined || task.dirId === folderId),
 			);
 			if (matches.length === 0) {
 				throw new Error(localize('debug.taskNotFound', "Debug task '{0}' was not found", taskId));

@@ -1,13 +1,13 @@
-import { DisposableStore } from "../../../../base/common/lifecycle.js";
-import { localize } from "../../../../nls.js";
-import { DialogSeverity } from "../../../../platform/dialogs/common/dialogs.js";
-import type { IDialogService } from "../../../../platform/dialogs/common/dialogs.js";
-import type { IQuickInputService } from "../../../../platform/quickinput/common/quickInput.js";
-import type { IQuickPickItem } from "../../../../platform/quickinput/common/quickInput.js";
-import type { IRemoteConnectionService } from "../../../../platform/remote/common/remoteConnectionService.js";
-import type { RemoteConnectionDefinition } from "../../../../platform/remote/common/remoteConnectionService.js";
+import { DisposableStore } from '../../../../base/common/lifecycle.js';
+import { localize } from '../../../../nls.js';
+import { DialogSeverity } from '../../../../platform/dialogs/common/dialogs.js';
+import type { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import type { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
+import type { IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import type { IRemoteConnectionService } from '../../../../platform/remote/common/remoteConnectionService.js';
+import type { RemoteConnectionDefinition } from '../../../../platform/remote/common/remoteConnectionService.js';
 
-type ManagementAction = "add" | "edit" | "remove";
+type ManagementAction = 'add' | 'edit' | 'remove';
 
 interface ManagementQuickPickItem extends IQuickPickItem {
 	readonly action: ManagementAction;
@@ -22,101 +22,161 @@ interface TextQuickPickItem extends IQuickPickItem {
 }
 
 /** Opens the graphical editor for the shared credential-free Remote connection catalog. */
-export async function showRemoteConnectionManager(connections: IRemoteConnectionService, quickInput: IQuickInputService, dialogs: IDialogService): Promise<void> {
+export async function showRemoteConnectionManager(
+	connections: IRemoteConnectionService,
+	quickInput: IQuickInputService,
+	dialogs: IDialogService,
+): Promise<void> {
 	let available: readonly RemoteConnectionDefinition[];
 	try {
 		available = await connections.list();
 	} catch (error) {
-		await showManagementError(dialogs, "Could not load saved Remote connections", error);
+		await showManagementError(dialogs, 'Could not load saved Remote connections', error);
 		return;
 	}
 
-	const items: ManagementQuickPickItem[] = [{ action: "add", label: "Add SSH Host", detail: "Save a credential-free OpenSSH host alias and Remote Workspace" }];
+	const items: ManagementQuickPickItem[] = [
+		{
+			action: 'add',
+			label: 'Add SSH Host',
+			detail: 'Save a credential-free OpenSSH host alias and Remote Workspace',
+		},
+	];
 	if (available.length > 0) {
-		items.push({ action: "edit", label: "Edit SSH Host", detail: "Change or rename an existing saved connection" });
-		items.push({ action: "remove", label: "Remove SSH Host", detail: "Delete an existing saved connection" });
+		items.push({ action: 'edit', label: 'Edit SSH Host', detail: 'Change or rename an existing saved connection' });
+		items.push({ action: 'remove', label: 'Remove SSH Host', detail: 'Delete an existing saved connection' });
 	}
-	const selected = await pickOne(quickInput, "Manage saved Remote SSH hosts", items);
+	const selected = await pickOne(quickInput, 'Manage saved Remote SSH hosts', items);
 	if (!selected) return;
 	switch (selected.action) {
-		case "add":
+		case 'add':
 			await addConnection(connections, quickInput, dialogs);
 			break;
-		case "edit":
+		case 'edit':
 			await editConnection(connections, quickInput, dialogs, available);
 			break;
-		case "remove":
+		case 'remove':
 			await removeConnection(connections, quickInput, dialogs, available);
 			break;
 	}
 }
 
-async function addConnection(connections: IRemoteConnectionService, quickInput: IQuickInputService, dialogs: IDialogService): Promise<void> {
+async function addConnection(
+	connections: IRemoteConnectionService,
+	quickInput: IQuickInputService,
+	dialogs: IDialogService,
+): Promise<void> {
 	const connection = await promptConnection(quickInput);
 	if (!connection) return;
 	try {
 		const saved = await connections.save(connection);
-		await showManagementSuccess(dialogs, "Remote connection saved", `'${saved.name}' now points to ${saved.host}:${saved.workspace}`);
+		await showManagementSuccess(
+			dialogs,
+			'Remote connection saved',
+			`'${saved.name}' now points to ${saved.host}:${saved.workspace}`,
+		);
 	} catch (error) {
-		await showManagementError(dialogs, "Could not save the Remote connection", error);
+		await showManagementError(dialogs, 'Could not save the Remote connection', error);
 	}
 }
 
-async function editConnection(connections: IRemoteConnectionService, quickInput: IQuickInputService, dialogs: IDialogService, available: readonly RemoteConnectionDefinition[]): Promise<void> {
-	const original = await pickConnection(quickInput, "Select a Remote SSH host to edit", available);
+async function editConnection(
+	connections: IRemoteConnectionService,
+	quickInput: IQuickInputService,
+	dialogs: IDialogService,
+	available: readonly RemoteConnectionDefinition[],
+): Promise<void> {
+	const original = await pickConnection(quickInput, 'Select a Remote SSH host to edit', available);
 	if (!original) return;
 	const connection = await promptConnection(quickInput, original);
 	if (!connection) return;
 	try {
 		const updated = await connections.update(original.name, connection);
-		await showManagementSuccess(dialogs, "Remote connection updated", `'${updated.name}' now points to ${updated.host}:${updated.workspace}`);
+		await showManagementSuccess(
+			dialogs,
+			'Remote connection updated',
+			`'${updated.name}' now points to ${updated.host}:${updated.workspace}`,
+		);
 	} catch (error) {
-		await showManagementError(dialogs, "Could not update the Remote connection", error);
+		await showManagementError(dialogs, 'Could not update the Remote connection', error);
 	}
 }
 
-async function removeConnection(connections: IRemoteConnectionService, quickInput: IQuickInputService, dialogs: IDialogService, available: readonly RemoteConnectionDefinition[]): Promise<void> {
-	const connection = await pickConnection(quickInput, "Select a Remote SSH host to remove", available);
+async function removeConnection(
+	connections: IRemoteConnectionService,
+	quickInput: IQuickInputService,
+	dialogs: IDialogService,
+	available: readonly RemoteConnectionDefinition[],
+): Promise<void> {
+	const connection = await pickConnection(quickInput, 'Select a Remote SSH host to remove', available);
 	if (!connection) return;
 	const confirmed = await dialogs.confirm({
-		title: "Remove Remote connection",
+		title: 'Remove Remote connection',
 		message: `Remove '${connection.name}' from saved Remote connections?`,
 		detail: `${connection.host}:${connection.workspace}`,
-		primaryButton: "Remove",
+		primaryButton: 'Remove',
 	});
 	if (!confirmed.confirmed) return;
 	try {
 		const removed = await connections.remove(connection.name);
 		await showManagementSuccess(
 			dialogs,
-			removed ? "Remote connection removed" : "Remote connection already removed",
-			removed ? `'${removed.name}' was removed from the shared catalog.` : `'${connection.name}' no longer exists in the shared catalog.`,
+			removed ? 'Remote connection removed' : 'Remote connection already removed',
+			removed
+				? `'${removed.name}' was removed from the shared catalog.`
+				: `'${connection.name}' no longer exists in the shared catalog.`,
 		);
 	} catch (error) {
-		await showManagementError(dialogs, "Could not remove the Remote connection", error);
+		await showManagementError(dialogs, 'Could not remove the Remote connection', error);
 	}
 }
 
-async function promptConnection(quickInput: IQuickInputService, initial?: RemoteConnectionDefinition): Promise<RemoteConnectionDefinition | undefined> {
-	const name = await promptText(quickInput, "Connection name (letters, digits, dots, underscores, or hyphens)", initial?.name);
+async function promptConnection(
+	quickInput: IQuickInputService,
+	initial?: RemoteConnectionDefinition,
+): Promise<RemoteConnectionDefinition | undefined> {
+	const name = await promptText(
+		quickInput,
+		'Connection name (letters, digits, dots, underscores, or hyphens)',
+		initial?.name,
+	);
 	if (name === undefined) return undefined;
-	const host = await promptText(quickInput, "OpenSSH config host alias", initial?.host);
+	const host = await promptText(quickInput, 'OpenSSH config host alias', initial?.host);
 	if (host === undefined) return undefined;
-	const workspace = await promptText(quickInput, localize({ bundle: 'ash.workbench', key: 'remote.workspace.absolutePath' }, "Absolute path to the Remote Workspace (for example, /srv/project or C:/work/project)"), initial?.workspace);
+	const workspace = await promptText(
+		quickInput,
+		localize(
+			{ bundle: 'ash.workbench', key: 'remote.workspace.absolutePath' },
+			'Absolute path to the Remote Workspace (for example, /srv/project or C:/work/project)',
+		),
+		initial?.workspace,
+	);
 	if (workspace === undefined) return undefined;
 	return { name, host, workspace };
 }
 
-function pickConnection(quickInput: IQuickInputService, placeholder: string, connections: readonly RemoteConnectionDefinition[]): Promise<RemoteConnectionDefinition | undefined> {
-	return pickOne(quickInput, placeholder, connections.map(connection => ({
-		connection,
-		label: connection.name,
-		description: connection.host,
-		detail: connection.workspace,
-	}))).then(item => item?.connection);
+function pickConnection(
+	quickInput: IQuickInputService,
+	placeholder: string,
+	connections: readonly RemoteConnectionDefinition[],
+): Promise<RemoteConnectionDefinition | undefined> {
+	return pickOne(
+		quickInput,
+		placeholder,
+		connections.map(connection => ({
+			connection,
+			label: connection.name,
+			description: connection.host,
+			detail: connection.workspace,
+		})),
+	).then(item => item?.connection);
 }
 
-function promptText(quickInput: IQuickInputService, placeholder: string, initialValue = ""): Promise<string | undefined> {
+function promptText(
+	quickInput: IQuickInputService,
+	placeholder: string,
+	initialValue = '',
+): Promise<string | undefined> {
 	const picker = quickInput.createQuickPick<TextQuickPickItem>();
 	const updateItem = (value: string): void => {
 		picker.items = value.trim() ? [{ text: value, label: value }] : [];
@@ -135,20 +195,28 @@ function promptText(quickInput: IQuickInputService, placeholder: string, initial
 			resolve(value);
 			picker.hide();
 		};
-		disposables.add(picker.onDidAccept(() => {
-			const item = picker.selectedItems[0];
-			if (!item) return;
-			return finish(item.text);
-		}));
-		disposables.add(picker.onDidHide(() => {
-			finish(undefined);
-			disposables.dispose();
-		}));
+		disposables.add(
+			picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				return finish(item.text);
+			}),
+		);
+		disposables.add(
+			picker.onDidHide(() => {
+				finish(undefined);
+				disposables.dispose();
+			}),
+		);
 		picker.show();
 	});
 }
 
-function pickOne<TItem extends IQuickPickItem>(quickInput: IQuickInputService, placeholder: string, items: readonly TItem[]): Promise<TItem | undefined> {
+function pickOne<TItem extends IQuickPickItem>(
+	quickInput: IQuickInputService,
+	placeholder: string,
+	items: readonly TItem[],
+): Promise<TItem | undefined> {
 	const picker = quickInput.createQuickPick<TItem>();
 	const disposables = new DisposableStore();
 	disposables.add(picker);
@@ -162,27 +230,31 @@ function pickOne<TItem extends IQuickPickItem>(quickInput: IQuickInputService, p
 			resolve(value);
 			picker.hide();
 		};
-		disposables.add(picker.onDidAccept(() => {
-			const item = picker.selectedItems[0];
-			if (!item) return;
-			return finish(item);
-		}));
-		disposables.add(picker.onDidHide(() => {
-			finish(undefined);
-			disposables.dispose();
-		}));
+		disposables.add(
+			picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				return finish(item);
+			}),
+		);
+		disposables.add(
+			picker.onDidHide(() => {
+				finish(undefined);
+				disposables.dispose();
+			}),
+		);
 		picker.show();
 	});
 }
 
 function showManagementSuccess(dialogs: IDialogService, message: string, detail: string): Promise<void> {
-	return dialogs.showMessage({ severity: DialogSeverity.Info, title: "Saved Remote connections", message, detail });
+	return dialogs.showMessage({ severity: DialogSeverity.Info, title: 'Saved Remote connections', message, detail });
 }
 
 function showManagementError(dialogs: IDialogService, message: string, error: unknown): Promise<void> {
 	return dialogs.showMessage({
 		severity: DialogSeverity.Error,
-		title: "Saved Remote connection failed",
+		title: 'Saved Remote connection failed',
 		message,
 		detail: error instanceof Error ? error.message : String(error),
 	});

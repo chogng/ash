@@ -8,7 +8,12 @@ import { createServiceIdentifier } from '../../../../platform/instantiation/comm
  */
 export interface IElevatedFileService {
 	isSupported(resource: URI): boolean;
-	writeFileElevated(resource: URI, value: VSBuffer, options?: IFileWriteOptions, signal?: AbortSignal): Promise<IFileWriteResult>;
+	writeFileElevated(
+		resource: URI,
+		value: VSBuffer,
+		options?: IFileWriteOptions,
+		signal?: AbortSignal,
+	): Promise<IFileWriteResult>;
 }
 
 export const IElevatedFileService = createServiceIdentifier<IElevatedFileService>('elevatedFileService');

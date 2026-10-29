@@ -1,11 +1,26 @@
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
-import { IAccessibleViewService, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	IAccessibleViewService,
+	AccessibleViewType,
+	AccessibilityVerbositySettingId,
+} from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { IInstantiationService, type ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
-import { ITerminalService, type ITerminalContribution, type ITerminalInstance, type IXtermTerminal } from '../../../terminal/browser/terminal.js';
-import { registerTerminalContribution, type ITerminalContributionContext } from '../../../terminal/browser/terminalExtensions.js';
+import {
+	IInstantiationService,
+	type ServicesAccessor,
+} from '../../../../../platform/instantiation/common/instantiation.js';
+import {
+	ITerminalService,
+	type ITerminalContribution,
+	type ITerminalInstance,
+	type IXtermTerminal,
+} from '../../../terminal/browser/terminal.js';
+import {
+	registerTerminalContribution,
+	type ITerminalContributionContext,
+} from '../../../terminal/browser/terminalExtensions.js';
 
 import { TerminalContextKeys } from '../../../terminal/common/terminalContextKey.js';
 import { TerminalAccessibilityHelpProvider } from './terminalAccessibilityHelp.js';
@@ -21,39 +36,63 @@ export class TerminalAccessibleViewContribution extends Disposable implements IT
 		@IAccessibleViewService private readonly accessibleView: IAccessibleViewService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
-	) { super(); }
+	) {
+		super();
+	}
 
 	public xtermReady(screen: IXtermTerminal): void {
 		if (this.context.instance.capabilities) {
-			screen.raw.loadAddon(this._register(this.instantiation.createInstance(TextAreaSyncAddon, this.context.instance.capabilities)));
+			screen.raw.loadAddon(
+				this._register(
+					this.instantiation.createInstance(TextAreaSyncAddon, this.context.instance.capabilities),
+				),
+			);
 		}
 		const updateLabel = (): void => {
 			const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.Terminal);
-			screen.raw.textarea?.setAttribute('aria-label', [localize('terminal.accessibility.input', 'Terminal input'), hint].filter(Boolean).join('. '));
+			screen.raw.textarea?.setAttribute(
+				'aria-label',
+				[localize('terminal.accessibility.input', 'Terminal input'), hint].filter(Boolean).join('. '),
+			);
 		};
 		updateLabel();
-		this._register(this.configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(AccessibilityVerbositySettingId.Terminal)) updateLabel();
-		}));
+		this._register(
+			this.configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(AccessibilityVerbositySettingId.Terminal)) updateLabel();
+			}),
+		);
 	}
 }
 
 function focusedInstance(accessor: ServicesAccessor): ITerminalInstance | undefined {
 	const instance = accessor.get(ITerminalService).activeInstance;
 	const screen = instance?.xterm;
-	return screen && !screen.isDisposed && screen.element.contains(screen.element.ownerDocument.activeElement) ? instance : undefined;
+	return screen && !screen.isDisposed && screen.element.contains(screen.element.ownerDocument.activeElement)
+		? instance
+		: undefined;
 }
 
 registerTerminalContribution(TerminalAccessibleViewContribution.ID, TerminalAccessibleViewContribution);
 AccessibleViewRegistry.register({
-	name: 'terminal', type: AccessibleViewType.Help, priority: 90, when: TerminalContextKeys.focus.isEqualTo(true),
+	name: 'terminal',
+	type: AccessibleViewType.Help,
+	priority: 90,
+	when: TerminalContextKeys.focus.isEqualTo(true),
 	getProvider: accessor => {
 		const instance = focusedInstance(accessor);
-		return instance ? new TerminalAccessibilityHelpProvider(instance, accessor.get(IConfigurationService).getValue<boolean>(TerminalSuggestSettingId.Enabled)) : undefined;
+		return instance
+			? new TerminalAccessibilityHelpProvider(
+					instance,
+					accessor.get(IConfigurationService).getValue<boolean>(TerminalSuggestSettingId.Enabled),
+				)
+			: undefined;
 	},
 });
 AccessibleViewRegistry.register({
-	name: 'terminal', type: AccessibleViewType.View, priority: 90, when: TerminalContextKeys.focus.isEqualTo(true),
+	name: 'terminal',
+	type: AccessibleViewType.View,
+	priority: 90,
+	when: TerminalContextKeys.focus.isEqualTo(true),
 	getProvider: accessor => {
 		const instance = focusedInstance(accessor);
 		return instance?.xterm ? new TerminalAccessibleBufferProvider(instance, instance.xterm) : undefined;

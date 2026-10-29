@@ -1,16 +1,32 @@
 import { Emitter } from '../../base/common/event.js';
-import { getTextViewFeatures, onDidChangeTextViewFeatures, type TextViewFeatureContext, type TextViewFeature } from './view/viewFeatures.js';
+import {
+	getTextViewFeatures,
+	onDidChangeTextViewFeatures,
+	type TextViewFeatureContext,
+	type TextViewFeature,
+} from './view/viewFeatures.js';
 import type { IMouseWheelEvent } from '../../base/browser/mouseEvent.js';
 import { Event } from '../../base/common/event.js';
 import { addDisposableListener, getClientArea, h } from '../../base/browser/dom.js';
 import { FastDomNode } from '../../base/browser/fastDomNode.js';
 import { PixelRatio, type IPixelRatioMonitor } from '../../base/browser/pixelRatio.js';
 import { runAtThisOrScheduleAtNextAnimationFrame } from '../../base/browser/scheduler.js';
-import { DisposableMap, DisposableStore, MutableDisposable, markAsSingleton, toDisposable, type IDisposable } from '../../base/common/lifecycle.js';
+import {
+	DisposableMap,
+	DisposableStore,
+	MutableDisposable,
+	markAsSingleton,
+	toDisposable,
+	type IDisposable,
+} from '../../base/common/lifecycle.js';
 import { onUnexpectedError } from '../../base/common/errors.js';
 import { type ISize } from '../../base/common/layout.js';
 import { clamp, isFiniteNumber } from '../../base/common/numbers.js';
-import { resolveEditorIndentationOptions, type EditorIndentationOptions, type ResolvedEditorIndentationOptions } from '../common/core/misc/indentation.js';
+import {
+	resolveEditorIndentationOptions,
+	type EditorIndentationOptions,
+	type ResolvedEditorIndentationOptions,
+} from '../common/core/misc/indentation.js';
 import { Position } from '../common/core/position.js';
 import { type IDimension } from '../common/core/2d/dimension.js';
 import { ScrollType } from '../common/editorCommon.js';
@@ -20,10 +36,29 @@ import { type IViewModel, type EditorScrollPosition, type TextMeasurer } from '.
 import { ViewEventHandler } from '../common/viewEventHandler.js';
 import * as viewEvents from '../common/viewEvents.js';
 import { type EditorVisualLineProjection } from '../common/viewModel/modelLineProjection.js';
-import { EditorLineWrapping, EditorOption, type EditorLayoutInfo, type EditorMinimapOptions, type FindComputedEditorOptionValueById, RenderLineNumbersType, isWrappingIndent, WrappingIndent } from '../common/config/editorOptions.js';
+import {
+	EditorLineWrapping,
+	EditorOption,
+	type EditorLayoutInfo,
+	type EditorMinimapOptions,
+	type FindComputedEditorOptionValueById,
+	RenderLineNumbersType,
+	isWrappingIndent,
+	WrappingIndent,
+} from '../common/config/editorOptions.js';
 import { type FontInfo } from '../common/config/fontInfo.js';
-import { type EditorViewportChange, EditorViewportChangeReason, type EditorViewportLayout, ViewLayout } from '../common/viewLayout/viewLayout.js';
-import { type ClientPoint, type EditorHitTarget, EditorHitTargetKind, hitTestStanzaVisualEditorPoint } from '../common/viewModel/pointerHitTest.js';
+import {
+	type EditorViewportChange,
+	EditorViewportChangeReason,
+	type EditorViewportLayout,
+	ViewLayout,
+} from '../common/viewLayout/viewLayout.js';
+import {
+	type ClientPoint,
+	type EditorHitTarget,
+	EditorHitTargetKind,
+	hitTestStanzaVisualEditorPoint,
+} from '../common/viewModel/pointerHitTest.js';
 import { applyFontInfo } from './config/domFontInfo.js';
 import { EditorConfiguration } from './config/editorConfiguration.js';
 import { DecorationsOverlay } from './viewParts/decorations/decorations.js';
@@ -38,7 +73,10 @@ import { RulersGpu } from './viewParts/rulersGpu/rulersGpu.js';
 import { EditorScrollbar } from './viewParts/editorScrollbar/editorScrollbar.js';
 import { LineNumbersOverlay } from './viewParts/lineNumbers/lineNumbers.js';
 import { BlockDecorations } from './viewParts/blockDecorations/blockDecorations.js';
-import { CurrentLineHighlightOverlay, CurrentLineMarginHighlightOverlay } from './viewParts/currentLineHighlight/currentLineHighlight.js';
+import {
+	CurrentLineHighlightOverlay,
+	CurrentLineMarginHighlightOverlay,
+} from './viewParts/currentLineHighlight/currentLineHighlight.js';
 import { LinesDecorationsOverlay } from './viewParts/linesDecorations/linesDecorations.js';
 import { MarginViewLineDecorationsOverlay } from './viewParts/marginDecorations/marginDecorations.js';
 import { SelectionsOverlay } from './viewParts/selections/selections.js';
@@ -52,7 +90,13 @@ import { ViewOverlayWidgets } from './viewParts/overlayWidgets/overlayWidgets.js
 import { type ViewPart } from './view/viewPart.js';
 import { ViewContext } from '../common/viewModel/viewContext.js';
 import type { IColorTheme } from '../../platform/theme/common/themeService.js';
-import type { IContentWidget, IEditorAriaOptions, IGlyphMarginWidget, IOverlayWidget, IViewZoneChangeAccessor } from './editorBrowser.js';
+import type {
+	IContentWidget,
+	IEditorAriaOptions,
+	IGlyphMarginWidget,
+	IOverlayWidget,
+	IViewZoneChangeAccessor,
+} from './editorBrowser.js';
 import { ContentViewOverlays, MarginViewOverlays } from './view/viewOverlays.js';
 import { ViewLines } from './viewParts/viewLines/viewLines.js';
 import { ViewLinesGpu } from './viewParts/viewLinesGpu/viewLinesGpu.js';
@@ -63,7 +107,11 @@ import { ViewZones } from './viewParts/viewZones/viewZones.js';
 import { type HorizontalPosition, RenderingContext } from './view/renderingContext.js';
 import { ViewportData } from '../common/viewLayout/viewLinesViewportData.js';
 import { ViewController, type ICommandDelegate, type ViewControllerOptions } from './view/viewController.js';
-import { type AbstractEditContext, type EditContextCharacterBounds, type EditContextOptions } from './controller/editContext/editContext.js';
+import {
+	type AbstractEditContext,
+	type EditContextCharacterBounds,
+	type EditContextOptions,
+} from './controller/editContext/editContext.js';
 import { type IClipboardCopyEvent, type IClipboardPasteEvent } from './controller/editContext/clipboardUtils.js';
 import { NativeEditContext, type NativeEditContextOptions } from './controller/editContext/native/nativeEditContext.js';
 import { TextAreaEditContext } from './controller/editContext/textArea/textAreaEditContext.js';
@@ -86,7 +134,7 @@ interface BrowserCaretDocument {
 	caretRangeFromPoint?(x: number, y: number): BrowserCaretRange | null;
 }
 
-export type EditorViewportPresentation = "document" | "embedded";
+export type EditorViewportPresentation = 'document' | 'embedded';
 
 export enum EditorTextDirection {
 	Auto = 'auto',
@@ -95,7 +143,7 @@ export enum EditorTextDirection {
 }
 
 /** Chooses which component renders the visible focus outline for an Stanza viewport. */
-export type EditorFocusOutlineOwner = "editor" | "host";
+export type EditorFocusOutlineOwner = 'editor' | 'host';
 
 /** Space reserved around the editor's projected text rows. */
 export interface EditorViewportPadding {
@@ -115,7 +163,7 @@ export interface EditorViewportOptions {
 	readonly dimension?: IDimension;
 	readonly padding?: EditorViewportPadding;
 	readonly ariaLabel?: string;
-	readonly textMeasurer?: TextMeasurer & { refresh?(): boolean; };
+	readonly textMeasurer?: TextMeasurer & { refresh?(): boolean };
 	readonly semanticTokenSource?: SemanticTokenSource;
 	readonly configurationService?: IConfigurationService;
 	readonly presentation?: EditorViewportPresentation;
@@ -155,7 +203,10 @@ export class View extends ViewEventHandler {
 	private readonly accessibilityStatusElement: HTMLDivElement;
 	private readonly viewContext: ViewContext;
 	private readonly viewParts: ViewPart[] = [];
-	private readonly featureScopes = new DisposableMap<string, DisposableStore & { readonly feature: TextViewFeature; }>();
+	private readonly featureScopes = new DisposableMap<
+		string,
+		DisposableStore & { readonly feature: TextViewFeature }
+	>();
 	private readonly featureTokensChanged = this._register(new Emitter<void>());
 	private readonly scrollbar: EditorScrollbar;
 	private readonly viewGpuContext: ViewGpuContext | undefined;
@@ -170,7 +221,7 @@ export class View extends ViewEventHandler {
 	private readonly marginViewOverlays: MarginViewOverlays;
 	private readonly decorations: DecorationsOverlay;
 	private readonly viewCursors: ViewCursors;
-	private readonly textMeasurer: TextMeasurer & { refresh?(): boolean; };
+	private readonly textMeasurer: TextMeasurer & { refresh?(): boolean };
 	private readonly viewModel: IViewModel;
 	readonly coordinatesConverter: IViewModel['coordinatesConverter'];
 	readonly cursorConfig: IViewModel['cursorConfig'];
@@ -212,60 +263,68 @@ export class View extends ViewEventHandler {
 		const ownerWindow = ownerDocument.defaultView;
 		if (!ownerWindow) throw new ReferenceError('Editor viewport requires a browser window');
 		this.pixelRatio = PixelRatio.getInstance(ownerWindow);
-		if (!(options.viewModel.model instanceof TextModel)) throw new TypeError('Editor view requires the editor text model implementation');
+		if (!(options.viewModel.model instanceof TextModel))
+			throw new TypeError('Editor view requires the editor text model implementation');
 		const viewport = options.viewModel.viewLayout;
-		if (!(viewport instanceof ViewLayout)) throw new TypeError('Editor view requires the editor view layout implementation');
-		if (options.rootDomNode && (options.rootDomNode.parentElement !== options.container || options.rootDomNode.childNodes.length > 0)) {
+		if (!(viewport instanceof ViewLayout))
+			throw new TypeError('Editor view requires the editor view layout implementation');
+		if (
+			options.rootDomNode &&
+			(options.rootDomNode.parentElement !== options.container || options.rootDomNode.childNodes.length > 0)
+		) {
 			throw new TypeError('Editor view requires an empty root in its container');
 		}
 		this.viewModel = options.viewModel;
 		this.model = options.viewModel.model;
-		this.domNode = new FastDomNode(options.rootDomNode ?? h(ownerDocument, "div"));
-		this.contentElement = h(ownerDocument, "div");
+		this.domNode = new FastDomNode(options.rootDomNode ?? h(ownerDocument, 'div'));
+		this.contentElement = h(ownerDocument, 'div');
 		this.contentNode = new FastDomNode(this.contentElement);
-		this.textMetricsElement = h(ownerDocument, "span");
-		this.accessibilityStatusElement = h(ownerDocument, "div");
-		this.presentation = options.presentation ?? "document";
-		this.focusOutlineOwner = options.focusOutlineOwner ?? "editor";
+		this.textMetricsElement = h(ownerDocument, 'span');
+		this.accessibilityStatusElement = h(ownerDocument, 'div');
+		this.presentation = options.presentation ?? 'document';
+		this.focusOutlineOwner = options.focusOutlineOwner ?? 'editor';
 		this.editorConfiguration = options.configuration;
 		const mouseStyle = this.editorConfiguration.options.get(EditorOption.mouseStyle);
 		this.padding = resolveEditorViewportPadding(options.padding);
 		this.indentation = resolveEditorIndentationOptions(options.indentation);
 		this.textDirection = options.textDirection ?? EditorTextDirection.Auto;
-		this.domNode.domNode.className = "stanza-editor";
+		this.domNode.domNode.className = 'stanza-editor';
 		this.domNode.domNode.classList.add(`stanza-editor-${this.presentation}`);
 		this.domNode.domNode.classList.add(`stanza-editor-focus-owner-${this.focusOutlineOwner}`);
 		this.domNode.domNode.classList.add(`stanza-editor-direction-${this.textDirection}`);
 		this.domNode.domNode.classList.add(`stanza-editor-mouse-${mouseStyle}`);
-		this.domNode.domNode.classList.toggle("hide-line-numbers", options.configuration.options.get(EditorOption.lineNumbers).renderType === RenderLineNumbersType.Off);
+		this.domNode.domNode.classList.toggle(
+			'hide-line-numbers',
+			options.configuration.options.get(EditorOption.lineNumbers).renderType === RenderLineNumbersType.Off,
+		);
 		this.domNode.domNode.style.tabSize = String(this.indentation.tabSize);
-		this.domNode.domNode.style.setProperty("--stanza-editor-padding-left", `${this.padding.left}px`);
-		this.domNode.domNode.style.setProperty("--stanza-editor-padding-right", `${this.padding.right}px`);
+		this.domNode.domNode.style.setProperty('--stanza-editor-padding-left', `${this.padding.left}px`);
+		this.domNode.domNode.style.setProperty('--stanza-editor-padding-right', `${this.padding.right}px`);
 		this.domNode.domNode.dir = this.textDirection;
-		this.domNode.domNode.classList.toggle("word-wrapped", this.softWrapping);
+		this.domNode.domNode.classList.toggle('word-wrapped', this.softWrapping);
 		// The text input owns the Tab stop; region focus still delegates to that input.
 		this.domNode.domNode.tabIndex = -1;
-		this.domNode.domNode.setAttribute("role", "region");
-		this.domNode.domNode.setAttribute("aria-label", options.ariaLabel ?? "Stanza editor");
-		this.contentNode.setClassName("stanza-editor-content");
-		this.textMetricsElement.className =
-			"stanza-editor-text-metrics";
-		this.textMetricsElement.setAttribute("aria-hidden", "true");
-		this.accessibilityStatusElement.className = "stanza-editor-accessibility-status";
-		this.accessibilityStatusElement.setAttribute("aria-live", "polite");
-		this.accessibilityStatusElement.setAttribute("aria-atomic", "true");
+		this.domNode.domNode.setAttribute('role', 'region');
+		this.domNode.domNode.setAttribute('aria-label', options.ariaLabel ?? 'Stanza editor');
+		this.contentNode.setClassName('stanza-editor-content');
+		this.textMetricsElement.className = 'stanza-editor-text-metrics';
+		this.textMetricsElement.setAttribute('aria-hidden', 'true');
+		this.accessibilityStatusElement.className = 'stanza-editor-accessibility-status';
+		this.accessibilityStatusElement.setAttribute('aria-live', 'polite');
+		this.accessibilityStatusElement.setAttribute('aria-atomic', 'true');
 		this.domNode.domNode.append(this.contentElement, this.textMetricsElement, this.accessibilityStatusElement);
 		if (options.rootDomNode) {
-			this._register(toDisposable(() => {
-				this.domNode.domNode.replaceChildren();
-			}));
+			this._register(
+				toDisposable(() => {
+					this.domNode.domNode.replaceChildren();
+				}),
+			);
 		} else {
 			options.container.append(this.domNode.domNode);
 			this._register(toDisposable(() => this.domNode.domNode.remove()));
 		}
 		this.textMeasurer =
-			options.textMeasurer ??
-			new BrowserTextMeasurer(this.textMetricsElement, this.editorConfiguration);
+			options.textMeasurer ?? new BrowserTextMeasurer(this.textMetricsElement, this.editorConfiguration);
 		this._fontInfo = this.editorConfiguration.options.get(EditorOption.fontInfo);
 		applyFontInfo(this.domNode.domNode, this.fontInfo);
 		this.textMeasurer.refresh?.();
@@ -274,152 +333,229 @@ export class View extends ViewEventHandler {
 		this.coordinatesConverter = this.viewModel.coordinatesConverter;
 		this.viewport = viewport;
 		this.onDidChangeLayout = viewport.onDidChange;
-		this._register(viewport.onDidChange(event => {
-			// Scroll-dependent Parts invalidate themselves through view events.
-			// Other geometry changes must still reach every geometry consumer.
-			if (event.reason !== EditorViewportChangeReason.Scroll) {
-				for (const part of this.viewParts) part.forceShouldRender();
-			}
-			this.scheduleProjection();
-		}));
+		this._register(
+			viewport.onDidChange(event => {
+				// Scroll-dependent Parts invalidate themselves through view events.
+				// Other geometry changes must still reach every geometry consumer.
+				if (event.reason !== EditorViewportChangeReason.Scroll) {
+					for (const part of this.viewParts) part.forceShouldRender();
+				}
+				this.scheduleProjection();
+			}),
+		);
 		this.viewContext = new ViewContext(this.editorConfiguration, options.theme, this.viewModel);
 		// Update the shared theme before Parts handle the same theme event.
 		this.viewModel.addViewEventHandler(this);
 		this._register(toDisposable(() => this.viewModel.removeViewEventHandler(this)));
-		this.scrollbar = this.registerViewPart(new EditorScrollbar(this.viewContext, this.contentNode, this.domNode, this.domNode));
+		this.scrollbar = this.registerViewPart(
+			new EditorScrollbar(this.viewContext, this.contentNode, this.domNode, this.domNode),
+		);
 		this.domNode.domNode.prepend(this.scrollbar.getDomNode().domNode);
 		let gpuContext: ViewGpuContext | undefined;
 		try {
-			gpuContext = this.editorConfiguration.options.get(EditorOption.experimentalGpuAcceleration) === 'on'
-				&& this.domNode.domNode.ownerDocument.defaultView?.navigator.gpu
-				? this._register(new ViewGpuContext(this.viewContext, lineNumber => {
-					const visualLine = this.visualProjection.lineAt(lineNumber - 1);
-					if (!visualLine || visualLine.projectionData?.injectionOffsets) return [];
-					return options.semanticTokenSource?.getLineTokens(visualLine.logicalLineIndex).flatMap(token => {
-						const startColumn = Math.max(token.startColumn, visualLine.startColumn);
-						const endColumn = Math.min(token.endColumn, visualLine.endColumn);
-						return endColumn > startColumn ? [{ ...token, startColumn: startColumn - visualLine.startColumn, endColumn: endColumn - visualLine.startColumn }] : [];
-					}) ?? [];
-				}, theme => {
-					const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
-					return preference === true || (preference !== false && theme.semanticHighlighting === true);
-				}))
-				: undefined;
+			gpuContext =
+				this.editorConfiguration.options.get(EditorOption.experimentalGpuAcceleration) === 'on' &&
+				this.domNode.domNode.ownerDocument.defaultView?.navigator.gpu
+					? this._register(
+							new ViewGpuContext(
+								this.viewContext,
+								lineNumber => {
+									const visualLine = this.visualProjection.lineAt(lineNumber - 1);
+									if (!visualLine || visualLine.projectionData?.injectionOffsets) return [];
+									return (
+										options.semanticTokenSource
+											?.getLineTokens(visualLine.logicalLineIndex)
+											.flatMap(token => {
+												const startColumn = Math.max(token.startColumn, visualLine.startColumn);
+												const endColumn = Math.min(token.endColumn, visualLine.endColumn);
+												return endColumn > startColumn
+													? [
+															{
+																...token,
+																startColumn: startColumn - visualLine.startColumn,
+																endColumn: endColumn - visualLine.startColumn,
+															},
+														]
+													: [];
+											}) ?? []
+									);
+								},
+								theme => {
+									const preference = options.configurationService?.getValue<
+										boolean | 'configuredByTheme'
+									>(EditorSemanticHighlightingConfiguration);
+									return (
+										preference === true ||
+										(preference !== false && theme.semanticHighlighting === true)
+									);
+								},
+							),
+						)
+					: undefined;
 		} catch {
 			// An optional rendering backend must not prevent the editor from opening.
 			gpuContext = undefined;
 		}
 		this.viewGpuContext = gpuContext;
 		if (options.configurationService) {
-			this._register(options.configurationService.onDidChangeConfiguration(event => {
-				if (!event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) return;
-				this.viewGpuContext?.refreshSemanticStyles(this.viewContext.theme.value);
-				this.viewLines.onTokensChanged();
-				this.featureTokensChanged.fire();
-				this.scheduleProjection();
-			}));
+			this._register(
+				options.configurationService.onDidChangeConfiguration(event => {
+					if (!event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) return;
+					this.viewGpuContext?.refreshSemanticStyles(this.viewContext.theme.value);
+					this.viewLines.onTokensChanged();
+					this.featureTokensChanged.fire();
+					this.scheduleProjection();
+				}),
+			);
 		}
-		this.controller = this._register(new ViewController(this, options.viewModel, options.controller ?? {}, options.commandDelegate, controller => {
-			const input = createEditContext(this.viewContext, this.scrollbar.getDomNode().domNode, {
-				...options.controller,
-				readOnly: options.viewModel.cursorConfig.readOnly,
-				textDirection: this.editorTextDirection,
-				ownerId: controller.ownerId,
-				characterBoundsProvider: modelOffset => this.characterBoundsAt(modelOffset),
-				viewController: controller,
-				viewport: this,
-			});
-			this.scrollbar.getDomNode().domNode.append(input.domNode.domNode);
-			return this.registerViewPart(input);
-		}));
+		this.controller = this._register(
+			new ViewController(
+				this,
+				options.viewModel,
+				options.controller ?? {},
+				options.commandDelegate,
+				controller => {
+					const input = createEditContext(this.viewContext, this.scrollbar.getDomNode().domNode, {
+						...options.controller,
+						readOnly: options.viewModel.cursorConfig.readOnly,
+						textDirection: this.editorTextDirection,
+						ownerId: controller.ownerId,
+						characterBoundsProvider: modelOffset => this.characterBoundsAt(modelOffset),
+						viewController: controller,
+						viewport: this,
+					});
+					this.scrollbar.getDomNode().domNode.append(input.domNode.domNode);
+					return this.registerViewPart(input);
+				},
+			),
+		);
 		this.onWillCopy = this.controller.editContext.onWillCopy;
 		this.onWillCut = this.controller.editContext.onWillCut;
 		this.onWillPaste = this.controller.editContext.onWillPaste;
 		this.viewZones = this.registerViewPart(new ViewZones(this.viewContext));
 		this.contentWidgets = this.registerViewPart(new ViewContentWidgets(this.viewContext, this.domNode));
-		this.overlayWidgets = this.registerViewPart(new ViewOverlayWidgets(this.viewContext, {
-			viewDomNode: this.domNode.domNode,
-			requestRender: () => this.scheduleProjection(),
-		}));
-		this.viewLines = this.registerViewPart(new ViewLines(this.viewContext, {
-			host: this.contentElement,
-			model: this.model,
-			readVisualProjection: () => this.visualProjection,
-			readProjectionRevision: () => this.projectionRevision,
-			semanticTokenSource: options.semanticTokenSource,
-			semanticHighlightingEnabled: theme => {
-				const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
-				return preference === true || (preference !== false && theme.semanticHighlighting === true);
-			},
-			configuration: this.editorConfiguration,
-			themeType: options.theme.colorScheme,
-			tabSize: this.indentation.tabSize,
-			textMeasurer: this.textMeasurer,
-			viewGpuContext: this.viewGpuContext,
-		}));
+		this.overlayWidgets = this.registerViewPart(
+			new ViewOverlayWidgets(this.viewContext, {
+				viewDomNode: this.domNode.domNode,
+				requestRender: () => this.scheduleProjection(),
+			}),
+		);
+		this.viewLines = this.registerViewPart(
+			new ViewLines(this.viewContext, {
+				host: this.contentElement,
+				model: this.model,
+				readVisualProjection: () => this.visualProjection,
+				readProjectionRevision: () => this.projectionRevision,
+				semanticTokenSource: options.semanticTokenSource,
+				semanticHighlightingEnabled: theme => {
+					const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(
+						EditorSemanticHighlightingConfiguration,
+					);
+					return preference === true || (preference !== false && theme.semanticHighlighting === true);
+				},
+				configuration: this.editorConfiguration,
+				themeType: options.theme.colorScheme,
+				tabSize: this.indentation.tabSize,
+				textMeasurer: this.textMeasurer,
+				viewGpuContext: this.viewGpuContext,
+			}),
+		);
 		this.viewLinesGpu = this.viewGpuContext
-			? this.registerViewPart(new ViewLinesGpu(this.viewContext, this.viewGpuContext, () => {
-				// A backend transition changes retained row content even when the model
-				// and viewport are unchanged; scheduling alone does not dirty those rows.
-				this.viewLines.onFlushed();
-				this.viewLines.forceShouldRender();
-				this.scheduleProjection();
-			}))
+			? this.registerViewPart(
+					new ViewLinesGpu(this.viewContext, this.viewGpuContext, () => {
+						// A backend transition changes retained row content even when the model
+						// and viewport are unchanged; scheduling alone does not dirty those rows.
+						this.viewLines.onFlushed();
+						this.viewLines.forceShouldRender();
+						this.scheduleProjection();
+					}),
+				)
 			: undefined;
-		this.contentViewOverlays = this.registerViewPart(new ContentViewOverlays(this.viewContext, this.contentElement));
+		this.contentViewOverlays = this.registerViewPart(
+			new ContentViewOverlays(this.viewContext, this.contentElement),
+		);
 		this.decorations = new DecorationsOverlay(this.viewContext, () => this.textLeft);
 		this.contentViewOverlays.addDynamicOverlay(new CurrentLineHighlightOverlay(this.viewContext));
-		this.contentViewOverlays.addDynamicOverlay(new SelectionsOverlay(this.viewContext, this.viewModel, this.model, this.contentElement, () => this.visualProjection, () => this.textLeft, this.textMeasurer));
+		this.contentViewOverlays.addDynamicOverlay(
+			new SelectionsOverlay(
+				this.viewContext,
+				this.viewModel,
+				this.model,
+				this.contentElement,
+				() => this.visualProjection,
+				() => this.textLeft,
+				this.textMeasurer,
+			),
+		);
 		// Opaque decoration backgrounds must be painted before indentation and bracket guides.
 		this.contentViewOverlays.addDynamicOverlay(this.decorations);
 
-		this.contentViewOverlays.addDynamicOverlay(new WhitespaceOverlay(
-			this.viewContext,
-			this.model,
-			this.viewModel,
-			this.contentElement,
-			() => this.visualProjection,
-			() => this.textLeft,
-			this.textMeasurer,
-		));
-		this.viewCursors = this.registerViewPart(new ViewCursors(this.viewContext, {
-			host: this.contentElement,
-			semanticTokenSource: options.semanticTokenSource,
-			readVisualProjection: () => this.visualProjection,
-			readTextLeft: () => this.textLeft,
-			textMeasurer: this.textMeasurer,
-		}, this.model, this.viewModel));
+		this.contentViewOverlays.addDynamicOverlay(
+			new WhitespaceOverlay(
+				this.viewContext,
+				this.model,
+				this.viewModel,
+				this.contentElement,
+				() => this.visualProjection,
+				() => this.textLeft,
+				this.textMeasurer,
+			),
+		);
+		this.viewCursors = this.registerViewPart(
+			new ViewCursors(
+				this.viewContext,
+				{
+					host: this.contentElement,
+					semanticTokenSource: options.semanticTokenSource,
+					readVisualProjection: () => this.visualProjection,
+					readTextLeft: () => this.textLeft,
+					textMeasurer: this.textMeasurer,
+				},
+				this.model,
+				this.viewModel,
+			),
+		);
 		const blockDecorations = this.registerViewPart(new BlockDecorations(this.viewContext));
 		this.margin = this.registerViewPart(new Margin(this.viewContext));
 		this.marginViewOverlays = this.registerViewPart(new MarginViewOverlays(this.viewContext, this.contentElement));
 		this.marginViewOverlays.addDynamicOverlay(new CurrentLineMarginHighlightOverlay(this.viewContext));
 		this.marginViewOverlays.addDynamicOverlay(new MarginViewLineDecorationsOverlay(this.viewContext));
 		this.marginViewOverlays.addDynamicOverlay(new LinesDecorationsOverlay(this.viewContext));
-		this.marginViewOverlays.addDynamicOverlay(new LineNumbersOverlay(this.viewContext, {
-			viewModel: this.viewModel,
-			readVisualProjection: () => this.visualProjection,
-		}));
+		this.marginViewOverlays.addDynamicOverlay(
+			new LineNumbersOverlay(this.viewContext, {
+				viewModel: this.viewModel,
+				readVisualProjection: () => this.visualProjection,
+			}),
+		);
 		this.glyphMarginWidgets = this.registerViewPart(new GlyphMarginWidgets(this.viewContext));
-		this.margin.getDomNode().domNode.append(this.viewZones.marginDomNode.domNode, this.marginViewOverlays.getDomNode().domNode, this.glyphMarginWidgets.domNode.domNode);
+		this.margin
+			.getDomNode()
+			.domNode.append(
+				this.viewZones.marginDomNode.domNode,
+				this.marginViewOverlays.getDomNode().domNode,
+				this.glyphMarginWidgets.domNode.domNode,
+			);
 		let rulersDomNode: HTMLElement | undefined;
 		if (this.viewLinesGpu) {
 			this.marginViewOverlays.addDynamicOverlay(new GpuMarkOverlay(this.viewContext, this.viewGpuContext!));
-			this.registerViewPart(new RulersGpu(
-				this.viewContext,
-				this.viewGpuContext!,
-			));
+			this.registerViewPart(new RulersGpu(this.viewContext, this.viewGpuContext!));
 		} else {
-			rulersDomNode = this.registerViewPart(new Rulers(this.viewContext, {
-				host: this.contentElement,
-				readTextLeft: () => this.textLeft,
-			})).domNode.domNode;
+			rulersDomNode = this.registerViewPart(
+				new Rulers(this.viewContext, { host: this.contentElement, readTextLeft: () => this.textLeft }),
+			).domNode.domNode;
 		}
 		const featureContext: Omit<TextViewFeatureContext, 'register' | 'registerPart' | 'registerContentOverlay'> = {
-			context: this.viewContext, host: this.domNode.domNode, contentHost: this.contentElement,
-			model: this.model, viewModel: this.viewModel, textMeasurer: this.textMeasurer,
+			context: this.viewContext,
+			host: this.domNode.domNode,
+			contentHost: this.contentElement,
+			model: this.model,
+			viewModel: this.viewModel,
+			textMeasurer: this.textMeasurer,
 			semanticTokenSource: options.semanticTokenSource,
 			semanticHighlightingEnabled: theme => {
-				const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(EditorSemanticHighlightingConfiguration);
+				const preference = options.configurationService?.getValue<boolean | 'configuredByTheme'>(
+					EditorSemanticHighlightingConfiguration,
+				);
 				return preference === true || (preference !== false && theme.semanticHighlighting === true);
 			},
 			readLayout: () => this.viewport.layout,
@@ -440,22 +576,34 @@ export class View extends ViewEventHandler {
 					registerPart: part => {
 						lifetime.add(part);
 						this.viewParts.push(part);
-						lifetime.add(toDisposable(() => {
-							const index = this.viewParts.indexOf(part);
-							if (index >= 0) this.viewParts.splice(index, 1);
-						}));
+						lifetime.add(
+							toDisposable(() => {
+								const index = this.viewParts.indexOf(part);
+								if (index >= 0) this.viewParts.splice(index, 1);
+							}),
+						);
 						return part;
 					},
-					registerContentOverlay: overlay => lifetime.add(this.contentViewOverlays.registerDynamicOverlay(overlay, this.decorations)),
+					registerContentOverlay: overlay =>
+						lifetime.add(this.contentViewOverlays.registerDynamicOverlay(overlay, this.decorations)),
 				};
-				if (feature.when && !feature.when(context)) { lifetime.dispose(); continue; }
+				if (feature.when && !feature.when(context)) {
+					lifetime.dispose();
+					continue;
+				}
 				active.add(feature.id);
-				if (this.featureScopes.get(feature.id)?.feature === feature) { lifetime.dispose(); continue; }
+				if (this.featureScopes.get(feature.id)?.feature === feature) {
+					lifetime.dispose();
+					continue;
+				}
 				this.featureScopes.deleteAndDispose(feature.id);
 				try {
 					feature.install(context);
 					this.featureScopes.set(feature.id, Object.assign(lifetime, { feature }));
-				} catch (error) { lifetime.dispose(); onUnexpectedError(error); }
+				} catch (error) {
+					lifetime.dispose();
+					onUnexpectedError(error);
+				}
 			}
 			for (const id of this.featureScopes.keys()) if (!active.has(id)) this.featureScopes.deleteAndDispose(id);
 			this.scheduleProjection();
@@ -464,7 +612,9 @@ export class View extends ViewEventHandler {
 		this._register(this.editorConfiguration.onDidChange(refreshFeatures));
 		refreshFeatures();
 		const decorationsOverviewRuler = this.registerViewPart(new DecorationsOverviewRuler(this.viewContext));
-		const scrollDecoration = this.registerViewPart(new ScrollDecorationViewPart(this.viewContext, this.domNode.domNode));
+		const scrollDecoration = this.registerViewPart(
+			new ScrollDecorationViewPart(this.viewContext, this.domNode.domNode),
+		);
 
 		// Paint selection and decoration backgrounds before glyphs, including opaque theme colors.
 		// Parts own their nodes; the host owns the visual stacking order.
@@ -484,25 +634,43 @@ export class View extends ViewEventHandler {
 			scrollDecoration.getDomNode().domNode,
 		);
 		const overviewRulerLayout = this.scrollbar.getOverviewRulerLayoutInfo();
-		overviewRulerLayout.parent.insertBefore(decorationsOverviewRuler.getDomNode(), overviewRulerLayout.insertBefore);
-		this._register(addDisposableListener(decorationsOverviewRuler.getDomNode(), 'pointerdown', (event: PointerEvent) => this.delegateVerticalScrollbarPointerDown(event)));
+		overviewRulerLayout.parent.insertBefore(
+			decorationsOverviewRuler.getDomNode(),
+			overviewRulerLayout.insertBefore,
+		);
+		this._register(
+			addDisposableListener(decorationsOverviewRuler.getDomNode(), 'pointerdown', (event: PointerEvent) =>
+				this.delegateVerticalScrollbarPointerDown(event),
+			),
+		);
 		this._register(new MouseHandler(this.viewContext, this.controller, this.createPointerHandlerHelper()));
 		ownerDocument.body.append(
 			this.contentWidgets.overflowingContentWidgetsDomNode.domNode,
 			this.overlayWidgets.overflowingOverlayWidgetsDomNode.domNode,
 		);
 		const scrollDomNode = this.scrollbar.getDomNode().domNode;
-		this._register(addDisposableListener(scrollDomNode, "scroll", () => {
-			if (scrollDomNode.scrollLeft === this.syncedScrollLeft && scrollDomNode.scrollTop === this.syncedScrollTop) return;
-			viewport.setScrollPosition({
-				scrollLeft: scrollDomNode.scrollLeft,
-				scrollTop: scrollDomNode.scrollTop,
-			}, ScrollType.Immediate);
-			this.syncScrollPosition(viewport.layout);
-		}));
+		this._register(
+			addDisposableListener(scrollDomNode, 'scroll', () => {
+				if (
+					scrollDomNode.scrollLeft === this.syncedScrollLeft &&
+					scrollDomNode.scrollTop === this.syncedScrollTop
+				)
+					return;
+				viewport.setScrollPosition(
+					{ scrollLeft: scrollDomNode.scrollLeft, scrollTop: scrollDomNode.scrollTop },
+					ScrollType.Immediate,
+				);
+				this.syncScrollPosition(viewport.layout);
+			}),
+		);
 		this.updateAccessibilityStatus();
 		const semanticTokenSource = options.semanticTokenSource;
-		const updateTokenReadiness = () => this.domNode.domNode.classList.toggle('tokens-ready', this.textModel.tokenization.modelVersion === this.textModel.version && this.textModel.tokenization.tokenCount > 0);
+		const updateTokenReadiness = () =>
+			this.domNode.domNode.classList.toggle(
+				'tokens-ready',
+				this.textModel.tokenization.modelVersion === this.textModel.version &&
+					this.textModel.tokenization.tokenCount > 0,
+			);
 		updateTokenReadiness();
 		if (semanticTokenSource) {
 			const refreshSemanticTokens = () => {
@@ -528,30 +696,37 @@ export class View extends ViewEventHandler {
 		}
 		const fontSet = ownerDocument.fonts;
 		if (fontSet) {
-			this._register(addDisposableListener(fontSet, "loadingdone", () => {
-				this.refreshFontMetrics();
-			}));
+			this._register(
+				addDisposableListener(fontSet, 'loadingdone', () => {
+					this.refreshFontMetrics();
+				}),
+			);
 		}
 
-		this._register(this.editorConfiguration.onDidChange(event => {
-			if (event.hasChanged(EditorOption.mouseStyle)) {
-				for (const style of ['text', 'default', 'copy']) {
-					this.domNode.domNode.classList.toggle(`stanza-editor-mouse-${style}`, style === this.editorConfiguration.options.get(EditorOption.mouseStyle));
+		this._register(
+			this.editorConfiguration.onDidChange(event => {
+				if (event.hasChanged(EditorOption.mouseStyle)) {
+					for (const style of ['text', 'default', 'copy']) {
+						this.domNode.domNode.classList.toggle(
+							`stanza-editor-mouse-${style}`,
+							style === this.editorConfiguration.options.get(EditorOption.mouseStyle),
+						);
+					}
 				}
-			}
-			if (event.hasChanged(EditorOption.fontInfo)) this.applyFontConfiguration();
-			else if (event.hasChanged(EditorOption.disableMonospaceOptimizations)) this.refreshFontMetrics(true);
-			if (event.hasChanged(EditorOption.wrappingInfo)) {
-				this.domNode.domNode.classList.toggle("word-wrapped", this.softWrapping);
-			}
-			if (!this.changingLayout && event.hasChanged(EditorOption.layoutInfo)) {
-				const layoutInfo = this.editorConfiguration.options.get(EditorOption.layoutInfo);
-				this.domNode.setWidth(layoutInfo.width);
-				this.domNode.setHeight(layoutInfo.height);
-				// Configuration can change before the view-model finishes publishing cursor and line events.
-				this.scheduleProjection();
-			}
-		}));
+				if (event.hasChanged(EditorOption.fontInfo)) this.applyFontConfiguration();
+				else if (event.hasChanged(EditorOption.disableMonospaceOptimizations)) this.refreshFontMetrics(true);
+				if (event.hasChanged(EditorOption.wrappingInfo)) {
+					this.domNode.domNode.classList.toggle('word-wrapped', this.softWrapping);
+				}
+				if (!this.changingLayout && event.hasChanged(EditorOption.layoutInfo)) {
+					const layoutInfo = this.editorConfiguration.options.get(EditorOption.layoutInfo);
+					this.domNode.setWidth(layoutInfo.width);
+					this.domNode.setHeight(layoutInfo.height);
+					// Configuration can change before the view-model finishes publishing cursor and line events.
+					this.scheduleProjection();
+				}
+			}),
+		);
 		this._register(this.pixelRatio.onDidChange(() => this.render(false, true)));
 		this._register(this.featureScopes);
 		this.layout(options.dimension ?? getClientArea(this.domNode.domNode));
@@ -575,9 +750,7 @@ export class View extends ViewEventHandler {
 	}
 
 	get lineWrapping(): EditorLineWrapping {
-		return this.softWrapping
-			? EditorLineWrapping.On
-			: EditorLineWrapping.Off;
+		return this.softWrapping ? EditorLineWrapping.On : EditorLineWrapping.Off;
 	}
 
 	get wrappingIndent(): WrappingIndent {
@@ -592,19 +765,19 @@ export class View extends ViewEventHandler {
 	/** Changes only this viewport's visual row projection; document text is unaffected. */
 	setLineWrapping(lineWrapping: EditorLineWrapping): EditorViewportLayout {
 		if (!Object.values(EditorLineWrapping).includes(lineWrapping)) {
-			throw new TypeError("Unknown Stanza editor line wrapping mode");
+			throw new TypeError('Unknown Stanza editor line wrapping mode');
 		}
 		const nextSoftWrapping = lineWrapping === EditorLineWrapping.On;
 		if (nextSoftWrapping === this.softWrapping) return this.viewport.layout;
 		this.editorConfiguration.updateOptions({ wordWrap: nextSoftWrapping ? 'on' : 'off' });
-		this.domNode.domNode.classList.toggle("word-wrapped", nextSoftWrapping);
+		this.domNode.domNode.classList.toggle('word-wrapped', nextSoftWrapping);
 		this.render(true, false);
 		return this.viewport.layout;
 	}
 
 	setWrappingIndent(wrappingIndent: WrappingIndent): EditorViewportLayout {
 		if (!isWrappingIndent(wrappingIndent)) {
-			throw new TypeError("Unknown Stanza wrapping indent mode");
+			throw new TypeError('Unknown Stanza wrapping indent mode');
 		}
 		if (wrappingIndent === this.wrappingIndent) return this.viewport.layout;
 		this.editorConfiguration.updateOptions({ wrappingIndent: rawWrappingIndent(wrappingIndent) });
@@ -690,8 +863,8 @@ export class View extends ViewEventHandler {
 
 	/** Announces one editor status message through the viewport's live region. */
 	announceAccessibilityStatus(message: string): void {
-		if (typeof message !== "string" || message.trim().length === 0) {
-			throw new TypeError("Stanza accessibility status must be a non-empty string");
+		if (typeof message !== 'string' || message.trim().length === 0) {
+			throw new TypeError('Stanza accessibility status must be a non-empty string');
 		}
 		this.accessibilityStatusElement.textContent = message.trim();
 	}
@@ -722,7 +895,9 @@ export class View extends ViewEventHandler {
 
 	/** Layout visibility is current even when the zone's DOM is awaiting a frame. */
 	isViewZoneVisible(id: string): boolean {
-		return this.viewport.getWhitespaceViewportData().some(whitespace => whitespace.id === id && whitespace.height > 0);
+		return this.viewport
+			.getWhitespaceViewportData()
+			.some(whitespace => whitespace.id === id && whitespace.height > 0);
 	}
 
 	createOverviewRuler(cssClassName: string): OverviewRuler {
@@ -799,15 +974,15 @@ export class View extends ViewEventHandler {
 			top = lineBottom - layout.viewportSize.height;
 		}
 
-		const line = this.model.getLineContent((visualLine.logicalLineIndex) + 1);
+		const line = this.model.getLineContent(visualLine.logicalLineIndex + 1);
 		const columnIndex = position.column - 1;
 		const domCaretLeft = this.domCaretLeft(visualLineIndex, columnIndex - visualLine.startColumn);
-		const caretLeft = domCaretLeft ?? (this.contentTextLeft + (visualLine.wrappedTextIndentWidth ?? 0) +
-			this.textMeasurer.measureLineWidth(line.slice(visualLine.startColumn, columnIndex)));
-		const caretRight = caretLeft + Math.max(
-			1,
-			this.textMeasurer.measureLineWidth(" "),
-		);
+		const caretLeft =
+			domCaretLeft ??
+			this.contentTextLeft +
+				(visualLine.wrappedTextIndentWidth ?? 0) +
+				this.textMeasurer.measureLineWidth(line.slice(visualLine.startColumn, columnIndex));
+		const caretRight = caretLeft + Math.max(1, this.textMeasurer.measureLineWidth(' '));
 		let left = this.softWrapping ? 0 : layout.scrollPosition.left;
 		if (caretLeft < left + this.contentTextLeft) {
 			left = caretLeft - this.contentTextLeft;
@@ -825,9 +1000,15 @@ export class View extends ViewEventHandler {
 		const columnIndex = position.column - 1;
 		const domCaretLeft = this.domCaretLeft(visualLineIndex, columnIndex - visualLine.startColumn);
 		return Object.freeze({
-			left: domCaretLeft ?? (this.contentTextLeft + (visualLine.wrappedTextIndentWidth ?? 0) + this.textMeasurer.measureLineWidth(
-				this.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, columnIndex),
-			)),
+			left:
+				domCaretLeft ??
+				this.contentTextLeft +
+					(visualLine.wrappedTextIndentWidth ?? 0) +
+					this.textMeasurer.measureLineWidth(
+						this.model
+							.getLineContent(visualLine.logicalLineIndex + 1)
+							.slice(visualLine.startColumn, columnIndex),
+					),
 			top: this.viewport.getVerticalOffsetForLineIndex(visualLineIndex),
 			height: this.viewport.layout.lineHeight,
 		});
@@ -841,16 +1022,22 @@ export class View extends ViewEventHandler {
 	}
 
 	/** Resolves the nearest browser-shaped cursor on one currently rendered visual line. */
-	getNearestPositionAtVisualHorizontalOffset(visualLineIndex: number, horizontalOffset: number): Position | undefined {
-		if (!isFiniteNumber(horizontalOffset)) throw new RangeError("Stanza visual cursor horizontal offset must be finite");
+	getNearestPositionAtVisualHorizontalOffset(
+		visualLineIndex: number,
+		horizontalOffset: number,
+	): Position | undefined {
+		if (!isFiniteNumber(horizontalOffset))
+			throw new RangeError('Stanza visual cursor horizontal offset must be finite');
 		if (this.editorTextDirection === EditorTextDirection.LeftToRight) return undefined;
 		const visualLine = this.visualProjection.lineAt(visualLineIndex);
 		if (!visualLine) return undefined;
-		const text = this.model.getLineContent((visualLine.logicalLineIndex) + 1).slice(visualLine.startColumn, visualLine.endColumn);
+		const text = this.model
+			.getLineContent(visualLine.logicalLineIndex + 1)
+			.slice(visualLine.startColumn, visualLine.endColumn);
 		let nearestColumn: number | undefined;
 		let nearestDistance = Number.POSITIVE_INFINITY;
 		for (const column of getTextGraphemeBoundaries(text)) {
-			const position = new Position((visualLine.logicalLineIndex) + 1, visualLine.startColumn + column + 1);
+			const position = new Position(visualLine.logicalLineIndex + 1, visualLine.startColumn + column + 1);
 			const left = this.viewLines.visibleRangeForPosition(new Position(visualLineIndex + 1, column + 1))?.left;
 			if (left === undefined) return undefined;
 			const distance = Math.abs(left - horizontalOffset);
@@ -861,7 +1048,7 @@ export class View extends ViewEventHandler {
 		}
 		return nearestColumn === undefined
 			? undefined
-			: new Position((visualLine.logicalLineIndex) + 1, (visualLine.startColumn + nearestColumn) + 1);
+			: new Position(visualLine.logicalLineIndex + 1, visualLine.startColumn + nearestColumn + 1);
 	}
 
 	public delegateVerticalScrollbarPointerDown(event: PointerEvent): void {
@@ -881,7 +1068,11 @@ export class View extends ViewEventHandler {
 			delegateScrollFromMouseWheelEvent: event => this.delegateScrollFromMouseWheelEvent(event),
 			focusTextArea: () => this.controller.editContext.focus(),
 			dispatchTextAreaEvent: event => this.controller.element.dispatchEvent(event),
-			getLastRenderData: () => new PointerHandlerLastRenderData(this.viewCursors.getLastRenderData(), this.controller.editContext.getLastRenderData()),
+			getLastRenderData: () =>
+				new PointerHandlerLastRenderData(
+					this.viewCursors.getLastRenderData(),
+					this.controller.editContext.getLastRenderData(),
+				),
 			renderNow: () => {
 				if (!this.isDisposed) this.render(true, false);
 			},
@@ -890,38 +1081,37 @@ export class View extends ViewEventHandler {
 			getPositionFromDOMInfo: (spanNode, offset) => this.getPositionFromDOMInfo(spanNode, offset),
 			visibleRangeForPosition: (lineNumber, column): HorizontalPosition | null => {
 				const position = new Position(lineNumber, column);
-				return this.viewLines.visibleRangeForPosition(position) ?? this.viewLinesGpu?.visibleRangeForPosition(position) ?? null;
+				return (
+					this.viewLines.visibleRangeForPosition(position) ??
+					this.viewLinesGpu?.visibleRangeForPosition(position) ??
+					null
+				);
 			},
-			getLineWidth: lineNumber => this.viewLinesGpu?.getLineWidth(lineNumber) ?? this.viewLines.getLineWidth(lineNumber),
+			getLineWidth: lineNumber =>
+				this.viewLinesGpu?.getLineWidth(lineNumber) ?? this.viewLines.getLineWidth(lineNumber),
 		};
 	}
 
-	getTargetAtClientPoint(
-		point: ClientPoint,
-	): EditorHitTarget | undefined {
+	getTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
 		validateClientPoint(point);
-		const domTarget = this.editorTextDirection === EditorTextDirection.LeftToRight
-			? undefined
-			: this.getDomTargetAtClientPoint(point);
+		const domTarget =
+			this.editorTextDirection === EditorTextDirection.LeftToRight
+				? undefined
+				: this.getDomTargetAtClientPoint(point);
 		if (domTarget) return domTarget;
 		const bounds = this.domNode.domNode.getBoundingClientRect();
-		return this.hitTestViewportPoint(
-			point.clientX - bounds.left,
-			point.clientY - bounds.top,
-		);
+		return this.hitTestViewportPoint(point.clientX - bounds.left, point.clientY - bounds.top);
 	}
 
 	getNearestTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
 		validateClientPoint(point);
-		const domTarget = this.editorTextDirection === EditorTextDirection.LeftToRight
-			? undefined
-			: this.getDomTargetAtClientPoint(point);
+		const domTarget =
+			this.editorTextDirection === EditorTextDirection.LeftToRight
+				? undefined
+				: this.getDomTargetAtClientPoint(point);
 		if (domTarget) return domTarget;
 		const layout = this.viewport.layout;
-		if (
-			layout.viewportSize.width === 0 ||
-			layout.viewportSize.height === 0
-		) {
+		if (layout.viewportSize.width === 0 || layout.viewportSize.height === 0) {
 			return undefined;
 		}
 		const bounds = this.domNode.domNode.getBoundingClientRect();
@@ -949,19 +1139,23 @@ export class View extends ViewEventHandler {
 
 	private getDomTargetAtClientPoint(point: ClientPoint): EditorHitTarget | undefined {
 		const document = this.domNode.domNode.ownerDocument as unknown as BrowserCaretDocument;
-		const caret = document.caretPositionFromPoint?.(point.clientX, point.clientY) ?? document.caretRangeFromPoint?.(point.clientX, point.clientY);
+		const caret =
+			document.caretPositionFromPoint?.(point.clientX, point.clientY) ??
+			document.caretRangeFromPoint?.(point.clientX, point.clientY);
 		if (!caret) return undefined;
 		const node = 'offsetNode' in caret ? caret.offsetNode : caret.startContainer;
 		const offset = 'offsetNode' in caret ? caret.offset : caret.startOffset;
-		const element = node.nodeType === node.TEXT_NODE ? node.parentElement : node as HTMLElement;
+		const element = node.nodeType === node.TEXT_NODE ? node.parentElement : (node as HTMLElement);
 		if (!element) return undefined;
 		const viewPosition = this.getPositionFromDOMInfo(element, offset);
-		return viewPosition ? Object.freeze({
-			kind: EditorHitTargetKind.Text,
-			position: this.coordinatesConverter.convertViewPositionToModelPosition(viewPosition),
-			viewPosition,
-			injectedText: this.viewModel.getInjectedTextAt(viewPosition),
-		}) : undefined;
+		return viewPosition
+			? Object.freeze({
+					kind: EditorHitTargetKind.Text,
+					position: this.coordinatesConverter.convertViewPositionToModelPosition(viewPosition),
+					viewPosition,
+					injectedText: this.viewModel.getInjectedTextAt(viewPosition),
+				})
+			: undefined;
 	}
 
 	getPositionFromDOMInfo(spanNode: HTMLElement, offset: number): Position | null {
@@ -981,7 +1175,10 @@ export class View extends ViewEventHandler {
 	}
 
 	private get gutterWidth(): number {
-		return Math.max(0, this.editorConfiguration.options.get(EditorOption.layoutInfo).contentLeft - this.contentOffsetLeft);
+		return Math.max(
+			0,
+			this.editorConfiguration.options.get(EditorOption.layoutInfo).contentLeft - this.contentOffsetLeft,
+		);
 	}
 
 	private get textLeft(): number {
@@ -1000,7 +1197,12 @@ export class View extends ViewEventHandler {
 
 	private prepareRenderPass(): EditorRenderPass | undefined {
 		if (this.isDisposed) return undefined;
-		if (this.renderedLayout === this.viewport.layout && !this.shouldRender() && !this.viewParts.some(part => part.shouldRender())) return undefined;
+		if (
+			this.renderedLayout === this.viewport.layout &&
+			!this.shouldRender() &&
+			!this.viewParts.some(part => part.shouldRender())
+		)
+			return undefined;
 		if (this.glyphMarginLanesDirty) {
 			this.glyphMarginLanesDirty = false;
 			this.computeGlyphMarginLanes();
@@ -1009,7 +1211,11 @@ export class View extends ViewEventHandler {
 		const startLineNumber = layout.visibleLines.startLineIndex + 1;
 		const endLineNumber = layout.visibleLines.endLineIndexExclusive;
 		if (startLineNumber <= endLineNumber) {
-			this.viewModel.setViewport(startLineNumber, endLineNumber, Math.floor((startLineNumber + endLineNumber) / 2));
+			this.viewModel.setViewport(
+				startLineNumber,
+				endLineNumber,
+				Math.floor((startLineNumber + endLineNumber) / 2),
+			);
 			this.viewModel.visibleLinesStabilized();
 		}
 		const viewportData = this.createViewportData();
@@ -1041,14 +1247,22 @@ export class View extends ViewEventHandler {
 					}
 				}
 				const textLayout = this.viewport.layout;
-				this.domNode.domNode.classList.toggle("horizontally-scrollable", textLayout.maximumScrollPosition.left > 0);
-				this.domNode.domNode.classList.toggle("vertically-scrollable", textLayout.maximumScrollPosition.top > 0);
+				this.domNode.domNode.classList.toggle(
+					'horizontally-scrollable',
+					textLayout.maximumScrollPosition.left > 0,
+				);
+				this.domNode.domNode.classList.toggle(
+					'vertically-scrollable',
+					textLayout.maximumScrollPosition.top > 0,
+				);
 				this.contentNode.setWidth(textLayout.contentSize.width - contentOffsetLeft);
 				this.contentNode.setHeight(textLayout.contentSize.height);
 				// Text rendering can change scroll geometry. Bind the context and
 				// collect invalidated Parts only after those changes have settled.
 				context = this.createRenderingContext(viewportData);
-				parts = this.viewParts.filter(part => part !== this.viewLines && part !== this.viewLinesGpu && part.shouldRender());
+				parts = this.viewParts.filter(
+					part => part !== this.viewLines && part !== this.viewLinesGpu && part.shouldRender(),
+				);
 			},
 			prepareParts: () => {
 				for (const part of parts) part.prepareRender(context);
@@ -1066,7 +1280,7 @@ export class View extends ViewEventHandler {
 	}
 
 	private computeGlyphMarginLanes(): void {
-		const glyphs: { readonly range: Range; readonly lane: GlyphMarginLane; readonly persist?: boolean; }[] = [];
+		const glyphs: { readonly range: Range; readonly lane: GlyphMarginLane; readonly persist?: boolean }[] = [];
 		let maxLineNumber = 0;
 		for (const decoration of this.model.getAllMarginDecorations()) {
 			const lane = decoration.options.glyphMargin?.position ?? GlyphMarginLane.Center;
@@ -1086,10 +1300,13 @@ export class View extends ViewEventHandler {
 
 	private scheduleProjection(): void {
 		if (this.isDisposed || this.pendingRender.value) return;
-		this.pendingRender.value = editorRenderingCoordinator.schedule(this.domNode.domNode.ownerDocument.defaultView!, () => {
-			this.pendingRender.clear();
-			return this.prepareRenderPass();
-		});
+		this.pendingRender.value = editorRenderingCoordinator.schedule(
+			this.domNode.domNode.ownerDocument.defaultView!,
+			() => {
+				this.pendingRender.clear();
+				return this.prepareRenderPass();
+			},
+		);
 	}
 
 	private updateAccessibilityStatus(): void {
@@ -1097,19 +1314,30 @@ export class View extends ViewEventHandler {
 		const selection = selectionSet[0]!;
 		if (!selection) return;
 		const position = selection.getPosition();
-		const selectedLength = this.model.offsetAt(selection.getEndPosition()) - this.model.offsetAt(selection.getStartPosition());
+		const selectedLength =
+			this.model.offsetAt(selection.getEndPosition()) - this.model.offsetAt(selection.getStartPosition());
 		if (selectionSet.length > 1) {
-			const totalSelectedLength = selectionSet.reduce((length, current) =>
-				length + this.model.offsetAt(current.getEndPosition()) - this.model.offsetAt(current.getStartPosition()), 0);
-			const summary = totalSelectedLength === 0
-				? `${selectionSet.length} cursors`
-				: `${selectionSet.length} selections, ${totalSelectedLength} characters selected`;
-			this.announceAccessibilityStatus(`${summary}; primary at Line ${position.lineNumber}, column ${position.column}`);
+			const totalSelectedLength = selectionSet.reduce(
+				(length, current) =>
+					length +
+					this.model.offsetAt(current.getEndPosition()) -
+					this.model.offsetAt(current.getStartPosition()),
+				0,
+			);
+			const summary =
+				totalSelectedLength === 0
+					? `${selectionSet.length} cursors`
+					: `${selectionSet.length} selections, ${totalSelectedLength} characters selected`;
+			this.announceAccessibilityStatus(
+				`${summary}; primary at Line ${position.lineNumber}, column ${position.column}`,
+			);
 			return;
 		}
-		this.announceAccessibilityStatus(selectedLength === 0
-			? `Line ${position.lineNumber}, column ${position.column}`
-			: `Line ${position.lineNumber}, column ${position.column}, ${selectedLength} characters selected`);
+		this.announceAccessibilityStatus(
+			selectedLength === 0
+				? `Line ${position.lineNumber}, column ${position.column}`
+				: `Line ${position.lineNumber}, column ${position.column}, ${selectedLength} characters selected`,
+		);
 	}
 
 	private createViewportData(): ViewportData {
@@ -1134,7 +1362,10 @@ export class View extends ViewEventHandler {
 		return Object.freeze({
 			left: Math.min(start.left, end.left) - this.getLayoutInfo().contentLeft,
 			top: start.top,
-			width: position.lineNumber === next.lineNumber ? Math.max(1, Math.abs(end.left - start.left)) : Math.max(1, this.measureTextWidth(' ')),
+			width:
+				position.lineNumber === next.lineNumber
+					? Math.max(1, Math.abs(end.left - start.left))
+					: Math.max(1, this.measureTextWidth(' ')),
 			height: start.height,
 		});
 	}
@@ -1154,7 +1385,8 @@ export class View extends ViewEventHandler {
 		// Reading native scroll offsets can flush pending layout after Parts paint.
 		// The ViewLayout and native scroll listener already invalidate this position;
 		// unchanged renders need no round trip through browser layout.
-		if (this.syncedScrollLeft === layout.scrollPosition.left && this.syncedScrollTop === layout.scrollPosition.top) return;
+		if (this.syncedScrollLeft === layout.scrollPosition.left && this.syncedScrollTop === layout.scrollPosition.top)
+			return;
 		// Only the scrollbar wrapper scrolls physically. Viewport Parts are its
 		// siblings and consume the same ViewLayout state without browser scrolling.
 		const scrollDomNode = this.scrollbar.getDomNode().domNode;
@@ -1245,14 +1477,21 @@ class EditorRenderingCoordinator {
 	public schedule(targetWindow: Window, prepare: () => EditorRenderPass | undefined): IDisposable {
 		this.pending.add(prepare);
 		if (!this.frames.has(targetWindow)) {
-			this.frames.set(targetWindow, runAtThisOrScheduleAtNextAnimationFrame(targetWindow, () => {
-				this.frames.deleteAndDispose(targetWindow);
-				// Whichever window gets a frame first consumes all queued editors.
-				// Requests created while rendering belong to the next batch.
-				const batch = [...this.pending];
-				this.pending.clear();
-				this.render(batch);
-			}, 100));
+			this.frames.set(
+				targetWindow,
+				runAtThisOrScheduleAtNextAnimationFrame(
+					targetWindow,
+					() => {
+						this.frames.deleteAndDispose(targetWindow);
+						// Whichever window gets a frame first consumes all queued editors.
+						// Requests created while rendering belong to the next batch.
+						const batch = [...this.pending];
+						this.pending.clear();
+						this.render(batch);
+					},
+					100,
+				),
+			);
 		}
 		return toDisposable(() => {
 			if (this.pending.delete(prepare) && this.pending.size === 0) {
@@ -1295,13 +1534,17 @@ class EditorRenderingCoordinator {
 const editorRenderingCoordinator = new EditorRenderingCoordinator();
 
 function validateEditorViewportOptions(options: EditorViewportOptions): void {
-	if (!(options.viewModel.model instanceof TextModel)) throw new TypeError('Editor view requires the editor text model implementation');
-	if (!(options.viewModel.viewLayout instanceof ViewLayout)) throw new TypeError('Editor view requires the editor view layout implementation');
+	if (!(options.viewModel.model instanceof TextModel))
+		throw new TypeError('Editor view requires the editor text model implementation');
+	if (!(options.viewModel.viewLayout instanceof ViewLayout))
+		throw new TypeError('Editor view requires the editor view layout implementation');
 	resolveEditorIndentationOptions(options.indentation);
 	const textDirection = options.textDirection ?? EditorTextDirection.Auto;
-	if (!Object.values(EditorTextDirection).includes(textDirection)) throw new TypeError('Unknown Stanza editor text direction');
+	if (!Object.values(EditorTextDirection).includes(textDirection))
+		throw new TypeError('Unknown Stanza editor text direction');
 	const focusOutlineOwner = options.focusOutlineOwner ?? 'editor';
-	if (focusOutlineOwner !== 'editor' && focusOutlineOwner !== 'host') throw new TypeError('Unknown Stanza editor focus outline owner');
+	if (focusOutlineOwner !== 'editor' && focusOutlineOwner !== 'host')
+		throw new TypeError('Unknown Stanza editor focus outline owner');
 	if (options.semanticTokenSource && options.semanticTokenSource.textModel !== options.viewModel.model) {
 		throw new TypeError('Stanza viewport and semantic token source must share one text model');
 	}
@@ -1309,7 +1552,11 @@ function validateEditorViewportOptions(options: EditorViewportOptions): void {
 
 type EditorEditContextOptions = EditContextOptions & Partial<Pick<NativeEditContextOptions, 'logService'>>;
 
-function createEditContext(context: ViewContext, container: HTMLElement, options: EditorEditContextOptions): AbstractEditContext {
+function createEditContext(
+	context: ViewContext,
+	container: HTMLElement,
+	options: EditorEditContextOptions,
+): AbstractEditContext {
 	const ownerWindow = container.ownerDocument.defaultView;
 	if (typeof ownerWindow?.EditContext !== 'function') return new TextAreaEditContext(context, container, options);
 	const logService = options.logService;
@@ -1319,10 +1566,14 @@ function createEditContext(context: ViewContext, container: HTMLElement, options
 
 function rawWrappingIndent(value: WrappingIndent): 'none' | 'same' | 'indent' | 'deepIndent' {
 	switch (value) {
-		case WrappingIndent.None: return 'none';
-		case WrappingIndent.Same: return 'same';
-		case WrappingIndent.Indent: return 'indent';
-		case WrappingIndent.DeepIndent: return 'deepIndent';
+		case WrappingIndent.None:
+			return 'none';
+		case WrappingIndent.Same:
+			return 'same';
+		case WrappingIndent.Indent:
+			return 'indent';
+		case WrappingIndent.DeepIndent:
+			return 'deepIndent';
 	}
 }
 
@@ -1342,7 +1593,10 @@ class BrowserTextMeasurer implements TextMeasurer {
 	private readonly context: CanvasRenderingContext2D | undefined;
 	private metrics: BrowserTextMetrics;
 
-	constructor(private readonly referenceElement: HTMLElement, private readonly configuration: EditorConfiguration) {
+	constructor(
+		private readonly referenceElement: HTMLElement,
+		private readonly configuration: EditorConfiguration,
+	) {
 		try {
 			this.context = h(referenceElement.ownerDocument, 'canvas').getContext('2d') ?? undefined;
 		} catch {
@@ -1351,8 +1605,12 @@ class BrowserTextMeasurer implements TextMeasurer {
 		this.metrics = this.readMetrics();
 	}
 
-	get horizontalPadding(): number { return this.metrics.horizontalPadding; }
-	get contentLeftPadding(): number { return this.metrics.contentLeftPadding; }
+	get horizontalPadding(): number {
+		return this.metrics.horizontalPadding;
+	}
+	get contentLeftPadding(): number {
+		return this.metrics.contentLeftPadding;
+	}
 
 	refresh(): boolean {
 		const metrics = this.readMetrics();
@@ -1382,7 +1640,9 @@ class BrowserTextMeasurer implements TextMeasurer {
 		const contentLeftPadding = cssNumber(style.paddingLeft, 0);
 		const horizontalPadding = contentLeftPadding + cssNumber(style.paddingRight, 0);
 		const font = `${style.fontStyle || 'normal'} ${style.fontVariantCaps || 'normal'} ${style.fontWeight || '400'} ${style.fontSize || `${fontSize}px`} ${style.fontFamily || 'monospace'}`;
-		const language = this.referenceElement.closest('[lang]')?.getAttribute('lang') ?? this.referenceElement.ownerDocument.documentElement.lang;
+		const language =
+			this.referenceElement.closest('[lang]')?.getAttribute('lang') ??
+			this.referenceElement.ownerDocument.documentElement.lang;
 		if (this.context) {
 			// Detached canvases do not inherit language, which affects the font
 			// selected for generic families such as monospace on Windows.
@@ -1392,12 +1652,27 @@ class BrowserTextMeasurer implements TextMeasurer {
 		}
 		const spaceWidth = positiveNumber(this.context?.measureText(' ').width, fontSize * 0.6);
 		const fontInfo = this.configuration.options.get(EditorOption.fontInfo);
-		const monospaceWidth = this.context && fontInfo.isTrusted && fontInfo.isMonospace
-			&& !this.configuration.options.get(EditorOption.disableMonospaceOptimizations)
-			&& style.fontVariantCaps === 'normal' && style.fontVariationSettings === 'normal'
-			? this.context.measureText('n').width : undefined;
+		const monospaceWidth =
+			this.context &&
+			fontInfo.isTrusted &&
+			fontInfo.isMonospace &&
+			!this.configuration.options.get(EditorOption.disableMonospaceOptimizations) &&
+			style.fontVariantCaps === 'normal' &&
+			style.fontVariationSettings === 'normal'
+				? this.context.measureText('n').width
+				: undefined;
 		return Object.freeze({
-			signature: JSON.stringify([language, font, letterSpacing, style.fontFeatureSettings, style.fontVariationSettings, tabSize, horizontalPadding, spaceWidth, monospaceWidth]),
+			signature: JSON.stringify([
+				language,
+				font,
+				letterSpacing,
+				style.fontFeatureSettings,
+				style.fontVariationSettings,
+				tabSize,
+				horizontalPadding,
+				spaceWidth,
+				monospaceWidth,
+			]),
 			font,
 			fontSize,
 			letterSpacing,
@@ -1433,21 +1708,15 @@ function positiveNumber(value: number | undefined, fallback: number): number {
 }
 
 function validateClientPoint(point: ClientPoint): void {
-	if (
-		!point ||
-		!isFiniteNumber(point.clientX) ||
-		!isFiniteNumber(point.clientY)
-	) {
-		throw new RangeError(
-			"Stanza client point must contain finite coordinates",
-		);
+	if (!point || !isFiniteNumber(point.clientX) || !isFiniteNumber(point.clientY)) {
+		throw new RangeError('Stanza client point must contain finite coordinates');
 	}
 }
 
 function resolveEditorViewportPadding(padding: EditorViewportPadding | undefined): EditorViewportPadding {
 	return Object.freeze({
-		right: nonNegativePaddingValue(padding?.right ?? 12, "right"),
-		left: nonNegativePaddingValue(padding?.left ?? 12, "left"),
+		right: nonNegativePaddingValue(padding?.right ?? 12, 'right'),
+		left: nonNegativePaddingValue(padding?.left ?? 12, 'left'),
 	});
 }
 

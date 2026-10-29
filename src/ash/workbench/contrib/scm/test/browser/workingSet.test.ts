@@ -24,7 +24,9 @@ test('SCM working sets save and restore editor state across branch changes', asy
 	const saved: string[] = [];
 	const applied: EditorWorkingSetTarget[] = [];
 	const editorPart = {
-		domNode: globalThis.document?.body ?? ({ ownerDocument: { activeElement: undefined }, contains: () => false } as unknown as HTMLElement),
+		domNode:
+			globalThis.document?.body ??
+			({ ownerDocument: { activeElement: undefined }, contains: () => false } as unknown as HTMLElement),
 		saveWorkingSet(id: string): EditorWorkingSet {
 			saved.push(id);
 			return workingSet(id);
@@ -60,11 +62,7 @@ test('SCM working sets save and restore editor state across branch changes', asy
 });
 
 function workingSet(id: string): EditorWorkingSet {
-	return {
-		id,
-		activeGroupIndex: 0,
-		groups: [{ activeEditorIndex: -1, editors: [], size: 1 }],
-	};
+	return { id, activeGroupIndex: 0, groups: [{ activeEditorIndex: -1, editors: [], size: 1 }] };
 }
 
 class TestSCMProvider implements ISCMProvider {
@@ -72,19 +70,38 @@ class TestSCMProvider implements ISCMProvider {
 	readonly providerId = 'test';
 	readonly label = 'project';
 	readonly groups = [];
-	readonly input = { value: '', placeholder: '', enabled: false, canAccept: false, buttonLabel: '', buttonTooltip: '', accept: async () => undefined };
+	readonly input = {
+		value: '',
+		placeholder: '',
+		enabled: false,
+		canAccept: false,
+		buttonLabel: '',
+		buttonTooltip: '',
+		accept: async () => undefined,
+	};
 	readonly statusBarCommands = [];
 	readonly statusMessage = '';
 	readonly isBusy = false;
 	private readonly changed = new Emitter<void>();
 	readonly onDidChangeResources = this.changed.event;
 
-	constructor(public activeRepositoryName: string) { }
-	accept(ref: string): void { this.activeRepositoryName = ref; this.changed.fire(); }
-	refresh(): Promise<void> { return Promise.resolve(); }
-	activate(): Promise<void> { return Promise.resolve(); }
-	dispose(): void { this.changed.dispose(); }
-	[Symbol.dispose](): void { this.dispose(); }
+	constructor(public activeRepositoryName: string) {}
+	accept(ref: string): void {
+		this.activeRepositoryName = ref;
+		this.changed.fire();
+	}
+	refresh(): Promise<void> {
+		return Promise.resolve();
+	}
+	activate(): Promise<void> {
+		return Promise.resolve();
+	}
+	dispose(): void {
+		this.changed.dispose();
+	}
+	[Symbol.dispose](): void {
+		this.dispose();
+	}
 }
 
 class TestStorageService {

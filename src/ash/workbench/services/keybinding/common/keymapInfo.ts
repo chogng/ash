@@ -61,10 +61,9 @@ export function deserializeKeyboardMapping(serialized: ISerializedKeyboardMappin
 
 export function toKeyboardLayoutDefinitions(info: IKeymapInfo): readonly IKeyboardLayoutDefinition[] {
 	const mapping = deserializeKeyboardMapping(info.mapping);
-	return [info.layout, ...info.secondaryLayouts].map((layout) => Object.freeze({
-		layout: toKeyboardLayoutInfo(layout),
-		mapping,
-	}));
+	return [info.layout, ...info.secondaryLayouts].map(layout =>
+		Object.freeze({ layout: toKeyboardLayoutInfo(layout), mapping }),
+	);
 }
 
 function toKeyboardLayoutInfo(layout: IRawKeyboardLayoutInfo): IKeyboardLayoutInfo {

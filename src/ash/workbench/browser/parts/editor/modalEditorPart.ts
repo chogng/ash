@@ -11,7 +11,13 @@ import { focusFirst, restoreFocus, trapTabFocus } from '../../../../base/browser
 import { Dimension, type IDimension } from '../../../../base/browser/dom.js';
 import { observeElementSize } from '../../../../base/browser/observer.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
-import { DisposableMap, Disposable, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import {
+	DisposableMap,
+	Disposable,
+	MutableDisposable,
+	toDisposable,
+	type IDisposable,
+} from '../../../../base/common/lifecycle.js';
 import { basename } from '../../../../base/common/resources.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import type { EditorOpenOptions } from '../../../services/editor/common/editorService.js';
@@ -92,28 +98,39 @@ export class ModalEditorPart extends Disposable {
 		headerDomNode.append(this.titleControlDomNode);
 		const actions = options.paneCreationOptions.actionServices;
 		if (actions) {
-			this.toolbar = this._register(new WorkbenchToolBar(headerDomNode, actions.contextMenuProvider, {
-				ariaLabel: localize('modalEditor.actions', 'Editor actions'),
-			}));
+			this.toolbar = this._register(
+				new WorkbenchToolBar(headerDomNode, actions.contextMenuProvider, {
+					ariaLabel: localize('modalEditor.actions', 'Editor actions'),
+				}),
+			);
 			this.toolbar.element.classList.add('ash-modal-editor-actions');
 		}
 		const closeLabel = localize('workbench.closeEditor', 'Close');
 		if (actions) {
-			this.closeToolbar = this._register(new MenuWorkbenchToolBar(headerDomNode, actions.menuService, actions.contextMenuProvider, MenuId.ModalEditorTitle, {
-				ariaLabel: closeLabel,
-				contextKeyService: actions.contextKeyService,
-			}));
+			this.closeToolbar = this._register(
+				new MenuWorkbenchToolBar(
+					headerDomNode,
+					actions.menuService,
+					actions.contextMenuProvider,
+					MenuId.ModalEditorTitle,
+					{ ariaLabel: closeLabel, contextKeyService: actions.contextKeyService },
+				),
+			);
 		} else {
 			// Hosts without menu services still expose the modal's close request through ActionBar.
-			this.closeToolbar = this._register(new WorkbenchToolBar(headerDomNode, { showContextMenu() { } }, { ariaLabel: closeLabel }));
-			this.closeToolbar.setActions([{
-				id: 'modalEditor.close',
-				label: closeLabel,
-				tooltip: closeLabel,
-				icon: Lxicon.close,
-				enabled: true,
-				run: () => this.requestClose(),
-			}]);
+			this.closeToolbar = this._register(
+				new WorkbenchToolBar(headerDomNode, { showContextMenu() {} }, { ariaLabel: closeLabel }),
+			);
+			this.closeToolbar.setActions([
+				{
+					id: 'modalEditor.close',
+					label: closeLabel,
+					tooltip: closeLabel,
+					icon: Lxicon.close,
+					enabled: true,
+					run: () => this.requestClose(),
+				},
+			]);
 		}
 		this.closeToolbar.element.classList.add('ash-modal-editor-close');
 
@@ -127,20 +144,26 @@ export class ModalEditorPart extends Disposable {
 		this.onDidChangeVisibility = this.visibilityEmitter.event;
 		this._register(observeElementSize(this.contentDomNode, size => this.layout(size)));
 		this._register(trapTabFocus(this.domNode));
-		this._register(addDisposableListener(this.hostDomNode, 'mousedown', event => {
-			if (event.target !== this.hostDomNode) return;
-			stopEvent(event);
-			this.requestClose();
-		}));
-		this._register(addDisposableListener(this.domNode, 'keydown', event => {
-			if (event.defaultPrevented || event.isComposing || event.key !== 'Escape') return;
-			stopEvent(event);
-			this.requestClose();
-		}));
-		this._register(toDisposable(() => {
-			this.hide();
-			this.hostDomNode.remove();
-		}));
+		this._register(
+			addDisposableListener(this.hostDomNode, 'mousedown', event => {
+				if (event.target !== this.hostDomNode) return;
+				stopEvent(event);
+				this.requestClose();
+			}),
+		);
+		this._register(
+			addDisposableListener(this.domNode, 'keydown', event => {
+				if (event.defaultPrevented || event.isComposing || event.key !== 'Escape') return;
+				stopEvent(event);
+				this.requestClose();
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				this.hide();
+				this.hostDomNode.remove();
+			}),
+		);
 	}
 
 	public get activeInput(): IResourceEditorInput | undefined {
@@ -171,12 +194,19 @@ export class ModalEditorPart extends Disposable {
 			if (sequence !== this.openSequence) throw new EditorOpenSupersededError(input);
 			if (openOptions.ignoreError || isCancellationError(error)) throw error;
 			const displayError = this.options.resolveOpenError
-				? this.options.resolveOpenError(error, input, openOptions, options => this.openEditor(input, options)) : error;
-			const pane = this.instantiationService.createInstance(ErrorPlaceholderEditor, displayError,
+				? this.options.resolveOpenError(error, input, openOptions, options => this.openEditor(input, options))
+				: error;
+			const pane = this.instantiationService.createInstance(
+				ErrorPlaceholderEditor,
+				displayError,
 				() => this.openEditor(input, { ...openOptions, source: EditorOpenSource.USER }),
 				async () => this.closeEditor(input),
 			);
-			const instance = new ModalEditorPaneInstance(this.contentDomNode, pane, this.uriIdentity.retainUri(input.resource));
+			const instance = new ModalEditorPaneInstance(
+				this.contentDomNode,
+				pane,
+				this.uriIdentity.retainUri(input.resource),
+			);
 			pane.create(instance.domNode);
 			void pane.setInput(input, instance.signal);
 			this.active.value?.setVisible(false);
@@ -192,12 +222,20 @@ export class ModalEditorPart extends Disposable {
 		}
 	}
 
-	private async doOpenEditor(input: IResourceEditorInput, openOptions: EditorOpenOptions, sequence: number): Promise<IEditorPane> {
+	private async doOpenEditor(
+		input: IResourceEditorInput,
+		openOptions: EditorOpenOptions,
+		sequence: number,
+	): Promise<IEditorPane> {
 		const descriptor = this.options.registry.getEditorPane(input, openOptions);
 		if (!descriptor) {
 			throw new RangeError(`No editor can open ${input.resource}`);
 		}
-		if (this.currentEntry && this.isSameEditor(this.currentEntry.input, input) && this.currentEntry.instance.pane.id === descriptor.id) {
+		if (
+			this.currentEntry &&
+			this.isSameEditor(this.currentEntry.input, input) &&
+			this.currentEntry.instance.pane.id === descriptor.id
+		) {
 			this.currentEntry = { input, instance: this.currentEntry.instance };
 			this.updateTitle(input);
 			this.show(openOptions);
@@ -207,12 +245,19 @@ export class ModalEditorPart extends Disposable {
 
 		const created = descriptor.create({ ...this.options.paneCreationOptions, input });
 		const pane = created instanceof Promise ? await created : created;
-		if (this.isDisposed || sequence !== this.openSequence) { pane.dispose(); throw new EditorOpenSupersededError(input); }
+		if (this.isDisposed || sequence !== this.openSequence) {
+			pane.dispose();
+			throw new EditorOpenSupersededError(input);
+		}
 		if (pane.id !== descriptor.id) {
 			pane.dispose();
 			throw new TypeError(`Editor pane factory '${descriptor.id}' created '${pane.id}'`);
 		}
-		const instance = new ModalEditorPaneInstance(this.contentDomNode, pane, this.uriIdentity.retainUri(input.resource));
+		const instance = new ModalEditorPaneInstance(
+			this.contentDomNode,
+			pane,
+			this.uriIdentity.retainUri(input.resource),
+		);
 		this.pending.set(sequence, instance);
 		try {
 			pane.create(instance.domNode);
@@ -324,7 +369,10 @@ export class ModalEditorPart extends Disposable {
 		const titleControl = pane instanceof EditorPane ? pane.getTitleControl() : undefined;
 		this.titleControlDomNode.replaceChildren(...(titleControl ? [titleControl] : []));
 		const updateActions = () => {
-			this.toolbar?.setActions(pane instanceof EditorPane ? pane.getActions() : [], pane instanceof EditorPane ? pane.getSecondaryActions() : []);
+			this.toolbar?.setActions(
+				pane instanceof EditorPane ? pane.getActions() : [],
+				pane instanceof EditorPane ? pane.getSecondaryActions() : [],
+			);
 		};
 		updateActions();
 		if (pane instanceof EditorPane) this.titleListener.value = pane.onTitleAreaUpdate(updateActions);
@@ -340,7 +388,11 @@ class ModalEditorPaneInstance extends Disposable {
 	public readonly domNode: HTMLDivElement;
 	public readonly signal: AbortSignal;
 
-	constructor(container: HTMLElement, public readonly pane: IEditorPane, identityLifetime: IDisposable) {
+	constructor(
+		container: HTMLElement,
+		public readonly pane: IEditorPane,
+		identityLifetime: IDisposable,
+	) {
 		super();
 		this._register(identityLifetime);
 		const ownerDocument = container.ownerDocument;

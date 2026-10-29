@@ -1,5 +1,5 @@
-import { isMacintosh, isWindows } from "./platform.js";
-import { URI } from "./uri.js";
+import { isMacintosh, isWindows } from './platform.js';
+import { URI } from './uri.js';
 
 /** Metadata carried in a data URI before its content. */
 export namespace DataUri {
@@ -27,8 +27,8 @@ export namespace DataUri {
 
 /** Path comparison behavior selected for a resource. */
 export enum ResourcePathCasing {
-	Sensitive = "sensitive",
-	Insensitive = "insensitive",
+	Sensitive = 'sensitive',
+	Insensitive = 'insensitive',
 }
 
 /**
@@ -42,26 +42,19 @@ export interface IExtUri {
 	getComparisonKeyIgnoringFragment(uri: URI): string;
 	isEqual(left: URI | undefined, right: URI | undefined): boolean;
 	isEqualOrParent(base: URI, parentCandidate: URI, ignoreFragment?: boolean): boolean;
-	isEqualIgnoringFragment(
-		left: URI | undefined,
-		right: URI | undefined,
-	): boolean;
+	isEqualIgnoringFragment(left: URI | undefined, right: URI | undefined): boolean;
 	ignorePathCasing(uri: URI): boolean;
 }
 
 /** Selects path comparison semantics for a URI. */
-export type ResourcePathCasingProvider = (
-	uri: URI,
-) => ResourcePathCasing;
+export type ResourcePathCasingProvider = (uri: URI) => ResourcePathCasing;
 
 const UNRESERVED_CHARACTER = /^[A-Za-z\d\-._~]$/;
 
 function normalizePercentEncoding(value: string): string {
 	return value.replace(/%([0-9a-f]{2})/gi, (_match, hexadecimal: string) => {
 		const character = String.fromCharCode(Number.parseInt(hexadecimal, 16));
-		return UNRESERVED_CHARACTER.test(character)
-			? character
-			: `%${hexadecimal.toUpperCase()}`;
+		return UNRESERVED_CHARACTER.test(character) ? character : `%${hexadecimal.toUpperCase()}`;
 	});
 }
 
@@ -69,7 +62,10 @@ function comparisonPath(path: string, ignoreCase: boolean): string {
 	if (!ignoreCase) {
 		return normalizePercentEncoding(path);
 	}
-	return path.split('/').map(segment => encodeURIComponent(decodeURIComponent(segment).toLowerCase())).join('/');
+	return path
+		.split('/')
+		.map(segment => encodeURIComponent(decodeURIComponent(segment).toLowerCase()))
+		.join('/');
 }
 
 function keyPart(value: string): string {
@@ -104,7 +100,9 @@ export class ExtUri implements IExtUri {
 				return uri.withEncodedPath(`${shareRoot}/`);
 			}
 		}
-		return uri.withEncodedPath(uri.scheme === 'file' && !uri.authority && /^\/[a-z]:$/i.test(parent) ? `${parent}/` : parent);
+		return uri.withEncodedPath(
+			uri.scheme === 'file' && !uri.authority && /^\/[a-z]:$/i.test(parent) ? `${parent}/` : parent,
+		);
 	}
 
 	getComparisonKey(uri: URI): string {
@@ -124,13 +122,19 @@ export class ExtUri implements IExtUri {
 	isEqualOrParent(base: URI, parentCandidate: URI, ignoreFragment = false): boolean {
 		const baseEncoded = base.toEncodedComponents();
 		const parentEncoded = parentCandidate.toEncodedComponents();
-		if (base.scheme !== parentCandidate.scheme || base.authority.toLowerCase() !== parentCandidate.authority.toLowerCase()) {
+		if (
+			base.scheme !== parentCandidate.scheme ||
+			base.authority.toLowerCase() !== parentCandidate.authority.toLowerCase()
+		) {
 			return false;
 		}
 		if (normalizePercentEncoding(baseEncoded.query) !== normalizePercentEncoding(parentEncoded.query)) {
 			return false;
 		}
-		if (!ignoreFragment && normalizePercentEncoding(baseEncoded.fragment) !== normalizePercentEncoding(parentEncoded.fragment)) {
+		if (
+			!ignoreFragment &&
+			normalizePercentEncoding(baseEncoded.fragment) !== normalizePercentEncoding(parentEncoded.fragment)
+		) {
 			return false;
 		}
 
@@ -140,14 +144,10 @@ export class ExtUri implements IExtUri {
 		return path === parent || path.startsWith(parent === '/' ? parent : `${parent}/`);
 	}
 
-	isEqualIgnoringFragment(
-		left: URI | undefined,
-		right: URI | undefined,
-	): boolean {
+	isEqualIgnoringFragment(left: URI | undefined, right: URI | undefined): boolean {
 		if (left === right) return true;
 		if (!left || !right) return false;
-		return this.getComparisonKeyIgnoringFragment(left)
-			=== this.getComparisonKeyIgnoringFragment(right);
+		return this.getComparisonKeyIgnoringFragment(left) === this.getComparisonKeyIgnoringFragment(right);
 	}
 
 	ignorePathCasing(uri: URI): boolean {
@@ -157,9 +157,7 @@ export class ExtUri implements IExtUri {
 	private createComparisonKey(uri: URI, includeFragment: boolean): string {
 		const encoded = uri.toEncodedComponents();
 		const path = comparisonPath(encoded.path, this.ignorePathCasing(uri));
-		const fragment = includeFragment
-			? normalizePercentEncoding(encoded.fragment)
-			: "";
+		const fragment = includeFragment ? normalizePercentEncoding(encoded.fragment) : '';
 
 		return [
 			keyPart(uri.scheme.toLowerCase()),
@@ -167,7 +165,7 @@ export class ExtUri implements IExtUri {
 			keyPart(path),
 			keyPart(normalizePercentEncoding(encoded.query)),
 			keyPart(fragment),
-		].join("");
+		].join('');
 	}
 }
 
@@ -187,17 +185,12 @@ export function basename(uri: URI): string {
  *
  * Remote providers should supply an `ExtUri` matching their own semantics.
  */
-export const extUriBiasedIgnorePathCase = new ExtUri((uri) => {
-	if (
-		uri.scheme === "file"
-		&& (isWindows || isMacintosh)
-	) {
+export const extUriBiasedIgnorePathCase = new ExtUri(uri => {
+	if (uri.scheme === 'file' && (isWindows || isMacintosh)) {
 		return ResourcePathCasing.Insensitive;
 	}
 	return ResourcePathCasing.Sensitive;
 });
 
 /** URI identity that ignores path casing for every scheme. */
-export const extUriIgnorePathCase = new ExtUri(
-	() => ResourcePathCasing.Insensitive,
-);
+export const extUriIgnorePathCase = new ExtUri(() => ResourcePathCasing.Insensitive);

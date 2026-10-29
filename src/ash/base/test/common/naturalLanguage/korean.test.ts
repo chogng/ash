@@ -21,6 +21,6 @@ suite('Korean keyboard alternatives', () => {
 	test('leaves unrelated, filler, and archaic characters without alternatives', () => {
 		assert.equal(keyboardInput('A ㅤ ㆍ 😀'), 'A ㅤ ㆍ 😀');
 		assert.equal(getKoreanAltChars(0x3164), undefined);
-		assert.equal(getKoreanAltChars(0xD7A4), undefined);
+		assert.equal(getKoreanAltChars(0xd7a4), undefined);
 	});
 });

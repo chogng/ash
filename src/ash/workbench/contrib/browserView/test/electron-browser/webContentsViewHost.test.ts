@@ -5,7 +5,12 @@ import { promiseWithResolvers } from '../../../../../base/common/async.js';
 import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { IBrowserViewService, BrowserViewStorageScope, type BrowserViewEvent, type IBrowserViewBounds } from '../../../../../platform/browserView/common/browserView.js';
+import {
+	IBrowserViewService,
+	BrowserViewStorageScope,
+	type BrowserViewEvent,
+	type IBrowserViewBounds,
+} from '../../../../../platform/browserView/common/browserView.js';
 import { IContextMenuService } from '../../../../../platform/contextview/browser/contextView.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../../../../platform/instantiation/common/serviceCollection.js';
@@ -25,7 +30,13 @@ suite('Browser page presentation', () => {
 		await settle(() => f.visible.get('first') === true);
 		host.setModel(f.model('second'));
 		await settle(() => f.visible.get('first') === false && f.visible.get('second') === true);
-		assert.deepEqual([...f.visible], [['first', false], ['second', true]]);
+		assert.deepEqual(
+			[...f.visible],
+			[
+				['first', false],
+				['second', true],
+			],
+		);
 	});
 
 	test('the remaining split takes over when the current host hides or is disposed', async () => {
@@ -48,7 +59,10 @@ suite('Browser page presentation', () => {
 		await settle(() => f.bounds.get('shared')?.x === 10);
 		first.dispose();
 		await settle(() => f.visible.get('shared') === false);
-		assert.deepEqual([f.bounds.get('shared'), f.visible.get('shared')], [{ x: 10, y: 20, width: 300, height: 200 }, false]);
+		assert.deepEqual(
+			[f.bounds.get('shared'), f.visible.get('shared')],
+			[{ x: 10, y: 20, width: 300, height: 200 }, false],
+		);
 	});
 
 	test('an input switch while positioning is pending cannot focus or retain the old page', async () => {
@@ -56,7 +70,10 @@ suite('Browser page presentation', () => {
 		const pending = promiseWithResolvers<void>();
 		const started = promiseWithResolvers<void>();
 		f.service.layout = async (id, bounds) => {
-			if (id === 'first') { started.resolve(); await pending.promise; }
+			if (id === 'first') {
+				started.resolve();
+				await pending.promise;
+			}
 			f.bounds.set(id, bounds);
 		};
 		const host = f.host(10);
@@ -74,7 +91,10 @@ suite('Browser page presentation', () => {
 		using f = fixture();
 		const pending = promiseWithResolvers<void>();
 		const started = promiseWithResolvers<void>();
-		f.service.layout = async () => { started.resolve(); await pending.promise; };
+		f.service.layout = async () => {
+			started.resolve();
+			await pending.promise;
+		};
 		const host = f.host(10);
 		host.setModel(f.model('closed'));
 		host.setVisible(true);
@@ -140,9 +160,9 @@ function fixture(): DisposableStore & {
 	store.add(toDisposable(() => dom.window.close()));
 	const targetWindow = dom.window as unknown as Window & typeof globalThis;
 	targetWindow.ResizeObserver = class implements ResizeObserver {
-		public observe(): void { }
-		public unobserve(): void { }
-		public disconnect(): void { }
+		public observe(): void {}
+		public unobserve(): void {}
+		public disconnect(): void {}
 	};
 	const events = store.add(new Emitter<BrowserViewEvent>());
 	const menuShown = store.add(new Emitter<void>());
@@ -152,23 +172,62 @@ function fixture(): DisposableStore & {
 	const focused: string[] = [];
 	const service = {
 		onDidEvent: events.event,
-		layout: async (id: string, value: IBrowserViewBounds) => { bounds.set(id, value); },
-		setVisible: async (id: string, value: boolean) => { visible.set(id, value); },
-		focus: async (id: string) => { focused.push(id); },
+		layout: async (id: string, value: IBrowserViewBounds) => {
+			bounds.set(id, value);
+		},
+		setVisible: async (id: string, value: boolean) => {
+			visible.set(id, value);
+		},
+		focus: async (id: string) => {
+			focused.push(id);
+		},
 	} as IBrowserViewService;
 	const dialogs = store.add(new DialogsModel());
-	const instantiation = store.add(new InstantiationService(new ServiceCollection(
-		[IBrowserViewService, service],
-		[ILogService, new NullLoggerService()],
-		[IDialogsModel, dialogs],
-		[IContextMenuService, { onDidShowContextMenu: menuShown.event, onDidHideContextMenu: menuHidden.event, showContextMenu() { }, hideContextMenu() { } }],
-	)));
+	const instantiation = store.add(
+		new InstantiationService(
+			new ServiceCollection(
+				[IBrowserViewService, service],
+				[ILogService, new NullLoggerService()],
+				[IDialogsModel, dialogs],
+				[
+					IContextMenuService,
+					{
+						onDidShowContextMenu: menuShown.event,
+						onDidHideContextMenu: menuHidden.event,
+						showContextMenu() {},
+						hideContextMenu() {},
+					},
+				],
+			),
+		),
+	);
 	return Object.assign(store, {
-		dom, service, events, menuShown, menuHidden, visible, bounds, focused,
-		model: (id: string) => store.add(instantiation.createInstance(BrowserViewModel, {
-			id, host: { windowId: 1 }, owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace },
-			state: { targetId: id, url: 'https://example.test/', title: id, loading: false, visible: false, canGoBack: false, canGoForward: false },
-		})),
+		dom,
+		service,
+		events,
+		menuShown,
+		menuHidden,
+		visible,
+		bounds,
+		focused,
+		model: (id: string) =>
+			store.add(
+				instantiation.createInstance(BrowserViewModel, {
+					id,
+					host: { windowId: 1 },
+					owner: { type: 'user' },
+					session: { scope: BrowserViewStorageScope.Workspace },
+					state: {
+						targetId: id,
+						url: 'https://example.test/',
+						title: id,
+						loading: false,
+						visible: false,
+						canGoBack: false,
+						canGoForward: false,
+					},
+				}),
+			),
 		host: (left: number) => {
 			const container = dom.window.document.createElement('div');
 			container.tabIndex = 0;
@@ -182,6 +241,8 @@ function fixture(): DisposableStore & {
 }
 
 async function settle(condition: () => boolean): Promise<void> {
-	for (let attempt = 0; attempt < 50 && !condition(); attempt++) { await Promise.resolve(); }
+	for (let attempt = 0; attempt < 50 && !condition(); attempt++) {
+		await Promise.resolve();
+	}
 	assert.equal(condition(), true, 'Expected the presentation command to finish');
 }

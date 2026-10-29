@@ -1,18 +1,21 @@
-import { EditorFoldingRangeSource, type EditorFoldingRange } from "./foldingRanges.js";
-import { type TextModel } from "../../../common/model/textModel.js";
+import { EditorFoldingRangeSource, type EditorFoldingRange } from './foldingRanges.js';
+import { type TextModel } from '../../../common/model/textModel.js';
 
 export interface EditorIndentFoldingOptions {
 	readonly tabSize?: number;
 }
 
 /** Computes provider-owned fold ranges from decreasing leading indentation. */
-export function computeEditorIndentFoldingRanges(model: TextModel, options: EditorIndentFoldingOptions = {}): readonly EditorFoldingRange[] {
+export function computeEditorIndentFoldingRanges(
+	model: TextModel,
+	options: EditorIndentFoldingOptions = {},
+): readonly EditorFoldingRange[] {
 	const tabSize = readTabSize(options.tabSize);
 	const stack: IndentLine[] = [];
 	const ranges: EditorFoldingRange[] = [];
 	let previous: IndentLine | undefined;
 	for (let lineIndex = 0; lineIndex < model.lineCount; lineIndex += 1) {
-		const text = model.getLineContent((lineIndex) + 1);
+		const text = model.getLineContent(lineIndex + 1);
 		if (isBlank(text)) continue;
 		const indentation = leadingIndentation(text, tabSize);
 		while (true) {
@@ -38,12 +41,9 @@ interface IndentLine {
 
 function appendRange(ranges: EditorFoldingRange[], startLineIndex: number, endLineIndex: number): void {
 	if (endLineIndex <= startLineIndex) return;
-	ranges.push(Object.freeze({
-		startLineIndex,
-		endLineIndex,
-		collapsed: false,
-		source: EditorFoldingRangeSource.Provider,
-	}));
+	ranges.push(
+		Object.freeze({ startLineIndex, endLineIndex, collapsed: false, source: EditorFoldingRangeSource.Provider }),
+	);
 }
 
 function isBlank(text: string): boolean {
@@ -53,10 +53,10 @@ function isBlank(text: string): boolean {
 function leadingIndentation(text: string, tabSize: number): number {
 	let indentation = 0;
 	for (const character of text) {
-		if (character === " ") {
+		if (character === ' ') {
 			indentation += 1;
-		} else if (character === "\t") {
-			indentation += tabSize - indentation % tabSize;
+		} else if (character === '\t') {
+			indentation += tabSize - (indentation % tabSize);
 		} else {
 			break;
 		}
@@ -67,7 +67,7 @@ function leadingIndentation(text: string, tabSize: number): number {
 function readTabSize(value: number | undefined): number {
 	const tabSize = value ?? 4;
 	if (!Number.isSafeInteger(tabSize) || tabSize < 1 || tabSize > 64) {
-		throw new RangeError("Indent folding tab size must be an integer from 1 through 64");
+		throw new RangeError('Indent folding tab size must be an integer from 1 through 64');
 	}
 	return tabSize;
 }

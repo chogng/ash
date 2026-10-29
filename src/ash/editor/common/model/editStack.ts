@@ -1,6 +1,6 @@
-import { type OffsetTextEdit } from "./historyCoalescing.js";
-import { Selection } from "../core/selection.js";
-import { TextChange } from "../core/textChange.js";
+import { type OffsetTextEdit } from './historyCoalescing.js';
+import { Selection } from '../core/selection.js';
+import { TextChange } from '../core/textChange.js';
 import { EndOfLineSequence } from '../model.js';
 import { UndoRedoGroup } from '../../../platform/undoRedo/common/undoRedo.js';
 
@@ -34,7 +34,7 @@ export class TextModelHistory {
 	constructor(
 		private readonly transactionLimit: number,
 		private readonly textUnitLimit: number,
-	) { }
+	) {}
 
 	get canUndo(): boolean {
 		return this.undoStack.length > 0;
@@ -58,7 +58,9 @@ export class TextModelHistory {
 		this.reset();
 		this.undoStack.push(...snapshot.undo.map(cloneEntry));
 		this.redoStack.push(...snapshot.redo.map(cloneEntry));
-		this.historyTextUnits = this.undoStack.concat(this.redoStack).reduce((total, entry) => total + entry.textUnits, 0);
+		this.historyTextUnits = this.undoStack
+			.concat(this.redoStack)
+			.reduce((total, entry) => total + entry.textUnits, 0);
 		this.stackElementOpen = false;
 		this.trim();
 	}
@@ -84,7 +86,7 @@ export class TextModelHistory {
 
 	beginRevision(historyGroup: UndoRedoGroup): void {
 		if (this.protectedGroup) {
-			throw new Error("A history revision is already active");
+			throw new Error('A history revision is already active');
 		}
 		this.protectedGroup = historyGroup;
 	}
@@ -93,14 +95,10 @@ export class TextModelHistory {
 		this.assertProtectedGroup(historyGroup);
 		this.protectedGroup = undefined;
 		this.trim();
-		return this.undoStack.some(
-			entry => entry.historyGroup === historyGroup,
-		);
+		return this.undoStack.some(entry => entry.historyGroup === historyGroup);
 	}
 
-	getRevisionEntry(
-		historyGroup: UndoRedoGroup,
-	): TextModelHistoryEntry | undefined {
+	getRevisionEntry(historyGroup: UndoRedoGroup): TextModelHistoryEntry | undefined {
 		this.assertProtectedGroup(historyGroup);
 		const entry = this.undoStack[this.undoStack.length - 1];
 		return entry?.historyGroup === historyGroup ? entry : undefined;
@@ -110,15 +108,13 @@ export class TextModelHistory {
 		this.cancelRevision(historyGroup);
 	}
 
-	cancelRevision(
-		historyGroup: UndoRedoGroup,
-	): TextModelHistoryEntry | undefined {
+	cancelRevision(historyGroup: UndoRedoGroup): TextModelHistoryEntry | undefined {
 		this.assertProtectedGroup(historyGroup);
 		this.protectedGroup = undefined;
 		const entry = this.undoStack[this.undoStack.length - 1];
 		if (!entry) return undefined;
 		if (entry.historyGroup !== historyGroup) {
-			throw new Error("The active history revision is not the latest undo step");
+			throw new Error('The active history revision is not the latest undo step');
 		}
 		return this.takeUndo();
 	}
@@ -129,12 +125,9 @@ export class TextModelHistory {
 	): TextModelHistoryEntry | undefined {
 		if (this.redoStack.length > 0) return undefined;
 		const previous = this.undoStack[this.undoStack.length - 1];
-		const canAppend = this.stackElementOpen && (
-			historyGroup === undefined || previous?.historyGroup === historyGroup
-		);
-		return previous && canAppend && accepts(previous)
-			? previous
-			: undefined;
+		const canAppend =
+			this.stackElementOpen && (historyGroup === undefined || previous?.historyGroup === historyGroup);
+		return previous && canAppend && accepts(previous) ? previous : undefined;
 	}
 
 	replaceUndoEntry(
@@ -144,7 +137,7 @@ export class TextModelHistory {
 		afterCursorState: Selection[] | null = previous.afterCursorState,
 	): void {
 		if (this.undoStack[this.undoStack.length - 1] !== previous) {
-			throw new Error("Only the latest undo entry can be replaced");
+			throw new Error('Only the latest undo entry can be replaced');
 		}
 		const replacement = createEntry(
 			edits,
@@ -175,7 +168,19 @@ export class TextModelHistory {
 		afterCursorState: Selection[] | null = null,
 		textChanges: readonly TextChange[] = [],
 	): void {
-		this.push(this.undoStack, edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds, beforeCursorState, afterCursorState, textChanges);
+		this.push(
+			this.undoStack,
+			edits,
+			transactionId,
+			alternativeVersionId,
+			editsEOL,
+			eol,
+			historyGroup,
+			lineIds,
+			beforeCursorState,
+			afterCursorState,
+			textChanges,
+		);
 		this.stackElementOpen = true;
 		this.trim();
 	}
@@ -192,7 +197,19 @@ export class TextModelHistory {
 		afterCursorState: Selection[] | null = null,
 		textChanges: readonly TextChange[] = [],
 	): void {
-		this.push(this.redoStack, edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds, beforeCursorState, afterCursorState, textChanges);
+		this.push(
+			this.redoStack,
+			edits,
+			transactionId,
+			alternativeVersionId,
+			editsEOL,
+			eol,
+			historyGroup,
+			lineIds,
+			beforeCursorState,
+			afterCursorState,
+			textChanges,
+		);
 		this.stackElementOpen = false;
 		this.trim();
 	}
@@ -234,14 +251,23 @@ export class TextModelHistory {
 		afterCursorState: Selection[] | null = null,
 		textChanges: readonly TextChange[] = [],
 	): void {
-		const entry = createEntry(edits, transactionId, alternativeVersionId, editsEOL, eol, historyGroup, lineIds, beforeCursorState, afterCursorState, textChanges);
+		const entry = createEntry(
+			edits,
+			transactionId,
+			alternativeVersionId,
+			editsEOL,
+			eol,
+			historyGroup,
+			lineIds,
+			beforeCursorState,
+			afterCursorState,
+			textChanges,
+		);
 		stack.push(entry);
 		this.historyTextUnits += entry.textUnits;
 	}
 
-	private take(
-		stack: TextModelHistoryEntry[],
-	): TextModelHistoryEntry | undefined {
+	private take(stack: TextModelHistoryEntry[]): TextModelHistoryEntry | undefined {
 		const entry = stack.pop();
 		if (entry) {
 			this.historyTextUnits -= entry.textUnits;
@@ -259,8 +285,7 @@ export class TextModelHistory {
 
 	private trim(): void {
 		while (
-			this.undoStack.length + this.redoStack.length >
-			this.transactionLimit ||
+			this.undoStack.length + this.redoStack.length > this.transactionLimit ||
 			this.historyTextUnits > this.textUnitLimit
 		) {
 			if (
@@ -270,9 +295,7 @@ export class TextModelHistory {
 			) {
 				break;
 			}
-			const stack = this.undoStack.length > 0
-				? this.undoStack
-				: this.redoStack;
+			const stack = this.undoStack.length > 0 ? this.undoStack : this.redoStack;
 			const [removed] = stack.splice(0, 1);
 			this.historyTextUnits -= removed.textUnits;
 		}
@@ -280,7 +303,7 @@ export class TextModelHistory {
 
 	private assertProtectedGroup(historyGroup: UndoRedoGroup): void {
 		if (this.protectedGroup !== historyGroup) {
-			throw new Error("The history revision is no longer active");
+			throw new Error('The history revision is no longer active');
 		}
 	}
 }
@@ -299,11 +322,12 @@ function createEntry(
 ): TextModelHistoryEntry {
 	return Object.freeze({
 		edits: Object.freeze(edits.map(edit => Object.freeze({ ...edit }))),
-		textChanges: Object.freeze(textChanges.map(change => new TextChange(change.oldPosition, change.oldText, change.newPosition, change.newText))),
-		textUnits: edits.reduce(
-			(total, edit) => total + edit.text.length,
-			0,
+		textChanges: Object.freeze(
+			textChanges.map(
+				change => new TextChange(change.oldPosition, change.oldText, change.newPosition, change.newText),
+			),
 		),
+		textUnits: edits.reduce((total, edit) => total + edit.text.length, 0),
 		transactionId,
 		alternativeVersionId,
 		editsEOL,
@@ -318,7 +342,18 @@ function createEntry(
 }
 
 function cloneEntry(entry: TextModelHistoryEntry): TextModelHistoryEntry {
-	return createEntry(entry.edits, entry.transactionId, entry.alternativeVersionId, entry.editsEOL, entry.eol, entry.historyGroup, entry.lineIds, entry.beforeCursorState, entry.afterCursorState, entry.textChanges);
+	return createEntry(
+		entry.edits,
+		entry.transactionId,
+		entry.alternativeVersionId,
+		entry.editsEOL,
+		entry.eol,
+		entry.historyGroup,
+		entry.lineIds,
+		entry.beforeCursorState,
+		entry.afterCursorState,
+		entry.textChanges,
+	);
 }
 
 function cloneSelections(selections: Selection[] | null): Selection[] | null {

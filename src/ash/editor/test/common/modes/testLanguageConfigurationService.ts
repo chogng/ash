@@ -1,6 +1,14 @@
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableStore, type IDisposable } from '../../../../base/common/lifecycle.js';
-import { IndentAction, type CharacterPair, type FoldingMarkers, type IAutoClosingPairConditional, type IndentationRule, type LanguageConfiguration, type OnEnterRule } from '../../../common/languages/languageConfiguration.js';
+import {
+	IndentAction,
+	type CharacterPair,
+	type FoldingMarkers,
+	type IAutoClosingPairConditional,
+	type IndentationRule,
+	type LanguageConfiguration,
+	type OnEnterRule,
+} from '../../../common/languages/languageConfiguration.js';
 import {
 	type ILanguageConfigurationService,
 	LanguageConfigurationRegistry,
@@ -17,9 +25,11 @@ export class TestLanguageConfigurationService extends Disposable implements ILan
 
 	constructor() {
 		super();
-		this._register(this.registry.onDidChange(event => {
-			this.changeEmitter.fire(new LanguageConfigurationServiceChangeEvent(event.languageId));
-		}));
+		this._register(
+			this.registry.onDidChange(event => {
+				this.changeEmitter.fire(new LanguageConfigurationServiceChangeEvent(event.languageId));
+			}),
+		);
 	}
 
 	public registerDefaults(): void {
@@ -54,14 +64,8 @@ const ECMASCRIPT_PAIRS: IAutoClosingPairConditional[] = [
 	autoPair('"', '"', ['string']),
 	autoPair('`', '`', ['string', 'comment']),
 ];
-const JSON_PAIRS: IAutoClosingPairConditional[] = [
-	...pairsFromBrackets(JSON_BRACKETS),
-	autoPair('"', '"', ['string']),
-];
-const RUST_PAIRS: IAutoClosingPairConditional[] = [
-	...pairsFromBrackets(BRACKETS),
-	autoPair('"', '"', ['string']),
-];
+const JSON_PAIRS: IAutoClosingPairConditional[] = [...pairsFromBrackets(JSON_BRACKETS), autoPair('"', '"', ['string'])];
+const RUST_PAIRS: IAutoClosingPairConditional[] = [...pairsFromBrackets(BRACKETS), autoPair('"', '"', ['string'])];
 const ECMASCRIPT_INDENTATION_RULES: IndentationRule = {
 	decreaseIndentPattern: /^\s*[\}\]\)].*$/,
 	increaseIndentPattern: /^.*(\{[^}]*|\([^)]*|\[[^\]]*)$/,
@@ -69,7 +73,8 @@ const ECMASCRIPT_INDENTATION_RULES: IndentationRule = {
 	unIndentedLinePattern: /^(\t|[ ])*[ ]\*[^/]*\*\/\s*$|^(\t|[ ])*[ ]\*\/\s*$|^(\t|[ ])*\*([ ]([^\*]|\*(?!\/))*)?$/,
 };
 const JSON_INDENTATION_RULES: IndentationRule = {
-	increaseIndentPattern: /({+(?=((\\.|[^"\\])*"(\\.|[^"\\])*")*[^"}]*)$)|(\[+(?=((\\.|[^"\\])*"(\\.|[^"\\])*")*[^"\]]*)$)/,
+	increaseIndentPattern:
+		/({+(?=((\\.|[^"\\])*"(\\.|[^"\\])*")*[^"}]*)$)|(\[+(?=((\\.|[^"\\])*"(\\.|[^"\\])*")*[^"\]]*)$)/,
 	decreaseIndentPattern: /^\s*[}\]],?\s*$/,
 };
 const RUST_INDENTATION_RULES: IndentationRule = {
@@ -81,9 +86,15 @@ const LINE_COMMENT_REGION_MARKERS: FoldingMarkers = {
 	end: /^\s*\/\/\s*#?endregion\b/iu,
 };
 const ECMASCRIPT_ON_ENTER_RULES: OnEnterRule[] = [
-	onEnter(/^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/, IndentAction.IndentOutdent, { afterText: /^\s*\*\/$/, appendText: ' * ' }),
+	onEnter(/^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/, IndentAction.IndentOutdent, {
+		afterText: /^\s*\*\/$/,
+		appendText: ' * ',
+	}),
 	onEnter(/^\s*\/\*\*(?!\/)([^\*]|\*(?!\/))*$/, IndentAction.None, { appendText: ' * ' }),
-	onEnter(/^(\t|[ ])*\*([ ]([^\*]|\*(?!\/))*)?$/, IndentAction.None, { previousLineText: /(?=^(\s*(\/\*\*|\*)).*)(?=(?!(\s*\*\/)))/, appendText: '* ' }),
+	onEnter(/^(\t|[ ])*\*([ ]([^\*]|\*(?!\/))*)?$/, IndentAction.None, {
+		previousLineText: /(?=^(\s*(\/\*\*|\*)).*)(?=(?!(\s*\*\/)))/,
+		appendText: '* ',
+	}),
 	onEnter(/^(\t|[ ])*[ ]\*\/\s*$/, IndentAction.None, { removeText: 1 }),
 	onEnter(/^(\t|[ ])*[ ]\*[^/]*\*\/\s*$/, IndentAction.None, { removeText: 1 }),
 	onEnter(/^\s*(\bcase\s.+:|\bdefault:)$/, IndentAction.Indent, { afterText: /^(?!\s*(\bcase\b|\bdefault\b))/ }),
@@ -146,7 +157,8 @@ const RUST_CONFIGURATION: LanguageConfiguration = {
 
 export function registerTestLanguageConfigurations(service: ILanguageConfigurationService): IDisposable {
 	const registrations = new DisposableStore();
-	for (const languageId of ECMASCRIPT_LANGUAGE_IDS) registrations.add(service.register(languageId, ECMASCRIPT_CONFIGURATION));
+	for (const languageId of ECMASCRIPT_LANGUAGE_IDS)
+		registrations.add(service.register(languageId, ECMASCRIPT_CONFIGURATION));
 	registrations.add(service.register('json', JSON_CONFIGURATION));
 	registrations.add(service.register('jsonc', JSONC_CONFIGURATION));
 	registrations.add(service.register('rust', RUST_CONFIGURATION));

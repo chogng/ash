@@ -2,10 +2,30 @@ import { createServer } from 'node:http';
 import { QuickAccess } from '../../../automation/quickaccess.js';
 import { expect, test } from '../../../automation/test.js';
 
-const defaultVisibleModelNames = ['GPT-6.1 Sol', 'Claude Sonnet 5.5', 'Grok 4.7', 'Gemini 3.8 Flash', 'Kimi K3', 'DeepSeek V4.1 Flash', 'GLM-5.3', 'Muse Spark 1.3'];
-const defaultEnabledModelNames = ['GPT-6.1 Sol', 'GPT-6 Luna', 'GPT-6 Astra', 'Claude Sonnet 5.5', 'Claude Opus 5.5', 'Grok 4.7'];
+const defaultVisibleModelNames = [
+	'GPT-6.1 Sol',
+	'Claude Sonnet 5.5',
+	'Grok 4.7',
+	'Gemini 3.8 Flash',
+	'Kimi K3',
+	'DeepSeek V4.1 Flash',
+	'GLM-5.3',
+	'Muse Spark 1.3',
+];
+const defaultEnabledModelNames = [
+	'GPT-6.1 Sol',
+	'GPT-6 Luna',
+	'GPT-6 Astra',
+	'Claude Sonnet 5.5',
+	'Claude Opus 5.5',
+	'Grok 4.7',
+];
 
-test('Models management opens from the command palette with search, accessible help and provider settings', async ({ workbench, target, reloadWorkbench }) => {
+test('Models management opens from the command palette with search, accessible help and provider settings', async ({
+	workbench,
+	target,
+	reloadWorkbench,
+}) => {
 	const page = workbench.page;
 	const commands = new QuickAccess(page);
 	await commands.runCommand('workbench.action.chat.manage');
@@ -15,7 +35,9 @@ test('Models management opens from the command palette with search, accessible h
 	if (target.appServerMode === 'required') {
 		await expect(editor.locator('.ash-models-settings-model-copy > span').first()).toBeVisible();
 		const names = await editor.locator('.ash-models-settings-model-copy > span').allTextContents();
-		for (const name of defaultVisibleModelNames) { expect(names).toContain(name); }
+		for (const name of defaultVisibleModelNames) {
+			expect(names).toContain(name);
+		}
 		const modelRows = editor.locator('.ash-models-settings-model-row');
 		await editor.getByRole('button', { name: 'Collapse All', exact: true }).click();
 		await expect(modelRows).toHaveCount(0);
@@ -31,11 +53,23 @@ test('Models management opens from the command palette with search, accessible h
 		await expect(groupSwitch).not.toHaveAttribute('aria-busy', 'true');
 		await expect(groupSwitch).not.toBeChecked();
 		await expect(groupSwitch).toBeFocused();
-		await expect.poll(() => modelRows.getByRole('switch').evaluateAll(inputs => inputs.every(input => !(input as HTMLInputElement).checked))).toBe(true);
+		await expect
+			.poll(() =>
+				modelRows
+					.getByRole('switch')
+					.evaluateAll(inputs => inputs.every(input => !(input as HTMLInputElement).checked)),
+			)
+			.toBe(true);
 		await groupSwitch.press('Space');
 		await expect(groupSwitch).not.toHaveAttribute('aria-busy', 'true');
 		await expect(groupSwitch).toBeChecked();
-		await expect.poll(() => modelRows.getByRole('switch').evaluateAll(inputs => inputs.every(input => (input as HTMLInputElement).checked))).toBe(true);
+		await expect
+			.poll(() =>
+				modelRows
+					.getByRole('switch')
+					.evaluateAll(inputs => inputs.every(input => (input as HTMLInputElement).checked)),
+			)
+			.toBe(true);
 	}
 	const search = editor.getByRole('searchbox', { name: 'Search models', exact: true });
 	await search.focus();
@@ -62,10 +96,14 @@ test('Models management opens from the command palette with search, accessible h
 		await commands.input.press('Enter');
 		await expect(commands.element).toHaveCount(0);
 		await search.focus();
-		await expect.poll(() => search.locator('..').evaluate(element => {
-			const style = getComputedStyle(element);
-			return style.borderTopStyle === 'solid' && Number.parseFloat(style.borderTopWidth) > 0;
-		})).toBe(true);
+		await expect
+			.poll(() =>
+				search.locator('..').evaluate(element => {
+					const style = getComputedStyle(element);
+					return style.borderTopStyle === 'solid' && Number.parseFloat(style.borderTopWidth) > 0;
+				}),
+			)
+			.toBe(true);
 	}
 	const geometry = await editor.evaluate(element => ({
 		overflow: getComputedStyle(element).overflowY,
@@ -89,63 +127,82 @@ test('Models management opens from the command palette with search, accessible h
 	await expect(restored).toHaveCount(1);
 });
 
-test('Add Models in the chat picker reaches the registered models management editor', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench }) => {
-	const page = workbench.page;
-	if (!await page.locator('.ash-chat-view-pane').isVisible()) { await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar'); }
-	await page.locator('.ash-chat-view-pane .ash-chat-input-model-action').press('ArrowDown');
-	const picker = page.locator('.ash-chat-model-picker');
-	const automatic = picker.getByRole('switch', { name: 'Auto', exact: true });
-	if (await automatic.isChecked()) { await automatic.press('Space'); }
-	await picker.getByRole('menuitem', { name: 'Add Models', exact: true }).click();
-	await expect(picker).toBeHidden();
-	const editor = page.locator('.ash-models-management-editor');
-	await expect(editor).toBeVisible();
-	await expect(editor.getByRole('searchbox', { name: 'Search models', exact: true })).toBeFocused();
-	await expect(editor.getByRole('button', { name: 'Collapse All', exact: true })).toBeEnabled();
-});
+test(
+	'Add Models in the chat picker reaches the registered models management editor',
+	{ tag: ['@browser-app-server', '@electron-app-server'] },
+	async ({ workbench }) => {
+		const page = workbench.page;
+		if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+			await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
+		}
+		await page.locator('.ash-chat-view-pane .ash-chat-input-model-action').press('ArrowDown');
+		const picker = page.locator('.ash-chat-model-picker');
+		const automatic = picker.getByRole('switch', { name: 'Auto', exact: true });
+		if (await automatic.isChecked()) {
+			await automatic.press('Space');
+		}
+		await picker.getByRole('menuitem', { name: 'Add Models', exact: true }).click();
+		await expect(picker).toBeHidden();
+		const editor = page.locator('.ash-models-management-editor');
+		await expect(editor).toBeVisible();
+		await expect(editor.getByRole('searchbox', { name: 'Search models', exact: true })).toBeFocused();
+		await expect(editor.getByRole('button', { name: 'Collapse All', exact: true })).toBeEnabled();
+	},
+);
 
-test('Models Settings saves enabled choices, preserves keyboard focus and restores Chinese help', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
-	let page = workbench.page;
-	await workbench.settingsEditor.openUserSettingsUI();
-	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-	await workbench.settingsEditor.selectGroup('agents');
-	await workbench.settingsEditor.selectCategory('models');
-	const names = settings.locator('.ash-models-settings-model-copy > span');
-	const baseline = defaultVisibleModelNames;
-	await expect(names).toHaveText(baseline);
-	const gemini = settings.getByRole('switch', { name: 'Show Gemini 3.8 Flash in model picker', exact: true });
-	await gemini.focus();
-	await gemini.press('Space');
-	await expect(gemini).toBeChecked();
-	await expect(gemini).not.toHaveAttribute('aria-busy', 'true');
-	await expect(gemini).toBeFocused();
-	await settings.getByRole('button', { name: 'viewall models', exact: true }).click();
-	const search = settings.getByRole('searchbox', { name: 'Search models', exact: true });
-	await search.fill('Gemini');
-	const originalSearchOrder = await names.allTextContents();
-	await search.focus();
-	await search.press('Alt+F2');
-	const accessible = page.getByRole('dialog', { name: 'Accessible View', exact: true });
-	await expect(accessible.getByRole('textbox')).toHaveValue(originalSearchOrder.join('\n'));
-	await accessible.getByRole('button', { name: 'Close', exact: true }).click();
-	await workbench.settingsEditor.selectCategory('general');
-	await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
-	await page.getByRole('option', { name: '简体中文', exact: true }).click();
-	({ workbench } = await restartWorkbench());
-	page = workbench.page;
-	await workbench.settingsEditor.openUserSettingsUI();
-	const chineseSettings = page.locator('.ash-settings-editor');
-	await workbench.settingsEditor.selectGroup('agents');
-	await workbench.settingsEditor.selectCategory('models');
-	const chineseSearch = chineseSettings.getByRole('searchbox', { name: '搜索模型', exact: true });
-	await expect(chineseSettings.getByRole('switch', { name: '在模型选择器中显示Gemini 3.8 Flash', exact: true })).toBeChecked();
-	await chineseSearch.focus();
-	await chineseSearch.press('Alt+F1');
-	await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(/已开启的模型排在前面，两组内部保持目录原序/);
-	await page.keyboard.press('Escape');
-});
+test(
+	'Models Settings saves enabled choices, preserves keyboard focus and restores Chinese help',
+	{ tag: ['@browser-app-server', '@electron-app-server'] },
+	async ({ target, workbench, restartWorkbench }) => {
+		let page = workbench.page;
+		await workbench.settingsEditor.openUserSettingsUI();
+		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+		await workbench.settingsEditor.selectGroup('agents');
+		await workbench.settingsEditor.selectCategory('models');
+		const names = settings.locator('.ash-models-settings-model-copy > span');
+		const baseline = defaultVisibleModelNames;
+		await expect(names).toHaveText(baseline);
+		const gemini = settings.getByRole('switch', { name: 'Show Gemini 3.8 Flash in model picker', exact: true });
+		await gemini.focus();
+		await gemini.press('Space');
+		await expect(gemini).toBeChecked();
+		await expect(gemini).not.toHaveAttribute('aria-busy', 'true');
+		await expect(gemini).toBeFocused();
+		await settings.getByRole('button', { name: 'viewall models', exact: true }).click();
+		const search = settings.getByRole('searchbox', { name: 'Search models', exact: true });
+		await search.fill('Gemini');
+		const originalSearchOrder = await names.allTextContents();
+		await search.focus();
+		await search.press('Alt+F2');
+		const accessible = page.getByRole('dialog', { name: 'Accessible View', exact: true });
+		await expect(accessible.getByRole('textbox')).toHaveValue(originalSearchOrder.join('\n'));
+		await accessible.getByRole('button', { name: 'Close', exact: true }).click();
+		await workbench.settingsEditor.selectCategory('general');
+		await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
+		await page.getByRole('option', { name: '简体中文', exact: true }).click();
+		({ workbench } = await restartWorkbench());
+		page = workbench.page;
+		await workbench.settingsEditor.openUserSettingsUI();
+		const chineseSettings = page.locator('.ash-settings-editor');
+		await workbench.settingsEditor.selectGroup('agents');
+		await workbench.settingsEditor.selectCategory('models');
+		const chineseSearch = chineseSettings.getByRole('searchbox', { name: '搜索模型', exact: true });
+		await expect(
+			chineseSettings.getByRole('switch', { name: '在模型选择器中显示Gemini 3.8 Flash', exact: true }),
+		).toBeChecked();
+		await chineseSearch.focus();
+		await chineseSearch.press('Alt+F1');
+		await expect(page.getByRole('dialog', { name: '无障碍帮助' }).getByRole('textbox')).toHaveValue(
+			/已开启的模型排在前面，两组内部保持目录原序/,
+		);
+		await page.keyboard.press('Escape');
+	},
+);
 
-test('Models Settings offers provider creation with compact fields and keyboard navigation', async ({ workbench, target }) => {
+test('Models Settings offers provider creation with compact fields and keyboard navigation', async ({
+	workbench,
+	target,
+}) => {
 	const page = workbench.page;
 	await workbench.settingsEditor.openUserSettingsUI();
 	const settings = page.getByRole('dialog', { name: 'Ash Settings' });
@@ -158,7 +215,9 @@ test('Models Settings offers provider creation with compact fields and keyboard 
 	await search.focus();
 	await search.press('Alt+F1');
 	const searchHelp = page.getByRole('dialog', { name: 'Accessibility Help' });
-	await expect(searchHelp.getByRole('textbox')).toHaveValue(/Enabled models appear first[\s\S]*Search models filters the full list/);
+	await expect(searchHelp.getByRole('textbox')).toHaveValue(
+		/Enabled models appear first[\s\S]*Search models filters the full list/,
+	);
 	await searchHelp.getByRole('button', { name: 'Close', exact: true }).click();
 	await expect(search).toBeFocused();
 	const heading = settings.locator('.ash-settings-tree-group-title:has(.ash-models-settings-provider-title)');
@@ -202,213 +261,256 @@ test('Models Settings offers provider creation with compact fields and keyboard 
 	await expect(model).toBeFocused();
 });
 
-test('Models Settings saves custom model IDs and keys and tests the configured endpoint', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench }) => {
-	const requests: { path: string; model?: string; key: string | undefined; }[] = [];
-	let rejectDiscovery = false;
-	const server = createServer(async (request, response) => {
-		if (request.method === 'GET') {
-			requests.push({ path: request.url!, key: request.headers.authorization });
-			response.writeHead(rejectDiscovery ? 503 : 200, { 'content-type': 'application/json' });
-			response.end(JSON.stringify({ data: [{ id: 'private-model' }, { id: 'rejected-model' }] }));
-			return;
-		}
-		const chunks: Buffer[] = [];
-		for await (const chunk of request) chunks.push(Buffer.from(chunk));
-		const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string; };
-		requests.push({ path: request.url!, model: body.model, key: request.headers.authorization });
-		if (body.model === 'rejected-model') { response.writeHead(403); response.end(); return; }
-		response.writeHead(200, { 'content-type': 'text/event-stream' });
-		response.end('data: {"id":"probe","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":null}]}\n\ndata: {"id":"probe","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
-	});
-	await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-	try {
-		const address = server.address();
-		if (!address || typeof address === 'string') throw new Error('Test endpoint has no port');
-		const page = workbench.page;
-		await workbench.settingsEditor.openUserSettingsUI();
-		const settings = page.getByRole('dialog', { name: 'Ash Settings' });
-		await workbench.settingsEditor.selectGroup('agents');
-		await workbench.settingsEditor.selectCategory('models');
-		await expect(settings.locator('.ash-models-settings-model-copy > span')).toHaveText(defaultVisibleModelNames);
-		const expand = settings.getByRole('button', { name: 'viewall models', exact: true });
-		await expand.click();
-		await expect(expand).toHaveAttribute('aria-expanded', 'true');
-		const rows = settings.locator('.ash-models-settings-model-row');
-		const enabledRows = rows.filter({ has: page.locator('[role="switch"][aria-checked="true"]') });
-		await expect(enabledRows).toContainText(defaultEnabledModelNames);
-		await expect(enabledRows).toHaveCount(defaultEnabledModelNames.length);
-		await expect(settings.locator('.ash-models-settings-model-row', { hasText: /^GPT-5\.[1-4]/ })).toHaveCount(0);
-		await expect(settings.locator('.ash-models-settings-model-row', { hasText: 'Gemini 3.1 Pro Preview' })).toHaveCount(1);
-		await expect(settings.locator('.ash-models-settings-model-row', { hasText: /Gemini 3\.[1-5].*Flash/ })).toHaveCount(0);
-		await expand.click();
-		await expect(expand).toHaveAttribute('aria-expanded', 'false');
-		const search = settings.getByRole('searchbox', { name: 'Search models', exact: true });
-		await search.fill('openai/gpt-6-astra');
-		await expect(rows).toHaveCount(1);
-		await expect(rows).toContainText(['GPT-6 Astra']);
-		await expect(search).toBeFocused();
-		await search.fill('SONNET 5.5');
-		await expect(rows).toHaveCount(1);
-		await expect(rows).toContainText(['Claude Sonnet 5.5']);
-		await search.fill('no-such-model');
-		await expect(rows).toHaveCount(0);
-		await expect(settings.getByRole('status').filter({ hasText: 'No models found.' })).toBeVisible();
-		await expect(settings.locator('.ash-models-settings-api-row').first()).toBeVisible();
-		await search.fill('Gemini 3.1 Pro');
-		const gemini = rows.getByRole('switch');
-		await expect(gemini).not.toBeChecked();
-		await gemini.focus();
-		await gemini.press('Space');
-		await expect(gemini).toBeChecked();
-		await search.fill('');
-		await expect(rows).toHaveCount(defaultVisibleModelNames.length);
-		const builtins = settings.locator('.ash-models-settings-api-row h5');
-		await expect(builtins).not.toContainText(['OpenAI-compatible']);
-		await settings.getByRole('button', { name: 'New provider', exact: true }).click();
-		const card = settings.locator('.ash-chat-models-widget').first();
-		await card.getByRole('textbox', { name: 'Provider name', exact: true }).fill('Local test gateway');
-		const url = card.getByRole('textbox', { name: 'Base URL', exact: true });
-		await url.fill(`http://127.0.0.1:${address.port}/v1`);
-		await url.press('Tab');
-		const key = card.locator('input[type="password"]');
-		await key.fill('isolated-test-key');
-		await key.press('Tab');
-		await expect(key).toHaveValue('••••••••');
-		await card.getByRole('combobox', { name: 'API format' }).click();
-		await page.getByRole('option', { name: 'OpenAI Chat Completions', exact: true }).click();
-		const testModels = card.getByRole('button', { name: 'Test models', exact: true });
-		await testModels.click();
-		const table = card.getByRole('table', { name: 'Provider models' });
-		const privateRow = table.locator('tr[data-model-id="private-model"]');
-		const rejectedRow = table.locator('tr[data-model-id="rejected-model"]');
-		await expect(privateRow.locator('.ash-chat-models-test-status')).toHaveClass(/passed/);
-		await expect(rejectedRow).toContainText('Model test failed');
-		await expect(card.getByRole('status')).toContainText('1 of 2 models passed');
-		await expect(page.locator('.ash-notification', { hasText: '1 of 2 models passed' })).toBeVisible();
-		expect(requests.filter(request => request.path === '/v1/models')).toHaveLength(1);
-		expect(requests.filter(request => request.model).map(request => request.model)).toEqual(['private-model', 'rejected-model']);
-		for (const [theme, id] of [['Ash High Contrast Dark', 'ash-high-contrast-dark'], ['Ash High Contrast Light', 'ash-high-contrast-light']]) {
-			await workbench.quickaccess.runCommand('workbench.action.selectTheme');
-			const themeSearch = page.locator('.ash-quick-pick').getByRole('combobox');
-			await themeSearch.fill(theme);
-			await themeSearch.press('Enter');
-			await expect(page.locator('#app')).toHaveAttribute('data-color-theme', id);
-			const statusStyles = await table.locator('.ash-chat-models-test-status').evaluateAll(elements => elements.map(element => {
-				const dot = getComputedStyle(element, '::before');
-				return { color: dot.backgroundColor, border: dot.borderStyle, width: parseFloat(dot.width) };
-			}));
-			expect(statusStyles[0]!.color).not.toBe(statusStyles[1]!.color);
-			for (const style of statusStyles) {
-				expect(style.border).toBe('solid');
-				expect(style.width).toBeGreaterThan(0);
+test(
+	'Models Settings saves custom model IDs and keys and tests the configured endpoint',
+	{ tag: ['@browser-app-server', '@electron-app-server'] },
+	async ({ target, workbench }) => {
+		const requests: { path: string; model?: string; key: string | undefined }[] = [];
+		let rejectDiscovery = false;
+		const server = createServer(async (request, response) => {
+			if (request.method === 'GET') {
+				requests.push({ path: request.url!, key: request.headers.authorization });
+				response.writeHead(rejectDiscovery ? 503 : 200, { 'content-type': 'application/json' });
+				response.end(JSON.stringify({ data: [{ id: 'private-model' }, { id: 'rejected-model' }] }));
+				return;
 			}
-			await card.getByRole('button', { name: 'Refresh models', exact: true }).focus();
-			await page.keyboard.press('Tab');
-			const addModel = card.getByRole('button', { name: 'Add model', exact: true });
-			await expect(addModel).toBeFocused();
-			await expect(addModel).toHaveCSS('outline-style', 'solid');
-			const tableBounds = await table.boundingBox();
-			const cardBounds = await card.boundingBox();
-			expect(tableBounds!.x + tableBounds!.width).toBeLessThanOrEqual(cardBounds!.x + cardBounds!.width);
-		}
+			const chunks: Buffer[] = [];
+			for await (const chunk of request) chunks.push(Buffer.from(chunk));
+			const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { model: string };
+			requests.push({ path: request.url!, model: body.model, key: request.headers.authorization });
+			if (body.model === 'rejected-model') {
+				response.writeHead(403);
+				response.end();
+				return;
+			}
+			response.writeHead(200, { 'content-type': 'text/event-stream' });
+			response.end(
+				'data: {"id":"probe","object":"chat.completion.chunk","choices":[{"index":0,"delta":{"content":"OK"},"finish_reason":null}]}\n\ndata: {"id":"probe","object":"chat.completion.chunk","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+			);
+		});
+		await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+		try {
+			const address = server.address();
+			if (!address || typeof address === 'string') throw new Error('Test endpoint has no port');
+			const page = workbench.page;
+			await workbench.settingsEditor.openUserSettingsUI();
+			const settings = page.getByRole('dialog', { name: 'Ash Settings' });
+			await workbench.settingsEditor.selectGroup('agents');
+			await workbench.settingsEditor.selectCategory('models');
+			await expect(settings.locator('.ash-models-settings-model-copy > span')).toHaveText(
+				defaultVisibleModelNames,
+			);
+			const expand = settings.getByRole('button', { name: 'viewall models', exact: true });
+			await expand.click();
+			await expect(expand).toHaveAttribute('aria-expanded', 'true');
+			const rows = settings.locator('.ash-models-settings-model-row');
+			const enabledRows = rows.filter({ has: page.locator('[role="switch"][aria-checked="true"]') });
+			await expect(enabledRows).toContainText(defaultEnabledModelNames);
+			await expect(enabledRows).toHaveCount(defaultEnabledModelNames.length);
+			await expect(settings.locator('.ash-models-settings-model-row', { hasText: /^GPT-5\.[1-4]/ })).toHaveCount(
+				0,
+			);
+			await expect(
+				settings.locator('.ash-models-settings-model-row', { hasText: 'Gemini 3.1 Pro Preview' }),
+			).toHaveCount(1);
+			await expect(
+				settings.locator('.ash-models-settings-model-row', { hasText: /Gemini 3\.[1-5].*Flash/ }),
+			).toHaveCount(0);
+			await expand.click();
+			await expect(expand).toHaveAttribute('aria-expanded', 'false');
+			const search = settings.getByRole('searchbox', { name: 'Search models', exact: true });
+			await search.fill('openai/gpt-6-astra');
+			await expect(rows).toHaveCount(1);
+			await expect(rows).toContainText(['GPT-6 Astra']);
+			await expect(search).toBeFocused();
+			await search.fill('SONNET 5.5');
+			await expect(rows).toHaveCount(1);
+			await expect(rows).toContainText(['Claude Sonnet 5.5']);
+			await search.fill('no-such-model');
+			await expect(rows).toHaveCount(0);
+			await expect(settings.getByRole('status').filter({ hasText: 'No models found.' })).toBeVisible();
+			await expect(settings.locator('.ash-models-settings-api-row').first()).toBeVisible();
+			await search.fill('Gemini 3.1 Pro');
+			const gemini = rows.getByRole('switch');
+			await expect(gemini).not.toBeChecked();
+			await gemini.focus();
+			await gemini.press('Space');
+			await expect(gemini).toBeChecked();
+			await search.fill('');
+			await expect(rows).toHaveCount(defaultVisibleModelNames.length);
+			const builtins = settings.locator('.ash-models-settings-api-row h5');
+			await expect(builtins).not.toContainText(['OpenAI-compatible']);
+			await settings.getByRole('button', { name: 'New provider', exact: true }).click();
+			const card = settings.locator('.ash-chat-models-widget').first();
+			await card.getByRole('textbox', { name: 'Provider name', exact: true }).fill('Local test gateway');
+			const url = card.getByRole('textbox', { name: 'Base URL', exact: true });
+			await url.fill(`http://127.0.0.1:${address.port}/v1`);
+			await url.press('Tab');
+			const key = card.locator('input[type="password"]');
+			await key.fill('isolated-test-key');
+			await key.press('Tab');
+			await expect(key).toHaveValue('••••••••');
+			await card.getByRole('combobox', { name: 'API format' }).click();
+			await page.getByRole('option', { name: 'OpenAI Chat Completions', exact: true }).click();
+			const testModels = card.getByRole('button', { name: 'Test models', exact: true });
+			await testModels.click();
+			const table = card.getByRole('table', { name: 'Provider models' });
+			const privateRow = table.locator('tr[data-model-id="private-model"]');
+			const rejectedRow = table.locator('tr[data-model-id="rejected-model"]');
+			await expect(privateRow.locator('.ash-chat-models-test-status')).toHaveClass(/passed/);
+			await expect(rejectedRow).toContainText('Model test failed');
+			await expect(card.getByRole('status')).toContainText('1 of 2 models passed');
+			await expect(page.locator('.ash-notification', { hasText: '1 of 2 models passed' })).toBeVisible();
+			expect(requests.filter(request => request.path === '/v1/models')).toHaveLength(1);
+			expect(requests.filter(request => request.model).map(request => request.model)).toEqual([
+				'private-model',
+				'rejected-model',
+			]);
+			for (const [theme, id] of [
+				['Ash High Contrast Dark', 'ash-high-contrast-dark'],
+				['Ash High Contrast Light', 'ash-high-contrast-light'],
+			]) {
+				await workbench.quickaccess.runCommand('workbench.action.selectTheme');
+				const themeSearch = page.locator('.ash-quick-pick').getByRole('combobox');
+				await themeSearch.fill(theme);
+				await themeSearch.press('Enter');
+				await expect(page.locator('#app')).toHaveAttribute('data-color-theme', id);
+				const statusStyles = await table.locator('.ash-chat-models-test-status').evaluateAll(elements =>
+					elements.map(element => {
+						const dot = getComputedStyle(element, '::before');
+						return { color: dot.backgroundColor, border: dot.borderStyle, width: parseFloat(dot.width) };
+					}),
+				);
+				expect(statusStyles[0]!.color).not.toBe(statusStyles[1]!.color);
+				for (const style of statusStyles) {
+					expect(style.border).toBe('solid');
+					expect(style.width).toBeGreaterThan(0);
+				}
+				await card.getByRole('button', { name: 'Refresh models', exact: true }).focus();
+				await page.keyboard.press('Tab');
+				const addModel = card.getByRole('button', { name: 'Add model', exact: true });
+				await expect(addModel).toBeFocused();
+				await expect(addModel).toHaveCSS('outline-style', 'solid');
+				const tableBounds = await table.boundingBox();
+				const cardBounds = await card.boundingBox();
+				expect(tableBounds!.x + tableBounds!.width).toBeLessThanOrEqual(cardBounds!.x + cardBounds!.width);
+			}
 
-		const enabled = privateRow.getByRole('switch', { name: 'Enable private-model', exact: true });
-		await expect(enabled).not.toBeChecked();
-		await enabled.focus();
-		await enabled.press('Space');
-		await expect(enabled).toBeChecked();
-		await testModels.click();
-		await expect(testModels).toBeEnabled();
-		expect(requests.filter(request => request.path === '/v1/models')).toHaveLength(1);
-		await expect(enabled).toBeChecked();
-		await card.getByRole('button', { name: 'Refresh models', exact: true }).click();
-		await expect(card.getByRole('status')).toContainText('2 models loaded');
-		await expect(enabled).toBeChecked();
-		await card.getByRole('button', { name: 'Edit context for private-model', exact: true }).click();
-		const context = card.getByRole('switch', { name: '1M context', exact: true });
-		await context.focus();
-		await context.press('Space');
-		await card.getByRole('button', { name: 'Save model', exact: true }).click();
-		await expect(privateRow).toContainText('1,000,000 tokens');
-		await expect(card.getByRole('button', { name: 'Delete model private-model', exact: true })).toBeVisible();
-		await card.getByRole('button', { name: 'Add model', exact: true }).click();
-		await card.getByRole('textbox', { name: 'Model ID', exact: true }).fill('manual-model');
-		await card.getByRole('textbox', { name: 'Upstream Model ID (optional)', exact: true }).fill('private-model');
-		await card.getByRole('spinbutton', { name: 'Context window (tokens)', exact: true }).fill('128000');
-		await card.getByRole('button', { name: 'Save model', exact: true }).click();
-		const manualRow = table.locator('tr[data-model-id="manual-model"]');
-		await expect(manualRow).toContainText('128,000 tokens');
-		await expect(manualRow.getByRole('switch')).not.toBeChecked();
-		const beforeMappedTest = requests.length;
-		await testModels.click();
-		await expect(card.getByRole('status')).toContainText('2 of 3 models passed');
-		expect(requests.slice(beforeMappedTest).map(request => request.model)).toEqual(['private-model', 'rejected-model', 'private-model']);
-		rejectDiscovery = true;
-		await card.getByRole('button', { name: 'Refresh models', exact: true }).click();
-		await expect(card.getByRole('status')).toContainText('Could not update Local test gateway');
-		await expect(table.locator('tbody tr')).toHaveCount(3);
-		await expect(page.locator('.ash-notification', { hasText: 'Could not update Local test gateway' })).toBeVisible();
-		rejectDiscovery = false;
-		await settings.locator('.ash-modal-editor-close').click();
-		await expect(settings).not.toBeVisible();
+			const enabled = privateRow.getByRole('switch', { name: 'Enable private-model', exact: true });
+			await expect(enabled).not.toBeChecked();
+			await enabled.focus();
+			await enabled.press('Space');
+			await expect(enabled).toBeChecked();
+			await testModels.click();
+			await expect(testModels).toBeEnabled();
+			expect(requests.filter(request => request.path === '/v1/models')).toHaveLength(1);
+			await expect(enabled).toBeChecked();
+			await card.getByRole('button', { name: 'Refresh models', exact: true }).click();
+			await expect(card.getByRole('status')).toContainText('2 models loaded');
+			await expect(enabled).toBeChecked();
+			await card.getByRole('button', { name: 'Edit context for private-model', exact: true }).click();
+			const context = card.getByRole('switch', { name: '1M context', exact: true });
+			await context.focus();
+			await context.press('Space');
+			await card.getByRole('button', { name: 'Save model', exact: true }).click();
+			await expect(privateRow).toContainText('1,000,000 tokens');
+			await expect(card.getByRole('button', { name: 'Delete model private-model', exact: true })).toBeVisible();
+			await card.getByRole('button', { name: 'Add model', exact: true }).click();
+			await card.getByRole('textbox', { name: 'Model ID', exact: true }).fill('manual-model');
+			await card
+				.getByRole('textbox', { name: 'Upstream Model ID (optional)', exact: true })
+				.fill('private-model');
+			await card.getByRole('spinbutton', { name: 'Context window (tokens)', exact: true }).fill('128000');
+			await card.getByRole('button', { name: 'Save model', exact: true }).click();
+			const manualRow = table.locator('tr[data-model-id="manual-model"]');
+			await expect(manualRow).toContainText('128,000 tokens');
+			await expect(manualRow.getByRole('switch')).not.toBeChecked();
+			const beforeMappedTest = requests.length;
+			await testModels.click();
+			await expect(card.getByRole('status')).toContainText('2 of 3 models passed');
+			expect(requests.slice(beforeMappedTest).map(request => request.model)).toEqual([
+				'private-model',
+				'rejected-model',
+				'private-model',
+			]);
+			rejectDiscovery = true;
+			await card.getByRole('button', { name: 'Refresh models', exact: true }).click();
+			await expect(card.getByRole('status')).toContainText('Could not update Local test gateway');
+			await expect(table.locator('tbody tr')).toHaveCount(3);
+			await expect(
+				page.locator('.ash-notification', { hasText: 'Could not update Local test gateway' }),
+			).toBeVisible();
+			rejectDiscovery = false;
+			await settings.locator('.ash-modal-editor-close').click();
+			await expect(settings).not.toBeVisible();
+			await workbench.settingsEditor.openUserSettingsUI();
+			await workbench.settingsEditor.selectGroup('agents');
+			await workbench.settingsEditor.selectCategory('models');
+			await search.fill('Gemini 3.1 Pro');
+			await expect(rows.getByRole('switch')).toBeChecked();
+			await search.fill('');
+			await expect(card.getByRole('textbox', { name: 'Provider name', exact: true })).toHaveValue(
+				'Local test gateway',
+			);
+			await expect(key).toHaveValue('••••••••');
+			await expect(enabled).toBeChecked();
+			await expect(privateRow).toContainText('1,000,000 tokens');
+			await expect(manualRow).toContainText('128,000 tokens');
+			await card.getByRole('button', { name: 'Edit context for manual-model', exact: true }).click();
+			await expect(card.getByRole('textbox', { name: 'Upstream Model ID (optional)', exact: true })).toHaveValue(
+				'private-model',
+			);
+			await card.getByRole('button', { name: 'Cancel', exact: true }).click();
+			await card.getByRole('button', { name: 'Delete model manual-model', exact: true }).click();
+			await expect(manualRow).toHaveCount(0);
+			await card.getByRole('button', { name: 'Delete model private-model', exact: true }).click();
+			await expect(privateRow).toHaveCount(1);
+			await expect(enabled).not.toBeChecked();
+			await expect(card.getByRole('button', { name: 'Delete model private-model', exact: true })).toHaveCount(0);
+			await key.fill('');
+			await key.press('Tab');
+			await expect(key).toHaveValue('');
+			await testModels.click();
+			await expect(testModels).toBeEnabled();
+			expect(requests.filter(request => request.model).at(-2)?.key).toBeUndefined();
+		} finally {
+			await new Promise<void>((resolve, reject) => server.close(error => (error ? reject(error) : resolve())));
+		}
+	},
+);
+
+test(
+	'Model descriptions retain provider copy after restarting in Chinese',
+	{ tag: ['@browser-app-server', '@electron-app-server'] },
+	async ({ target, workbench, restartWorkbench }) => {
+		const openModelCard = async (chinese: boolean): Promise<void> => {
+			const page = workbench.page;
+			if (!(await page.locator('.ash-chat-view-pane').isVisible())) {
+				await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
+			}
+			await page.locator('.ash-chat-view-pane .ash-chat-input-model-action').press('ArrowDown');
+			const picker = page.locator('.ash-chat-model-picker');
+			const automatic = picker.getByRole('switch', { name: chinese ? '自动' : 'Auto', exact: true });
+			if (await automatic.isChecked()) {
+				await automatic.press('Space');
+			}
+			const search = picker.getByRole('combobox');
+			await search.fill('GPT-6.1 Sol');
+			await search.press('ArrowRight');
+			const card = picker.getByRole('region', { name: 'GPT-6.1 Sol', exact: true });
+			await expect(card).toBeFocused();
+			await expect(card).toHaveText('Latest workhorse model for coding and everyday work.');
+			await expect(card.getByRole('switch')).toHaveCount(0);
+			await card.press('Escape');
+		};
+		await openModelCard(false);
 		await workbench.settingsEditor.openUserSettingsUI();
 		await workbench.settingsEditor.selectGroup('agents');
-		await workbench.settingsEditor.selectCategory('models');
-		await search.fill('Gemini 3.1 Pro');
-		await expect(rows.getByRole('switch')).toBeChecked();
-		await search.fill('');
-		await expect(card.getByRole('textbox', { name: 'Provider name', exact: true })).toHaveValue('Local test gateway');
-		await expect(key).toHaveValue('••••••••');
-		await expect(enabled).toBeChecked();
-		await expect(privateRow).toContainText('1,000,000 tokens');
-		await expect(manualRow).toContainText('128,000 tokens');
-		await card.getByRole('button', { name: 'Edit context for manual-model', exact: true }).click();
-		await expect(card.getByRole('textbox', { name: 'Upstream Model ID (optional)', exact: true })).toHaveValue('private-model');
-		await card.getByRole('button', { name: 'Cancel', exact: true }).click();
-		await card.getByRole('button', { name: 'Delete model manual-model', exact: true }).click();
-		await expect(manualRow).toHaveCount(0);
-		await card.getByRole('button', { name: 'Delete model private-model', exact: true }).click();
-		await expect(privateRow).toHaveCount(1);
-		await expect(enabled).not.toBeChecked();
-		await expect(card.getByRole('button', { name: 'Delete model private-model', exact: true })).toHaveCount(0);
-		await key.fill('');
-		await key.press('Tab');
-		await expect(key).toHaveValue('');
-		await testModels.click();
-		await expect(testModels).toBeEnabled();
-		expect(requests.filter(request => request.model).at(-2)?.key).toBeUndefined();
-	} finally {
-		await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
-	}
-});
-
-
-test('Model descriptions retain provider copy after restarting in Chinese', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, workbench, restartWorkbench }) => {
-	const openModelCard = async (chinese: boolean): Promise<void> => {
-		const page = workbench.page;
-		if (!await page.locator('.ash-chat-view-pane').isVisible()) {
-			await workbench.quickaccess.runCommand('workbench.action.toggleAuxiliaryBar');
-		}
-		await page.locator('.ash-chat-view-pane .ash-chat-input-model-action').press('ArrowDown');
-		const picker = page.locator('.ash-chat-model-picker');
-		const automatic = picker.getByRole('switch', { name: chinese ? '自动' : 'Auto', exact: true });
-		if (await automatic.isChecked()) { await automatic.press('Space'); }
-		const search = picker.getByRole('combobox');
-		await search.fill('GPT-6.1 Sol');
-		await search.press('ArrowRight');
-		const card = picker.getByRole('region', { name: 'GPT-6.1 Sol', exact: true });
-		await expect(card).toBeFocused();
-		await expect(card).toHaveText('Latest workhorse model for coding and everyday work.');
-		await expect(card.getByRole('switch')).toHaveCount(0);
-		await card.press('Escape');
-	};
-	await openModelCard(false);
-	await workbench.settingsEditor.openUserSettingsUI();
-	await workbench.settingsEditor.selectGroup('agents');
-	await workbench.settingsEditor.selectCategory('general');
-	const settings = workbench.page.getByRole('dialog', { name: 'Ash Settings' });
-	await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
-	await workbench.page.getByRole('option', { name: '简体中文', exact: true }).click();
-	({ workbench } = await restartWorkbench());
-	await openModelCard(true);
-});
+		await workbench.settingsEditor.selectCategory('general');
+		const settings = workbench.page.getByRole('dialog', { name: 'Ash Settings' });
+		await settings.getByRole('combobox', { name: 'Interface language', exact: true }).click();
+		await workbench.page.getByRole('option', { name: '简体中文', exact: true }).click();
+		({ workbench } = await restartWorkbench());
+		await openModelCard(true);
+	},
+);

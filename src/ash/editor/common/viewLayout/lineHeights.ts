@@ -37,14 +37,23 @@ export class LineHeightsManager {
 		for (const data of customLineHeightData) this.ranges.set(data.decorationId, data);
 	}
 
-	set defaultLineHeight(value: number) { this.lineHeight = value; }
-	get defaultLineHeight(): number { return this.lineHeight; }
+	set defaultLineHeight(value: number) {
+		this.lineHeight = value;
+	}
+	get defaultLineHeight(): number {
+		return this.lineHeight;
+	}
 
 	removeCustomLineHeight(decorationId: string): void {
 		this.ranges.delete(decorationId);
 	}
 
-	insertOrChangeCustomLineHeight(decorationId: string, startLineNumber: number, endLineNumber: number, lineHeight: number): void {
+	insertOrChangeCustomLineHeight(
+		decorationId: string,
+		startLineNumber: number,
+		endLineNumber: number,
+		lineHeight: number,
+	): void {
 		const start = Math.max(1, Math.min(startLineNumber, endLineNumber));
 		const end = Math.max(start, Math.max(startLineNumber, endLineNumber));
 		this.ranges.set(decorationId, new CustomLineHeightData(decorationId, start, end, lineHeight));
@@ -110,7 +119,10 @@ export class LineHeightsManager {
 			if (from <= range.startLineNumber) {
 				this.ranges.set(id, moveRange(range, count));
 			} else if (from <= range.endLineNumber) {
-				this.ranges.set(id, new CustomLineHeightData(id, range.startLineNumber, range.endLineNumber + count, range.lineHeight));
+				this.ranges.set(
+					id,
+					new CustomLineHeightData(id, range.startLineNumber, range.endLineNumber + count, range.lineHeight),
+				);
 			}
 		}
 	}
@@ -122,9 +134,13 @@ export class CustomLineHeightData {
 		readonly startLineNumber: number,
 		readonly endLineNumber: number,
 		readonly lineHeight: number,
-	) { }
+	) {}
 
-	static fromDecorations(decorations: IModelDecoration[], coordinatesConverter: ICoordinatesConverter, configuration: IEditorConfiguration): CustomLineHeightData[] {
+	static fromDecorations(
+		decorations: IModelDecoration[],
+		coordinatesConverter: ICoordinatesConverter,
+		configuration: IEditorConfiguration,
+	): CustomLineHeightData[] {
 		const baseHeight = configuration.options.get(EditorOption.lineHeight);
 		return decorations.map(decoration => {
 			const range = coordinatesConverter.convertModelRangeToViewRange(decoration.range);
@@ -139,5 +155,10 @@ export class CustomLineHeightData {
 }
 
 function moveRange(range: CustomLineHeightData, delta: number): CustomLineHeightData {
-	return new CustomLineHeightData(range.decorationId, range.startLineNumber + delta, range.endLineNumber + delta, range.lineHeight);
+	return new CustomLineHeightData(
+		range.decorationId,
+		range.startLineNumber + delta,
+		range.endLineNumber + delta,
+		range.lineHeight,
+	);
 }

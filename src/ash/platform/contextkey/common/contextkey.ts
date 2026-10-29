@@ -1,4 +1,4 @@
-import type { Event } from "../../../base/common/event.js";
+import type { Event } from '../../../base/common/event.js';
 import { createDecorator } from '../../instantiation/common/instantiation.js';
 import { localize } from '../../../nls.js';
 import { isWindows } from '../../../base/common/platform.js';
@@ -9,7 +9,8 @@ import { Scanner, TokenType, type Token, type LexingError } from './scanner.js';
 
 export const IContextKeyService = createDecorator<IContextKeyService>('contextKeyService');
 
-export type ContextKeyValue = boolean | string | number | null | undefined | readonly unknown[] | Readonly<Record<string, unknown>>;
+export type ContextKeyValue =
+	boolean | string | number | null | undefined | readonly unknown[] | Readonly<Record<string, unknown>>;
 
 /** Read-only values used to evaluate action and keybinding conditions. */
 export interface Context {
@@ -45,13 +46,8 @@ export interface IContextKey<T extends ContextKeyValue> {
 export interface IContextKeyService extends Context {
 	readonly onDidChangeContext: Event<ContextKeyChangeEvent>;
 
-	contextMatchesRules(
-		expression: ContextKeyExpression | undefined,
-	): boolean;
-	createKey<T extends ContextKeyValue>(
-		key: string,
-		defaultValue: T,
-	): IContextKey<T>;
+	contextMatchesRules(expression: ContextKeyExpression | undefined): boolean;
+	createKey<T extends ContextKeyValue>(key: string, defaultValue: T): IContextKey<T>;
 	getContext(): Context;
 	bufferChangeEvents(callback: () => void): void;
 	setContext(key: string, value: ContextKeyValue): void;
@@ -66,7 +62,7 @@ export class RawContextKey<T extends ContextKeyValue> {
 		readonly key: string,
 		readonly defaultValue: T,
 	) {
-		if (!key) throw new TypeError("Context key must not be empty");
+		if (!key) throw new TypeError('Context key must not be empty');
 	}
 
 	bindTo(service: IContextKeyService): IContextKey<T> {
@@ -83,9 +79,11 @@ class Expression implements ContextKeyExpression {
 		readonly evaluate: (context: Context) => boolean,
 		readonly keys: () => ReadonlySet<string>,
 		private readonly text: string,
-	) { }
+	) {}
 
-	serialize(): string { return this.text; }
+	serialize(): string {
+		return this.text;
+	}
 }
 
 /** Factory functions for context expressions used by contributions. */
@@ -95,16 +93,24 @@ export const ContextKeyExpr = {
 	},
 
 	true(): ContextKeyExpression {
-		return new Expression(() => true, () => new Set(), 'true');
+		return new Expression(
+			() => true,
+			() => new Set(),
+			'true',
+		);
 	},
 
 	false(): ContextKeyExpression {
-		return new Expression(() => false, () => new Set(), 'false');
+		return new Expression(
+			() => false,
+			() => new Set(),
+			'false',
+		);
 	},
 
 	has(key: string): ContextKeyExpression {
 		return new Expression(
-			(context) => Boolean(context.getValue(key)),
+			context => Boolean(context.getValue(key)),
 			() => new Set([key]),
 			key,
 		);
@@ -112,7 +118,7 @@ export const ContextKeyExpr = {
 
 	not(key: string): ContextKeyExpression {
 		return new Expression(
-			(context) => !context.getValue(key),
+			context => !context.getValue(key),
 			() => new Set([key]),
 			`!${key}`,
 		);
@@ -124,7 +130,7 @@ export const ContextKeyExpr = {
 		}
 		return new Expression(
 			// When clauses compare numeric text and numeric context values equivalently.
-			(context) => context.getValue(key) == value,
+			context => context.getValue(key) == value,
 			() => new Set([key]),
 			`${key} == ${JSON.stringify(value)}`,
 		);
@@ -133,7 +139,7 @@ export const ContextKeyExpr = {
 	notEquals(key: string, value: ContextKeyValue): ContextKeyExpression {
 		const expression = this.equals(key, value);
 		return new Expression(
-			(context) => !expression.evaluate(context),
+			context => !expression.evaluate(context),
 			() => new Set([key]),
 			typeof value === 'boolean' ? (value ? `!${key}` : key) : `${key} != ${JSON.stringify(value)}`,
 		);
@@ -142,26 +148,38 @@ export const ContextKeyExpr = {
 	regex(key: string, value: RegExp): ContextKeyExpression {
 		// Global and sticky flags carry mutable match state across evaluations.
 		const regexp = new RegExp(value.source, value.flags.replace(/[gy]/gu, ''));
-		return new Expression(context => regexp.test(String(context.getValue(key))), () => new Set([key]), `${key} =~ ${regexp}`);
+		return new Expression(
+			context => regexp.test(String(context.getValue(key))),
+			() => new Set([key]),
+			`${key} =~ ${regexp}`,
+		);
 	},
 
 	in(key: string, valueKey: string): ContextKeyExpression {
-		return new Expression(context => {
-			const value = context.getValue(key);
-			const collection = context.getValue(valueKey);
-			if (Array.isArray(collection)) {
-				return collection.some(candidate => membershipValueEquals(value, candidate));
-			}
-			if (collection === null || typeof collection !== 'object' || typeof value !== 'string') {
-				return false;
-			}
-			return Object.keys(collection).some(candidate => membershipValueEquals(value, candidate));
-		}, () => new Set([key, valueKey]), `${key} in ${valueKey}`);
+		return new Expression(
+			context => {
+				const value = context.getValue(key);
+				const collection = context.getValue(valueKey);
+				if (Array.isArray(collection)) {
+					return collection.some(candidate => membershipValueEquals(value, candidate));
+				}
+				if (collection === null || typeof collection !== 'object' || typeof value !== 'string') {
+					return false;
+				}
+				return Object.keys(collection).some(candidate => membershipValueEquals(value, candidate));
+			},
+			() => new Set([key, valueKey]),
+			`${key} in ${valueKey}`,
+		);
 	},
 
 	notIn(key: string, valueKey: string): ContextKeyExpression {
 		const expression = this.in(key, valueKey);
-		return new Expression(context => !expression.evaluate(context), () => expression.keys(), `${key} not in ${valueKey}`);
+		return new Expression(
+			context => !expression.evaluate(context),
+			() => expression.keys(),
+			`${key} not in ${valueKey}`,
+		);
 	},
 
 	greater(key: string, value: number | string): ContextKeyExpression {
@@ -180,32 +198,16 @@ export const ContextKeyExpr = {
 		return numericComparison(key, value, (left, right) => left <= right, '<=');
 	},
 
-	and(
-		...expressions: readonly (ContextKeyExpression | undefined)[]
-	): ContextKeyExpression | undefined {
-		const defined = expressions.filter(
-			(expression): expression is ContextKeyExpression => Boolean(expression),
-		);
+	and(...expressions: readonly (ContextKeyExpression | undefined)[]): ContextKeyExpression | undefined {
+		const defined = expressions.filter((expression): expression is ContextKeyExpression => Boolean(expression));
 		if (defined.length === 0) return undefined;
-		return combineExpressions(
-			defined,
-			(context) => defined.every((expression) => expression.evaluate(context)),
-			'&&',
-		);
+		return combineExpressions(defined, context => defined.every(expression => expression.evaluate(context)), '&&');
 	},
 
-	or(
-		...expressions: readonly (ContextKeyExpression | undefined)[]
-	): ContextKeyExpression | undefined {
-		const defined = expressions.filter(
-			(expression): expression is ContextKeyExpression => Boolean(expression),
-		);
+	or(...expressions: readonly (ContextKeyExpression | undefined)[]): ContextKeyExpression | undefined {
+		const defined = expressions.filter((expression): expression is ContextKeyExpression => Boolean(expression));
 		if (defined.length === 0) return undefined;
-		return combineExpressions(
-			defined,
-			(context) => defined.some((expression) => expression.evaluate(context)),
-			'||',
-		);
+		return combineExpressions(defined, context => defined.some(expression => expression.evaluate(context)), '||');
 	},
 };
 
@@ -218,26 +220,44 @@ function combineExpressions(
 	for (const expression of expressions) {
 		for (const key of expression.keys()) keys.add(key);
 	}
-	return new Expression(evaluate, () => keys, expressions.map(expression => `(${expression.serialize()})`).join(` ${operator} `));
+	return new Expression(
+		evaluate,
+		() => keys,
+		expressions.map(expression => `(${expression.serialize()})`).join(` ${operator} `),
+	);
 }
 
 function membershipValueEquals(value: ContextKeyValue, candidate: unknown): boolean {
 	if (value === candidate) {
 		return true;
 	}
-	if (!isWindows || typeof value !== 'string' || typeof candidate !== 'string'
-		|| !value.startsWith(`${Schemas.file}:`) || !candidate.startsWith(`${Schemas.file}:`)) {
+	if (
+		!isWindows ||
+		typeof value !== 'string' ||
+		typeof candidate !== 'string' ||
+		!value.startsWith(`${Schemas.file}:`) ||
+		!candidate.startsWith(`${Schemas.file}:`)
+	) {
 		return false;
 	}
 	return extUriIgnorePathCase.isEqual(URI.parse(value), URI.parse(candidate));
 }
 
-function numericComparison(key: string, value: number | string, compare: (left: number, right: number) => boolean, operator: string): ContextKeyExpression {
+function numericComparison(
+	key: string,
+	value: number | string,
+	compare: (left: number, right: number) => boolean,
+	operator: string,
+): ContextKeyExpression {
 	const right = parseFloat(String(value));
-	return new Expression(context => {
-		const left = context.getValue(key);
-		return (typeof left === 'number' || typeof left === 'string') && compare(parseFloat(String(left)), right);
-	}, () => new Set([key]), `${key} ${operator} ${JSON.stringify(value)}`);
+	return new Expression(
+		context => {
+			const left = context.getValue(key);
+			return (typeof left === 'number' || typeof left === 'string') && compare(parseFloat(String(left)), right);
+		},
+		() => new Set([key]),
+		`${key} ${operator} ${JSON.stringify(value)}`,
+	);
 }
 
 export interface ParsingError {
@@ -256,8 +276,12 @@ export class Parser {
 	private position = 0;
 	private diagnostics: ParsingError[] = [];
 
-	public get lexingErrors(): Readonly<LexingError[]> { return this.scanner.errors; }
-	public get parsingErrors(): Readonly<ParsingError[]> { return this.diagnostics; }
+	public get lexingErrors(): Readonly<LexingError[]> {
+		return this.scanner.errors;
+	}
+	public get parsingErrors(): Readonly<ParsingError[]> {
+		return this.diagnostics;
+	}
 
 	public parse(source: string): ContextKeyExpression | undefined {
 		this.position = 0;
@@ -269,7 +293,10 @@ export class Parser {
 		}
 		try {
 			if (!source.trim()) {
-				this.fail(this.current(), localize('contextkey.emptyExpression', 'Context key expression must not be empty.'));
+				this.fail(
+					this.current(),
+					localize('contextkey.emptyExpression', 'Context key expression must not be empty.'),
+				);
 			}
 			const expression = this.parseOr();
 			this.expect(TokenType.EOF);
@@ -309,10 +336,21 @@ export class Parser {
 				return ContextKeyExpr.not(token.lexeme);
 			}
 			if (token.type !== TokenType.LParen && token.type !== TokenType.True && token.type !== TokenType.False) {
-				return this.fail(token, localize('contextkey.expectedKey', 'Expected a context key, received "{0}".', Scanner.getLexeme(token)));
+				return this.fail(
+					token,
+					localize(
+						'contextkey.expectedKey',
+						'Expected a context key, received "{0}".',
+						Scanner.getLexeme(token),
+					),
+				);
 			}
 			const operand = this.parseUnary();
-			return new Expression(context => !operand.evaluate(context), () => operand.keys(), `!(${operand.serialize()})`);
+			return new Expression(
+				context => !operand.evaluate(context),
+				() => operand.keys(),
+				`!(${operand.serialize()})`,
+			);
 		}
 		if (this.match(TokenType.LParen)) {
 			const expression = this.parseOr();
@@ -327,7 +365,19 @@ export class Parser {
 		}
 		const key = this.expect(TokenType.Str).lexeme;
 		const operator = this.current().type;
-		if (![TokenType.Eq, TokenType.NotEq, TokenType.RegexOp, TokenType.In, TokenType.Not, TokenType.Gt, TokenType.GtEq, TokenType.Lt, TokenType.LtEq].includes(operator)) {
+		if (
+			![
+				TokenType.Eq,
+				TokenType.NotEq,
+				TokenType.RegexOp,
+				TokenType.In,
+				TokenType.Not,
+				TokenType.Gt,
+				TokenType.GtEq,
+				TokenType.Lt,
+				TokenType.LtEq,
+			].includes(operator)
+		) {
 			return ContextKeyExpr.has(key);
 		}
 		this.position++;
@@ -339,15 +389,31 @@ export class Parser {
 		}
 		const value = this.comparisonValue();
 		switch (operator) {
-			case TokenType.Eq: return ContextKeyExpr.equals(key, value);
-			case TokenType.NotEq: return ContextKeyExpr.notEquals(key, value);
-			case TokenType.In: return ContextKeyExpr.in(key, String(value));
-			case TokenType.Not: return ContextKeyExpr.notIn(key, String(value));
-			case TokenType.Gt: return ContextKeyExpr.greater(key, String(value));
-			case TokenType.GtEq: return ContextKeyExpr.greaterEquals(key, String(value));
-			case TokenType.Lt: return ContextKeyExpr.smaller(key, String(value));
-			case TokenType.LtEq: return ContextKeyExpr.smallerEquals(key, String(value));
-			default: return this.fail(this.current(), localize('contextkey.unexpectedToken', 'Unexpected token "{0}".', Scanner.getLexeme(this.current())));
+			case TokenType.Eq:
+				return ContextKeyExpr.equals(key, value);
+			case TokenType.NotEq:
+				return ContextKeyExpr.notEquals(key, value);
+			case TokenType.In:
+				return ContextKeyExpr.in(key, String(value));
+			case TokenType.Not:
+				return ContextKeyExpr.notIn(key, String(value));
+			case TokenType.Gt:
+				return ContextKeyExpr.greater(key, String(value));
+			case TokenType.GtEq:
+				return ContextKeyExpr.greaterEquals(key, String(value));
+			case TokenType.Lt:
+				return ContextKeyExpr.smaller(key, String(value));
+			case TokenType.LtEq:
+				return ContextKeyExpr.smallerEquals(key, String(value));
+			default:
+				return this.fail(
+					this.current(),
+					localize(
+						'contextkey.unexpectedToken',
+						'Unexpected token "{0}".',
+						Scanner.getLexeme(this.current()),
+					),
+				);
 		}
 	}
 
@@ -362,7 +428,10 @@ export class Parser {
 			return this.fail(token, localize('contextkey.invalidRegex', 'Invalid regular expression.'));
 		}
 		try {
-			return ContextKeyExpr.regex(key, new RegExp(token.lexeme.slice(1, closingSlash), token.lexeme.slice(closingSlash + 1)));
+			return ContextKeyExpr.regex(
+				key,
+				new RegExp(token.lexeme.slice(1, closingSlash), token.lexeme.slice(closingSlash + 1)),
+			);
 		} catch (error) {
 			if (!(error instanceof SyntaxError)) {
 				throw error;
@@ -374,17 +443,36 @@ export class Parser {
 	private comparisonValue(): string | boolean {
 		const token = this.current();
 		switch (token.type) {
-			case TokenType.EOF: return '';
-			case TokenType.True: this.position++; return true;
-			case TokenType.False: this.position++; return false;
+			case TokenType.EOF:
+				return '';
+			case TokenType.True:
+				this.position++;
+				return true;
+			case TokenType.False:
+				this.position++;
+				return false;
 			case TokenType.Str:
-			case TokenType.QuotedStr: this.position++; return token.lexeme;
-			case TokenType.In: this.position++; return 'in';
-			default: return this.fail(token, localize('contextkey.expectedValue', 'Expected a comparison value, received "{0}".', Scanner.getLexeme(token)));
+			case TokenType.QuotedStr:
+				this.position++;
+				return token.lexeme;
+			case TokenType.In:
+				this.position++;
+				return 'in';
+			default:
+				return this.fail(
+					token,
+					localize(
+						'contextkey.expectedValue',
+						'Expected a comparison value, received "{0}".',
+						Scanner.getLexeme(token),
+					),
+				);
 		}
 	}
 
-	private current(): Token { return this.tokens[this.position]; }
+	private current(): Token {
+		return this.tokens[this.position];
+	}
 
 	private match(type: TokenType): boolean {
 		if (this.current().type !== type) {
@@ -394,16 +482,22 @@ export class Parser {
 		return true;
 	}
 
-	private expect<T extends TokenType>(type: T): Token & { type: T; } {
+	private expect<T extends TokenType>(type: T): Token & { type: T } {
 		const token = this.current();
 		if (!this.match(type)) {
 			const lexeme = Scanner.getLexeme(token);
-			const message = type === TokenType.Str
-				? localize('contextkey.expectedKey', 'Expected a context key, received "{0}".', lexeme)
-				: localize('contextkey.expectedToken', 'Expected "{0}", received "{1}".', Scanner.getLexeme({ type } as Token), lexeme);
+			const message =
+				type === TokenType.Str
+					? localize('contextkey.expectedKey', 'Expected a context key, received "{0}".', lexeme)
+					: localize(
+							'contextkey.expectedToken',
+							'Expected "{0}", received "{1}".',
+							Scanner.getLexeme({ type } as Token),
+							lexeme,
+						);
 			this.fail(token, message);
 		}
-		return token as Token & { type: T; };
+		return token as Token & { type: T };
 	}
 
 	private fail(token: Token, message: string): never {

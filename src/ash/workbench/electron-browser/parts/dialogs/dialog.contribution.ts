@@ -7,9 +7,6 @@ if (environment.runtime === 'electron') {
 	registerWorkbenchContribution(
 		'workbench.contrib.dialogHandler',
 		WorkbenchPhase.BlockStartup,
-		accessor => new DialogHandlerContribution(
-			accessor.get(IDialogsModel),
-			accessor.get(IWorkbenchDialogHandler),
-		),
+		accessor => new DialogHandlerContribution(accessor.get(IDialogsModel), accessor.get(IWorkbenchDialogHandler)),
 	);
 }

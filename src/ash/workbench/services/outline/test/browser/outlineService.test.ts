@@ -9,9 +9,21 @@ import { OutlineTarget, type IOutline, type IOutlineCreator } from '../../browse
 import { OutlineService } from '../../browser/outlineService.js';
 
 const pane: IEditorPane = {
-	id: 'test', getId: () => 'test', getTitle: () => 'Test', getControl: () => undefined,
-	onDidFocus: Event.None, onDidBlur: Event.None, focus: () => { }, hasFocus: () => false,
-	setInput: async () => { }, clearInput: () => { }, layout: () => { }, setVisible: () => { }, isVisible: () => true, dispose: () => { }, [Symbol.dispose]: () => { },
+	id: 'test',
+	getId: () => 'test',
+	getTitle: () => 'Test',
+	getControl: () => undefined,
+	onDidFocus: Event.None,
+	onDidBlur: Event.None,
+	focus: () => {},
+	hasFocus: () => false,
+	setInput: async () => {},
+	clearInput: () => {},
+	layout: () => {},
+	setVisible: () => {},
+	isVisible: () => true,
+	dispose: () => {},
+	[Symbol.dispose]: () => {},
 };
 
 suite('OutlineService', () => {
@@ -22,7 +34,10 @@ suite('OutlineService', () => {
 		const calls: OutlineTarget[] = [];
 		const creator: IOutlineCreator<IEditorPane, string> = {
 			matches: (candidate): candidate is IEditorPane => candidate === pane,
-			createOutline: async (_editor, target) => { calls.push(target); return undefined; },
+			createOutline: async (_editor, target) => {
+				calls.push(target);
+				return undefined;
+			},
 		};
 		const changes: boolean[] = [];
 		using listener = service.onDidChange(() => changes.push(service.canCreateOutline(pane)));
@@ -30,7 +45,10 @@ suite('OutlineService', () => {
 		assert.throws(() => service.registerOutlineCreator(creator), /already registered/);
 		assert.equal(await service.createOutline(pane, OutlineTarget.OutlinePane, CancellationToken.None), undefined);
 		registration.dispose();
-		assert.deepEqual({ calls, changes, supported: service.canCreateOutline(pane) }, { calls: [OutlineTarget.OutlinePane], changes: [true, false], supported: false });
+		assert.deepEqual(
+			{ calls, changes, supported: service.canCreateOutline(pane) },
+			{ calls: [OutlineTarget.OutlinePane], changes: [true, false], supported: false },
+		);
 	});
 
 	for (const stop of ['cancel', 'unregister', 'dispose'] as const) {
@@ -40,11 +58,33 @@ suite('OutlineService', () => {
 			const pending = new DeferredPromise<IOutline<string>>();
 			let disposed = 0;
 			const outline: IOutline<string> = {
-				uri: undefined, outlineKind: 'test', isEmpty: true, activeElement: undefined, onDidChange: Event.None,
-				config: { treeDataSource: { getChildren: () => [] }, comparator: { compareByName: () => 0, compareByType: () => 0, compareByPosition: () => 0 }, options: { modelOptions: { identityProvider: { getId: value => value } }, renderElement: () => { throw new Error('Unused renderer'); } } },
-				reveal: () => { }, dispose: () => { disposed++; }, [Symbol.dispose]: () => { disposed++; },
+				uri: undefined,
+				outlineKind: 'test',
+				isEmpty: true,
+				activeElement: undefined,
+				onDidChange: Event.None,
+				config: {
+					treeDataSource: { getChildren: () => [] },
+					comparator: { compareByName: () => 0, compareByType: () => 0, compareByPosition: () => 0 },
+					options: {
+						modelOptions: { identityProvider: { getId: value => value } },
+						renderElement: () => {
+							throw new Error('Unused renderer');
+						},
+					},
+				},
+				reveal: () => {},
+				dispose: () => {
+					disposed++;
+				},
+				[Symbol.dispose]: () => {
+					disposed++;
+				},
 			};
-			using registration = service.registerOutlineCreator({ matches: (candidate): candidate is IEditorPane => candidate === pane, createOutline: () => pending.p });
+			using registration = service.registerOutlineCreator({
+				matches: (candidate): candidate is IEditorPane => candidate === pane,
+				createOutline: () => pending.p,
+			});
 			const result = service.createOutline(pane, OutlineTarget.OutlinePane, token.token);
 			if (stop === 'cancel') {
 				token.cancel();

@@ -5,7 +5,7 @@ import { createDecorator } from '../../../../platform/instantiation/common/insta
 
 export interface IWorkingCopyHistoryEntry {
 	readonly id: string;
-	readonly workingCopy: { readonly resource: URI; readonly name: string; };
+	readonly workingCopy: { readonly resource: URI; readonly name: string };
 	readonly location: URI;
 	readonly timestamp: number;
 }
@@ -18,8 +18,11 @@ export interface IWorkingCopyHistoryEntryDescriptor {
 }
 
 export interface IWorkingCopyHistoryService {
-	readonly onDidAddEntry: Event<{ readonly entry: IWorkingCopyHistoryEntry; }>;
-	addEntry(descriptor: IWorkingCopyHistoryEntryDescriptor, token: CancellationToken): Promise<IWorkingCopyHistoryEntry>;
+	readonly onDidAddEntry: Event<{ readonly entry: IWorkingCopyHistoryEntry }>;
+	addEntry(
+		descriptor: IWorkingCopyHistoryEntryDescriptor,
+		token: CancellationToken,
+	): Promise<IWorkingCopyHistoryEntry>;
 	getEntries(resource: URI, token: CancellationToken): Promise<readonly IWorkingCopyHistoryEntry[]>;
 }
 

@@ -27,7 +27,10 @@ suite('webWorkbench browser component', () => {
 		await expect(bar).toHaveCSS('padding-right', '152px');
 		await expect(bar).toHaveCSS('padding-left', '12px');
 		await expect(bar).toHaveCSS('-webkit-app-region', 'drag');
-		await expect(page.locator('[data-part="editor"]')).toHaveCSS('height', `${(await page.viewportSize())!.height - 48}px`);
+		await expect(page.locator('[data-part="editor"]')).toHaveCSS(
+			'height',
+			`${(await page.viewportSize())!.height - 48}px`,
+		);
 		for (const index of [0, 1, 2, 3]) {
 			await page.evaluate(index => window.ashWebWorkbenchIntegration.setTheme(index), index);
 			const button = page.getByRole('button', { name: 'Titlebar action', exact: true });

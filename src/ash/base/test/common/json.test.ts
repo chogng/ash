@@ -8,21 +8,32 @@ test('JSON scanner retains JSONC structure and source ranges', () => {
 	const scanned = scanJson(source, { allowComments: true, allowTrailingComma: true });
 
 	assert.equal(scanned.errors.length, 0);
-	assert.deepEqual(scanned.tokens.filter(token => token.kind !== JsonTokenKind.Trivia).map(token => token.kind), [
-		JsonTokenKind.OpenBrace,
-		JsonTokenKind.LineComment,
-		JsonTokenKind.String,
-		JsonTokenKind.Colon,
-		JsonTokenKind.True,
-		JsonTokenKind.Comma,
-		JsonTokenKind.CloseBrace,
-	]);
-	assert.equal(source.slice(scanned.tokens[2]!.offset, scanned.tokens[2]!.offset + scanned.tokens[2]!.length), '// note');
+	assert.deepEqual(
+		scanned.tokens.filter(token => token.kind !== JsonTokenKind.Trivia).map(token => token.kind),
+		[
+			JsonTokenKind.OpenBrace,
+			JsonTokenKind.LineComment,
+			JsonTokenKind.String,
+			JsonTokenKind.Colon,
+			JsonTokenKind.True,
+			JsonTokenKind.Comma,
+			JsonTokenKind.CloseBrace,
+		],
+	);
+	assert.equal(
+		source.slice(scanned.tokens[2]!.offset, scanned.tokens[2]!.offset + scanned.tokens[2]!.length),
+		'// note',
+	);
 });
 
 test('JSON parser distinguishes strict JSON from JSONC', () => {
 	const source = '{ "enabled": true, // note\n }';
-	assert.match(parseJsonDocument(source).errors.map(error => error.message).join('\n'), /Comments|Trailing commas/u);
+	assert.match(
+		parseJsonDocument(source)
+			.errors.map(error => error.message)
+			.join('\n'),
+		/Comments|Trailing commas/u,
+	);
 	assert.deepEqual(parseJsonc(source, 'settings'), { enabled: true });
 	const document = parseJsonDocument(source, { allowComments: true, allowTrailingComma: true });
 	assert.deepEqual(document.value, { enabled: true });
@@ -59,5 +70,5 @@ test('JSONC compatibility helpers strip comments and trailing commas without tou
 	assert.match(stripped, /"text": "\/\/ keep,\}"/u);
 	assert.doesNotMatch(stripped, /remove/u);
 	assert.doesNotMatch(stripped, /true,\s*\}/u);
-	assert.deepEqual(parse<{ text: string; enabled: boolean; }>(source), { text: '// keep,}', enabled: true });
+	assert.deepEqual(parse<{ text: string; enabled: boolean }>(source), { text: '// keep,}', enabled: true });
 });

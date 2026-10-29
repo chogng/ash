@@ -3,7 +3,12 @@ import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { isIOS } from '../../../../base/browser/browser.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { localize } from '../../../../nls.js';
-import { type ICodeEditor, type IOverlayWidget, type IOverlayWidgetPosition, OverlayWidgetPositionPreference } from '../../../browser/editorBrowser.js';
+import {
+	type ICodeEditor,
+	type IOverlayWidget,
+	type IOverlayWidgetPosition,
+	OverlayWidgetPositionPreference,
+} from '../../../browser/editorBrowser.js';
 import { EditorContributionInstantiation, registerEditorContribution } from '../../../browser/editorExtensions.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import type { IEditorContribution } from '../../../common/editorCommon.js';

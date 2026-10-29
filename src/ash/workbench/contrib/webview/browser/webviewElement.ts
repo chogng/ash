@@ -1,6 +1,6 @@
-import { addDisposableListener, h } from "../../../../base/browser/dom.js";
-import { mainWindow, type CodeWindow } from "../../../../base/browser/window.js";
-import { Emitter } from "../../../../base/common/event.js";
+import { addDisposableListener, h } from '../../../../base/browser/dom.js';
+import { mainWindow, type CodeWindow } from '../../../../base/browser/window.js';
+import { Emitter } from '../../../../base/common/event.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -9,8 +9,13 @@ import { IFileService } from '../../../../platform/files/common/files.js';
 import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
 import { webviewGenericCspSource } from '../common/webview.js';
 import { loadLocalResource } from './resourceLoading.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import type { IWebviewElement, WebviewContentOptions, WebviewInitInfo, WebviewMessageReceivedEvent } from "./webview.js";
+import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import type {
+	IWebviewElement,
+	WebviewContentOptions,
+	WebviewInitInfo,
+	WebviewMessageReceivedEvent,
+} from './webview.js';
 
 interface WebviewMessageEnvelope {
 	readonly channel: string;
@@ -30,7 +35,7 @@ const WEBVIEW_CONTENT_SECURITY_POLICY = [
 	"object-src 'none'",
 	`base-uri ${webviewGenericCspSource}`,
 	"form-action 'none'",
-].join("; ");
+].join('; ');
 
 /**
  * Owns one isolated origin. Its worker routes resource reads through the existing
@@ -65,7 +70,7 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		resolve: (sent: boolean) => void;
 		reject: (error: unknown) => void;
 	}[] = [];
-	private channel = "";
+	private channel = '';
 	private documentVersion = 0;
 	private html: string | undefined;
 	private isReady = false;
@@ -85,9 +90,10 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		const bootstrapAsset = new URL('./pre/index.html', import.meta.url);
 		const workerAsset = new URL('./pre/service-worker.js?no-inline', import.meta.url);
 		// File-hosted bundles use filesystem URLs; the isolated host exposes their asset names.
-		const assetPath = (asset: URL): string => asset.protocol === `${Schemas.file}:`
-			? `assets/${asset.pathname.slice(asset.pathname.lastIndexOf('/') + 1)}`
-			: asset.pathname.replace(/^\//, '');
+		const assetPath = (asset: URL): string =>
+			asset.protocol === `${Schemas.file}:`
+				? `assets/${asset.pathname.slice(asset.pathname.lastIndexOf('/') + 1)}`
+				: asset.pathname.replace(/^\//, '');
 		this.bootstrapUrl = new URL(assetPath(bootstrapAsset), `${endpoint}/`);
 		const workerUrl = new URL(assetPath(workerAsset), `${endpoint}/`);
 		this.frameOrigin = `${this.bootstrapUrl.protocol}//${this.bootstrapUrl.host}`;
@@ -98,40 +104,48 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		this.messageProtocol = initInfo.contentOptions?.messageProtocol;
 		this.contentSecurityPolicy = initInfo.contentOptions?.contentSecurityPolicy;
 		this.forwardKeyboardEvents = initInfo.options.forwardKeyboardEvents === true;
-		const element = h(mainWindow.document, "iframe");
+		const element = h(mainWindow.document, 'iframe');
 		this.element = element;
 		element.name = instanceId;
-		element.className = "ash-webview";
+		element.className = 'ash-webview';
 		element.tabIndex = 0;
-		element.setAttribute("sandbox", "allow-scripts allow-same-origin");
-		if (this.messageProtocol === 'mcp') element.setAttribute('allow', "camera 'none'; microphone 'none'; geolocation 'none'; clipboard-write 'none'");
-		element.setAttribute("referrerpolicy", "no-referrer");
-		element.setAttribute("title", validateTitle(initInfo.title ?? "Webview"));
-		element.style.border = "0";
-		element.style.display = "block";
-		element.style.width = "100%";
-		element.style.height = "100%";
-		this._register(toDisposable(() => {
-			if (this.isBootstrapReady && element.isConnected) {
-				this.sendControl({ type: 'shutdown' });
-			}
-			this.resourceRequests.clear();
-			this.mountListeners.clear();
-			this.discardPendingMessages();
-			// Owners must receive blur and disposal before the registered emitters are released.
-			this.setFocused(false);
-			this.disposed.fire();
-			element.src = 'about:blank';
-			element.remove();
-		}));
+		element.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+		if (this.messageProtocol === 'mcp')
+			element.setAttribute(
+				'allow',
+				"camera 'none'; microphone 'none'; geolocation 'none'; clipboard-write 'none'",
+			);
+		element.setAttribute('referrerpolicy', 'no-referrer');
+		element.setAttribute('title', validateTitle(initInfo.title ?? 'Webview'));
+		element.style.border = '0';
+		element.style.display = 'block';
+		element.style.width = '100%';
+		element.style.height = '100%';
+		this._register(
+			toDisposable(() => {
+				if (this.isBootstrapReady && element.isConnected) {
+					this.sendControl({ type: 'shutdown' });
+				}
+				this.resourceRequests.clear();
+				this.mountListeners.clear();
+				this.discardPendingMessages();
+				// Owners must receive blur and disposal before the registered emitters are released.
+				this.setFocused(false);
+				this.disposed.fire();
+				element.src = 'about:blank';
+				element.remove();
+			}),
+		);
 	}
 
-	public get isFocused(): boolean { return this.hasFocus; }
+	public get isFocused(): boolean {
+		return this.hasFocus;
+	}
 
 	public mountTo(parent: HTMLElement, targetWindow: CodeWindow): void {
 		this.assertNotDisposed();
 		if (this.isMounted) {
-			throw new Error("WebviewElement is already mounted");
+			throw new Error('WebviewElement is already mounted');
 		}
 		if (this.frameOrigin === targetWindow.location.origin) {
 			throw new Error('Webview origin must be isolated from the Workbench');
@@ -139,69 +153,95 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		this.isMounted = true;
 		const listeners = new DisposableStore();
 		this.mountListeners.value = listeners;
-		listeners.add(addDisposableListener(this.element, "focus", () => {
-			this.setFocused(true);
-			// DOM focus targets the outer iframe; keyboard input belongs to its content document.
-			if (this.isBootstrapReady) {
-				this.sendControl({ type: 'focus' });
-			}
-		}));
-		listeners.add(addDisposableListener(this.element, "blur", () => this.setFocused(false)));
-		listeners.add(addDisposableListener<MessageEvent>(targetWindow, "message", event => {
-			const contentWindow = this.element.contentWindow;
-			if (!contentWindow || event.source !== contentWindow || event.origin !== this.frameOrigin) {
-				return;
-			}
-			if (event.data?.channel === this.instanceChannel) {
-				if (event.data.type === 'bootstrap-ready') {
-					this.isBootstrapReady = true;
-					this.sendDocument();
-				} else if (event.data.type === 'load-resource') {
-					void this.loadResource(event.data);
-				} else if (event.data.type === 'bootstrap-error') {
-					console.error('Webview bootstrap failed', event.data.error);
-					this.discardPendingMessages();
+		listeners.add(
+			addDisposableListener(this.element, 'focus', () => {
+				this.setFocused(true);
+				// DOM focus targets the outer iframe; keyboard input belongs to its content document.
+				if (this.isBootstrapReady) {
+					this.sendControl({ type: 'focus' });
 				}
-				return;
-			}
-			if (event.data?.channel === `${this.channel}:lifecycle`) {
-				if (event.data.type === "ready") {
-					this.isReady = true;
-					// Focus can precede bootstrap or document loading when an editor pane opens.
-					if (this.element.ownerDocument.activeElement === this.element) {
-						this.sendControl({ type: 'focus' });
+			}),
+		);
+		listeners.add(addDisposableListener(this.element, 'blur', () => this.setFocused(false)));
+		listeners.add(
+			addDisposableListener<MessageEvent>(targetWindow, 'message', event => {
+				const contentWindow = this.element.contentWindow;
+				if (!contentWindow || event.source !== contentWindow || event.origin !== this.frameOrigin) {
+					return;
+				}
+				if (event.data?.channel === this.instanceChannel) {
+					if (event.data.type === 'bootstrap-ready') {
+						this.isBootstrapReady = true;
+						this.sendDocument();
+					} else if (event.data.type === 'load-resource') {
+						void this.loadResource(event.data);
+					} else if (event.data.type === 'bootstrap-error') {
+						console.error('Webview bootstrap failed', event.data.error);
+						this.discardPendingMessages();
 					}
-					for (const pending of this.pendingMessages.splice(0)) {
-						try {
-							this.sendContentMessage(pending.message, pending.transfer);
-							pending.resolve(true);
-						} catch (error) {
-							pending.reject(error);
+					return;
+				}
+				if (event.data?.channel === `${this.channel}:lifecycle`) {
+					if (event.data.type === 'ready') {
+						this.isReady = true;
+						// Focus can precede bootstrap or document loading when an editor pane opens.
+						if (this.element.ownerDocument.activeElement === this.element) {
+							this.sendControl({ type: 'focus' });
 						}
+						for (const pending of this.pendingMessages.splice(0)) {
+							try {
+								this.sendContentMessage(pending.message, pending.transfer);
+								pending.resolve(true);
+							} catch (error) {
+								pending.reject(error);
+							}
+						}
+					} else if (event.data.type === 'focus' || event.data.type === 'blur') {
+						this.setFocused(event.data.type === 'focus');
 					}
-				} else if (event.data.type === "focus" || event.data.type === "blur") {
-					this.setFocused(event.data.type === "focus");
+					return;
 				}
-				return;
-			}
-			if (this.forwardKeyboardEvents && event.data?.channel === `${this.channel}:keyboard`) {
-				const keyboard = event.data;
-				if ((keyboard.type !== 'keydown' && keyboard.type !== 'keyup') || typeof keyboard.key !== 'string' || typeof keyboard.code !== 'string') return;
-				if (![keyboard.altKey, keyboard.ctrlKey, keyboard.shiftKey, keyboard.metaKey, keyboard.repeat].every(value => typeof value === 'boolean')) return;
-				this.keyboardEvents.fire(new targetWindow.KeyboardEvent(keyboard.type, {
-					key: keyboard.key, code: keyboard.code, altKey: keyboard.altKey, ctrlKey: keyboard.ctrlKey,
-					shiftKey: keyboard.shiftKey, metaKey: keyboard.metaKey, repeat: keyboard.repeat,
-					bubbles: true, cancelable: true,
-				}));
-				return;
-			}
-			const envelope = validateEnvelope(event.data, this.channel);
-			if (envelope) {
-				this.messages.fire({ message: envelope.message });
-			}
-		}));
+				if (this.forwardKeyboardEvents && event.data?.channel === `${this.channel}:keyboard`) {
+					const keyboard = event.data;
+					if (
+						(keyboard.type !== 'keydown' && keyboard.type !== 'keyup') ||
+						typeof keyboard.key !== 'string' ||
+						typeof keyboard.code !== 'string'
+					)
+						return;
+					if (
+						![
+							keyboard.altKey,
+							keyboard.ctrlKey,
+							keyboard.shiftKey,
+							keyboard.metaKey,
+							keyboard.repeat,
+						].every(value => typeof value === 'boolean')
+					)
+						return;
+					this.keyboardEvents.fire(
+						new targetWindow.KeyboardEvent(keyboard.type, {
+							key: keyboard.key,
+							code: keyboard.code,
+							altKey: keyboard.altKey,
+							ctrlKey: keyboard.ctrlKey,
+							shiftKey: keyboard.shiftKey,
+							metaKey: keyboard.metaKey,
+							repeat: keyboard.repeat,
+							bubbles: true,
+							cancelable: true,
+						}),
+					);
+					return;
+				}
+				const envelope = validateEnvelope(event.data, this.channel);
+				if (envelope) {
+					this.messages.fire({ message: envelope.message });
+				}
+			}),
+		);
 		if (this.html === undefined) {
-			this.setHtml("");
+			this.setHtml('');
 		}
 		this.element.src = this.bootstrapUrl.href;
 		parent.append(this.element);
@@ -223,13 +263,13 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 		const cancellation = new CancellationTokenSource();
 		this.resourceRequests.value = toDisposable(() => cancellation.dispose(true));
 		this.documentCancellation = cancellation;
-		this.element.setAttribute("data-ash-webview-channel", this.channel);
+		this.element.setAttribute('data-ash-webview-channel', this.channel);
 		this.sendDocument();
 	}
 
 	public setTitle(title: string): void {
 		this.assertNotDisposed();
-		this.element.setAttribute("title", validateTitle(title));
+		this.element.setAttribute('title', validateTitle(title));
 		this.sendControl({ type: 'title', title });
 	}
 
@@ -238,7 +278,9 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 			return false;
 		}
 		if (!this.isReady) {
-			return new Promise<boolean>((resolve, reject) => this.pendingMessages.push({ message, transfer, resolve, reject }));
+			return new Promise<boolean>((resolve, reject) =>
+				this.pendingMessages.push({ message, transfer, resolve, reject }),
+			);
 		}
 		this.sendContentMessage(message, transfer);
 		return true;
@@ -251,7 +293,9 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	}
 
 	private sendControl(message: object, transfer: readonly ArrayBuffer[] = []): void {
-		this.element.contentWindow?.postMessage({ ...message, channel: this.instanceChannel }, this.frameOrigin, [...transfer]);
+		this.element.contentWindow?.postMessage({ ...message, channel: this.instanceChannel }, this.frameOrigin, [
+			...transfer,
+		]);
 	}
 
 	private sendContentMessage(message: unknown, transfer: readonly ArrayBuffer[]): void {
@@ -264,14 +308,28 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 				type: 'document',
 				documentChannel: this.channel,
 				title: this.element.title,
-				html: createWebviewDocument(this.channel, this.html, this.forwardKeyboardEvents, this.allowScripts, this.contentSecurityPolicy),
+				html: createWebviewDocument(
+					this.channel,
+					this.html,
+					this.forwardKeyboardEvents,
+					this.allowScripts,
+					this.contentSecurityPolicy,
+				),
 				messageProtocol: this.messageProtocol,
 			});
 		}
 	}
 
-	private async loadResource(request: { readonly id?: unknown; readonly documentChannel?: unknown; readonly url?: unknown; }): Promise<void> {
-		if (!Number.isSafeInteger(request.id) || typeof request.url !== 'string' || request.documentChannel !== this.channel) {
+	private async loadResource(request: {
+		readonly id?: unknown;
+		readonly documentChannel?: unknown;
+		readonly url?: unknown;
+	}): Promise<void> {
+		if (
+			!Number.isSafeInteger(request.id) ||
+			typeof request.url !== 'string' ||
+			request.documentChannel !== this.channel
+		) {
 			return;
 		}
 		const channel = this.channel;
@@ -301,14 +359,17 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 			return;
 		}
 		const bytes = response.bytes?.slice().buffer;
-		this.sendControl({
-			type: 'resource-response',
-			id: request.id,
-			documentChannel: channel,
-			status: response.status,
-			mimeType: response.mimeType,
-			bytes,
-		}, bytes ? [bytes] : []);
+		this.sendControl(
+			{
+				type: 'resource-response',
+				id: request.id,
+				documentChannel: channel,
+				status: response.status,
+				mimeType: response.mimeType,
+				bytes,
+			},
+			bytes ? [bytes] : [],
+		);
 	}
 
 	private setFocused(focused: boolean): void {
@@ -330,19 +391,29 @@ export class WebviewElement extends Disposable implements IWebviewElement {
 	}
 }
 
-function createWebviewDocument(channel: string, html: string, forwardKeyboardEvents: boolean, allowScripts: boolean, appCsp?: WebviewContentOptions['contentSecurityPolicy']): string {
+function createWebviewDocument(
+	channel: string,
+	html: string,
+	forwardKeyboardEvents: boolean,
+	allowScripts: boolean,
+	appCsp?: WebviewContentOptions['contentSecurityPolicy'],
+): string {
 	const nonce = crypto.randomUUID();
-	const policy = appCsp ? [
-		"default-src 'none'", "object-src 'none'", "form-action 'none'",
-		`connect-src ${webviewGenericCspSource} ${appCsp.connectDomains.join(' ')}`,
-		`frame-src ${appCsp.frameDomains.join(' ') || "'none'"}`,
-		`base-uri ${appCsp.baseUriDomains.join(' ') || webviewGenericCspSource}`,
-		`img-src ${webviewGenericCspSource} data: blob: ${appCsp.resourceDomains.join(' ')}`,
-		`media-src ${webviewGenericCspSource} data: blob: ${appCsp.resourceDomains.join(' ')}`,
-		`font-src ${webviewGenericCspSource} data: ${appCsp.resourceDomains.join(' ')}`,
-		`style-src 'unsafe-inline' ${webviewGenericCspSource} ${appCsp.resourceDomains.join(' ')}`,
-		`script-src ${allowScripts ? `'unsafe-inline' ${webviewGenericCspSource} ${appCsp.resourceDomains.join(' ')}` : `'nonce-${nonce}'`}`,
-	].join('; ') : `${WEBVIEW_CONTENT_SECURITY_POLICY}; script-src ${allowScripts ? `'unsafe-inline' ${webviewGenericCspSource}` : `'nonce-${nonce}'`}`;
+	const policy = appCsp
+		? [
+				"default-src 'none'",
+				"object-src 'none'",
+				"form-action 'none'",
+				`connect-src ${webviewGenericCspSource} ${appCsp.connectDomains.join(' ')}`,
+				`frame-src ${appCsp.frameDomains.join(' ') || "'none'"}`,
+				`base-uri ${appCsp.baseUriDomains.join(' ') || webviewGenericCspSource}`,
+				`img-src ${webviewGenericCspSource} data: blob: ${appCsp.resourceDomains.join(' ')}`,
+				`media-src ${webviewGenericCspSource} data: blob: ${appCsp.resourceDomains.join(' ')}`,
+				`font-src ${webviewGenericCspSource} data: ${appCsp.resourceDomains.join(' ')}`,
+				`style-src 'unsafe-inline' ${webviewGenericCspSource} ${appCsp.resourceDomains.join(' ')}`,
+				`script-src ${allowScripts ? `'unsafe-inline' ${webviewGenericCspSource} ${appCsp.resourceDomains.join(' ')}` : `'nonce-${nonce}'`}`,
+			].join('; ')
+		: `${WEBVIEW_CONTENT_SECURITY_POLICY}; script-src ${allowScripts ? `'unsafe-inline' ${webviewGenericCspSource}` : `'nonce-${nonce}'`}`;
 	// Wait for content scripts to register handlers before delivering queued host messages.
 	const bootstrap = `(() => {
     const channel = ${JSON.stringify(channel)};
@@ -371,7 +442,9 @@ function createWebviewDocument(channel: string, html: string, forwardKeyboardEve
     };
     Object.defineProperty(globalThis, "acquireVsCodeApi", acquireApi);
     Object.defineProperty(globalThis, "acquireAshWebviewApi", acquireApi);
-    ${forwardKeyboardEvents ? `for (const type of ['keydown', 'keyup']) {
+    ${
+		forwardKeyboardEvents
+			? `for (const type of ['keydown', 'keyup']) {
       document.addEventListener(type, event => {
         if (event.isComposing) return;
         if (type === 'keydown' && (event.key === 'F1' || (event.altKey && event.key === 'F2'))) event.preventDefault();
@@ -379,14 +452,15 @@ function createWebviewDocument(channel: string, html: string, forwardKeyboardEve
           key: event.key, code: event.code, altKey: event.altKey, ctrlKey: event.ctrlKey,
           shiftKey: event.shiftKey, metaKey: event.metaKey, repeat: event.repeat }, '*');
       });
-    }` : ''}
+    }`
+			: ''
+	}
   })();`;
 	return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="${escapeAttribute(policy)
-		}">
+  <meta http-equiv="Content-Security-Policy" content="${escapeAttribute(policy)}">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <script nonce="${nonce}">${bootstrap}</script>
 </head>
@@ -394,51 +468,38 @@ function createWebviewDocument(channel: string, html: string, forwardKeyboardEve
 </html>`;
 }
 
-function validateEnvelope(
-	value: unknown,
-	channel: string,
-): WebviewMessageEnvelope | undefined {
-	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+function validateEnvelope(value: unknown, channel: string): WebviewMessageEnvelope | undefined {
+	if (typeof value !== 'object' || value === null || Array.isArray(value)) {
 		return undefined;
 	}
 	const candidate = value as Record<string, unknown>;
 	const keys = Object.keys(candidate).sort();
-	if (
-		keys.length !== 2 ||
-		keys[0] !== "channel" ||
-		keys[1] !== "message" ||
-		candidate.channel !== channel
-	) {
+	if (keys.length !== 2 || keys[0] !== 'channel' || keys[1] !== 'message' || candidate.channel !== channel) {
 		return undefined;
 	}
-	return {
-		channel,
-		message: candidate.message,
-	};
+	return { channel, message: candidate.message };
 }
 
 function validateHtml(value: string): string {
-	if (typeof value !== "string") {
-		throw new Error("webview HTML must be a string");
+	if (typeof value !== 'string') {
+		throw new Error('webview HTML must be a string');
 	}
 	if (value.length > MAX_WEBVIEW_HTML_LENGTH) {
-		throw new Error("webview HTML exceeds the supported size");
+		throw new Error('webview HTML exceeds the supported size');
 	}
 	return value;
 }
 
 function validateTitle(value: string): string {
-	if (typeof value !== "string" || value.length === 0) {
-		throw new Error("webview title must be a non-empty string");
+	if (typeof value !== 'string' || value.length === 0) {
+		throw new Error('webview title must be a non-empty string');
 	}
 	if (value.length > MAX_WEBVIEW_TITLE_LENGTH) {
-		throw new Error("webview title is too long");
+		throw new Error('webview title is too long');
 	}
 	return value;
 }
 
 function escapeAttribute(value: string): string {
-	return value
-		.replaceAll("&", "&amp;")
-		.replaceAll('"', "&quot;");
+	return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
 }

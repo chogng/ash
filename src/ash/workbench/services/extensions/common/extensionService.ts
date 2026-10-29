@@ -1,20 +1,37 @@
-import type { URI } from "../../../../base/common/uri.js";
-import type { Event } from "../../../../base/common/event.js";
-import type { IDisposable } from "../../../../base/common/lifecycle.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import type { ExtensionThemeSource } from "./extensionTheme.js";
-import type { ExtensionDebugAdapterSource } from "./extensionDebugAdapter.js";
-import type { ExtensionFileTemplateSource, ExtensionFileTemplateDefinition } from "./extensionFileTemplate.js";
+import type { URI } from '../../../../base/common/uri.js';
+import type { Event } from '../../../../base/common/event.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import type { ExtensionThemeSource } from './extensionTheme.js';
+import type { ExtensionDebugAdapterSource } from './extensionDebugAdapter.js';
+import type { ExtensionFileTemplateSource, ExtensionFileTemplateDefinition } from './extensionFileTemplate.js';
 import type { IExtensionPointUser } from './extensionsRegistry.js';
-export type { ExtensionDebugAdapterContribution, ExtensionGrammarContribution, ExtensionLanguageContribution, ExtensionManifest, ExtensionSnippetContribution, ExtensionThemeContribution } from "./extensionManifest.js";
-export type { ExtensionDebugAdapterDefinition, ExtensionDebugAdapterSource } from "./extensionDebugAdapter.js";
-export type { ExtensionThemeCatalog, ExtensionThemeDefinition, ExtensionThemeSource } from "./extensionTheme.js";
-export { parseExtensionTheme } from "./extensionTheme.js";
-export type { ExtensionFileTemplateCatalog, ExtensionFileTemplateDefinition, ExtensionFileTemplateSource } from "./extensionFileTemplate.js";
-export { parseExtensionManifest } from "./extensionManifest.js";
+export type {
+	ExtensionDebugAdapterContribution,
+	ExtensionGrammarContribution,
+	ExtensionLanguageContribution,
+	ExtensionManifest,
+	ExtensionSnippetContribution,
+	ExtensionThemeContribution,
+} from './extensionManifest.js';
+export type { ExtensionDebugAdapterDefinition, ExtensionDebugAdapterSource } from './extensionDebugAdapter.js';
+export type { ExtensionThemeCatalog, ExtensionThemeDefinition, ExtensionThemeSource } from './extensionTheme.js';
+export { parseExtensionTheme } from './extensionTheme.js';
+export type {
+	ExtensionFileTemplateCatalog,
+	ExtensionFileTemplateDefinition,
+	ExtensionFileTemplateSource,
+} from './extensionFileTemplate.js';
+export { parseExtensionManifest } from './extensionManifest.js';
 
-export type ExtensionSourceKind = "builtIn" | "plugin" | "registry" | "user";
-export type ExtensionDiagnosticCode = "sourceUnavailable" | "invalidManifest" | "duplicateExtension" | "pathEscapesRoot" | "resourceNotFound" | "resourceTooLarge";
+export type ExtensionSourceKind = 'builtIn' | 'plugin' | 'registry' | 'user';
+export type ExtensionDiagnosticCode =
+	| 'sourceUnavailable'
+	| 'invalidManifest'
+	| 'duplicateExtension'
+	| 'pathEscapesRoot'
+	| 'resourceNotFound'
+	| 'resourceTooLarge';
 
 /** Workbench-owned public identity for one discovered declarative extension. */
 export interface ExtensionDescriptor {
@@ -29,7 +46,7 @@ export interface ExtensionDescriptor {
 	readonly manifestSha256: string;
 	readonly packageSha256: string;
 	/** Backend-attested Plugin executable identity; packageSha256 keeps its catalog domain. */
-	readonly runtimeBinding?: { readonly runtimeId: string; readonly packageDigest: string; };
+	readonly runtimeBinding?: { readonly runtimeId: string; readonly packageDigest: string };
 }
 
 export interface ExtensionDiagnostic {
@@ -82,7 +99,9 @@ export interface IExtensionService extends IDisposable {
 	/** The executable host owns this registration; declaration-only hosts have no handler. */
 	registerActivationHandler(handler: (event: string, signal?: AbortSignal) => Promise<void>): IDisposable;
 	/** The sole snippet owner validates generation-bound resources before commit. A replacement receives the current snapshot on the next reload; in-flight loads drain to the latest owner. */
-	registerSnippetHandler(handler: (files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation): IDisposable;
+	registerSnippetHandler(
+		handler: (files: readonly ExtensionSnippetFile[]) => ExtensionSnippetActivation,
+	): IDisposable;
 }
 
-export const IExtensionService = createServiceIdentifier<IExtensionService>("extensionService");
+export const IExtensionService = createServiceIdentifier<IExtensionService>('extensionService');

@@ -1,4 +1,10 @@
-import { AuxiliaryWindow, BrowserAuxiliaryWindowService, type AuxiliaryWindowOpenOptions, type AuxiliaryWindowState, type IAuxiliaryWindow } from '../browser/auxiliaryWindowService.js';
+import {
+	AuxiliaryWindow,
+	BrowserAuxiliaryWindowService,
+	type AuxiliaryWindowOpenOptions,
+	type AuxiliaryWindowState,
+	type IAuxiliaryWindow,
+} from '../browser/auxiliaryWindowService.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { INativeHostService } from '../../../common/services.js';
@@ -20,11 +26,18 @@ export class ElectronAuxiliaryWindowService extends BrowserAuxiliaryWindowServic
 	}
 
 	protected override createAuxiliaryWindow(target: Window, title: string): AuxiliaryWindow {
-		return new ElectronAuxiliaryWindow(this.opener, target, this.workbenchRoot, this.themeService, title, this.host);
+		return new ElectronAuxiliaryWindow(
+			this.opener,
+			target,
+			this.workbenchRoot,
+			this.themeService,
+			title,
+			this.host,
+		);
 	}
 
 	override async open(options?: AuxiliaryWindowOpenOptions): Promise<IAuxiliaryWindow> {
-		const window = await super.open(options) as ElectronAuxiliaryWindow;
+		const window = (await super.open(options)) as ElectronAuxiliaryWindow;
 		try {
 			await window.initializeHostState();
 			return window;
@@ -41,11 +54,20 @@ class ElectronAuxiliaryWindow extends AuxiliaryWindow {
 	private readonly pinChanged = this._register(new Emitter<boolean>());
 	override readonly alwaysOnTop: NonNullable<IAuxiliaryWindow['alwaysOnTop']>;
 
-	constructor(source: Window, target: Window, root: HTMLElement, themes: IThemeService, title: string, private readonly host: INativeHostApi) {
+	constructor(
+		source: Window,
+		target: Window,
+		root: HTMLElement,
+		themes: IThemeService,
+		title: string,
+		private readonly host: INativeHostApi,
+	) {
 		super(source, target, root, themes, title);
 		const owner = this;
 		this.alwaysOnTop = {
-			get value() { return owner.state?.alwaysOnTop ?? false; },
+			get value() {
+				return owner.state?.alwaysOnTop ?? false;
+			},
 			onDidChange: this.pinChanged.event,
 			set: value => host.setAlwaysOnTop(value, target.name),
 		};

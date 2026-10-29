@@ -3,19 +3,22 @@ import { test } from 'mocha';
 import { CursorMove } from '../../common/cursor/cursorMoveCommands.js';
 
 test('CursorMove parses standard directions, units, selection, value, and history flags', () => {
-	assert.deepEqual(CursorMove.parse({
-		to: CursorMove.RawDirection.Down,
-		by: CursorMove.RawUnit.FoldedLine,
-		value: 3,
-		select: true,
-		noHistory: true,
-	}), {
-		direction: CursorMove.Direction.Down,
-		unit: CursorMove.Unit.FoldedLine,
-		value: 3,
-		select: true,
-		noHistory: true,
-	});
+	assert.deepEqual(
+		CursorMove.parse({
+			to: CursorMove.RawDirection.Down,
+			by: CursorMove.RawUnit.FoldedLine,
+			value: 3,
+			select: true,
+			noHistory: true,
+		}),
+		{
+			direction: CursorMove.Direction.Down,
+			unit: CursorMove.Unit.FoldedLine,
+			value: 3,
+			select: true,
+			noHistory: true,
+		},
+	);
 	assert.deepEqual(CursorMove.parse({ to: CursorMove.RawDirection.Left }), {
 		direction: CursorMove.Direction.Left,
 		unit: CursorMove.Unit.None,
@@ -28,7 +31,7 @@ test('CursorMove parses standard directions, units, selection, value, and histor
 });
 
 test('CursorMove command metadata rejects malformed command arguments', () => {
-	const constraint = CursorMove.metadata.args?.[0]?.constraint as ((value: unknown) => boolean);
+	const constraint = CursorMove.metadata.args?.[0]?.constraint as (value: unknown) => boolean;
 	assert.equal(constraint({ to: 'left', select: false, value: 2 }), true);
 	assert.equal(constraint({ to: 'left', select: 'yes' }), false);
 	assert.equal(constraint({ by: 'line' }), false);

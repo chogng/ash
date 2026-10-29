@@ -6,10 +6,22 @@ export interface IEquatable<T> {
 	equals(other: T): boolean;
 }
 
-export function strictEquals<T>(left: T, right: T): boolean { return left === right; }
-export function strictEqualsC<T>(): EqualityComparer<T> { return strictEquals; }
-export function arrayEquals<T>(left: readonly T[], right: readonly T[], equals: EqualityComparer<T> = strictEquals): boolean { return arraysEqual(left, right, equals); }
-export function arrayEqualsC<T>(equals: EqualityComparer<T> = strictEquals): EqualityComparer<readonly T[]> { return (left, right) => arrayEquals(left, right, equals); }
+export function strictEquals<T>(left: T, right: T): boolean {
+	return left === right;
+}
+export function strictEqualsC<T>(): EqualityComparer<T> {
+	return strictEquals;
+}
+export function arrayEquals<T>(
+	left: readonly T[],
+	right: readonly T[],
+	equals: EqualityComparer<T> = strictEquals,
+): boolean {
+	return arraysEqual(left, right, equals);
+}
+export function arrayEqualsC<T>(equals: EqualityComparer<T> = strictEquals): EqualityComparer<readonly T[]> {
+	return (left, right) => arrayEquals(left, right, equals);
+}
 
 export function structuralEquals<T>(left: T, right: T): boolean {
 	if (Object.is(left, right)) return true;
@@ -23,10 +35,18 @@ export function structuralEquals<T>(left: T, right: T): boolean {
 	return leftKeys.every(key => structuralEquals(left[key], right[key]));
 }
 
-export function structuralEqualsC<T>(): EqualityComparer<T> { return structuralEquals; }
-export function thisEqualsC<T extends IEquatable<T>>(): EqualityComparer<T> { return (left, right) => left.equals(right); }
+export function structuralEqualsC<T>(): EqualityComparer<T> {
+	return structuralEquals;
+}
+export function thisEqualsC<T extends IEquatable<T>>(): EqualityComparer<T> {
+	return (left, right) => left.equals(right);
+}
 
-export function equalsIfDefined<T>(left: T | null | undefined, right: T | null | undefined, equals: EqualityComparer<T>): boolean {
+export function equalsIfDefined<T>(
+	left: T | null | undefined,
+	right: T | null | undefined,
+	equals: EqualityComparer<T>,
+): boolean {
 	if (left == null || right == null) return left === right;
 	return equals(left, right);
 }

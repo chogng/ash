@@ -18,23 +18,38 @@ test('DecorationsService merges async completion notifications and skips unchang
 	const dom = new JSDOM('<!doctype html><head></head><body></body>');
 	using decorations = new DecorationsService(dom.window.document, new NullLoggerService());
 	using changes = new Emitter<readonly URI[]>();
-	using provider = decorations.registerDecorationsProvider({ label: 'Async', onDidChange: changes.event, provideDecorations: async () => ({ color: 'description.foreground', tooltip: 'Ignored' }) });
+	using provider = decorations.registerDecorationsProvider({
+		label: 'Async',
+		onDidChange: changes.event,
+		provideDecorations: async () => ({ color: 'description.foreground', tooltip: 'Ignored' }),
+	});
 	const resources = ['first', 'second', 'third'].map(name => URI.file(`/workspace/${name}`));
 	const notifications: boolean[][] = [];
-	using listener = decorations.onDidChangeDecorations(event => notifications.push(resources.map(resource => event.affectsResource(resource))));
+	using listener = decorations.onDidChangeDecorations(event =>
+		notifications.push(resources.map(resource => event.affectsResource(resource))),
+	);
 	const initial = new DeferredPromise<void>();
-	using initialListener = decorations.onDidChangeDecorations(() => { initialListener.dispose(); void initial.complete(); });
+	using initialListener = decorations.onDidChangeDecorations(() => {
+		initialListener.dispose();
+		void initial.complete();
+	});
 	decorations.getDecoration(resources[0]!, false);
 	decorations.getDecoration(resources[1]!, false);
 	await initial.p;
 	assert.deepEqual(notifications, [[true, true, false]]);
 	const next = new DeferredPromise<void>();
-	using nextListener = decorations.onDidChangeDecorations(() => { nextListener.dispose(); void next.complete(); });
+	using nextListener = decorations.onDidChangeDecorations(() => {
+		nextListener.dispose();
+		void next.complete();
+	});
 	changes.fire(resources.slice(0, 2));
 	assert.equal(notifications.length, 1);
 	decorations.getDecoration(resources[2]!, false);
 	await next.p;
-	assert.deepEqual(notifications, [[true, true, false], [false, false, true]]);
+	assert.deepEqual(notifications, [
+		[true, true, false],
+		[false, false, true],
+	]);
 	dom.window.close();
 });
 
@@ -47,7 +62,8 @@ test('DecorationsService caches provider queries and removes styles when labels 
 	const uri = URI.file('/workspace/file');
 	let queries = 0;
 	const provider = decorations.registerDecorationsProvider({
-		label: 'Test', onDidChange: changes.event,
+		label: 'Test',
+		onDidChange: changes.event,
 		provideDecorations: () => {
 			queries += 1;
 			return { color: 'description.foreground', letter: 'M', tooltip: 'Modified' };
@@ -75,7 +91,8 @@ test('DecorationsService discards cancelled results after invalidation and provi
 	const second = new DeferredPromise<IDecorationData | undefined>();
 	const tokens: CancellationToken[] = [];
 	using provider = decorations.registerDecorationsProvider({
-		label: 'Async', onDidChange: changes.event,
+		label: 'Async',
+		onDidChange: changes.event,
 		provideDecorations: (_uri, token) => {
 			tokens.push(token);
 			return tokens.length === 1 ? first.p : second.p;
@@ -91,7 +108,10 @@ test('DecorationsService discards cancelled results after invalidation and provi
 	const notifications: boolean[] = [];
 	using listener = decorations.onDidChangeDecorations(event => notifications.push(event.affectsResource(uri)));
 	const updated = new DeferredPromise<void>();
-	using updatedListener = decorations.onDidChangeDecorations(() => { updatedListener.dispose(); void updated.complete(); });
+	using updatedListener = decorations.onDidChangeDecorations(() => {
+		updatedListener.dispose();
+		void updated.complete();
+	});
 	await second.complete({ tooltip: 'Current result', color: 'description.foreground' });
 	await updated.p;
 	assert.deepEqual(notifications, [true]);
@@ -114,7 +134,8 @@ test('DecorationsService keeps resolved colors during async refresh and clears t
 	const queries = [initial, superseded, current];
 	const tokens: CancellationToken[] = [];
 	using provider = decorations.registerDecorationsProvider({
-		label: 'Async', onDidChange: changes.event,
+		label: 'Async',
+		onDidChange: changes.event,
 		provideDecorations: (resource, token) => {
 			if (resource.path === folder.path) {
 				return undefined;
@@ -155,8 +176,9 @@ test('DecorationsService clears the completed decoration on refresh failure or p
 	const pending = new DeferredPromise<IDecorationData | undefined>();
 	let refresh = false;
 	using provider = decorations.registerDecorationsProvider({
-		label: 'Async', onDidChange: changes.event,
-		provideDecorations: () => refresh ? pending.p : { color: 'description.foreground', tooltip: 'Ignored' },
+		label: 'Async',
+		onDidChange: changes.event,
+		provideDecorations: () => (refresh ? pending.p : { color: 'description.foreground', tooltip: 'Ignored' }),
 	});
 	using initial = decorations.getDecoration(uri, false)!;
 	refresh = true;
@@ -183,8 +205,20 @@ test('DecorationsService combines provider descriptions and bubbles only opted-i
 	using updates = new Emitter<readonly URI[]>();
 	const folder = URI.file('/workspace/folder');
 	const child = URI.joinPath(folder, 'file');
-	using ignored = decorations.registerDecorationsProvider({ label: 'Ignore', onDidChange: Event.None, provideDecorations: resource => resource.path === child.path ? { color: 'description.foreground', tooltip: 'Ignored' } : undefined });
-	using marker = decorations.registerDecorationsProvider({ label: 'Problems', onDidChange: updates.event, provideDecorations: resource => resource.path === child.path ? { weight: 10, color: 'error.foreground', letter: '!', tooltip: 'Error', bubble: true } : undefined });
+	using ignored = decorations.registerDecorationsProvider({
+		label: 'Ignore',
+		onDidChange: Event.None,
+		provideDecorations: resource =>
+			resource.path === child.path ? { color: 'description.foreground', tooltip: 'Ignored' } : undefined,
+	});
+	using marker = decorations.registerDecorationsProvider({
+		label: 'Problems',
+		onDidChange: updates.event,
+		provideDecorations: resource =>
+			resource.path === child.path
+				? { weight: 10, color: 'error.foreground', letter: '!', tooltip: 'Error', bubble: true }
+				: undefined,
+	});
 	using file = decorations.getDecoration(child, false)!;
 	assert.equal(file.tooltip, 'Error • Ignored');
 	assert.equal(decorations.getDecoration(folder, false), undefined);
@@ -200,7 +234,14 @@ test('DecorationsService cancels outstanding requests and removes its stylesheet
 	const decorations = new DecorationsService(dom.window.document, new NullLoggerService());
 	const pending = new DeferredPromise<IDecorationData | undefined>();
 	let token: CancellationToken | undefined;
-	using provider = decorations.registerDecorationsProvider({ label: 'Pending', onDidChange: Event.None, provideDecorations: (_uri, cancellation) => { token = cancellation; return pending.p; } });
+	using provider = decorations.registerDecorationsProvider({
+		label: 'Pending',
+		onDidChange: Event.None,
+		provideDecorations: (_uri, cancellation) => {
+			token = cancellation;
+			return pending.p;
+		},
+	});
 	decorations.getDecoration(URI.file('/workspace/file'), false);
 	decorations.dispose();
 	assert.equal(token!.isCancellationRequested, true);
@@ -210,12 +251,23 @@ test('DecorationsService cancels outstanding requests and removes its stylesheet
 	dom.window.close();
 });
 
-
 test('DecorationsService retains independent provider colors and badges and semantic icon colors', () => {
 	const dom = new JSDOM('<!doctype html><head></head><body></body>');
 	using decorations = new DecorationsService(dom.window.document, new NullLoggerService());
-	using status = decorations.registerDecorationsProvider({ label: 'Status', onDidChange: Event.None, provideDecorations: () => ({ color: 'description.foreground', tooltip: 'Modified' }) });
-	using marker = decorations.registerDecorationsProvider({ label: 'Marker', onDidChange: Event.None, provideDecorations: () => ({ weight: 10, letter: { ...Lxicon.add, color: { id: 'error.foreground' } }, tooltip: 'Problem' }) });
+	using status = decorations.registerDecorationsProvider({
+		label: 'Status',
+		onDidChange: Event.None,
+		provideDecorations: () => ({ color: 'description.foreground', tooltip: 'Modified' }),
+	});
+	using marker = decorations.registerDecorationsProvider({
+		label: 'Marker',
+		onDidChange: Event.None,
+		provideDecorations: () => ({
+			weight: 10,
+			letter: { ...Lxicon.add, color: { id: 'error.foreground' } },
+			tooltip: 'Problem',
+		}),
+	});
 	using handle = decorations.getDecoration(URI.file('/workspace/file'), false)!;
 	assert.equal(handle.tooltip, 'Problem • Modified');
 	assert.match(dom.window.document.head.textContent!, /--ash-description-foreground/u);

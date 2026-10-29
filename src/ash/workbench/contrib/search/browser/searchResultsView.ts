@@ -27,7 +27,9 @@ export class SearchResultsRenderer extends Disposable {
 		private readonly onRemoveElement: (element: RenderableMatch) => void,
 		@IHoverService private readonly hover: IHoverService,
 		@IConfigurationService private readonly configuration: IConfigurationService,
-	) { super(); }
+	) {
+		super();
+	}
 
 	public setLineNumberBudget(maximumLineNumber: number): void {
 		this.lineNumberDigits = String(maximumLineNumber).length;
@@ -42,10 +44,13 @@ export class SearchResultsRenderer extends Disposable {
 			content.classList.add('ash-search-match');
 			const showLineNumbers = this.configuration.getValue<boolean>(ContentSearchConfiguration.showLineNumbers);
 			const extraLines = element.range.endLineNumber - element.range.startLineNumber;
-			const lineLabel = (showLineNumbers ? `${element.range.startLineNumber}:` : '') + (extraLines > 0 ? `+${extraLines}` : '');
+			const lineLabel =
+				(showLineNumbers ? `${element.range.startLineNumber}:` : '') + (extraLines > 0 ? `+${extraLines}` : '');
 			if (lineLabel) {
 				// A shared budget aligns numbered results; a multiline hint remains visible without line numbers.
-				const digits = showLineNumbers ? Math.max(this.lineNumberDigits + 1, lineLabel.length) : lineLabel.length;
+				const digits = showLineNumbers
+					? Math.max(this.lineNumberDigits + 1, lineLabel.length)
+					: lineLabel.length;
 				content.style.gridTemplateColumns = `calc(${digits}ch + 4px) minmax(0, 1fr)`;
 				const line = h(this.document, 'span');
 				line.className = 'ash-search-line-number';
@@ -58,34 +63,60 @@ export class SearchResultsRenderer extends Disposable {
 			preview.className = 'ash-search-preview';
 			appendPreview(this.document, preview, element);
 			content.append(preview);
-			content.setAttribute('aria-label', localize('search.matchLabel', 'Line {0}, column {1}: {2}', element.range.startLineNumber, element.range.startColumn, element.preview));
+			content.setAttribute(
+				'aria-label',
+				localize(
+					'search.matchLabel',
+					'Line {0}, column {1}: {2}',
+					element.range.startLineNumber,
+					element.range.startColumn,
+					element.preview,
+				),
+			);
 		} else {
 			content.classList.add('ash-search-file-heading');
 			const labelContainer = h(this.document, 'span');
 			labelContainer.className = element.kind === 'file' ? 'ash-search-file-path' : 'ash-search-folder-path';
 			content.append(labelContainer);
-			const parent = element.kind === 'file' ? element.path.slice(0, Math.max(0, element.path.lastIndexOf('/'))) : '';
-			const description = element.kind === 'file' && !options.treeView ? [options.showWorkspace ? element.folder?.name : '', parent].filter(Boolean).join(' • ') : undefined;
+			const parent =
+				element.kind === 'file' ? element.path.slice(0, Math.max(0, element.path.lastIndexOf('/'))) : '';
+			const description =
+				element.kind === 'file' && !options.treeView
+					? [options.showWorkspace ? element.folder?.name : '', parent].filter(Boolean).join(' • ')
+					: undefined;
 			const label = options.folderNames?.join('/') ?? element.name;
-			resources.add(new IconLabel(labelContainer, {
-				label,
-				description,
-				title: element.resource.toString(),
-				ariaLabel: description ? `${label}, ${description}` : label,
-			}));
+			resources.add(
+				new IconLabel(labelContainer, {
+					label,
+					description,
+					title: element.resource.toString(),
+					ariaLabel: description ? `${label}, ${description}` : label,
+				}),
+			);
 			if (element.kind === 'file') {
-				const badge = resources.add(new CountBadge(content, {
-					count: element.matches.length, size: 'small'
-				}, defaultCountBadgeStyles));
+				const badge = resources.add(
+					new CountBadge(content, { count: element.matches.length, size: 'small' }, defaultCountBadgeStyles),
+				);
 				badge.domNode.classList.add('ash-search-file-count');
 			}
 		}
-		resources.add(this.hover.setupHover({ target: content, content: element.kind === 'match' ? element.preview : element.resource.toString() }));
-		resources.add(addDisposableListener(content, 'contextmenu', event => {
-			event.preventDefault();
-			event.stopPropagation();
-			this.showContextMenu(element, { x: event.clientX, y: event.clientY, targetWindow: this.document.defaultView ?? undefined });
-		}));
+		resources.add(
+			this.hover.setupHover({
+				target: content,
+				content: element.kind === 'match' ? element.preview : element.resource.toString(),
+			}),
+		);
+		resources.add(
+			addDisposableListener(content, 'contextmenu', event => {
+				event.preventDefault();
+				event.stopPropagation();
+				this.showContextMenu(element, {
+					x: event.clientX,
+					y: event.clientY,
+					targetWindow: this.document.defaultView ?? undefined,
+				});
+			}),
+		);
 		// A removed or virtualized row cannot retain an actionable context menu.
 		resources.add(toDisposable(() => this.onRemoveElement(element)));
 		return content;
@@ -93,11 +124,17 @@ export class SearchResultsRenderer extends Disposable {
 
 	public releaseRow(row: HTMLElement): void {
 		const content = row.querySelector<HTMLElement>('.ash-search-result');
-		if (content) { this.rows.deleteAndDispose(content); }
+		if (content) {
+			this.rows.deleteAndDispose(content);
+		}
 	}
 }
 
-function appendPreview(document: Document, container: HTMLElement, match: Extract<RenderableMatch, { kind: 'match'; }>): void {
+function appendPreview(
+	document: Document,
+	container: HTMLElement,
+	match: Extract<RenderableMatch, { kind: 'match' }>,
+): void {
 	const text = match.preview;
 	const hitStart = Math.max(0, Math.min(text.length, match.previewRange.start));
 	const hitEnd = Math.max(hitStart, Math.min(text.length, match.previewRange.end));
@@ -108,10 +145,14 @@ function appendPreview(document: Document, container: HTMLElement, match: Extrac
 	let start = Math.max(0, before.length - 26);
 	// Only presentation boundaries change. The complete hit and backend UTF-16 range stay intact,
 	// even when one unusually long match exceeds the surrounding-text budget.
-	if (start > 0 && isLowSurrogate(before.charCodeAt(start))) { start++; }
+	if (start > 0 && isLowSurrogate(before.charCodeAt(start))) {
+		start++;
+	}
 	// Reserve the ellipses and rendered context separators within the existing preview text limit.
 	let end = Math.min(after.length, Math.max(0, 246 - (before.length - start) - hit.length));
-	if (end < after.length && isLowSurrogate(after.charCodeAt(end))) { end--; }
+	if (end < after.length && isLowSurrogate(after.charCodeAt(end))) {
+		end--;
+	}
 	// Context yields width before the hit so narrow result rows still show what matched.
 	const prefix = h(document, 'span');
 	prefix.className = 'ash-search-preview-context';
@@ -124,4 +165,6 @@ function appendPreview(document: Document, container: HTMLElement, match: Extrac
 	container.append(prefix, mark, suffix);
 }
 
-function isLowSurrogate(value: number): boolean { return value >= 0xdc00 && value <= 0xdfff; }
+function isLowSurrogate(value: number): boolean {
+	return value >= 0xdc00 && value <= 0xdfff;
+}

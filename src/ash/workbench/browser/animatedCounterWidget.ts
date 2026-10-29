@@ -32,13 +32,17 @@ export class AnimatedCounterWidget extends Disposable {
 		this.value = h(container.ownerDocument, 'span', { className: 'ash-animated-counter-value' });
 		this.element.append(this.value);
 		container.append(this.element);
-		this._register(toDisposable(() => {
-			this.stopAnimation();
-			this.element.remove();
-		}));
-		this._register(accessibilityService.onDidChangeReducedMotion(() => {
-			if (accessibilityService.isMotionReduced()) this.stopAnimation();
-		}));
+		this._register(
+			toDisposable(() => {
+				this.stopAnimation();
+				this.element.remove();
+			}),
+		);
+		this._register(
+			accessibilityService.onDidChangeReducedMotion(() => {
+				if (accessibilityService.isMotionReduced()) this.stopAnimation();
+			}),
+		);
 		this._register(autorun(reader => this.update(options.count.read(reader))));
 	}
 
@@ -46,9 +50,13 @@ export class AnimatedCounterWidget extends Disposable {
 		if (count === this.count) return;
 		const previousCount = this.count;
 		const previousText = this.value.textContent ?? '';
-		const animate = previousCount !== undefined && count !== undefined
-			&& this.options.duration !== 0 && !this.accessibilityService.isMotionReduced()
-			&& typeof this.element.animate === 'function' && this.element.getClientRects().length > 0;
+		const animate =
+			previousCount !== undefined &&
+			count !== undefined &&
+			this.options.duration !== 0 &&
+			!this.accessibilityService.isMotionReduced() &&
+			typeof this.element.animate === 'function' &&
+			this.element.getClientRects().length > 0;
 		const previousWidth = animate ? this.element.getBoundingClientRect().width : 0;
 		// Interrupt older transitions instead of queuing stale counts behind them.
 		this.stopAnimation();
@@ -63,20 +71,30 @@ export class AnimatedCounterWidget extends Disposable {
 		outgoing.dataset.value = previousText;
 		this.element.append(outgoing);
 		this.outgoing = outgoing;
-		const down = (count! > previousCount!) === (this.options.direction !== 'bottomToTop');
+		const down = count! > previousCount! === (this.options.direction !== 'bottomToTop');
 		const offset = down ? '-100%' : '100%';
 		const timing: KeyframeAnimationOptions = { duration: this.options.duration ?? 240, easing: 'ease-out' };
-		this.animations.push(this.value.animate([
-			{ transform: `translateY(${offset})`, opacity: 0 },
-			{ transform: 'translateY(0)', opacity: 1 },
-		], timing));
-		const departure = outgoing.animate([
-			{ transform: 'translateY(0)', opacity: 1 },
-			{ transform: `translateY(${down ? '100%' : '-100%'})`, opacity: 0 },
-		], timing);
+		this.animations.push(
+			this.value.animate(
+				[
+					{ transform: `translateY(${offset})`, opacity: 0 },
+					{ transform: 'translateY(0)', opacity: 1 },
+				],
+				timing,
+			),
+		);
+		const departure = outgoing.animate(
+			[
+				{ transform: 'translateY(0)', opacity: 1 },
+				{ transform: `translateY(${down ? '100%' : '-100%'})`, opacity: 0 },
+			],
+			timing,
+		);
 		this.animations.push(departure);
 		if (Math.abs(previousWidth - nextWidth) > 0.5) {
-			this.animations.push(this.element.animate([{ width: `${previousWidth}px` }, { width: `${nextWidth}px` }], timing));
+			this.animations.push(
+				this.element.animate([{ width: `${previousWidth}px` }, { width: `${nextWidth}px` }], timing),
+			);
 		}
 		departure.onfinish = departure.oncancel = () => this.stopAnimation();
 	}

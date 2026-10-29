@@ -4,24 +4,42 @@ import { tmpdir } from 'node:os';
 import { basename, extname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-interface Capture { readonly status?: string; readonly timestamp?: string; readonly details?: string; readonly blockedOn?: string; }
-interface Step { readonly id?: string; readonly title?: string; readonly captures?: Capture[]; }
+interface Capture {
+	readonly status?: string;
+	readonly timestamp?: string;
+	readonly details?: string;
+	readonly blockedOn?: string;
+}
+interface Step {
+	readonly id?: string;
+	readonly title?: string;
+	readonly captures?: Capture[];
+}
 interface Manifest {
 	readonly scenarioId?: string;
 	readonly title?: string;
 	readonly outcome?: string;
 	readonly videoStartedAt?: string;
 	readonly steps?: Step[];
-	artifacts?: { videos?: string[]; };
+	artifacts?: { videos?: string[] };
 }
-interface Caption { readonly from: number; readonly to: number; readonly eyebrow: string; readonly title: string[]; readonly details: string[]; readonly accent: string; }
+interface Caption {
+	readonly from: number;
+	readonly to: number;
+	readonly eyebrow: string;
+	readonly title: string[];
+	readonly details: string[];
+	readonly accent: string;
+}
 
-const fontCandidates = process.env.CHAPTER_FONT ? [process.env.CHAPTER_FONT] : [
-	'/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
-	'/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
-	'/System/Library/Fonts/Supplemental/Arial Bold.ttf',
-	'C:/Windows/Fonts/arialbd.ttf',
-];
+const fontCandidates = process.env.CHAPTER_FONT
+	? [process.env.CHAPTER_FONT]
+	: [
+			'/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+			'/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+			'/System/Library/Fonts/Supplemental/Arial Bold.ttf',
+			'C:/Windows/Fonts/arialbd.ttf',
+		];
 
 export function resolveVideoTool(tool: 'ffmpeg' | 'ffprobe'): string | undefined {
 	const override = process.env[`${tool.toUpperCase()}_PATH`];
@@ -30,9 +48,16 @@ export function resolveVideoTool(tool: 'ffmpeg' | 'ffprobe'): string | undefined
 	for (const candidate of candidates) {
 		try {
 			execFileSync(candidate, ['-version'], { stdio: 'ignore' });
-			if (tool === 'ffmpeg' && !execFileSync(candidate, ['-hide_banner', '-h', 'filter=drawtext'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).includes('Filter drawtext')) continue;
+			if (
+				tool === 'ffmpeg' &&
+				!execFileSync(candidate, ['-hide_banner', '-h', 'filter=drawtext'], {
+					encoding: 'utf8',
+					stdio: ['ignore', 'pipe', 'ignore'],
+				}).includes('Filter drawtext')
+			)
+				continue;
 			return candidate;
-		} catch { }
+		} catch {}
 	}
 	return undefined;
 }
@@ -45,18 +70,33 @@ function installedToolCandidates(executable: string): string[] {
 			candidates.push(join(localAppData, 'Microsoft', 'WinGet', 'Links', executable));
 			const packages = join(localAppData, 'Microsoft', 'WinGet', 'Packages');
 			for (const packageName of readDirectories(packages).filter(name => /ffmpeg/iu.test(name))) {
-				for (const build of readDirectories(join(packages, packageName))) candidates.push(join(packages, packageName, build, 'bin', executable));
+				for (const build of readDirectories(join(packages, packageName)))
+					candidates.push(join(packages, packageName, build, 'bin', executable));
 			}
 		}
-		candidates.push(join(process.env.ProgramData ?? '', 'chocolatey', 'bin', executable), join(process.env.ProgramFiles ?? '', 'ffmpeg', 'bin', executable));
+		candidates.push(
+			join(process.env.ProgramData ?? '', 'chocolatey', 'bin', executable),
+			join(process.env.ProgramFiles ?? '', 'ffmpeg', 'bin', executable),
+		);
 	} else {
-		candidates.push(`/opt/homebrew/opt/ffmpeg-full/bin/${executable}`, `/opt/homebrew/bin/${executable}`, `/usr/local/bin/${executable}`, `/usr/bin/${executable}`);
+		candidates.push(
+			`/opt/homebrew/opt/ffmpeg-full/bin/${executable}`,
+			`/opt/homebrew/bin/${executable}`,
+			`/usr/local/bin/${executable}`,
+			`/usr/bin/${executable}`,
+		);
 	}
 	return candidates.filter(existsSync);
 }
 
 function readDirectories(root: string): string[] {
-	try { return readdirSync(root, { withFileTypes: true }).filter(entry => entry.isDirectory()).map(entry => entry.name); } catch { return []; }
+	try {
+		return readdirSync(root, { withFileTypes: true })
+			.filter(entry => entry.isDirectory())
+			.map(entry => entry.name);
+	} catch {
+		return [];
+	}
 }
 
 export function renderChapters(runRoot: string): void {
@@ -65,7 +105,11 @@ export function renderChapters(runRoot: string): void {
 	const videoStartedAt = Date.parse(manifest.videoStartedAt ?? '');
 	const rawVideos = (manifest.artifacts?.videos ?? []).filter(video => extname(video).toLowerCase() === '.webm');
 	if (rawVideos.length !== 1) {
-		console.log(rawVideos.length ? `The run has ${rawVideos.length} recordings; one caption timeline cannot represent multiple windows.` : 'No recorded video is available.');
+		console.log(
+			rawVideos.length
+				? `The run has ${rawVideos.length} recordings; one caption timeline cannot represent multiple windows.`
+				: 'No recorded video is available.',
+		);
 		return;
 	}
 	if (!Number.isFinite(videoStartedAt)) {
@@ -76,7 +120,10 @@ export function renderChapters(runRoot: string): void {
 	if (!font) throw new Error('No caption font could be found. Set CHAPTER_FONT to a TrueType font.');
 	const ffmpeg = resolveVideoTool('ffmpeg');
 	const ffprobe = resolveVideoTool('ffprobe');
-	if (!ffmpeg || !ffprobe) throw new Error(`${[!ffmpeg && 'ffmpeg', !ffprobe && 'ffprobe'].filter(Boolean).join(' and ')} could not be found`);
+	if (!ffmpeg || !ffprobe)
+		throw new Error(
+			`${[!ffmpeg && 'ffmpeg', !ffprobe && 'ffprobe'].filter(Boolean).join(' and ')} could not be found`,
+		);
 
 	const inputPath = join(runRoot, rawVideos[0]!);
 	const outputRelative = 'videos/annotated.mp4';
@@ -85,13 +132,30 @@ export function renderChapters(runRoot: string): void {
 	try {
 		const fontCopy = join(workDirectory, 'font.ttf');
 		writeFileSync(fontCopy, readFileSync(font));
-		const probe = JSON.parse(execFileSync(ffprobe, [
-			'-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-show_entries', 'format=duration', '-of', 'json', inputPath,
-		], { encoding: 'utf8' })) as { streams?: { width?: number; height?: number; }[]; format?: { duration?: string; }; };
+		const probe = JSON.parse(
+			execFileSync(
+				ffprobe,
+				[
+					'-v',
+					'error',
+					'-select_streams',
+					'v:0',
+					'-show_entries',
+					'stream=width,height',
+					'-show_entries',
+					'format=duration',
+					'-of',
+					'json',
+					inputPath,
+				],
+				{ encoding: 'utf8' },
+			),
+		) as { streams?: { width?: number; height?: number }[]; format?: { duration?: string } };
 		const width = Number(probe.streams?.[0]?.width);
 		const height = Number(probe.streams?.[0]?.height);
 		const duration = Number(probe.format?.duration);
-		if (!Number.isInteger(width) || !Number.isInteger(height) || !Number.isFinite(duration) || duration <= 0) throw new Error('The recorded video could not be probed.');
+		if (!Number.isInteger(width) || !Number.isInteger(height) || !Number.isFinite(duration) || duration <= 0)
+			throw new Error('The recorded video could not be probed.');
 
 		const margin = Math.round(width * 0.02);
 		const eyebrowSize = Math.max(12, Math.round(height * 0.02));
@@ -99,7 +163,7 @@ export function renderChapters(runRoot: string): void {
 		const detailSize = Math.max(11, Math.round(height * 0.018));
 		const lineHeight = (size: number): number => Math.round(size * 1.35);
 		const columnsFor = (size: number): number => Math.max(16, Math.floor((width - margin * 3) / (size * 0.52)));
-		const boundaries: { readonly step: Step; readonly at: number; }[] = [];
+		const boundaries: { readonly step: Step; readonly at: number }[] = [];
 		let previous = 0;
 		for (const step of manifest.steps ?? []) {
 			const started = step.captures?.find(capture => capture.status === 'started') ?? step.captures?.[0];
@@ -116,7 +180,14 @@ export function renderChapters(runRoot: string): void {
 
 		const captions: Caption[] = [];
 		if (boundaries[0]!.at > 0.05) {
-			captions.push({ from: 0, to: boundaries[0]!.at, eyebrow: 'ASH UI VALIDATION', title: wrap(manifest.title ?? 'UI validation', columnsFor(titleSize), 2), details: wrap(manifest.scenarioId ?? '', columnsFor(detailSize), 1), accent: accentFor(manifest.outcome) });
+			captions.push({
+				from: 0,
+				to: boundaries[0]!.at,
+				eyebrow: 'ASH UI VALIDATION',
+				title: wrap(manifest.title ?? 'UI validation', columnsFor(titleSize), 2),
+				details: wrap(manifest.scenarioId ?? '', columnsFor(detailSize), 1),
+				accent: accentFor(manifest.outcome),
+			});
 		}
 		boundaries.forEach((boundary, index) => {
 			const result = boundary.step.captures?.at(-1);
@@ -134,17 +205,32 @@ export function renderChapters(runRoot: string): void {
 		const titleLines = Math.max(1, ...captions.map(caption => caption.title.length));
 		const detailLines = Math.max(0, ...captions.map(caption => caption.details.length));
 		const gap = Math.round(height * 0.008);
-		let bandHeight = margin + lineHeight(eyebrowSize) + gap + titleLines * lineHeight(titleSize) + (detailLines ? gap + detailLines * lineHeight(detailSize) : 0) + margin;
+		let bandHeight =
+			margin +
+			lineHeight(eyebrowSize) +
+			gap +
+			titleLines * lineHeight(titleSize) +
+			(detailLines ? gap + detailLines * lineHeight(detailSize) : 0) +
+			margin;
 		bandHeight += bandHeight % 2;
 		const filters = [`[0:v]pad=${width}:${height + bandHeight}:0:${bandHeight}:color=0x0D1117[base]`];
 		let label = 'base';
 		let textIndex = 0;
-		const draw = (lines: readonly string[], size: number, y: number, color: string, caption: Caption, align: 'left' | 'right'): void => {
+		const draw = (
+			lines: readonly string[],
+			size: number,
+			y: number,
+			color: string,
+			caption: Caption,
+			align: 'left' | 'right',
+		): void => {
 			if (!lines.length || caption.to <= caption.from + 0.05) return;
 			const name = `text-${textIndex++}.txt`;
 			writeFileSync(join(workDirectory, name), lines.join('\n'));
 			const next = `text${textIndex}`;
-			filters.push(`[${label}]drawtext=fontfile=font.ttf:textfile=${name}:expansion=none:fontcolor=${color}:fontsize=${size}:line_spacing=${Math.round(size * 0.35)}:x=${align === 'right' ? `w-text_w-${margin}` : margin}:y=${y}:enable='between(t,${caption.from.toFixed(3)},${caption.to.toFixed(3)})'[${next}]`);
+			filters.push(
+				`[${label}]drawtext=fontfile=font.ttf:textfile=${name}:expansion=none:fontcolor=${color}:fontsize=${size}:line_spacing=${Math.round(size * 0.35)}:x=${align === 'right' ? `w-text_w-${margin}` : margin}:y=${y}:enable='between(t,${caption.from.toFixed(3)},${caption.to.toFixed(3)})'[${next}]`,
+			);
 			label = next;
 		};
 		for (const caption of captions) {
@@ -158,7 +244,34 @@ export function renderChapters(runRoot: string): void {
 		}
 		filters.push(`[${label}]setsar=1,format=yuv420p[out]`);
 		mkdirSync(join(runRoot, 'videos'), { recursive: true });
-		execFileSync(ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-i', inputPath, '-filter_complex', filters.join(';'), '-map', '[out]', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '30', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', outputPath], { cwd: workDirectory, stdio: ['ignore', 'inherit', 'inherit'] });
+		execFileSync(
+			ffmpeg,
+			[
+				'-y',
+				'-hide_banner',
+				'-loglevel',
+				'error',
+				'-i',
+				inputPath,
+				'-filter_complex',
+				filters.join(';'),
+				'-map',
+				'[out]',
+				'-an',
+				'-c:v',
+				'libx264',
+				'-preset',
+				'veryfast',
+				'-crf',
+				'30',
+				'-pix_fmt',
+				'yuv420p',
+				'-movflags',
+				'+faststart',
+				outputPath,
+			],
+			{ cwd: workDirectory, stdio: ['ignore', 'inherit', 'inherit'] },
+		);
 		manifest.artifacts ??= {};
 		manifest.artifacts.videos = [...new Set([outputRelative, ...(manifest.artifacts.videos ?? [])])];
 		writeFileSync(manifestPath, `${JSON.stringify(manifest, undefined, 2)}\n`);
@@ -171,10 +284,14 @@ export function renderChapters(runRoot: string): void {
 
 function accentFor(status: string | undefined): string {
 	switch (status) {
-		case 'passed': return '0x3FB950';
-		case 'failed': return '0xF85149';
-		case 'skipped': return '0xD29922';
-		default: return '0x58A6FF';
+		case 'passed':
+			return '0x3FB950';
+		case 'failed':
+			return '0xF85149';
+		case 'skipped':
+			return '0xD29922';
+		default:
+			return '0x58A6FF';
 	}
 }
 
@@ -182,8 +299,10 @@ function wrap(value: string, limit: number, maxLines: number): string[] {
 	const lines: string[] = [];
 	let line = '';
 	for (const word of value.trim().split(/\s+/u).filter(Boolean)) {
-		if (line && `${line} ${word}`.length > limit) { lines.push(line); line = word; }
-		else line = line ? `${line} ${word}` : word;
+		if (line && `${line} ${word}`.length > limit) {
+			lines.push(line);
+			line = word;
+		} else line = line ? `${line} ${word}` : word;
 	}
 	if (line) lines.push(line);
 	if (lines.length <= maxLines) return lines;
@@ -200,10 +319,18 @@ function pointReportAtAnnotatedVideo(runRoot: string, rawVideo: string, annotate
 }
 
 export function tryRenderChapters(runRoot: string): void {
-	try { renderChapters(runRoot); }
-	catch (error) { console.warn(`Unable to render evidence captions: ${error instanceof Error ? error.message : String(error)}. The raw recording is unaffected.`); }
+	try {
+		renderChapters(runRoot);
+	} catch (error) {
+		console.warn(
+			`Unable to render evidence captions: ${error instanceof Error ? error.message : String(error)}. The raw recording is unaffected.`,
+		);
+	}
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href && basename(process.argv[1] ?? '') === 'renderEvidenceChapters.js') {
+if (
+	import.meta.url === pathToFileURL(process.argv[1] ?? '').href &&
+	basename(process.argv[1] ?? '') === 'renderEvidenceChapters.js'
+) {
 	tryRenderChapters(resolve(process.argv[2] ?? process.env.RUN_ROOT ?? '.'));
 }

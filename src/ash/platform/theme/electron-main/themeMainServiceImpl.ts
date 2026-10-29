@@ -22,28 +22,43 @@ export class ThemeMainService extends Disposable implements IThemeMainService {
 	private readonly changed = this._register(new Emitter<IColorScheme>());
 	public readonly onDidChangeColorScheme = this.changed.event;
 	private scheme: IColorScheme;
-	constructor(private readonly systemTheme: SystemTheme, private readonly state: IStateService) {
+	constructor(
+		private readonly systemTheme: SystemTheme,
+		private readonly state: IStateService,
+	) {
 		super();
 		this.scheme = this.readScheme();
 		const update = (): void => {
 			const scheme = this.readScheme();
-			if (scheme.dark === this.scheme.dark && scheme.highContrast === this.scheme.highContrast) { return; }
+			if (scheme.dark === this.scheme.dark && scheme.highContrast === this.scheme.highContrast) {
+				return;
+			}
 			this.scheme = scheme;
 			this.changed.fire(scheme);
 		};
 		systemTheme.on('updated', update);
 		this._register(toDisposable(() => systemTheme.removeListener('updated', update)));
 	}
-	private readScheme(): IColorScheme { return { dark: this.systemTheme.shouldUseDarkColors, highContrast: this.systemTheme.shouldUseHighContrastColors }; }
-	public getColorScheme(): IColorScheme { return this.scheme; }
+	private readScheme(): IColorScheme {
+		return {
+			dark: this.systemTheme.shouldUseDarkColors,
+			highContrast: this.systemTheme.shouldUseHighContrastColors,
+		};
+	}
+	public getColorScheme(): IColorScheme {
+		return this.scheme;
+	}
 	public getBackgroundColor(scope = 'workbench'): string {
 		return this.getWindowSplash(scope).colorInfo.background;
 	}
 	public getWindowSplash(scope: string): IPartsSplash {
 		const saved = this.state.getItem(`windowSplash.${scope}`);
 		if (saved !== undefined) {
-			try { return validatePartsSplash(saved); }
-			catch { /* A rendering cache can be discarded without losing user state. */ }
+			try {
+				return validatePartsSplash(saved);
+			} catch {
+				/* A rendering cache can be discarded without losing user state. */
+			}
 		}
 		let scheme = this.scheme.dark ? ColorScheme.Dark : ColorScheme.Light;
 		if (this.scheme.highContrast) {
@@ -52,10 +67,15 @@ export class ThemeMainService extends Disposable implements IThemeMainService {
 		const colors = Colors.resolve(scheme);
 		const background = colors.find(color => color.id === editorBackground)?.value;
 		const text = colors.find(color => color.id === foreground)?.value;
-		if (!background || !text) { throw new Error('The startup theme must define background and foreground colors'); }
+		if (!background || !text) {
+			throw new Error('The startup theme must define background and foreground colors');
+		}
 		return {
 			baseTheme: scheme,
-			colorInfo: { background: Color.Format.CSS.formatHex(background), foreground: Color.Format.CSS.formatHex(text) },
+			colorInfo: {
+				background: Color.Format.CSS.formatHex(background),
+				foreground: Color.Format.CSS.formatHex(text),
+			},
 		};
 	}
 	public async saveWindowSplash(scope: string, splash: IPartsSplash): Promise<void> {

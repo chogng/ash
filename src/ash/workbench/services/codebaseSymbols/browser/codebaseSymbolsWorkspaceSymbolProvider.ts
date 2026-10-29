@@ -1,37 +1,60 @@
-import { Position } from "../../../../editor/common/core/position.js";
-import { Range } from "../../../../editor/common/core/range.js";
+import { Position } from '../../../../editor/common/core/position.js';
+import { Range } from '../../../../editor/common/core/range.js';
 import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
 import type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolProvider } from '../../../../editor/common/languages.js';
-import { workspaceResourceFromPath } from "../../../../platform/workspace/common/workspace.js";
-import type { ICodebaseSymbolsService, CodebaseSymbolsRange } from "../../../../platform/codebaseSymbols/common/codebaseSymbolsService.js";
-import type { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { workspaceResourceFromPath } from '../../../../platform/workspace/common/workspace.js';
+import type {
+	ICodebaseSymbolsService,
+	CodebaseSymbolsRange,
+} from '../../../../platform/codebaseSymbols/common/codebaseSymbolsService.js';
+import type { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 
 const MAX_WORKSPACE_SYMBOL_RESULTS = 100;
 
 /** Registers the local syntax declaration projection as one Workspace Symbol provider. */
-export function registerCodebaseSymbolsWorkspaceSymbolProvider(languageFeatures: ILanguageFeaturesService, symbols: ICodebaseSymbolsService, workspace: IWorkspaceContextService) {
-	return languageFeatures.workspaceSymbolProvider.register('*', new CodebaseSymbolsWorkspaceSymbolProvider(symbols, workspace));
+export function registerCodebaseSymbolsWorkspaceSymbolProvider(
+	languageFeatures: ILanguageFeaturesService,
+	symbols: ICodebaseSymbolsService,
+	workspace: IWorkspaceContextService,
+) {
+	return languageFeatures.workspaceSymbolProvider.register(
+		'*',
+		new CodebaseSymbolsWorkspaceSymbolProvider(symbols, workspace),
+	);
 }
 
 class CodebaseSymbolsWorkspaceSymbolProvider implements LanguageWorkspaceSymbolProvider {
-	constructor(private readonly symbols: ICodebaseSymbolsService, private readonly workspace: IWorkspaceContextService) { }
+	constructor(
+		private readonly symbols: ICodebaseSymbolsService,
+		private readonly workspace: IWorkspaceContextService,
+	) {}
 
 	async provideWorkspaceSymbols(query: string, signal: AbortSignal): Promise<readonly LanguageWorkspaceSymbol[]> {
 		const root = singleWorkspaceRoot(this.workspace);
 		if (!root) return Object.freeze([]);
 		const result = await this.symbols.search(query, MAX_WORKSPACE_SYMBOL_RESULTS, signal);
-		return Object.freeze(result.matches.flatMap(match => {
-			const resource = workspaceResourceFromPath(root, match.path);
-			if (!resource) return [];
-			return [Object.freeze({
-				name: match.name,
-				kind: match.kind,
-				resource,
-				range: textRange(match.selectionRange),
-				...(match.containerName === undefined ? {} : { containerName: match.containerName }),
-				data: Object.freeze({ source: "codebaseSymbols", score: match.score, sourceRevision: match.sourceRevision, declarationRange: textRange(match.declarationRange), matchedIndices: match.matchedIndices }),
-			})];
-		}));
+		return Object.freeze(
+			result.matches.flatMap(match => {
+				const resource = workspaceResourceFromPath(root, match.path);
+				if (!resource) return [];
+				return [
+					Object.freeze({
+						name: match.name,
+						kind: match.kind,
+						resource,
+						range: textRange(match.selectionRange),
+						...(match.containerName === undefined ? {} : { containerName: match.containerName }),
+						data: Object.freeze({
+							source: 'codebaseSymbols',
+							score: match.score,
+							sourceRevision: match.sourceRevision,
+							declarationRange: textRange(match.declarationRange),
+							matchedIndices: match.matchedIndices,
+						}),
+					}),
+				];
+			}),
+		);
 	}
 }
 

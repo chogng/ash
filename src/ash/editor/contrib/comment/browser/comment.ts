@@ -3,7 +3,13 @@ import { KeyChord, KeyCode, KeyMod } from '../../../../base/common/keyCodes.js';
 import * as nls from '../../../../nls.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { EditorAction, registerEditorAction, registerEditorContribution, type IActionOptions, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
+import {
+	EditorAction,
+	registerEditorAction,
+	registerEditorContribution,
+	type IActionOptions,
+	type ServicesAccessor,
+} from '../../../browser/editorFeatureRegistration.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { Range } from '../../../common/core/range.js';
 import { type ICommand } from '../../../common/editorCommon.js';
@@ -12,7 +18,10 @@ import { BlockCommentCommand } from './blockCommentCommand.js';
 import { LineCommentCommand, Type } from './lineCommentCommand.js';
 
 abstract class CommentLineAction extends EditorAction {
-	constructor(private readonly type: Type, options: IActionOptions) {
+	constructor(
+		private readonly type: Type,
+		options: IActionOptions,
+	) {
 		super(options);
 	}
 
@@ -33,15 +42,20 @@ abstract class CommentLineAction extends EditorAction {
 			if (previous.index < current.index) current.ignoreFirstLine = true;
 			else previous.ignoreFirstLine = true;
 		}
-		const commands = ordered.sort((left, right) => left.index - right.index).map<ICommand>(entry => new LineCommentCommand(
-			configuration,
-			entry.selection,
-			modelOptions.indentSize,
-			this.type,
-			comments.insertSpace,
-			comments.ignoreEmptyLines,
-			entry.ignoreFirstLine,
-		));
+		const commands = ordered
+			.sort((left, right) => left.index - right.index)
+			.map<ICommand>(
+				entry =>
+					new LineCommentCommand(
+						configuration,
+						entry.selection,
+						modelOptions.indentSize,
+						this.type,
+						comments.insertSpace,
+						comments.ignoreEmptyLines,
+						entry.ignoreFirstLine,
+					),
+			);
 		editor.pushUndoStop();
 		editor.executeCommands(this.id, commands);
 		editor.pushUndoStop();
@@ -66,7 +80,10 @@ class AddLineCommentAction extends CommentLineAction {
 			id: 'editor.action.addCommentLine',
 			label: nls.localize2('comment.line.add', 'Add Line Comment'),
 			precondition: EditorContextKeys.writable,
-			kbOpts: { primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyC), weight: KeybindingWeight.EditorContrib },
+			kbOpts: {
+				primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyC),
+				weight: KeybindingWeight.EditorContrib,
+			},
 			canTriggerInlineEdits: true,
 		});
 	}
@@ -78,7 +95,10 @@ class RemoveLineCommentAction extends CommentLineAction {
 			id: 'editor.action.removeCommentLine',
 			label: nls.localize2('comment.line.remove', 'Remove Line Comment'),
 			precondition: EditorContextKeys.writable,
-			kbOpts: { primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyU), weight: KeybindingWeight.EditorContrib },
+			kbOpts: {
+				primary: KeyChord(KeyMod.CtrlCmd | KeyCode.KeyK, KeyMod.CtrlCmd | KeyCode.KeyU),
+				weight: KeybindingWeight.EditorContrib,
+			},
 			canTriggerInlineEdits: true,
 		});
 	}
@@ -105,7 +125,10 @@ class BlockCommentAction extends EditorAction {
 		const configuration = accessor.get(ILanguageConfigurationService);
 		const insertSpace = editor.getOption(EditorOption.comments).insertSpace;
 		editor.pushUndoStop();
-		editor.executeCommands(this.id, selections.map(selection => new BlockCommentCommand(selection, insertSpace, configuration)));
+		editor.executeCommands(
+			this.id,
+			selections.map(selection => new BlockCommentCommand(selection, insertSpace, configuration)),
+		);
 		editor.pushUndoStop();
 	}
 }
@@ -116,39 +139,55 @@ registerEditorAction(RemoveLineCommentAction);
 const toggleBlockComment = registerEditorAction(BlockCommentAction);
 
 registerEditorContribution({
-	id: 'editor.contrib.comment', install: context => {
+	id: 'editor.contrib.comment',
+	install: context => {
 		if (context.kind !== 'text') {
 			return;
 		}
-		context.register(context.editor.onKeyDown(event => {
-			if (event.browserEvent.defaultPrevented || event.isComposing || event.browserEvent.getModifierState('AltGraph')) {
-				return;
-			}
-			const line = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === '/';
-			const block = event.shiftKey && event.altKey && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === 'a';
-			if (!line && !block) {
-				return;
-			}
-			const action = context.editor.getAction(line ? toggleLineComment.id : toggleBlockComment.id);
-			if (!action?.isSupported()) {
-				return;
-			}
-			const position = context.editor.getPosition();
-			const model = context.editor.getModel();
-			if (!position || !model) {
-				return;
-			}
-			const languageId = model.getLanguageIdAtPosition(position.lineNumber, position.column);
-			const comments = context.configurations.getLanguageConfiguration(languageId).comments;
-			if (line ? !comments?.lineCommentToken : !comments?.blockCommentStartToken || !comments.blockCommentEndToken) {
-				return;
-			}
-			event.stop();
-			void action.run().catch(context.onLanguageError);
-			const selection = context.editor.getSelection();
-			if (selection) {
-				context.view.revealPosition(selection.getPosition());
-			}
-		}));
-	}
+		context.register(
+			context.editor.onKeyDown(event => {
+				if (
+					event.browserEvent.defaultPrevented ||
+					event.isComposing ||
+					event.browserEvent.getModifierState('AltGraph')
+				) {
+					return;
+				}
+				const line = (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key === '/';
+				const block =
+					event.shiftKey &&
+					event.altKey &&
+					!event.ctrlKey &&
+					!event.metaKey &&
+					event.key.toLowerCase() === 'a';
+				if (!line && !block) {
+					return;
+				}
+				const action = context.editor.getAction(line ? toggleLineComment.id : toggleBlockComment.id);
+				if (!action?.isSupported()) {
+					return;
+				}
+				const position = context.editor.getPosition();
+				const model = context.editor.getModel();
+				if (!position || !model) {
+					return;
+				}
+				const languageId = model.getLanguageIdAtPosition(position.lineNumber, position.column);
+				const comments = context.configurations.getLanguageConfiguration(languageId).comments;
+				if (
+					line
+						? !comments?.lineCommentToken
+						: !comments?.blockCommentStartToken || !comments.blockCommentEndToken
+				) {
+					return;
+				}
+				event.stop();
+				void action.run().catch(context.onLanguageError);
+				const selection = context.editor.getSelection();
+				if (selection) {
+					context.view.revealPosition(selection.getPosition());
+				}
+			}),
+		);
+	},
 });

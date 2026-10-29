@@ -31,18 +31,52 @@ export class CoworkPaneFactory extends Disposable {
 		super();
 		this.services = this._register(services.createChild());
 		// Cowork owns its defaults and remembered choice while sharing the catalog and provider connections.
-		this.services.registerInstance(ILanguageModelsConfigurationService, this._register(services.createInstance(LanguageModelsConfigurationService, CoworkModelPreferences)));
+		this.services.registerInstance(
+			ILanguageModelsConfigurationService,
+			this._register(services.createInstance(LanguageModelsConfigurationService, CoworkModelPreferences)),
+		);
 	}
 
-	public createPane(container: HTMLElement, panelId: string, selection: SessionsViewSelection, createNewSession: () => void): ISessionsConversationPane {
-		const scope = this.providerScopes.createScope(selection.kind === 'session' ? selection.active.session.sessionId : undefined, selection.kind === 'untitled' ? selection.session.providerId : undefined);
+	public createPane(
+		container: HTMLElement,
+		panelId: string,
+		selection: SessionsViewSelection,
+		createNewSession: () => void,
+	): ISessionsConversationPane {
+		const scope = this.providerScopes.createScope(
+			selection.kind === 'session' ? selection.active.session.sessionId : undefined,
+			selection.kind === 'untitled' ? selection.session.providerId : undefined,
+		);
 		try {
-			scope.registerSingleton(ILanguageModelsConfigurationService, () => scope.createInstance(LanguageModelsConfigurationService, CoworkModelPreferences));
-			const model = scope.createInstance(CoworkWidgetModel, this.chat, selection.kind === 'session' ? { kind: 'session', active: selection.active } : { kind: 'untitled', session: selection.session }, this.sessions);
-			const pane = scope.createInstance<CoworkWidget<CoworkWidgetModel>>(CoworkWidget, container, panelId, model, createNewSession, this.commands, undefined, undefined, undefined,
-				(inputContainer: HTMLElement, delegate: ChatInputDelegate) => scope.createInstance(NewCoworkInputWidget, inputContainer, delegate, model));
+			scope.registerSingleton(ILanguageModelsConfigurationService, () =>
+				scope.createInstance(LanguageModelsConfigurationService, CoworkModelPreferences),
+			);
+			const model = scope.createInstance(
+				CoworkWidgetModel,
+				this.chat,
+				selection.kind === 'session'
+					? { kind: 'session', active: selection.active }
+					: { kind: 'untitled', session: selection.session },
+				this.sessions,
+			);
+			const pane = scope.createInstance<CoworkWidget<CoworkWidgetModel>>(
+				CoworkWidget,
+				container,
+				panelId,
+				model,
+				createNewSession,
+				this.commands,
+				undefined,
+				undefined,
+				undefined,
+				(inputContainer: HTMLElement, delegate: ChatInputDelegate) =>
+					scope.createInstance(NewCoworkInputWidget, inputContainer, delegate, model),
+			);
 			return new ScopedSessionConversationPane(pane, scope, model);
-		} catch (error) { scope.dispose(); throw error; }
+		} catch (error) {
+			scope.dispose();
+			throw error;
+		}
 	}
 }
 

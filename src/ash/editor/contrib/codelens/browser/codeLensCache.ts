@@ -21,7 +21,9 @@ interface CacheEntry {
 }
 
 const cachedCodeLensProvider: CodeLensProvider = {
-	provideCodeLenses: () => { throw new Error('Cached CodeLens entries cannot provide results'); },
+	provideCodeLenses: () => {
+		throw new Error('Cached CodeLens entries cannot provide results');
+	},
 };
 
 /** Owns the bounded non-executable cache and its optional workspace storage binding. */
@@ -52,15 +54,19 @@ export class CodeLensCache {
 		const binding = new DisposableStore();
 		this.storageBinding = binding;
 		binding.add(storageService.onWillSaveState(() => this.store(storageService)));
-		binding.add(storageService.onDidChangeValue(event => {
-			if (event.external && event.scope === StorageScope.WORKSPACE && event.key === StorageKey) {
-				this.restore(storageService.get(StorageKey, StorageScope.WORKSPACE, '{}'));
-			}
-		}));
-		binding.add(toDisposable(() => {
-			this.store(storageService);
-			if (this.storageBinding === binding) this.storageBinding = undefined;
-		}));
+		binding.add(
+			storageService.onDidChangeValue(event => {
+				if (event.external && event.scope === StorageScope.WORKSPACE && event.key === StorageKey) {
+					this.restore(storageService.get(StorageKey, StorageScope.WORKSPACE, '{}'));
+				}
+			}),
+		);
+		binding.add(
+			toDisposable(() => {
+				this.store(storageService);
+				if (this.storageBinding === binding) this.storageBinding = undefined;
+			}),
+		);
 		return binding;
 	}
 
@@ -84,16 +90,13 @@ export class CodeLensCache {
 const caches = new WeakMap<ILanguageFeaturesService, CodeLensCache>();
 export function getCodeLensCache(features: ILanguageFeaturesService): CodeLensCache {
 	let cache = caches.get(features);
-	if (!cache) caches.set(features, cache = new CodeLensCache());
+	if (!cache) caches.set(features, (cache = new CodeLensCache()));
 	return cache;
 }
 
 function createCachedItem(range: IRange, title: string | undefined): CodeLensItem {
 	return Object.freeze({
-		symbol: Object.freeze({
-			range,
-			...(title ? { command: Object.freeze({ id: '', title }) } : {}),
-		}),
+		symbol: Object.freeze({ range, ...(title ? { command: Object.freeze({ id: '', title }) } : {}) }),
 		provider: cachedCodeLensProvider,
 	});
 }
@@ -114,7 +117,9 @@ function deserialize(raw: string): ReadonlyMap<string, CacheEntry> {
 		} catch {
 			continue;
 		}
-		const lines = [...new Set(candidate.lines)].filter(line => line <= candidate.lineCount).sort((left, right) => left - right);
+		const lines = [...new Set(candidate.lines)]
+			.filter(line => line <= candidate.lineCount)
+			.sort((left, right) => left - right);
 		const lenses = lines.map(line => createCachedItem(Range.fromPositions(new Position(line, 1)), undefined));
 		result.set(key, { lineCount: candidate.lineCount, model: createModel(lenses) });
 	}
@@ -128,7 +133,13 @@ function createModel(items: readonly CodeLensItem[]): CodeLensModel {
 }
 
 function isSerializedCacheEntry(value: unknown): value is SerializedCacheEntry {
-	if (!isRecord(value) || !Number.isSafeInteger(value.lineCount) || (value.lineCount as number) < 1 || !Array.isArray(value.lines)) return false;
+	if (
+		!isRecord(value) ||
+		!Number.isSafeInteger(value.lineCount) ||
+		(value.lineCount as number) < 1 ||
+		!Array.isArray(value.lines)
+	)
+		return false;
 	return value.lines.every(line => Number.isSafeInteger(line) && line >= 1);
 }
 

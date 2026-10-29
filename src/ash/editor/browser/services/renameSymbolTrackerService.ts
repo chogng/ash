@@ -4,7 +4,8 @@ import { type Position } from '../../common/core/position.js';
 import { type Range } from '../../common/core/range.js';
 import { type ITextModel } from '../../common/model.js';
 
-export const IRenameSymbolTrackerService = createServiceIdentifier<IRenameSymbolTrackerService>('renameSymbolTrackerService');
+export const IRenameSymbolTrackerService =
+	createServiceIdentifier<IRenameSymbolTrackerService>('renameSymbolTrackerService');
 
 export interface ITrackedWord {
 	readonly model: ITextModel;

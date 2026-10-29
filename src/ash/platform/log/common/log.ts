@@ -1,17 +1,17 @@
-import { Disposable, type IDisposable } from "../../../base/common/lifecycle.js";
+import { Disposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { Emitter, Event } from '../../../base/common/event.js';
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export const LogLevel = Object.freeze({
-	Off: "off",
-	Trace: "trace",
-	Debug: "debug",
-	Info: "information",
-	Warning: "warning",
-	Error: "error",
+	Off: 'off',
+	Trace: 'trace',
+	Debug: 'debug',
+	Info: 'information',
+	Warning: 'warning',
+	Error: 'error',
 } as const);
 
-export type LogLevel = typeof LogLevel[keyof typeof LogLevel];
+export type LogLevel = (typeof LogLevel)[keyof typeof LogLevel];
 export type LogEntryLevel = Exclude<LogLevel, typeof LogLevel.Off>;
 export const DEFAULT_LOG_LEVEL: LogLevel = LogLevel.Info;
 
@@ -40,8 +40,8 @@ export interface ILogServiceHost extends ILogService {
 	registerSink(sink: ILogSink, replay?: boolean): IDisposable;
 }
 
-export const ILogService = createServiceIdentifier<ILogService>("logService");
-export const ILoggerService = createServiceIdentifier<ILoggerService>("loggerService");
+export const ILogService = createServiceIdentifier<ILogService>('logService');
+export const ILoggerService = createServiceIdentifier<ILoggerService>('loggerService');
 
 export interface ILoggerService {
 	createLogger(id: string, options?: ILoggerOptions): ILogger;
@@ -72,7 +72,7 @@ export interface DidChangeLoggersEvent {
 
 /** Owns logger identity and lifetime; hosts choose only the persistence sinks. */
 export abstract class AbstractLoggerService<T extends ILogger = ILogger> extends Disposable implements ILoggerService {
-	private readonly loggers = new Map<string, { logger: T; info: ILoggerResource; subscription: IDisposable; }>();
+	private readonly loggers = new Map<string, { logger: T; info: ILoggerResource; subscription: IDisposable }>();
 	private readonly loggersChanged = this._register(new Emitter<DidChangeLoggersEvent>());
 	readonly onDidChangeLoggers = this.loggersChanged.event;
 	private readonly visibilityChanged = this._register(new Emitter<readonly [string, boolean]>());
@@ -98,8 +98,12 @@ export abstract class AbstractLoggerService<T extends ILogger = ILogger> extends
 	}
 
 	protected abstract doCreateLogger(id: string): T;
-	getLogger(id: string): T | undefined { return this.loggers.get(id)?.logger; }
-	*getRegisteredLoggers(): Iterable<ILoggerResource> { for (const { info } of this.loggers.values()) yield info; }
+	getLogger(id: string): T | undefined {
+		return this.loggers.get(id)?.logger;
+	}
+	*getRegisteredLoggers(): Iterable<ILoggerResource> {
+		for (const { info } of this.loggers.values()) yield info;
+	}
 	setVisibility(id: string, visible: boolean): void {
 		const entry = this.loggers.get(id);
 		if (!entry || Boolean(entry.info.hidden) === !visible) return;
@@ -107,7 +111,10 @@ export abstract class AbstractLoggerService<T extends ILogger = ILogger> extends
 		this.visibilityChanged.fire([id, visible]);
 	}
 	protected override disposeCore(): void {
-		for (const { logger, subscription } of this.loggers.values()) { subscription.dispose(); logger.dispose(); }
+		for (const { logger, subscription } of this.loggers.values()) {
+			subscription.dispose();
+			logger.dispose();
+		}
 		this.loggers.clear();
 		super.disposeCore();
 	}
@@ -149,19 +156,28 @@ export interface ILogger extends ILogServiceHost, IDisposable {
 }
 
 export function isLogLevel(value: unknown): value is LogLevel {
-	return typeof value === "string" && Object.values(LogLevel).includes(value as LogLevel);
+	return typeof value === 'string' && Object.values(LogLevel).includes(value as LogLevel);
 }
 
 /** The startup resource uses the standard short spellings, independently of entry severity names. */
 export function parseLogLevel(value: string): LogLevel | undefined {
 	switch (value.toLowerCase()) {
-		case 'trace': return LogLevel.Trace;
-		case 'debug': return LogLevel.Debug;
-		case 'info': case 'information': return LogLevel.Info;
-		case 'warn': case 'warning': return LogLevel.Warning;
-		case 'error': return LogLevel.Error;
-		case 'off': return LogLevel.Off;
-		default: return undefined;
+		case 'trace':
+			return LogLevel.Trace;
+		case 'debug':
+			return LogLevel.Debug;
+		case 'info':
+		case 'information':
+			return LogLevel.Info;
+		case 'warn':
+		case 'warning':
+			return LogLevel.Warning;
+		case 'error':
+			return LogLevel.Error;
+		case 'off':
+			return LogLevel.Off;
+		default:
+			return undefined;
 	}
 }
 
@@ -176,24 +192,58 @@ export function canLog(loggerLevel: LogLevel, messageLevel: LogLevel): boolean {
 
 export function log(logger: ILogService, level: LogLevel, message: string): void {
 	switch (level) {
-		case LogLevel.Trace: logger.trace(message); break;
-		case LogLevel.Debug: logger.debug(message); break;
-		case LogLevel.Info: logger.info(message); break;
-		case LogLevel.Warning: logger.warn(message); break;
-		case LogLevel.Error: logger.error(message); break;
-		case LogLevel.Off: break;
+		case LogLevel.Trace:
+			logger.trace(message);
+			break;
+		case LogLevel.Debug:
+			logger.debug(message);
+			break;
+		case LogLevel.Info:
+			logger.info(message);
+			break;
+		case LogLevel.Warning:
+			logger.warn(message);
+			break;
+		case LogLevel.Error:
+			logger.error(message);
+			break;
+		case LogLevel.Off:
+			break;
 	}
 }
 
 export class ConsoleLogger implements ILogService {
-	constructor(private readonly category = "application", private readonly target: Pick<Console, "debug" | "info" | "warn" | "error"> = console) { }
-	trace(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write("debug", message, argument, arguments_); }
-	debug(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write("debug", message, argument, arguments_); }
-	info(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write("info", message, argument, arguments_); }
-	warn(message: string, argument?: unknown, ...arguments_: unknown[]): void { this.write("warn", message, argument, arguments_); }
-	error(message: string | Error, argument?: unknown, ...arguments_: unknown[]): void { this.write("error", message instanceof Error ? message.message : message, argument, message instanceof Error ? [message, ...arguments_] : arguments_); }
+	constructor(
+		private readonly category = 'application',
+		private readonly target: Pick<Console, 'debug' | 'info' | 'warn' | 'error'> = console,
+	) {}
+	trace(message: string, argument?: unknown, ...arguments_: unknown[]): void {
+		this.write('debug', message, argument, arguments_);
+	}
+	debug(message: string, argument?: unknown, ...arguments_: unknown[]): void {
+		this.write('debug', message, argument, arguments_);
+	}
+	info(message: string, argument?: unknown, ...arguments_: unknown[]): void {
+		this.write('info', message, argument, arguments_);
+	}
+	warn(message: string, argument?: unknown, ...arguments_: unknown[]): void {
+		this.write('warn', message, argument, arguments_);
+	}
+	error(message: string | Error, argument?: unknown, ...arguments_: unknown[]): void {
+		this.write(
+			'error',
+			message instanceof Error ? message.message : message,
+			argument,
+			message instanceof Error ? [message, ...arguments_] : arguments_,
+		);
+	}
 
-	private write(method: "debug" | "info" | "warn" | "error", message: string, argument: unknown, arguments_: readonly unknown[]): void {
+	private write(
+		method: 'debug' | 'info' | 'warn' | 'error',
+		message: string,
+		argument: unknown,
+		arguments_: readonly unknown[],
+	): void {
 		const values = argument === undefined ? arguments_ : [argument, ...arguments_];
 		this.target[method](`[${this.category}] ${message}`, ...values);
 	}
@@ -204,30 +254,48 @@ export class NullLoggerService implements ILogServiceHost, ILoggerService, ILogg
 	readonly onDidDispose = Event.None;
 	readonly onDidChangeLoggers = Event.None;
 	readonly onDidChangeVisibility = Event.None;
-	getLogger(_id: string): ILogger | undefined { return undefined; }
-	getRegisteredLoggers(): Iterable<ILoggerResource> { return []; }
-	setVisibility(_id: string, _visible: boolean): void { }
-	getLevel(): LogLevel { return LogLevel.Off; }
-	setLevel(_level: LogLevel): void { }
-	async flush(): Promise<void> { }
-	dispose(): void { }
-	[Symbol.dispose](): void { this.dispose(); }
-	trace(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
-	debug(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
-	info(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
-	warn(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
-	error(_categoryOrError: string | Error, _messageOrArgument?: unknown, ..._arguments: unknown[]): void { }
-	registerSink(_sink: ILogSink): IDisposable { return { dispose() { }, [Symbol.dispose]() { } }; }
-	createLogger(_category: string): ILogger { return this; }
+	getLogger(_id: string): ILogger | undefined {
+		return undefined;
+	}
+	getRegisteredLoggers(): Iterable<ILoggerResource> {
+		return [];
+	}
+	setVisibility(_id: string, _visible: boolean): void {}
+	getLevel(): LogLevel {
+		return LogLevel.Off;
+	}
+	setLevel(_level: LogLevel): void {}
+	async flush(): Promise<void> {}
+	dispose(): void {}
+	[Symbol.dispose](): void {
+		this.dispose();
+	}
+	trace(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void {}
+	debug(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void {}
+	info(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void {}
+	warn(_categoryOrMessage: string, _messageOrArgument?: unknown, ..._arguments: unknown[]): void {}
+	error(_categoryOrError: string | Error, _messageOrArgument?: unknown, ..._arguments: unknown[]): void {}
+	registerSink(_sink: ILogSink): IDisposable {
+		return { dispose() {}, [Symbol.dispose]() {} };
+	}
+	createLogger(_category: string): ILogger {
+		return this;
+	}
 }
 
 function logLevelOrder(level: LogLevel): number {
 	switch (level) {
-		case LogLevel.Trace: return 1;
-		case LogLevel.Debug: return 2;
-		case LogLevel.Info: return 3;
-		case LogLevel.Warning: return 4;
-		case LogLevel.Error: return 5;
-		case LogLevel.Off: return Number.POSITIVE_INFINITY;
+		case LogLevel.Trace:
+			return 1;
+		case LogLevel.Debug:
+			return 2;
+		case LogLevel.Info:
+			return 3;
+		case LogLevel.Warning:
+			return 4;
+		case LogLevel.Error:
+			return 5;
+		case LogLevel.Off:
+			return Number.POSITIVE_INFINITY;
 	}
 }

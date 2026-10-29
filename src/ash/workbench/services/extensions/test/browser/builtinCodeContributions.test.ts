@@ -8,7 +8,9 @@ suite('codeExtension browser component', () => {
 		const { page } = browserTests;
 
 		const networkRequests: string[] = [];
-		page.on('request', request => { if (request.url().includes('__code_')) networkRequests.push(request.url()); });
+		page.on('request', request => {
+			if (request.url().includes('__code_')) networkRequests.push(request.url());
+		});
 		await page.goto('/codeExtension.html');
 		await page.waitForFunction(() => !!window.ashCodeExtension);
 		try {
@@ -33,6 +35,8 @@ suite('codeExtension browser component', () => {
 				expect((await page.evaluate(() => window.ashCodeExtension.undo())).text).toBe('');
 			}
 			expect(networkRequests).toEqual([]);
-		} finally { await page.evaluate(() => window.ashCodeExtension?.dispose()).catch(() => undefined); }
+		} finally {
+			await page.evaluate(() => window.ashCodeExtension?.dispose()).catch(() => undefined);
+		}
 	});
 });

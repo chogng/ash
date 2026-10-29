@@ -3,7 +3,12 @@ import { test } from 'mocha';
 import { Emitter, Event } from '../../../../../base/common/event.js';
 import { IAccountService, type AccountState } from '../../../../../platform/accounts/common/accountService.js';
 import { createDisconnectedGitHubService } from '../../../../../platform/github/browser/appServerGitHubService.js';
-import { GitHubError, GitHubErrorCode, IGitHubService, type GitHubAccount } from '../../../../../platform/github/common/githubService.js';
+import {
+	GitHubError,
+	GitHubErrorCode,
+	IGitHubService,
+	type GitHubAccount,
+} from '../../../../../platform/github/common/githubService.js';
 import type { JsonValue } from '../../../../../base/common/jsonValue.js';
 import { ILogService, NullLoggerService } from '../../../../../platform/log/common/log.js';
 import type { PolicyValue } from '../../../../../base/common/policy.js';
@@ -16,45 +21,84 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import { ConfigurationService } from '../../../../../platform/configuration/common/configurationService.js';
 import { TestConfigurationFiles } from '../../../configuration/test/common/testServices.js';
 import { UserDataProfileService } from '../../../userDataProfile/browser/userDataProfileService.js';
-import { ChatModelPreferences, LanguageModelsConfigurationService } from '../../../../contrib/chat/browser/languageModelsConfigurationService.js';
+import {
+	ChatModelPreferences,
+	LanguageModelsConfigurationService,
+} from '../../../../contrib/chat/browser/languageModelsConfigurationService.js';
 import type { IStorageService } from '../../../../../platform/storage/common/storage.js';
 
 const log = new NullLoggerService();
-const account: GitHubAccount = { id: 'first', host: 'github.com', login: 'first', status: 'ready', credentialRevision: 1n };
-const binding: Record<string, PolicyDefinition> = { ManagedFeature: { type: 'boolean', managedSettings: { strictPluginOnlyCustomization: { type: 'boolean' } } } };
+const account: GitHubAccount = {
+	id: 'first',
+	host: 'github.com',
+	login: 'first',
+	status: 'ready',
+	credentialRevision: 1n,
+};
+const binding: Record<string, PolicyDefinition> = {
+	ManagedFeature: { type: 'boolean', managedSettings: { strictPluginOnlyCustomization: { type: 'boolean' } } },
+};
 
 function accountServices(events: Emitter<AccountState>): IAccountService {
-	const unexpected = async (): Promise<never> => { throw new Error('Unexpected account mutation'); };
+	const unexpected = async (): Promise<never> => {
+		throw new Error('Unexpected account mutation');
+	};
 	return {
-		onDidChangeAccounts: events.event, onDidCompleteLogin: Event.None,
-		read: async () => ({ revision: 1n, accounts: [] }), startLogin: unexpected, cancelLogin: unexpected, logout: unexpected
+		onDidChangeAccounts: events.event,
+		onDidCompleteLogin: Event.None,
+		read: async () => ({ revision: 1n, accounts: [] }),
+		startLogin: unexpected,
+		cancelLogin: unexpected,
+		logout: unexpected,
 	};
 }
 
-function githubServices(read: IGitHubService['readManagedSettings'], list: () => Promise<readonly GitHubAccount[]> = async () => [account]): IGitHubService {
+function githubServices(
+	read: IGitHubService['readManagedSettings'],
+	list: () => Promise<readonly GitHubAccount[]> = async () => [account],
+): IGitHubService {
 	return { ...createDisconnectedGitHubService(), listAccounts: list, readManagedSettings: read };
 }
 
 test('Registered account mappings resolve real provider fields and system policy has priority', async () => {
 	using changes = new Emitter<AccountState>();
 	const ids: string[] = [];
-	using accounts = new AccountPolicyService(accountServices(changes), githubServices(async id => { ids.push(id); return { strictPluginOnlyCustomization: true }; }), log);
+	using accounts = new AccountPolicyService(
+		accountServices(changes),
+		githubServices(async id => {
+			ids.push(id);
+			return { strictPluginOnlyCustomization: true };
+		}),
+		log,
+	);
 	class System extends AbstractPolicyService {
 		candidate: Record<string, PolicyValue> = { ManagedFeature: false };
-		protected async refresh(): Promise<void> { this.accept(this.candidate); }
+		protected async refresh(): Promise<void> {
+			this.accept(this.candidate);
+		}
 	}
 	using system = new System();
 	using policies = new MultiplexPolicyService([system, accounts]);
 	const registry = new ConfigurationRegistry();
 	registry.registerConfiguration({
-		key: 'ui.managedFeature', defaultValue: true, policy: { name: 'ManagedFeature', managedSettings: binding.ManagedFeature!.managedSettings }, parse: value => {
+		key: 'ui.managedFeature',
+		defaultValue: true,
+		policy: { name: 'ManagedFeature', managedSettings: binding.ManagedFeature!.managedSettings },
+		parse: value => {
 			if (typeof value !== 'boolean') throw new TypeError('Expected boolean');
 			return value;
-		}
+		},
 	});
 	using configuration = new PolicyConfiguration(registry, policies, log);
 	await configuration.initialize();
-	assert.deepEqual([configuration.configurationModel.getValue('ui.managedFeature'), accounts.getPolicyValue('ManagedFeature'), ids], [false, true, ['first']]);
+	assert.deepEqual(
+		[
+			configuration.configurationModel.getValue('ui.managedFeature'),
+			accounts.getPolicyValue('ManagedFeature'),
+			ids,
+		],
+		[false, true, ['first']],
+	);
 	system.candidate = {};
 	await system.updatePolicyDefinitions(binding);
 	assert.equal(configuration.configurationModel.getValue('ui.managedFeature'), true);
@@ -63,7 +107,14 @@ test('Registered account mappings resolve real provider fields and system policy
 test('Account read failures and malformed replacements retain policy, while authoritative absence removes it', async () => {
 	using changes = new Emitter<AccountState>();
 	let raw: Readonly<Record<string, JsonValue>> | null | Error = { strictPluginOnlyCustomization: true };
-	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => { if (raw instanceof Error) throw raw; return raw; }), log);
+	using source = new AccountPolicyService(
+		accountServices(changes),
+		githubServices(async () => {
+			if (raw instanceof Error) throw raw;
+			return raw;
+		}),
+		log,
+	);
 	await source.updatePolicyDefinitions(binding);
 	raw = new Error('Network failed');
 	await source.updatePolicyDefinitions(binding);
@@ -80,10 +131,25 @@ test('Logout cancels pending policy reads and prevents a late response from rest
 	using changes = new Emitter<AccountState>();
 	let release!: () => void;
 	let entered!: () => void;
-	const started = new Promise<void>(resolve => { entered = resolve; });
-	const gate = new Promise<void>(resolve => { release = resolve; });
+	const started = new Promise<void>(resolve => {
+		entered = resolve;
+	});
+	const gate = new Promise<void>(resolve => {
+		release = resolve;
+	});
 	let selected: readonly GitHubAccount[] = [account];
-	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => { entered(); await gate; return { strictPluginOnlyCustomization: true }; }, async () => selected), log);
+	using source = new AccountPolicyService(
+		accountServices(changes),
+		githubServices(
+			async () => {
+				entered();
+				await gate;
+				return { strictPluginOnlyCustomization: true };
+			},
+			async () => selected,
+		),
+		log,
+	);
 	const loading = source.updatePolicyDefinitions(binding);
 	await started;
 	selected = [];
@@ -95,15 +161,24 @@ test('Logout cancels pending policy reads and prevents a late response from rest
 
 test('Account callbacks see only declared fields and missing fields do not create default restrictions', async () => {
 	using changes = new Emitter<AccountState>();
-	let raw: Readonly<Record<string, JsonValue>> = { permissions: { disableBypassPermissionsMode: 'disable' }, unrequested: true };
-	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => raw), log);
+	let raw: Readonly<Record<string, JsonValue>> = {
+		permissions: { disableBypassPermissionsMode: 'disable' },
+		unrequested: true,
+	};
+	using source = new AccountPolicyService(
+		accountServices(changes),
+		githubServices(async () => raw),
+		log,
+	);
 	const definitions: Record<string, PolicyDefinition> = {
 		ManagedFeature: {
-			type: 'boolean', managedSettings: { 'permissions.disableBypassPermissionsMode': { type: 'string' } }, value: data => {
+			type: 'boolean',
+			managedSettings: { 'permissions.disableBypassPermissionsMode': { type: 'string' } },
+			value: data => {
 				assert.equal(data.managedSettings?.unrequested, undefined);
 				return data.managedSettings?.['permissions.disableBypassPermissionsMode'] === 'disable';
-			}
-		}
+			},
+		},
 	};
 	await source.updatePolicyDefinitions(definitions);
 	assert.equal(source.getPolicyValue('ManagedFeature'), true);
@@ -114,14 +189,23 @@ test('Account callbacks see only declared fields and missing fields do not creat
 
 test('Copilot model policy reaches the real configuration and new-chat consumer, with legacy fallback and withdrawal', async () => {
 	using changes = new Emitter<AccountState>();
-	let raw: Readonly<Record<string, JsonValue>> = { model: ' anthropic/claude-opus-5-5 ', permissions: { model: 'openai/gpt-6.1-sol' } };
-	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => raw), log);
+	let raw: Readonly<Record<string, JsonValue>> = {
+		model: ' anthropic/claude-opus-5-5 ',
+		permissions: { model: 'openai/gpt-6.1-sol' },
+	};
+	using source = new AccountPolicyService(
+		accountServices(changes),
+		githubServices(async () => raw),
+		log,
+	);
 	using files = new TestConfigurationFiles('{"chat.defaultModel":"openai/gpt-6.1-sol"}');
 	const profile = new UserDataProfileService();
 	using configuration = new ConfigurationService(profile.currentProfile.settingsResource, files, source, log);
 	await configuration.initialize();
-	using preferences = new LanguageModelsConfigurationService(ChatModelPreferences, configuration,
-		{ get: () => undefined, onDidChangeValue: Event.None } as unknown as IStorageService);
+	using preferences = new LanguageModelsConfigurationService(ChatModelPreferences, configuration, {
+		get: () => undefined,
+		onDidChangeValue: Event.None,
+	} as unknown as IStorageService);
 	const first = { provider: 'openai', model: 'gpt-6.1-sol' };
 	const second = { provider: 'anthropic', model: 'claude-opus-5-5' };
 	const catalog = [first, second].map(model => ({ model, displayName: model.model, longContext: null }));
@@ -144,13 +228,17 @@ test('Explicit refresh exposes cold failure, joins in-flight requests, retains o
 	let release: (() => void) | undefined;
 	let entered: (() => void) | undefined;
 	let gate: Promise<void> | undefined;
-	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => {
-		calls++;
-		entered?.();
-		await gate;
-		if (raw instanceof Error) throw raw;
-		return raw;
-	}), log);
+	using source = new AccountPolicyService(
+		accountServices(changes),
+		githubServices(async () => {
+			calls++;
+			entered?.();
+			await gate;
+			if (raw instanceof Error) throw raw;
+			return raw;
+		}),
+		log,
+	);
 	const states: AccountPolicyRefreshState[] = [];
 	using listener = source.onDidChangeState(state => states.push(state));
 	const state = (): AccountPolicyRefreshState => source.state;
@@ -161,8 +249,12 @@ test('Explicit refresh exposes cold failure, joins in-flight requests, retains o
 	assert.equal(source.getPolicyValue('ManagedFeature'), undefined);
 
 	raw = { strictPluginOnlyCustomization: true };
-	gate = new Promise<void>(resolve => { release = resolve; });
-	const started = new Promise<void>(resolve => { entered = resolve; });
+	gate = new Promise<void>(resolve => {
+		release = resolve;
+	});
+	const started = new Promise<void>(resolve => {
+		entered = resolve;
+	});
 	const retry = source.refresh();
 	await started;
 	assert.equal(state().phase, 'refreshing');
@@ -178,10 +270,12 @@ test('Explicit refresh exposes cold failure, joins in-flight requests, retains o
 	raw = new GitHubError(GitHubErrorCode.ManagedSettingsUpdateRequired);
 	await source.refresh();
 	assert.deepEqual(state(), {
-		phase: 'failed', failure: GitHubErrorCode.ManagedSettingsUpdateRequired,
+		phase: 'failed',
+		failure: GitHubErrorCode.ManagedSettingsUpdateRequired,
 		retainsPolicy: true,
 		scope: { accountId: 'first', host: 'github.com', credentialRevision: 1n },
-		lastAttemptAt: state().lastAttemptAt, lastSuccessAt: success,
+		lastAttemptAt: state().lastAttemptAt,
+		lastSuccessAt: success,
 	});
 	assert.equal(source.getPolicyValue('ManagedFeature'), true);
 	raw = null;
@@ -196,20 +290,33 @@ test('Refresh scope and success timestamps do not cross credential, host or acco
 	using changes = new Emitter<AccountState>();
 	let selected = account;
 	let raw: Readonly<Record<string, JsonValue>> | Error = { strictPluginOnlyCustomization: true };
-	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => {
-		if (raw instanceof Error) throw raw;
-		return raw;
-	}, async () => [selected]), log);
+	using source = new AccountPolicyService(
+		accountServices(changes),
+		githubServices(
+			async () => {
+				if (raw instanceof Error) throw raw;
+				return raw;
+			},
+			async () => [selected],
+		),
+		log,
+	);
 	await source.updatePolicyDefinitions(binding);
 	assert.equal(typeof source.state.lastSuccessAt, 'number');
 	raw = new GitHubError(GitHubErrorCode.AuthenticationRequired);
 	selected = { ...account, credentialRevision: 2n };
-	changes.fire({ revision: 2n, accounts: [{ provider: 'github', accountId: selected.id, status: 'ready', credentialRevision: 2n }] });
+	changes.fire({
+		revision: 2n,
+		accounts: [{ provider: 'github', accountId: selected.id, status: 'ready', credentialRevision: 2n }],
+	});
 	await source.refresh();
 	assert.equal(source.state.lastSuccessAt, undefined);
 	assert.equal(source.state.scope?.credentialRevision, 2n);
 	assert.equal(source.getPolicyValue('ManagedFeature'), true);
-	for (const next of [{ ...selected, host: 'enterprise.example' }, { ...selected, id: 'second' }]) {
+	for (const next of [
+		{ ...selected, host: 'enterprise.example' },
+		{ ...selected, id: 'second' },
+	]) {
 		selected = next;
 		await source.refresh();
 		assert.equal(source.state.lastSuccessAt, undefined);
@@ -224,19 +331,38 @@ test('Superseding account events complete the new refresh and disposed owners pu
 	let selected = account;
 	let release!: () => void;
 	let entered!: () => void;
-	const started = new Promise<void>(resolve => { entered = resolve; });
-	const held = new Promise<void>(resolve => { release = resolve; });
+	const started = new Promise<void>(resolve => {
+		entered = resolve;
+	});
+	const held = new Promise<void>(resolve => {
+		release = resolve;
+	});
 	let calls = 0;
-	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => {
-		if (++calls === 1) { entered(); await held; }
-		return { strictPluginOnlyCustomization: selected.id === 'second' };
-	}, async () => [selected]), log);
+	using source = new AccountPolicyService(
+		accountServices(changes),
+		githubServices(
+			async () => {
+				if (++calls === 1) {
+					entered();
+					await held;
+				}
+				return { strictPluginOnlyCustomization: selected.id === 'second' };
+			},
+			async () => [selected],
+		),
+		log,
+	);
 	let notifications = 0;
-	using listener = source.onDidChangeState(() => { notifications++; });
+	using listener = source.onDidChangeState(() => {
+		notifications++;
+	});
 	const initial = source.updatePolicyDefinitions(binding);
 	await started;
 	selected = { ...account, id: 'second' };
-	changes.fire({ revision: 2n, accounts: [{ provider: 'github', accountId: 'second', status: 'ready', credentialRevision: 1n }] });
+	changes.fire({
+		revision: 2n,
+		accounts: [{ provider: 'github', accountId: 'second', status: 'ready', credentialRevision: 1n }],
+	});
 	release();
 	await initial;
 	assert.equal(calls, 2);
@@ -257,9 +383,17 @@ test('DI requires the provider and state observers can reenter refresh without d
 	services.registerInstance(ILogService, log);
 	assert.throws(() => services.createInstance(AccountPolicyService), /Unknown service.*githubService/);
 	let calls = 0;
-	services.registerInstance(IGitHubService, githubServices(async () => { calls++; return {}; }));
+	services.registerInstance(
+		IGitHubService,
+		githubServices(async () => {
+			calls++;
+			return {};
+		}),
+	);
 	using source = services.createInstance(AccountPolicyService);
-	using listener = source.onDidChangeState(state => { if (state.phase === 'refreshing') void source.refresh(); });
+	using listener = source.onDidChangeState(state => {
+		if (state.phase === 'refreshing') void source.refresh();
+	});
 	await source.updatePolicyDefinitions(binding);
 	assert.equal(calls, 1);
 	assert.equal(source.state.phase, 'ready');
@@ -269,17 +403,27 @@ test('Disposal cancels an in-flight retry without publishing its late success', 
 	using changes = new Emitter<AccountState>();
 	let release!: () => void;
 	let entered!: () => void;
-	const started = new Promise<void>(resolve => { entered = resolve; });
-	const gate = new Promise<void>(resolve => { release = resolve; });
+	const started = new Promise<void>(resolve => {
+		entered = resolve;
+	});
+	const gate = new Promise<void>(resolve => {
+		release = resolve;
+	});
 	let token: import('../../../../../base/common/cancellation.js').CancellationToken | undefined;
-	using source = new AccountPolicyService(accountServices(changes), githubServices(async (_id, cancellation) => {
-		token = cancellation;
-		entered();
-		await gate;
-		return { strictPluginOnlyCustomization: true };
-	}), log);
+	using source = new AccountPolicyService(
+		accountServices(changes),
+		githubServices(async (_id, cancellation) => {
+			token = cancellation;
+			entered();
+			await gate;
+			return { strictPluginOnlyCustomization: true };
+		}),
+		log,
+	);
 	let notifications = 0;
-	using listener = source.onDidChangeState(() => { notifications++; });
+	using listener = source.onDidChangeState(() => {
+		notifications++;
+	});
 	const pending = source.updatePolicyDefinitions(binding);
 	await started;
 	source.dispose();
@@ -294,10 +438,20 @@ test('Disposal cancels an in-flight retry without publishing its late success', 
 test('State observers can dispose the owner before a request starts', async () => {
 	using changes = new Emitter<AccountState>();
 	let calls = 0;
-	using source = new AccountPolicyService(accountServices(changes), githubServices(async () => {
-		calls++;
-		return { strictPluginOnlyCustomization: true };
-	}, async () => { calls++; return [account]; }), log);
+	using source = new AccountPolicyService(
+		accountServices(changes),
+		githubServices(
+			async () => {
+				calls++;
+				return { strictPluginOnlyCustomization: true };
+			},
+			async () => {
+				calls++;
+				return [account];
+			},
+		),
+		log,
+	);
 	using listener = source.onDidChangeState(state => {
 		if (state.phase === 'refreshing') source.dispose();
 	});

@@ -1,6 +1,5 @@
 import { KeyboardLayoutContribution } from './_.contribution.js';
 
-
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 	layout: { name: '00000416', id: '', text: 'Portuguese (Brazilian ABNT)' },
 	secondaryLayouts: [],
@@ -55,7 +54,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		Backslash: [']', '}', 'º', '', 0, 'VK_OEM_5'],
 		Semicolon: ['ç', 'Ç', '', '', 0, 'VK_OEM_1'],
 		Quote: ['~', '^', '', '', 0, 'VK_OEM_7'],
-		Backquote: ['\'', '"', '', '', 0, 'VK_OEM_3'],
+		Backquote: ["'", '"', '', '', 0, 'VK_OEM_3'],
 		Comma: [',', '<', '', '', 0, 'VK_OEM_COMMA'],
 		Period: ['.', '>', '', '', 0, 'VK_OEM_PERIOD'],
 		Slash: [';', ':', '', '', 0, 'VK_OEM_2'],
@@ -160,6 +159,6 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 
 		BrowserStop: [],
 		BrowserRefresh: [],
-		BrowserFavorites: []
-	}
+		BrowserFavorites: [],
+	},
 });

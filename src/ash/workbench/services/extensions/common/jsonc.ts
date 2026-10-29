@@ -1,1 +1,1 @@
-export { parseJsonc } from "../../../../base/common/jsonc.js";
+export { parseJsonc } from '../../../../base/common/jsonc.js';

@@ -16,7 +16,7 @@ export class StickyLineCandidate {
 		public readonly endLineNumber: number,
 		public readonly top: number,
 		public readonly height: number,
-	) { }
+	) {}
 }
 
 export interface IStickyLineCandidateProvider {
@@ -45,25 +45,30 @@ export class StickyLineCandidateProvider extends Disposable implements IStickyLi
 	) {
 		super();
 		this.options = editor.getOption(EditorOption.stickyScroll);
-		this.modelProvider = this._register(instantiationService.createInstance(StickyModelProvider, editor, folding, onError));
+		this.modelProvider = this._register(
+			instantiationService.createInstance(StickyModelProvider, editor, folding, onError),
+		);
 		this._register(toDisposable(() => this.request?.dispose(true)));
 		this._register(folding.onDidChange(() => this.schedule()));
 		this._register(editor.onDidChangeModelContent(() => this.schedule()));
 		this._register(folding.model.onDidChangeLanguage(() => this.schedule(true)));
 		this._register(languageFeaturesService.documentSymbolProvider.onDidChange(() => this.schedule(true)));
-		this._register(editor.onDidChangeConfiguration(event => {
-			if (event.hasChanged(EditorOption.stickyScroll)) {
-				const options = editor.getOption(EditorOption.stickyScroll);
-				const changed = options.enabled !== this.options.enabled || options.defaultModel !== this.options.defaultModel;
-				this.options = options;
-				if (changed) {
-					this.schedule(true);
+		this._register(
+			editor.onDidChangeConfiguration(event => {
+				if (event.hasChanged(EditorOption.stickyScroll)) {
+					const options = editor.getOption(EditorOption.stickyScroll);
+					const changed =
+						options.enabled !== this.options.enabled || options.defaultModel !== this.options.defaultModel;
+					this.options = options;
+					if (changed) {
+						this.schedule(true);
+					}
 				}
-			}
-			if (event.hasChanged(EditorOption.folding)) {
-				this.schedule();
-			}
-		}));
+				if (event.hasChanged(EditorOption.folding)) {
+					this.schedule();
+				}
+			}),
+		);
 	}
 
 	public getVersionId(): number | undefined {
@@ -76,10 +81,14 @@ export class StickyLineCandidateProvider extends Disposable implements IStickyLi
 		if (this.isDisposed || !this.editor.getOption(EditorOption.stickyScroll).enabled) {
 			return;
 		}
-		const request = this.request = new CancellationTokenSource();
+		const request = (this.request = new CancellationTokenSource());
 		try {
 			const model = await this.modelProvider.update(request.token);
-			if (request.token.isCancellationRequested || this.isDisposed || model?.version !== this.editor.getModel()?.getVersionId()) {
+			if (
+				request.token.isCancellationRequested ||
+				this.isDisposed ||
+				model?.version !== this.editor.getModel()?.getVersionId()
+			) {
 				return;
 			}
 			this.model = model;
@@ -100,21 +109,28 @@ export class StickyLineCandidateProvider extends Disposable implements IStickyLi
 		const result: StickyLineCandidate[] = [];
 		const hidden = this.editor._getViewModel()!.getHiddenAreas();
 		const height = this.editor.getOption(EditorOption.lineHeight);
-		const pending = [...this.model?.element?.children ?? []].reverse();
+		const pending = [...(this.model?.element?.children ?? [])].reverse();
 		while (pending.length > 0) {
 			const element = pending.pop()!;
 			const scope = element.range!;
 			if (scope.startLineNumber > range.endLineNumber || scope.endLineNumber <= range.startLineNumber) {
 				continue;
 			}
-			if (hidden.some(area => scope.startLineNumber >= area.startLineNumber && scope.startLineNumber <= area.endLineNumber)) {
+			if (
+				hidden.some(
+					area =>
+						scope.startLineNumber >= area.startLineNumber && scope.startLineNumber <= area.endLineNumber,
+				)
+			) {
 				continue;
 			}
 			let depth = 0;
 			for (let parent = element.parent; parent?.range; parent = parent.parent) {
 				depth++;
 			}
-			result.push(new StickyLineCandidate(scope.startLineNumber, scope.endLineNumber - 1, depth * height, height));
+			result.push(
+				new StickyLineCandidate(scope.startLineNumber, scope.endLineNumber - 1, depth * height, height),
+			);
 			pending.push(...element.children.slice().reverse());
 		}
 		return result;

@@ -1,7 +1,7 @@
-import ts from "typescript";
+import ts from 'typescript';
 
 const conventionalUiClassPattern = /(?:Part|ViewPane|Widget)$/u;
-const explicitPrototypePatchMarker = "@ash-hot-reload patch-prototype";
+const explicitPrototypePatchMarker = '@ash-hot-reload patch-prototype';
 
 export interface HotReloadClassAnalysis {
 	readonly name: string;
@@ -19,7 +19,7 @@ export interface HotReloadModuleAnalysis {
 }
 
 /** Extracts the runtime-stable and initialization-sensitive surfaces of one Renderer module. */
-export function analyzeHotReloadModule(code: string, file = "module.ts"): HotReloadModuleAnalysis {
+export function analyzeHotReloadModule(code: string, file = 'module.ts'): HotReloadModuleAnalysis {
 	const source = ts.createSourceFile(file, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
 	const explicitOptIn = code.includes(explicitPrototypePatchMarker);
 	const classes: HotReloadClassAnalysis[] = [];
@@ -39,29 +39,48 @@ export function analyzeHotReloadModule(code: string, file = "module.ts"): HotRel
 		classNames: classes.map(entry => entry.name),
 		widgetClassNames,
 		classes,
-		moduleBoundary: source.statements.filter(statement => !targetDeclarations.has(statement as ts.ClassDeclaration)).map(statement => statement.getText(source)),
+		moduleBoundary: source.statements
+			.filter(statement => !targetDeclarations.has(statement as ts.ClassDeclaration))
+			.map(statement => statement.getText(source)),
 	};
 }
 
-function collectRuntimeExportNames(source: ts.SourceFile, targetDeclarations: ReadonlySet<ts.ClassDeclaration>): readonly string[] {
+function collectRuntimeExportNames(
+	source: ts.SourceFile,
+	targetDeclarations: ReadonlySet<ts.ClassDeclaration>,
+): readonly string[] {
 	const names = new Set<string>();
 	for (const declaration of targetDeclarations) {
 		if (declaration.name) names.add(declaration.name.text);
 	}
 	for (const statement of source.statements) {
-		if (hasModifier(statement, ts.SyntaxKind.ExportKeyword) && !hasModifier(statement, ts.SyntaxKind.DeclareKeyword)) collectExportedDeclarationNames(statement, names);
-		if (ts.isExportDeclaration(statement) && !statement.isTypeOnly && !statement.moduleSpecifier && statement.exportClause && ts.isNamedExports(statement.exportClause)) {
+		if (
+			hasModifier(statement, ts.SyntaxKind.ExportKeyword) &&
+			!hasModifier(statement, ts.SyntaxKind.DeclareKeyword)
+		)
+			collectExportedDeclarationNames(statement, names);
+		if (
+			ts.isExportDeclaration(statement) &&
+			!statement.isTypeOnly &&
+			!statement.moduleSpecifier &&
+			statement.exportClause &&
+			ts.isNamedExports(statement.exportClause)
+		) {
 			for (const element of statement.exportClause.elements) {
 				if (!element.isTypeOnly) names.add((element.propertyName ?? element.name).text);
 			}
 		}
-		if (ts.isExportAssignment(statement) && ts.isIdentifier(statement.expression)) names.add(statement.expression.text);
+		if (ts.isExportAssignment(statement) && ts.isIdentifier(statement.expression))
+			names.add(statement.expression.text);
 	}
 	return [...names];
 }
 
 function collectExportedDeclarationNames(statement: ts.Statement, names: Set<string>): void {
-	if ((ts.isClassDeclaration(statement) || ts.isFunctionDeclaration(statement) || ts.isEnumDeclaration(statement)) && statement.name) {
+	if (
+		(ts.isClassDeclaration(statement) || ts.isFunctionDeclaration(statement) || ts.isEnumDeclaration(statement)) &&
+		statement.name
+	) {
 		names.add(statement.name.text);
 		return;
 	}
@@ -84,26 +103,43 @@ function collectBindingNames(name: ts.BindingName, names: Set<string>): void {
 }
 
 /** Explains why a change must rebuild the module rather than patch existing prototypes. */
-export function unsafeHotReloadChangeReason(previous: HotReloadModuleAnalysis, next: HotReloadModuleAnalysis): string | undefined {
-	if (previous.classNames.join("\0") !== next.classNames.join("\0")) return "persistent UI class set changed";
-	if (previous.widgetClassNames.length > 0 && previous.widgetClassNames.length !== previous.classNames.length) return 'module mixes recreated widgets and persistent UI classes';
-	if (JSON.stringify(previous.moduleBoundary) !== JSON.stringify(next.moduleBoundary)) return "module imports, exports, declarations, or side effects changed";
+export function unsafeHotReloadChangeReason(
+	previous: HotReloadModuleAnalysis,
+	next: HotReloadModuleAnalysis,
+): string | undefined {
+	if (previous.classNames.join('\0') !== next.classNames.join('\0')) return 'persistent UI class set changed';
+	if (previous.widgetClassNames.length > 0 && previous.widgetClassNames.length !== previous.classNames.length)
+		return 'module mixes recreated widgets and persistent UI classes';
+	if (JSON.stringify(previous.moduleBoundary) !== JSON.stringify(next.moduleBoundary))
+		return 'module imports, exports, declarations, or side effects changed';
 	for (let index = 0; index < previous.classes.length; index += 1) {
 		const before = previous.classes[index];
 		const after = next.classes[index];
 		if (before.declaration !== after.declaration) return `${before.name} inheritance or declaration changed`;
-		if (JSON.stringify(before.initialization) !== JSON.stringify(after.initialization)) return `${before.name} constructor, field, static state, or decorated member changed`;
+		if (JSON.stringify(before.initialization) !== JSON.stringify(after.initialization))
+			return `${before.name} constructor, field, static state, or decorated member changed`;
 	}
 	return undefined;
 }
 
-function analyzeClass(declaration: ts.ClassDeclaration, name: ts.Identifier, source: ts.SourceFile, isWidget: boolean): HotReloadClassAnalysis {
-	const initialization = declaration.members.filter(member => {
-		if (isPrototypePatchableMember(member)) return false;
-		if (!isWidget) return true;
-		// Widgets recreate instance initialization; static state and decorators still require a page reload.
-		return hasModifier(member, ts.SyntaxKind.StaticKeyword) || hasRuntimeDecorator(member) || ts.isClassStaticBlockDeclaration(member);
-	}).map(member => member.getText(source));
+function analyzeClass(
+	declaration: ts.ClassDeclaration,
+	name: ts.Identifier,
+	source: ts.SourceFile,
+	isWidget: boolean,
+): HotReloadClassAnalysis {
+	const initialization = declaration.members
+		.filter(member => {
+			if (isPrototypePatchableMember(member)) return false;
+			if (!isWidget) return true;
+			// Widgets recreate instance initialization; static state and decorators still require a page reload.
+			return (
+				hasModifier(member, ts.SyntaxKind.StaticKeyword) ||
+				hasRuntimeDecorator(member) ||
+				ts.isClassStaticBlockDeclaration(member)
+			);
+		})
+		.map(member => member.getText(source));
 	if (isWidget) {
 		const constructor = declaration.members.find(ts.isConstructorDeclaration);
 		initialization.push(JSON.stringify(constructor?.parameters.map(parameter => parameter.getText(source)) ?? []));
@@ -119,7 +155,7 @@ function analyzeClass(declaration: ts.ClassDeclaration, name: ts.Identifier, sou
 }
 
 function sourceParseDiagnostics(source: ts.SourceFile): readonly ts.Diagnostic[] {
-	return (source as ts.SourceFile & { readonly parseDiagnostics: readonly ts.Diagnostic[]; }).parseDiagnostics;
+	return (source as ts.SourceFile & { readonly parseDiagnostics: readonly ts.Diagnostic[] }).parseDiagnostics;
 }
 
 function extendsClause(declaration: ts.ClassDeclaration): ts.HeritageClause | undefined {
@@ -127,7 +163,8 @@ function extendsClause(declaration: ts.ClassDeclaration): ts.HeritageClause | un
 }
 
 function isPrototypePatchableMember(member: ts.ClassElement): boolean {
-	if (!ts.isMethodDeclaration(member) && !ts.isGetAccessorDeclaration(member) && !ts.isSetAccessorDeclaration(member)) return false;
+	if (!ts.isMethodDeclaration(member) && !ts.isGetAccessorDeclaration(member) && !ts.isSetAccessorDeclaration(member))
+		return false;
 	if (hasModifier(member, ts.SyntaxKind.StaticKeyword) || hasRuntimeDecorator(member)) return false;
 	return !(member.name && (ts.isComputedPropertyName(member.name) || ts.isPrivateIdentifier(member.name)));
 }

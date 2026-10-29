@@ -5,36 +5,46 @@ import '../testEditorDom.js';
 import { h, text } from '../../../../base/browser/dom.js';
 import { IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { Event as EditorEvent } from '../../../../base/common/event.js';
-import { toDisposable } from "../../../../base/common/lifecycle.js";
-import { ContentWidgetPositionPreference, type ICodeEditor, type IContentWidget, type IGlyphMarginWidget } from '../../../browser/editorBrowser.js';
+import { toDisposable } from '../../../../base/common/lifecycle.js';
+import {
+	ContentWidgetPositionPreference,
+	type ICodeEditor,
+	type IContentWidget,
+	type IGlyphMarginWidget,
+} from '../../../browser/editorBrowser.js';
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
-import { TextModel } from "../../../common/model/textModel.js";
+import { TextModel } from '../../../common/model/textModel.js';
 import { SyntaxProviderRegistry } from '../../../common/languageFeatureRegistry.js';
 import { GlyphMarginLane } from '../../../common/model.js';
 import { EditorLineWrapping, EditorOption, RenderLineNumbersType } from '../../../common/config/editorOptions.js';
 import { EditorType, ScrollType, type IEditor } from '../../../common/editorCommon.js';
 import { VerticalRevealType } from '../../../common/viewEvents.js';
-import { IContextKeyService, ContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import { IContextKeyService, ContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import {
+	AccessibilitySupport,
+	IAccessibilityService,
+} from '../../../../platform/accessibility/common/accessibility.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { errorHandler, setUnexpectedErrorHandler } from '../../../../base/common/errors.js';
 import { DeferredPromise } from '../../../../base/common/async.js';
 import { TestLanguageFeaturesService } from '../../common/testLanguageFeaturesService.js';
 
-const { CodeEditorWidget } = await import("../../../browser/widget/codeEditor/codeEditorWidget.js");
+const { CodeEditorWidget } = await import('../../../browser/widget/codeEditor/codeEditorWidget.js');
 const { createTestCodeEditor } = await import('../testCodeEditor.js');
-const { TextAreaEditContextRegistry } = await import('../../../browser/controller/editContext/textArea/textAreaEditContextRegistry.js');
+const { TextAreaEditContextRegistry } =
+	await import('../../../browser/controller/editContext/textArea/textAreaEditContextRegistry.js');
 const { ViewPart } = await import('../../../browser/view/viewPart.js');
 const { observableCodeEditor } = await import('../../../browser/observableCodeEditor.js');
-const { InstantiationService } = await import("../../../../platform/instantiation/common/instantiationService.js");
+const { InstantiationService } = await import('../../../../platform/instantiation/common/instantiationService.js');
 const { ILogService, NullLoggerService } = await import('../../../../platform/log/common/log.js');
-const { PlaceholderTextContribution } = await import("../../../contrib/placeholderText/browser/placeholderTextContribution.js");
+const { PlaceholderTextContribution } =
+	await import('../../../contrib/placeholderText/browser/placeholderTextContribution.js');
 const { VersionedEditorWorkerClient } = await import('../../../browser/services/editorWorkerService.js');
 const { EditorWorker } = await import('../../../common/services/editorWebWorker.js');
 await import('../../../contrib/inPlaceReplace/browser/inPlaceReplace.js');
@@ -49,9 +59,9 @@ const enabledAccessibilityService: IAccessibilityService = {
 	isMotionReduced: () => false,
 	isTransparencyReduced: () => false,
 	getAccessibilitySupport: () => AccessibilitySupport.Enabled,
-	setAccessibilitySupport: () => { },
-	alert: () => { },
-	status: () => { },
+	setAccessibilitySupport: () => {},
+	alert: () => {},
+	status: () => {},
 };
 
 function delay(targetWindow: Pick<Window, 'setTimeout'>, duration: number): Promise<void> {
@@ -73,11 +83,19 @@ test('format on type uses the live input position and keeps its trigger in one u
 			return [{ range: model.getFullModelRange(), text: 'ALPHA;' }];
 		},
 	});
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, formatOnType: true, languageFeaturesService: features });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		formatOnType: true,
+		languageFeaturesService: features,
+	});
 	editor.setPosition(new Position(1, 6));
 	editor.trigger('keyboard', 'type', { text: ';' });
 	await new Promise<void>(resolve => {
-		const listener = model.onDidChangeContent(() => { listener.dispose(); resolve(); });
+		const listener = model.onDidChangeContent(() => {
+			listener.dispose();
+			resolve();
+		});
 	});
 	assert.equal(model.getValue(), 'ALPHA;');
 	model.undo();
@@ -96,12 +114,19 @@ test('format on type cancels late edits when disabled and when its provider is r
 		using registration = features.onTypeFormattingEditProvider.register('*', {
 			autoFormatTriggerCharacters: [';'],
 			provideOnTypeFormattingEdits(_model, _position, _ch, _options, token) {
-				token.onCancellationRequested(() => { cancelled = true; });
+				token.onCancellationRequested(() => {
+					cancelled = true;
+				});
 				void requested.complete();
 				return response.p;
 			},
 		});
-		using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, formatOnType: true, languageFeaturesService: features });
+		using editor = createTestCodeEditor({
+			container: requiredElement(dom.window.document, 'main'),
+			model,
+			formatOnType: true,
+			languageFeaturesService: features,
+		});
 		editor.setPosition(new Position(1, 6));
 		editor.trigger('keyboard', 'type', { text: ';' });
 		await requested.p;
@@ -164,7 +189,10 @@ test('editor line-number width follows edits, undo, and model replacement before
 	editor.setModel(replacement);
 	widths.push(editor.getLayoutInfo().lineNumbersWidth);
 
-	assert.deepEqual(widths, [2, 1, 3, 1].map(digits => Math.round(digits * digitWidth)));
+	assert.deepEqual(
+		widths,
+		[2, 1, 3, 1].map(digits => Math.round(digits * digitWidth)),
+	);
 });
 
 test('editor reads long-line wrapping from each attached model and honors accessibility overrides', () => {
@@ -183,7 +211,9 @@ test('editor reads long-line wrapping from each attached model and honors access
 	});
 	editor.layout({ width: 320, height: 80 });
 	const states: boolean[] = [];
-	const read = (): void => { states.push(editor.getLayoutInfo().isWordWrapMinified); };
+	const read = (): void => {
+		states.push(editor.getLayoutInfo().isWordWrapMinified);
+	};
 	read();
 	editor.updateOptions({ accessibilitySupport: 'off' });
 	read();
@@ -200,12 +230,12 @@ test('editor reads long-line wrapping from each attached model and honors access
 	assert.deepEqual(states, [true, false, false, true, false, false, true]);
 });
 
-test("CodeEditorWidget owns one canonical browser editing surface", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('CodeEditorWidget owns one canonical browser editing surface', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
-	using model = new TextModel("alpha");
-	const editor = createTestCodeEditor({ container, model, lineHeight: 20, ariaLabel: "Code" });
+	const container = requiredElement(dom.window.document, 'main');
+	using model = new TextModel('alpha');
+	const editor = createTestCodeEditor({ container, model, lineHeight: 20, ariaLabel: 'Code' });
 	const ownerId = editor.getId();
 
 	editor.layout({ width: 320, height: 80 });
@@ -213,8 +243,8 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	editor.applyFontInfo(fontTarget);
 
 	assert.equal(editor.getDomNode().parentElement, container);
-	assert.equal(editor.getDomNode().getAttribute("aria-label"), "Code");
-	assert.equal(editor.controller.element.getAttribute("aria-label"), "Code");
+	assert.equal(editor.getDomNode().getAttribute('aria-label'), 'Code');
+	assert.equal(editor.controller.element.getAttribute('aria-label'), 'Code');
 	const margin = requiredElement<HTMLElement>(editor.getDomNode(), '.margin');
 	assert.equal(margin.getAttribute('role'), 'presentation');
 	assert.equal(margin.hasAttribute('aria-hidden'), false);
@@ -230,7 +260,7 @@ test("CodeEditorWidget owns one canonical browser editing surface", () => {
 	editor.dispose();
 	assert.equal(TextAreaEditContextRegistry.get(ownerId), undefined);
 	assert.equal(editor.getDomNode().isConnected, false);
-	assert.equal(model.getText(), "alpha");
+	assert.equal(model.getText(), 'alpha');
 	assert.equal(editor.getModel(), null);
 	assert.equal(editor.getSelections(), null);
 	dom.window.close();
@@ -271,21 +301,26 @@ test('force retokenize action refreshes the active model through its syntax prov
 		id: 'test.retokenize',
 		languageIds: ['retokenize'],
 		provideTokens: () => ({
-			tokens: [{
-				range: new Range(1, 1, 1, 6),
-				tokenType: ++requests === 1 ? 'string' : 'comment',
-				modifiers: [],
-			}]
+			tokens: [
+				{ range: new Range(1, 1, 1, 6), tokenType: ++requests === 1 ? 'string' : 'comment', modifiers: [] },
+			],
 		}),
 	});
-	using model = new TextModel('value', { languageId: 'retokenize', tokenization: { syntaxProviderRegistry: providers } });
+	using model = new TextModel('value', {
+		languageId: 'retokenize',
+		tokenization: { syntaxProviderRegistry: providers },
+	});
 	for (let attempt = 0; attempt < 20 && !model.tokenization.hasAccurateTokensForLine(1); attempt++) {
 		await new Promise(resolve => setTimeout(resolve, 0));
 	}
 	assert.equal(model.tokenization.getLanguageTokens(0)[0]?.tokenType, 'string');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: [],
+	});
 	try {
 		const action = editor.getAction('editor.action.forceRetokenize');
 		assert.ok(action);
@@ -306,21 +341,51 @@ test('force retokenize action refreshes the active model through its syntax prov
 test('an editor without contributions renders model tokens across model replacement and isolates view decorations', async () => {
 	using providers = new SyntaxProviderRegistry();
 	let tokenType = 'keyword';
-	using registration = providers.register({ id: 'test.core-tokens', languageIds: ['core-tokens'], provideTokens: () => ({ tokens: [{ range: new Range(1, 1, 1, 6), tokenType, modifiers: [] }] }) });
-	using model = new TextModel('value', { languageId: 'core-tokens', tokenization: { syntaxProviderRegistry: providers } });
-	using replacement = new TextModel('other', { languageId: 'core-tokens', tokenization: { syntaxProviderRegistry: providers } });
-	await Promise.all([model.tokenization.whenReady(new AbortController().signal), replacement.tokenization.whenReady(new AbortController().signal)]);
+	using registration = providers.register({
+		id: 'test.core-tokens',
+		languageIds: ['core-tokens'],
+		provideTokens: () => ({ tokens: [{ range: new Range(1, 1, 1, 6), tokenType, modifiers: [] }] }),
+	});
+	using model = new TextModel('value', {
+		languageId: 'core-tokens',
+		tokenization: { syntaxProviderRegistry: providers },
+	});
+	using replacement = new TextModel('other', {
+		languageId: 'core-tokens',
+		tokenization: { syntaxProviderRegistry: providers },
+	});
+	await Promise.all([
+		model.tokenization.whenReady(new AbortController().signal),
+		replacement.tokenization.whenReady(new AbortController().signal),
+	]);
 	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using cleanup = toDisposable(() => dom.window.close());
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [], minimap: { enabled: false } });
-	using other = createTestCodeEditor({ container: requiredElement(dom.window.document, 'aside'), model, contributions: [], minimap: { enabled: false } });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: [],
+		minimap: { enabled: false },
+	});
+	using other = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'aside'),
+		model,
+		contributions: [],
+		minimap: { enabled: false },
+	});
 	editor.layout({ width: 400, height: 80 });
 	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().querySelector('.token-keyword')?.textContent, 'value');
-	editor.createDecorationsCollection([{ range: new Range(1, 1, 1, 2), options: { description: 'own', inlineClassName: 'own-highlight' } }]);
-	other.createDecorationsCollection([{ range: new Range(1, 2, 1, 3), options: { description: 'other', inlineClassName: 'other-highlight' } }]);
-	assert.deepEqual(editor.getLineDecorations(1)?.map(decoration => decoration.options.description), ['own']);
+	editor.createDecorationsCollection([
+		{ range: new Range(1, 1, 1, 2), options: { description: 'own', inlineClassName: 'own-highlight' } },
+	]);
+	other.createDecorationsCollection([
+		{ range: new Range(1, 2, 1, 3), options: { description: 'other', inlineClassName: 'other-highlight' } },
+	]);
+	assert.deepEqual(
+		editor.getLineDecorations(1)?.map(decoration => decoration.options.description),
+		['own'],
+	);
 
 	editor.setModel(replacement);
 	tokenType = 'string';
@@ -339,24 +404,37 @@ for (const wordWrap of ['off', 'wordWrapColumn'] as const) {
 	test(`injected text preserves source highlighting with wrapping ${wordWrap}`, async () => {
 		using providers = new SyntaxProviderRegistry();
 		using registration = providers.register({
-			id: 'test.injected-tokens', languageIds: ['injected-tokens'],
+			id: 'test.injected-tokens',
+			languageIds: ['injected-tokens'],
 			provideTokens: () => ({
 				tokens: [
 					{ range: new Range(1, 1, 1, 4), tokenType: 'keyword', modifiers: [] },
 					{ range: new Range(1, 13, 1, 20), tokenType: 'string', modifiers: [] },
-				]
+				],
 			}),
 		});
-		using model = new TextModel('let value = "hello";', { languageId: 'injected-tokens', tokenization: { syntaxProviderRegistry: providers } });
+		using model = new TextModel('let value = "hello";', {
+			languageId: 'injected-tokens',
+			tokenization: { syntaxProviderRegistry: providers },
+		});
 		await model.tokenization.whenReady(new AbortController().signal);
 		const dom = new JSDOM('<!doctype html><body><main></main></body>');
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		using cleanup = toDisposable(() => dom.window.close());
-		using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [], minimap: { enabled: false }, wordWrap, wordWrapColumn: 12 });
-		editor.createDecorationsCollection([4, 15].map(offset => ({
-			range: new Range(1, offset + 1, 1, offset + 1),
-			options: { description: 'test hint', after: { content: 'HINT', inlineClassName: 'test-hint' } },
-		})));
+		using editor = createTestCodeEditor({
+			container: requiredElement(dom.window.document, 'main'),
+			model,
+			contributions: [],
+			minimap: { enabled: false },
+			wordWrap,
+			wordWrapColumn: 12,
+		});
+		editor.createDecorationsCollection(
+			[4, 15].map(offset => ({
+				range: new Range(1, offset + 1, 1, offset + 1),
+				options: { description: 'test hint', after: { content: 'HINT', inlineClassName: 'test-hint' } },
+			})),
+		);
 		editor.layout({ width: 400, height: 160 });
 		editor.view.render(true, false);
 		const lines = editor.getDomNode().querySelector('.view-lines')!;
@@ -371,7 +449,11 @@ test('move selected text actions update text, selection and undo through the edi
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('012345');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: [],
+	});
 	try {
 		const left = editor.getAction('editor.action.moveCarretLeftAction');
 		const right = editor.getAction('editor.action.moveCarretRightAction');
@@ -404,10 +486,10 @@ test('move selected text actions update text, selection and undo through the edi
 		model.setValue('012345\nabcdef');
 		editor.setSelections([new Selection(1, 3, 1, 5), new Selection(2, 3, 2, 5)]);
 		await left.run();
-		assert.deepEqual([
-			model.getValue(),
-			(editor.getSelections() ?? []).map(selection => selection.toString()),
-		], ['023145\nacdbef', ['[1,2 -> 1,4]', '[2,2 -> 2,4]']]);
+		assert.deepEqual(
+			[model.getValue(), (editor.getSelections() ?? []).map(selection => selection.toString())],
+			['023145\nacdbef', ['[1,2 -> 1,4]', '[2,2 -> 2,4]']],
+		);
 		model.setValue('012345\nabcdef');
 		editor.setSelection(new Selection(1, 2, 2, 3));
 		await left.run();
@@ -416,10 +498,10 @@ test('move selected text actions update text, selection and undo through the edi
 		editor.setSelection(new Selection(2, 1, 2, 1));
 		await left.run();
 		await right.run();
-		assert.deepEqual([
-			model.getValue(),
-			(editor.getSelections() ?? []).map(selection => selection.toString()),
-		], ['012345\nabcdef', ['[2,1 -> 2,1]']]);
+		assert.deepEqual(
+			[model.getValue(), (editor.getSelections() ?? []).map(selection => selection.toString())],
+			['012345\nabcdef', ['[2,1 -> 2,1]']],
+		);
 	} finally {
 		dom.window.close();
 	}
@@ -430,7 +512,11 @@ test('insert final new line action appends the model EOL and keeps the selection
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: [],
+	});
 	try {
 		const action = editor.getAction('editor.action.insertFinalNewLine');
 		assert.ok(action);
@@ -457,11 +543,14 @@ test('CodeEditorWidget actions keep their editor context across read-only change
 	using rootContext = new ContextKeyService();
 	services.registerInstance(IContextKeyService, rootContext);
 	using editor = createTestCodeEditor({
-		container: requiredElement(dom.window.document, 'main'), model: first,
-		readOnly: true, instantiationService: services,
+		container: requiredElement(dom.window.document, 'main'),
+		model: first,
+		readOnly: true,
+		instantiationService: services,
 	});
 	using other = createTestCodeEditor({
-		container: requiredElement(dom.window.document, 'aside'), model: second,
+		container: requiredElement(dom.window.document, 'aside'),
+		model: second,
 		instantiationService: services,
 	});
 	try {
@@ -470,21 +559,33 @@ test('CodeEditorWidget actions keep their editor context across read-only change
 		other.focus();
 		assert.equal(editor.getAction('missing.action'), null);
 		assert.equal(action.isSupported(), false);
-		assert.equal(editor.getSupportedActions().some(candidate => candidate.id === action.id), false);
+		assert.equal(
+			editor.getSupportedActions().some(candidate => candidate.id === action.id),
+			false,
+		);
 		assert.equal(other.getAction(action.id)!.isSupported(), true);
 		await action.run();
 		assert.deepEqual([first.getValue(), second.getValue()], ['first\nkeep', 'second\nkeep']);
 		editor.updateOptions({ readOnly: false });
 		assert.equal(action.isSupported(), true);
-		await editor.getSupportedActions().find(candidate => candidate.id === action.id)!.run();
+		await editor
+			.getSupportedActions()
+			.find(candidate => candidate.id === action.id)!
+			.run();
 		assert.deepEqual([first.getValue(), second.getValue()], ['keep', 'second\nkeep']);
 		editor.setModel(null);
 		await action.run();
 		assert.equal(context.getValue('editorLangId'), '');
 		editor.setModel(replacement);
-		assert.strictEqual(editor.invokeWithinContext(accessor => accessor.get(IContextKeyService)), context);
+		assert.strictEqual(
+			editor.invokeWithinContext(accessor => accessor.get(IContextKeyService)),
+			context,
+		);
 		await action.run();
-		assert.deepEqual([first.getValue(), replacement.getValue(), second.getValue()], ['keep', 'keep', 'second\nkeep']);
+		assert.deepEqual(
+			[first.getValue(), replacement.getValue(), second.getValue()],
+			['keep', 'keep', 'second\nkeep'],
+		);
 		editor.dispose();
 		await assert.rejects(action.run(), ReferenceError);
 	} finally {
@@ -508,10 +609,11 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 	editor.layout({ width: 280, height: 60 });
 	editor.view.render(true, false);
 
-	const lineNumber = (lineIndex: number): string => requiredElement<HTMLElement>(
-		editor.getDomNode(),
-		`.margin-view-overlays .view-overlay-line[data-line-index="${lineIndex}"] .line-numbers`,
-	).textContent ?? '';
+	const lineNumber = (lineIndex: number): string =>
+		requiredElement<HTMLElement>(
+			editor.getDomNode(),
+			`.margin-view-overlays .view-overlay-line[data-line-index="${lineIndex}"] .line-numbers`,
+		).textContent ?? '';
 	assert.equal(lineNumber(0), '1');
 	editor.setPosition(new Position(3, 1));
 	editor.view.render(true, false);
@@ -522,23 +624,32 @@ test('editor configuration updates rerender line-number, selection, whitespace, 
 	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-selection').length, 1);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-whitespace').length, 4);
-	assert.equal(editor.getDomNode().querySelectorAll('.view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide').length, 1);
-	assert.equal(editor.getDomNode().querySelectorAll('.view-overlay-line[data-line-index="2"] .stanza-editor-indent-guide').length, 1);
+	assert.equal(
+		editor.getDomNode().querySelectorAll('.view-overlay-line[data-line-index="1"] .stanza-editor-indent-guide')
+			.length,
+		1,
+	);
+	assert.equal(
+		editor.getDomNode().querySelectorAll('.view-overlay-line[data-line-index="2"] .stanza-editor-indent-guide')
+			.length,
+		1,
+	);
 
 	let configurationChanges = 0;
-	using configurationListener = editor.onDidChangeConfiguration(() => configurationChanges += 1);
-	editor.updateOptions({
-		lineNumbers: 'off',
-		renderWhitespace: 'all',
-		guides: { indentation: false },
-	});
+	using configurationListener = editor.onDidChangeConfiguration(() => (configurationChanges += 1));
+	editor.updateOptions({ lineNumbers: 'off', renderWhitespace: 'all', guides: { indentation: false } });
 	editor.view.render(true, false);
 	assert.equal(configurationChanges, 1);
 	assert.equal(editor.getOption(EditorOption.lineNumbers).renderType, RenderLineNumbersType.Off);
 	assert.equal(editor.getOptions().get(EditorOption.renderWhitespace), 'all');
 	assert.equal(editor.getRawOptions().lineNumbers, 'off');
 	assert.equal(editor.getDomNode().classList.contains('hide-line-numbers'), true);
-	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.margin').style.getPropertyValue('--stanza-editor-line-numbers-width'), '0px');
+	assert.equal(
+		requiredElement<HTMLElement>(editor.getDomNode(), '.margin').style.getPropertyValue(
+			'--stanza-editor-line-numbers-width',
+		),
+		'0px',
+	);
 	assert.equal(editor.getDomNode().querySelectorAll('.margin-view-overlays .line-numbers').length, 0);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-whitespace').length, 5);
 	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-indent-guide').length, 0);
@@ -550,7 +661,12 @@ test('simple line numbers and empty overlays do not create or serialize temporar
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
 	using model = new TextModel('one\ntwo\nthree');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, renderWhitespace: 'none', minimap: { enabled: false } });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		renderWhitespace: 'none',
+		minimap: { enabled: false },
+	});
 	editor.layout({ width: 280, height: 100 });
 	editor.view.render(true, false);
 	const prototype = dom.window.Element.prototype;
@@ -574,7 +690,12 @@ test('simple line numbers and empty overlays do not create or serialize temporar
 		editor.view.render(true, false);
 		assert.equal(temporaryRowsSerialized, 0);
 		assert.equal(elementsCreated, 0);
-		assert.deepEqual([...editor.getDomNode().querySelectorAll('.margin-view-overlays .line-numbers')].map(node => node.textContent), ['1', '2', '3']);
+		assert.deepEqual(
+			[...editor.getDomNode().querySelectorAll('.margin-view-overlays .line-numbers')].map(
+				node => node.textContent,
+			),
+			['1', '2', '3'],
+		);
 	} finally {
 		dom.window.document.createElement = createElement;
 		Object.defineProperty(prototype, 'innerHTML', innerHTML);
@@ -587,7 +708,13 @@ test('line-number strings escape custom text and retain active and wrapped row b
 	using closeWindow = toDisposable(() => dom.window.close());
 	using model = new TextModel('wrapped text '.repeat(12) + '\nlast');
 	const label = (lineNumber: number) => `<img src=x onerror="throw 1"> & '${lineNumber}'`;
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineNumbers: label, wordWrap: 'on', minimap: { enabled: false } });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		lineNumbers: label,
+		wordWrap: 'on',
+		minimap: { enabled: false },
+	});
 	editor.layout({ width: 180, height: 300 });
 	editor.view.render(true, false);
 	const numbers = [...editor.getDomNode().querySelectorAll<HTMLElement>('.margin-view-overlays .line-numbers')];
@@ -600,7 +727,10 @@ test('line-number strings escape custom text and retain active and wrapped row b
 	editor.updateOptions({ lineNumbers: 'relative', wordWrap: 'off' });
 	editor.setPosition(new Position(2, 1));
 	editor.view.render(true, false);
-	assert.deepEqual([...editor.getDomNode().querySelectorAll('.margin-view-overlays .line-numbers')].map(node => node.textContent), ['1', '2']);
+	assert.deepEqual(
+		[...editor.getDomNode().querySelectorAll('.margin-view-overlays .line-numbers')].map(node => node.textContent),
+		['1', '2'],
+	);
 });
 
 test('empty overlay results clear earlier selection, whitespace and indentation content', () => {
@@ -608,7 +738,13 @@ test('empty overlay results clear earlier selection, whitespace and indentation 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
 	using model = new TextModel('root\n    one\n    two');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, renderWhitespace: 'selection', guides: { indentation: true, bracketPairs: false }, minimap: { enabled: false } });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		renderWhitespace: 'selection',
+		guides: { indentation: true, bracketPairs: false },
+		minimap: { enabled: false },
+	});
 	editor.layout({ width: 280, height: 100 });
 	editor.setSelection(new Selection(2, 1, 2, 5));
 	editor.view.render(true, false);
@@ -618,7 +754,13 @@ test('empty overlay results clear earlier selection, whitespace and indentation 
 	editor.setPosition(new Position(2, 1));
 	model.setValue('root\none\ntwo');
 	editor.view.render(true, false);
-	assert.equal(editor.getDomNode().querySelectorAll('.stanza-editor-selection, .stanza-editor-whitespace, .stanza-editor-indent-guide').length, 0);
+	assert.equal(
+		editor
+			.getDomNode()
+			.querySelectorAll('.stanza-editor-selection, .stanza-editor-whitespace, .stanza-editor-indent-guide')
+			.length,
+		0,
+	);
 	editor.updateOptions({ renderWhitespace: 'all' });
 	model.setValue('root\n    one\n    two');
 	editor.setSelection(new Selection(3, 1, 3, 5));
@@ -645,14 +787,33 @@ test('indent guides use model indentation units and include blank lines in the a
 	editor.view.render(true, false);
 	editor.setPosition(new Position(3, 1));
 	editor.view.render(true, false);
-	const guides = (line: number) => [...editor.getDomNode().querySelectorAll<HTMLElement>(`.view-overlay-line[data-line-index="${line}"] .stanza-editor-indent-guide`)];
-	assert.deepEqual([0, 1, 2, 3, 4].map(line => guides(line).length), [0, 2, 2, 2, 0]);
-	assert.deepEqual(guides(2).map(guide => guide.classList.contains('active')), [false, true]);
-	assert.deepEqual(guides(1).map(guide => guide.style.left), guides(2).map(guide => guide.style.left));
-	assert.deepEqual(guides(3).map(guide => guide.style.left), guides(2).map(guide => guide.style.left));
+	const guides = (line: number) => [
+		...editor
+			.getDomNode()
+			.querySelectorAll<HTMLElement>(`.view-overlay-line[data-line-index="${line}"] .stanza-editor-indent-guide`),
+	];
+	assert.deepEqual(
+		[0, 1, 2, 3, 4].map(line => guides(line).length),
+		[0, 2, 2, 2, 0],
+	);
+	assert.deepEqual(
+		guides(2).map(guide => guide.classList.contains('active')),
+		[false, true],
+	);
+	assert.deepEqual(
+		guides(1).map(guide => guide.style.left),
+		guides(2).map(guide => guide.style.left),
+	);
+	assert.deepEqual(
+		guides(3).map(guide => guide.style.left),
+		guides(2).map(guide => guide.style.left),
+	);
 	model.updateOptions({ indentSize: 4 });
 	editor.view.render(true, false);
-	assert.deepEqual([1, 2, 3].map(line => guides(line).length), [1, 1, 1]);
+	assert.deepEqual(
+		[1, 2, 3].map(line => guides(line).length),
+		[1, 1, 1],
+	);
 	assert.equal(guides(2)[0]?.classList.contains('active'), true);
 	editor.updateOptions({ guides: { highlightActiveIndentation: false } });
 	editor.view.render(true, false);
@@ -691,7 +852,11 @@ test('embedded editor content height shrinks below the viewport when lines are h
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('one\ntwo\nthree\nfour\nfive');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		lineHeight: 20,
+	});
 	editor.layout({ width: 240, height: 300 });
 	const heights: number[] = [];
 	using listener = editor.onDidContentSizeChange(event => {
@@ -713,7 +878,11 @@ test('common editor reveal modes scroll without changing selection or borrowing 
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
 	using model = new TextModel(Array.from({ length: 60 }, () => 'line').join('\n'));
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, lineHeight: 20 });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		lineHeight: 20,
+	});
 	const control: IEditor = editor;
 	control.layout({ width: 300, height: 100 });
 	control.setPosition(new Position(2, 2));
@@ -757,7 +926,9 @@ test('common editor reveal modes scroll without changing selection or borrowing 
 });
 
 test('widget focus queries follow DOM focus before deferred blur events', () => {
-	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside><button id="outside">outside</button></body>');
+	const dom = new JSDOM(
+		'<!doctype html><body><main></main><aside></aside><button id="outside">outside</button></body>',
+	);
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using closeWindow = toDisposable(() => dom.window.close());
 	using model = new TextModel('text');
@@ -769,7 +940,15 @@ test('widget focus queries follow DOM focus before deferred blur events', () => 
 	first.focus();
 	header.focus();
 	const context = first.invokeWithinContext(accessor => accessor.get(IContextKeyService));
-	assert.deepEqual([observed.isTextFocused.get(), observed.isFocused.get(), context.getValue('editorTextFocus'), context.getValue('editorFocus')], [false, true, false, true]);
+	assert.deepEqual(
+		[
+			observed.isTextFocused.get(),
+			observed.isFocused.get(),
+			context.getValue('editorTextFocus'),
+			context.getValue('editorFocus'),
+		],
+		[false, true, false, true],
+	);
 
 	second.focus();
 	assert.deepEqual([first.hasWidgetFocus(), second.hasWidgetFocus()], [false, true]);
@@ -813,7 +992,18 @@ test('common editor columns follow tabs and Unicode after replacing and detachin
 	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model });
 	const control: IEditor = editor;
 	assert.equal(control.getEditorType(), EditorType.ICodeEditor);
-	assert.deepEqual([2, 3, 5, 7].map(column => [control.getVisibleColumnFromPosition({ lineNumber: 1, column }), control.getStatusbarColumn({ lineNumber: 1, column })]), [[5, 5], [7, 6], [9, 7], [10, 9]]);
+	assert.deepEqual(
+		[2, 3, 5, 7].map(column => [
+			control.getVisibleColumnFromPosition({ lineNumber: 1, column }),
+			control.getStatusbarColumn({ lineNumber: 1, column }),
+		]),
+		[
+			[5, 5],
+			[7, 6],
+			[9, 7],
+			[10, 9],
+		],
+	);
 	control.setPosition(new Position(1, 3));
 	const state = control.saveViewState();
 	control.setPosition(new Position(1, 1));
@@ -822,9 +1012,21 @@ test('common editor columns follow tabs and Unicode after replacing and detachin
 	control.restoreViewState({ original: null, modified: null });
 	assert.deepEqual(control.getPosition(), new Position(1, 3));
 	control.setModel(replacement);
-	assert.deepEqual([control.getVisibleColumnFromPosition({ lineNumber: 1, column: 2 }), control.getStatusbarColumn({ lineNumber: 1, column: 2 })], [9, 9]);
+	assert.deepEqual(
+		[
+			control.getVisibleColumnFromPosition({ lineNumber: 1, column: 2 }),
+			control.getStatusbarColumn({ lineNumber: 1, column: 2 }),
+		],
+		[9, 9],
+	);
 	control.setModel(null);
-	assert.deepEqual([control.getVisibleColumnFromPosition({ lineNumber: 1, column: 2 }), control.getStatusbarColumn({ lineNumber: 1, column: 2 })], [2, 2]);
+	assert.deepEqual(
+		[
+			control.getVisibleColumnFromPosition({ lineNumber: 1, column: 2 }),
+			control.getStatusbarColumn({ lineNumber: 1, column: 2 }),
+		],
+		[2, 2],
+	);
 });
 
 test('CodeEditorWidget isolates model decorations by editor lifetime', () => {
@@ -850,7 +1052,10 @@ test('CodeEditorWidget isolates model decorations by editor lifetime', () => {
 		secondId = accessor.addDecoration(new Range(1, 3, 1, 5), { description: 'second editor' });
 	});
 
-	assert.deepEqual(model.getAllDecorations().map(decoration => decoration.id), [firstId, secondId]);
+	assert.deepEqual(
+		model.getAllDecorations().map(decoration => decoration.id),
+		[firstId, secondId],
+	);
 	first.dispose();
 	assert.equal(model.getDecorationRange(firstId), null);
 	assert.deepEqual(model.getDecorationRange(secondId), new Range(1, 3, 1, 5));
@@ -872,7 +1077,9 @@ test('CodeEditorWidget owns decoration collections and reveals without moving se
 	editor.layout({ width: 240, height: 40 });
 	const selection = Selection.fromPositions(new Position(1, 2));
 	editor.setSelection(selection);
-	const decorations = editor.createDecorationsCollection([{ range: new Range(2, 1, 2, 4), options: { description: 'owned collection' } }]);
+	const decorations = editor.createDecorationsCollection([
+		{ range: new Range(2, 1, 2, 4), options: { description: 'owned collection' } },
+	]);
 
 	editor.revealRange(new Range(4, 1, 4, 5));
 
@@ -966,12 +1173,24 @@ test('CodeEditorWidget runs in-place replacement through the registered contribu
 	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(1, 7), new Position(1, 8)));
 
-	const next = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: '.', ctrlKey: true, shiftKey: true }) as unknown as KeyboardEvent;
+	const next = new dom.window.KeyboardEvent('keydown', {
+		bubbles: true,
+		cancelable: true,
+		key: '.',
+		ctrlKey: true,
+		shiftKey: true,
+	}) as unknown as KeyboardEvent;
 	editor.controller.element.dispatchEvent(next);
 	assert.equal(next.defaultPrevented, true);
 	await waitForText(model, 'value 2');
 
-	const previous = new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key: ',', ctrlKey: true, shiftKey: true }) as unknown as KeyboardEvent;
+	const previous = new dom.window.KeyboardEvent('keydown', {
+		bubbles: true,
+		cancelable: true,
+		key: ',',
+		ctrlKey: true,
+		shiftKey: true,
+	}) as unknown as KeyboardEvent;
 	editor.controller.element.dispatchEvent(previous);
 	assert.equal(previous.defaultPrevented, true);
 	await waitForText(model, 'value 1');
@@ -986,9 +1205,16 @@ test('CodeEditorWidget selects the full replacement and keeps an empty caret col
 	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	editor.setSelection(new Selection(1, 6, 1, 10));
 
-	const replace = (key: string) => editor.controller.element.dispatchEvent(new dom.window.KeyboardEvent('keydown', {
-		bubbles: true, cancelable: true, key, ctrlKey: true, shiftKey: true,
-	}));
+	const replace = (key: string) =>
+		editor.controller.element.dispatchEvent(
+			new dom.window.KeyboardEvent('keydown', {
+				bubbles: true,
+				cancelable: true,
+				key,
+				ctrlKey: true,
+				shiftKey: true,
+			}),
+		);
 	replace('.');
 	await waitForText(model, 'flag false');
 	assert.equal(editor.getSelection()?.toString(), '[1,6 -> 1,11]');
@@ -1004,31 +1230,34 @@ test('CodeEditorWidget selects the full replacement and keeps an empty caret col
 	dom.window.close();
 });
 
-test("CodeEditorWidget owns padding, placeholder, and current-line presentation for embedded editors", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('CodeEditorWidget owns padding, placeholder, and current-line presentation for embedded editors', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
+	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel();
 	using editor = createTestCodeEditor({
 		container,
 		model,
 		lineHeight: 20,
-		placeholder: "Ask Ash",
-		presentation: "embedded",
+		placeholder: 'Ask Ash',
+		presentation: 'embedded',
 		padding: { top: 20, bottom: 20 },
 	});
 
 	editor.layout({ width: 320, height: 40 });
 	editor.view.render(true, false);
 
-	assert.equal(editor.getDomNode().querySelector(".view-line.active"), null);
-	assert.ok(editor.getDomNode().querySelector(".stanza-editor-caret"));
-	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ".view-lines").style.top, "0px");
-	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ".view-lines").style.transform, "");
-	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ".view-line").style.top, "20px");
-	assert.equal(editor.getDomNode().style.getPropertyValue("--stanza-editor-padding-left"), "12px");
-	assert.equal(editor.getDomNode().style.getPropertyValue("--stanza-editor-padding-right"), "12px");
-	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), ".stanza-editor-placeholder-text").style.top, "20px");
+	assert.equal(editor.getDomNode().querySelector('.view-line.active'), null);
+	assert.ok(editor.getDomNode().querySelector('.stanza-editor-caret'));
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.view-lines').style.top, '0px');
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.view-lines').style.transform, '');
+	assert.equal(requiredElement<HTMLElement>(editor.getDomNode(), '.view-line').style.top, '20px');
+	assert.equal(editor.getDomNode().style.getPropertyValue('--stanza-editor-padding-left'), '12px');
+	assert.equal(editor.getDomNode().style.getPropertyValue('--stanza-editor-padding-right'), '12px');
+	assert.equal(
+		requiredElement<HTMLElement>(editor.getDomNode(), '.stanza-editor-placeholder-text').style.top,
+		'20px',
+	);
 	assert.equal(editor.view.viewportLayout.contentSize.height, 60);
 	dom.window.close();
 });
@@ -1048,7 +1277,9 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	});
 	editor.layout({ width: 90, height: 100 });
 	editor.view.render(true, false);
-	const targetPosition = editor._getViewModel()!.coordinatesConverter.convertViewPositionToModelPosition(new Position(3, 1));
+	const targetPosition = editor
+		._getViewModel()!
+		.coordinatesConverter.convertViewPositionToModelPosition(new Position(3, 1));
 	editor.setPosition(targetPosition);
 	editor.view.render(true, false);
 
@@ -1056,7 +1287,9 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	const primary = requiredElement<HTMLElement>(layer, '.cursor');
 	assert.equal(layer.getAttribute('role'), 'presentation');
 	assert.equal(layer.getAttribute('aria-hidden'), 'true');
-	const viewPosition = editor._getViewModel()!.coordinatesConverter.convertModelPositionToViewPosition(targetPosition);
+	const viewPosition = editor
+		._getViewModel()!
+		.coordinatesConverter.convertModelPositionToViewPosition(targetPosition);
 	assert.equal(viewPosition.lineNumber, 3);
 	assert.equal(primary.style.top, `${(viewPosition.lineNumber - 1) * 20}px`);
 	assert.equal(primary.style.visibility, 'hidden');
@@ -1071,7 +1304,9 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	assert.ok(layer.querySelector('.cursor-primary'));
 	assert.ok(layer.querySelector('.cursor-secondary'));
 
-	editor.controller.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
+	editor.controller.textArea!.dispatchEvent(
+		new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }),
+	);
 	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().classList.contains('overtype'), true);
 	assert.equal(layer.classList.contains('cursor-block-style'), true);
@@ -1082,7 +1317,9 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	editor._getViewModel()!.onCompositionEnd();
 	editor.view.render(true, false);
 	assert.equal(primary.style.visibility, 'inherit');
-	editor.controller.textArea!.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }));
+	editor.controller.textArea!.dispatchEvent(
+		new dom.window.KeyboardEvent('keydown', { bubbles: true, key: 'Insert' }),
+	);
 	editor.view.render(true, false);
 	assert.equal(editor.getDomNode().classList.contains('overtype'), false);
 	assert.equal(layer.classList.contains('cursor-line-style'), true);
@@ -1093,44 +1330,47 @@ test('ViewCursors follows view positions, configuration, focus, composition, and
 	dom.window.close();
 });
 
-test("PlaceholderTextContribution follows model emptiness and editor layout", () => {
-	const dom = new JSDOM("<!doctype html><body><main></main></body>");
+test('PlaceholderTextContribution follows model emptiness and editor layout', () => {
+	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
-	const container = requiredElement(dom.window.document, "main");
+	const container = requiredElement(dom.window.document, 'main');
 	using model = new TextModel();
 	using editor = createTestCodeEditor({
 		container,
 		model,
 		lineHeight: 20,
-		placeholder: "Ask Ash",
+		placeholder: 'Ask Ash',
 		padding: { top: 8, bottom: 8 },
 	});
 
 	editor.layout({ width: 320, height: 80 });
 	editor.view.render(true, false);
-	const placeholder = requiredElement<HTMLElement>(editor.getDomNode(), ".stanza-editor-placeholder-text");
+	const placeholder = requiredElement<HTMLElement>(editor.getDomNode(), '.stanza-editor-placeholder-text');
 	const layout = editor.getLayoutInfo();
 	assert.strictEqual(PlaceholderTextContribution.get(editor), editor.getContribution(PlaceholderTextContribution.ID));
-	assert.deepEqual({
-		display: dom.window.getComputedStyle(placeholder).display,
-		left: placeholder.style.left,
-		top: placeholder.style.top,
-		width: placeholder.style.width,
-		lineHeight: placeholder.style.lineHeight,
-	}, {
-		display: "block",
-		left: `${layout.contentLeft}px`,
-		top: "8px",
-		width: `${layout.contentWidth - layout.verticalScrollbarWidth}px`,
-		lineHeight: "20px",
-	});
+	assert.deepEqual(
+		{
+			display: dom.window.getComputedStyle(placeholder).display,
+			left: placeholder.style.left,
+			top: placeholder.style.top,
+			width: placeholder.style.width,
+			lineHeight: placeholder.style.lineHeight,
+		},
+		{
+			display: 'block',
+			left: `${layout.contentLeft}px`,
+			top: '8px',
+			width: `${layout.contentWidth - layout.verticalScrollbarWidth}px`,
+			lineHeight: '20px',
+		},
+	);
 
-	model.reset("alpha");
+	model.reset('alpha');
 	editor.view.render(true, false);
-	assert.equal(dom.window.getComputedStyle(placeholder).display, "none");
-	model.reset("");
+	assert.equal(dom.window.getComputedStyle(placeholder).display, 'none');
+	model.reset('');
 	editor.view.render(true, false);
-	assert.equal(dom.window.getComputedStyle(placeholder).display, "block");
+	assert.equal(dom.window.getComputedStyle(placeholder).display, 'block');
 	dom.window.close();
 });
 
@@ -1149,23 +1389,49 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 }
 
 test('trigger dispatches actions and commands in the receiving editor with its context', async () => {
-	const { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand } = await import('../../../browser/editorExtensions.js');
-	const calls: { editor: ICodeEditor; args: unknown; }[] = [];
+	const { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand } =
+		await import('../../../browser/editorExtensions.js');
+	const calls: { editor: ICodeEditor; args: unknown }[] = [];
 	const condition = ContextKeyExpr.has('test.trigger.enabled');
-	registerEditorAction(class extends EditorAction {
-		constructor() { super({ id: 'test.trigger.action', label: 'Test trigger', alias: 'Test trigger', precondition: condition }); }
-		public run(_accessor: unknown, editor: ICodeEditor, args: unknown): void { calls.push({ editor, args }); }
-	});
-	registerEditorCommand(new class extends EditorCommand {
-		constructor() { super({ id: 'test.trigger.command', precondition: condition }); }
-		public runEditorCommand(_accessor: unknown, editor: ICodeEditor, args: unknown): void { calls.push({ editor, args }); }
-	}());
+	registerEditorAction(
+		class extends EditorAction {
+			constructor() {
+				super({
+					id: 'test.trigger.action',
+					label: 'Test trigger',
+					alias: 'Test trigger',
+					precondition: condition,
+				});
+			}
+			public run(_accessor: unknown, editor: ICodeEditor, args: unknown): void {
+				calls.push({ editor, args });
+			}
+		},
+	);
+	registerEditorCommand(
+		new (class extends EditorCommand {
+			constructor() {
+				super({ id: 'test.trigger.command', precondition: condition });
+			}
+			public runEditorCommand(_accessor: unknown, editor: ICodeEditor, args: unknown): void {
+				calls.push({ editor, args });
+			}
+		})(),
+	);
 	const dom = new JSDOM('<!doctype html><body><main></main><aside></aside></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
 	using otherModel = new TextModel('beta');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
-	using other = createTestCodeEditor({ container: requiredElement(dom.window.document, 'aside'), model: otherModel, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: [],
+	});
+	using other = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'aside'),
+		model: otherModel,
+		contributions: [],
+	});
 	const context = editor.invokeWithinContext(accessor => accessor.get(IContextKeyService));
 	context.setContext('test.trigger.enabled', false);
 	other.invokeWithinContext(accessor => accessor.get(IContextKeyService)).setContext('test.trigger.enabled', true);
@@ -1175,7 +1441,10 @@ test('trigger dispatches actions and commands in the receiving editor with its c
 	assert.deepEqual(calls, []);
 	context.setContext('test.trigger.enabled', true);
 	for (const id of ['test.trigger.action', 'test.trigger.command']) editor.trigger('test', id, payload);
-	assert.deepEqual(calls, [{ editor, args: payload }, { editor, args: { value: 42, source: 'test' } }]);
+	assert.deepEqual(calls, [
+		{ editor, args: payload },
+		{ editor, args: { value: 42, source: 'test' } },
+	]);
 	assert.equal(dom.window.document.activeElement, other.controller.element);
 	assert.deepEqual(payload, { value: 42 });
 	editor.setModel(null);
@@ -1185,21 +1454,43 @@ test('trigger dispatches actions and commands in the receiving editor with its c
 });
 
 test('trigger reports synchronous command errors and rejected action promises', async () => {
-	const { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand } = await import('../../../browser/editorExtensions.js');
+	const { EditorAction, EditorCommand, registerEditorAction, registerEditorCommand } =
+		await import('../../../browser/editorExtensions.js');
 	const commandError = new Error('Command failed');
 	const actionError = new Error('Action failed');
-	registerEditorCommand(new class extends EditorCommand {
-		constructor() { super({ id: 'test.trigger.failure.command', precondition: undefined }); }
-		public runEditorCommand(): void { throw commandError; }
-	}());
-	registerEditorAction(class extends EditorAction {
-		constructor() { super({ id: 'test.trigger.failure.action', label: 'Test failure', alias: 'Test failure', precondition: undefined }); }
-		public async run(): Promise<void> { throw actionError; }
-	});
+	registerEditorCommand(
+		new (class extends EditorCommand {
+			constructor() {
+				super({ id: 'test.trigger.failure.command', precondition: undefined });
+			}
+			public runEditorCommand(): void {
+				throw commandError;
+			}
+		})(),
+	);
+	registerEditorAction(
+		class extends EditorAction {
+			constructor() {
+				super({
+					id: 'test.trigger.failure.action',
+					label: 'Test failure',
+					alias: 'Test failure',
+					precondition: undefined,
+				});
+			}
+			public async run(): Promise<void> {
+				throw actionError;
+			}
+		},
+	);
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using model = new TextModel('alpha');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, contributions: [] });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		contributions: [],
+	});
 	const previous = errorHandler.getUnexpectedErrorHandler();
 	const errors: unknown[] = [];
 	setUnexpectedErrorHandler(error => errors.push(error));
@@ -1230,12 +1521,19 @@ test('formatting context keys follow registration, language changes, and model r
 	});
 	const action = editor.getAction('editor.action.formatDocument')!;
 	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
-	const read = () => editor.invokeWithinContext(accessor => {
-		const context = accessor.get(IContextKeyService);
-		return [context.getValue('editorHasDocumentFormattingProvider'), context.getValue('editorHasDocumentSelectionFormattingProvider'), action.isSupported()];
-	});
+	const read = () =>
+		editor.invokeWithinContext(accessor => {
+			const context = accessor.get(IContextKeyService);
+			return [
+				context.getValue('editorHasDocumentFormattingProvider'),
+				context.getValue('editorHasDocumentSelectionFormattingProvider'),
+				action.isSupported(),
+			];
+		});
 	assert.deepEqual(read(), [false, false, false]);
-	using registration = features.documentRangeFormattingEditProvider.register('typescript', { provideDocumentRangeFormattingEdits: () => [] });
+	using registration = features.documentRangeFormattingEditProvider.register('typescript', {
+		provideDocumentRangeFormattingEdits: () => [],
+	});
 	assert.deepEqual(read(), [false, false, false]);
 	model.setLanguage('typescript');
 	assert.deepEqual(read(), [true, true, true]);
@@ -1260,7 +1558,8 @@ test('selection formatting merges expanded edits repeatedly before one undoable 
 		model,
 		contributions: [],
 	});
-	const { formatEditor, FormattingKind, FormattingConflicts } = await import('../../../contrib/format/browser/format.js');
+	const { formatEditor, FormattingKind, FormattingConflicts } =
+		await import('../../../contrib/format/browser/format.js');
 	using selector = FormattingConflicts.setFormatterSelector(async providers => providers[0]);
 	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
 	const queried: string[] = [];
@@ -1268,7 +1567,12 @@ test('selection formatting merges expanded edits repeatedly before one undoable 
 		provideDocumentRangeFormattingEdits(receivedModel, range) {
 			assert.equal(receivedModel.getValue(), 'alpha\nbeta\ngamma');
 			queried.push(range.toString());
-			return [{ range: receivedModel.getFullModelRange(), text: range.endLineNumber === 3 ? 'ALPHA\nBETA\nGAMMA' : 'discard me' }];
+			return [
+				{
+					range: receivedModel.getFullModelRange(),
+					text: range.endLineNumber === 3 ? 'ALPHA\nBETA\nGAMMA' : 'discard me',
+				},
+			];
 		},
 	});
 	using worker = new VersionedEditorWorkerClient(model, () => new EditorWorker());
@@ -1298,16 +1602,28 @@ test('format actions share the model worker and release the save hook on detach'
 	});
 	using services = new InstantiationService();
 	const cues: string[] = [];
-	services.registerInstance(IAccessibilitySignalService, { playSignal: async signal => { cues.push(signal.settingsKey); }, playSignalLoop: () => { throw new Error('Unexpected loop'); } });
+	services.registerInstance(IAccessibilitySignalService, {
+		playSignal: async signal => {
+			cues.push(signal.settingsKey);
+		},
+		playSignalLoop: () => {
+			throw new Error('Unexpected loop');
+		},
+	});
 	using editor = createTestCodeEditor({
 		instantiationService: services,
-		container: requiredElement(dom.window.document, 'main'), model,
+		container: requiredElement(dom.window.document, 'main'),
+		model,
 		formatOnSave: true,
-		onLanguageError: error => { throw error; },
-		editorWorkerFactory: model => worker = new VersionedEditorWorkerClient(model, () => new EditorWorker()),
+		onLanguageError: error => {
+			throw error;
+		},
+		editorWorkerFactory: model => (worker = new VersionedEditorWorkerClient(model, () => new EditorWorker())),
 		registerBeforeSave: hook => {
 			saveHook = hook;
-			return toDisposable(() => { saveHook = undefined; });
+			return toDisposable(() => {
+				saveHook = undefined;
+			});
 		},
 	});
 	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
@@ -1317,7 +1633,10 @@ test('format actions share the model worker and release the save hook on detach'
 			return [{ range: model.getFullModelRange(), text: 'ALPHA' }];
 		},
 	});
-	assert.equal(editor.invokeWithinContext(accessor => accessor.get(IVersionedEditorWorkerClient)), worker);
+	assert.equal(
+		editor.invokeWithinContext(accessor => accessor.get(IVersionedEditorWorkerClient)),
+		worker,
+	);
 	assert.equal(editor.getContribution('editor.contrib.format'), null);
 	assert.ok(saveHook);
 	await saveHook();
@@ -1334,10 +1653,18 @@ test('format actions share the model worker and release the save hook on detach'
 	const { EditorExtensionsRegistry } = await import('../../../browser/editorExtensions.js');
 	for (const id of ['editor.action.formatDocument', 'editor.action.formatSelection']) {
 		const action = [...EditorExtensionsRegistry.getEditorActions()].find(action => action.id === id)!;
-		await action.run({
-			get: () => { throw new Error('Detached model service was requested'); },
-			getOptional: () => { throw new Error('Detached model service was requested'); },
-		}, editor, {});
+		await action.run(
+			{
+				get: () => {
+					throw new Error('Detached model service was requested');
+				},
+				getOptional: () => {
+					throw new Error('Detached model service was requested');
+				},
+			},
+			editor,
+			{},
+		);
 	}
 	dom.window.close();
 });
@@ -1345,28 +1672,49 @@ test('format actions share the model worker and release the save hook on detach'
 const codeFeatures = registerTestCodeEditorFeatures();
 after(() => codeFeatures.dispose());
 
-
 test('format on type uses trigger characters, supports multiple cursors and undoes with typing', async () => {
 	await import('../../../contrib/format/browser/formatActions.js');
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using cleanup = toDisposable(() => dom.window.close());
 	using model = new TextModel('alpha\nbeta');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, formatOnType: true });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		formatOnType: true,
+	});
 	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
 	let calls = 0;
 	using provider = features.onTypeFormattingEditProvider.register('*', {
 		autoFormatTriggerCharacters: [';'],
 		provideOnTypeFormattingEdits(model, position) {
 			calls++;
-			return [{ range: new Range(position.lineNumber, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber)), text: model.getLineContent(position.lineNumber).toUpperCase() }];
+			return [
+				{
+					range: new Range(
+						position.lineNumber,
+						1,
+						position.lineNumber,
+						model.getLineMaxColumn(position.lineNumber),
+					),
+					text: model.getLineContent(position.lineNumber).toUpperCase(),
+				},
+			];
 		},
 	});
 	editor.setSelections([new Selection(1, 6, 1, 6), new Selection(2, 5, 2, 5)]);
 	editor.trigger('keyboard', 'type', { text: ';' });
 	await new Promise<void>(resolve => {
-		const listener = model.onDidChangeContent(() => { if (model.getValue() === 'ALPHA;\nBETA;') { listener.dispose(); resolve(); } });
-		if (model.getValue() === 'ALPHA;\nBETA;') { listener.dispose(); resolve(); }
+		const listener = model.onDidChangeContent(() => {
+			if (model.getValue() === 'ALPHA;\nBETA;') {
+				listener.dispose();
+				resolve();
+			}
+		});
+		if (model.getValue() === 'ALPHA;\nBETA;') {
+			listener.dispose();
+			resolve();
+		}
 	});
 	assert.equal(calls, 2);
 	model.undo();
@@ -1384,12 +1732,22 @@ test('format on type cancels stale edits after language change and readonly chan
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	using cleanup = toDisposable(() => dom.window.close());
 	using model = new TextModel('alpha;');
-	using editor = createTestCodeEditor({ container: requiredElement(dom.window.document, 'main'), model, formatOnType: true });
+	using editor = createTestCodeEditor({
+		container: requiredElement(dom.window.document, 'main'),
+		model,
+		formatOnType: true,
+	});
 	const features = editor.invokeWithinContext(accessor => accessor.get(ILanguageFeaturesService));
 	using worker = new VersionedEditorWorkerClient(model, () => new EditorWorker());
 	for (const change of [() => model.setLanguage('changed'), () => editor.updateOptions({ readOnly: true })]) {
-		let finish!: (edits: { range: Range; text: string; }[]) => void;
-		using provider = features.onTypeFormattingEditProvider.register('*', { autoFormatTriggerCharacters: [';'], provideOnTypeFormattingEdits: () => new Promise(resolve => { finish = resolve; }) });
+		let finish!: (edits: { range: Range; text: string }[]) => void;
+		using provider = features.onTypeFormattingEditProvider.register('*', {
+			autoFormatTriggerCharacters: [';'],
+			provideOnTypeFormattingEdits: () =>
+				new Promise(resolve => {
+					finish = resolve;
+				}),
+		});
 		const pending = formatEditorOnType(editor, features, worker, ';');
 		change();
 		finish([{ range: model.getFullModelRange(), text: 'late' }]);

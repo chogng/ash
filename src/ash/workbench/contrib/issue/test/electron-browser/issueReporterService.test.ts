@@ -26,18 +26,49 @@ suite('Desktop issue diagnostics', () => {
 			_serviceBrand: undefined,
 			getSystemInfo: async () => {
 				calls.push('system');
-				return { os: 'Darwin arm64 test', cpus: 'Local CPU', memory: '16 GiB', gpuStatus: { webgl: 'enabled' }, screenReader: 'no', vmHint: '', processArgs: '', remoteData: [] };
+				return {
+					os: 'Darwin arm64 test',
+					cpus: 'Local CPU',
+					memory: '16 GiB',
+					gpuStatus: { webgl: 'enabled' },
+					screenReader: 'no',
+					vmHint: '',
+					processArgs: '',
+					remoteData: [],
+				};
 			},
-			getPerformanceInfo: async options => { assert.equal(options, undefined); calls.push('performance'); return { processInfo: '123\t0.1\t20.0\tAsh Main' }; },
-			resolveProcesses: async () => { throw new Error('Not used by the report'); },
+			getPerformanceInfo: async options => {
+				assert.equal(options, undefined);
+				calls.push('performance');
+				return { processInfo: '123\t0.1\t20.0\tAsh Main' };
+			},
+			resolveProcesses: async () => {
+				throw new Error('Not used by the report');
+			},
 			getSystemStatus: async () => 'local system status',
 		};
 		const server = ProxyChannel.fromService(host, resources);
-		const channel: IChannel = { call: (command, arg) => server.call('window:1', command, JSON.parse(JSON.stringify(arg))), listen: () => Event.None };
-		const collection = new ServiceCollection(...getSingletonServiceDescriptors(),
-			[IMainProcessService, { getChannel: (name: string) => { assert.equal(name, 'process'); return channel; }, registerChannel: () => { } }],
+		const channel: IChannel = {
+			call: (command, arg) => server.call('window:1', command, JSON.parse(JSON.stringify(arg))),
+			listen: () => Event.None,
+		};
+		const collection = new ServiceCollection(
+			...getSingletonServiceDescriptors(),
+			[
+				IMainProcessService,
+				{
+					getChannel: (name: string) => {
+						assert.equal(name, 'process');
+						return channel;
+					},
+					registerChannel: () => {},
+				},
+			],
 			[IIssueReporterService, createReporter()],
-			[IExtensionService, { currentCatalog: { extensions: [], diagnostics: [] } } as unknown as IExtensionService],
+			[
+				IExtensionService,
+				{ currentCatalog: { extensions: [], diagnostics: [] } } as unknown as IExtensionService,
+			],
 		);
 		const services = resources.add(new InstantiationService(collection));
 		const form = services.get(IIssueFormService);
@@ -51,11 +82,26 @@ suite('Desktop issue diagnostics', () => {
 	});
 
 	test('invalid host diagnostics leave a usable report with explicit collection failures', async () => {
-		using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(),
-			[IMainProcessService, { getChannel: () => ({ call: async () => ({ gpuStatus: 42, processInfo: 42 }), listen: () => Event.None }), registerChannel: () => { } }],
-			[IIssueReporterService, createReporter()],
-			[IExtensionService, { currentCatalog: { extensions: [], diagnostics: [] } } as unknown as IExtensionService],
-		));
+		using services = new InstantiationService(
+			new ServiceCollection(
+				...getSingletonServiceDescriptors(),
+				[
+					IMainProcessService,
+					{
+						getChannel: () => ({
+							call: async () => ({ gpuStatus: 42, processInfo: 42 }),
+							listen: () => Event.None,
+						}),
+						registerChannel: () => {},
+					},
+				],
+				[IIssueReporterService, createReporter()],
+				[
+					IExtensionService,
+					{ currentCatalog: { extensions: [], diagnostics: [] } } as unknown as IExtensionService,
+				],
+			),
+		);
 		const form = services.get(IIssueFormService);
 		await form.initialize({ issueTitle: 'Retained draft', issueBody: 'Reproduction steps' });
 		assert.equal(form.state.error, undefined);
@@ -68,17 +114,42 @@ suite('Desktop issue diagnostics', () => {
 
 	test('window disposal discards a pending diagnostic result', async () => {
 		let requested!: () => void;
-		const started = new Promise<void>(resolve => { requested = resolve; });
+		const started = new Promise<void>(resolve => {
+			requested = resolve;
+		});
 		let release!: () => void;
-		const pending = new Promise<void>(resolve => { release = resolve; });
-		using services = new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors(),
-			[IMainProcessService, { getChannel: () => ({ call: async () => { requested(); await pending; throw new Error('Window closed'); }, listen: () => Event.None }), registerChannel: () => { } }],
-			[IIssueReporterService, createReporter()],
-			[IExtensionService, { currentCatalog: { extensions: [], diagnostics: [] } } as unknown as IExtensionService],
-		));
+		const pending = new Promise<void>(resolve => {
+			release = resolve;
+		});
+		using services = new InstantiationService(
+			new ServiceCollection(
+				...getSingletonServiceDescriptors(),
+				[
+					IMainProcessService,
+					{
+						getChannel: () => ({
+							call: async () => {
+								requested();
+								await pending;
+								throw new Error('Window closed');
+							},
+							listen: () => Event.None,
+						}),
+						registerChannel: () => {},
+					},
+				],
+				[IIssueReporterService, createReporter()],
+				[
+					IExtensionService,
+					{ currentCatalog: { extensions: [], diagnostics: [] } } as unknown as IExtensionService,
+				],
+			),
+		);
 		const form = services.get(IIssueFormService);
 		let state = form.state;
-		using listener = form.onDidChange(value => { state = value; });
+		using listener = form.onDidChange(value => {
+			state = value;
+		});
 		const operation = form.initialize({ issueTitle: 'Window-local draft' });
 		await started;
 		const beforeDisposal = state;
@@ -96,9 +167,16 @@ suite('Desktop issue diagnostics', () => {
 
 function createReporter(): IIssueReporterService {
 	return {
-		read: async () => ({ reportIssueUrl: 'https://example.test', version: 'server-version', os: 'linux', arch: 'x86_64' }),
+		read: async () => ({
+			reportIssueUrl: 'https://example.test',
+			version: 'server-version',
+			os: 'linux',
+			arch: 'x86_64',
+		}),
 		searchGitHubIssues: async () => [],
-		submitIssue: async () => { throw new Error('Unexpected submission'); },
+		submitIssue: async () => {
+			throw new Error('Unexpected submission');
+		},
 	};
 }
 
@@ -106,7 +184,8 @@ suite('issueReporter browser component', () => {
 	const browserTests = useBrowserTests();
 	setup(async function () {
 		const { page } = browserTests;
-		await page.goto('/issueReporter.html'); await page.evaluate(() => window.ashIssueReporterIntegration.open());
+		await page.goto('/issueReporter.html');
+		await page.evaluate(() => window.ashIssueReporterIntegration.open());
 	});
 	teardown(async function () {
 		const { page } = browserTests;
@@ -118,12 +197,16 @@ suite('issueReporter browser component', () => {
 
 		await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Editor loses focus');
 		const title = page.getByRole('textbox', { name: 'Title', exact: true });
-		await title.press('Home'); await title.press('ArrowRight'); await page.keyboard.insertText('x'); await page.keyboard.insertText('y');
+		await title.press('Home');
+		await title.press('ArrowRight');
+		await page.keyboard.insertText('x');
+		await page.keyboard.insertText('y');
 		await expect(title).toHaveValue('Exyditor loses focus');
 		await page.getByRole('textbox', { name: 'Description', exact: true }).fill('Open the editor and press Tab.');
 		await page.getByText('Preview the report that will be submitted', { exact: true }).click();
 		const preview = page.locator('.ash-issue-reporter pre');
-		await expect(preview).toContainText('0.1.0-test'); await expect(preview).toContainText('example.syntax 1.2.3');
+		await expect(preview).toContainText('0.1.0-test');
+		await expect(preview).toContainText('example.syntax 1.2.3');
 		await expect(preview).toContainText('App Server\nAsh: 0.1.0-test\nOS: windows (x86_64)');
 		await expect(preview).toContainText('Browser: Mozilla/');
 		await page.getByRole('checkbox', { name: 'Include installed extensions' }).uncheck();
@@ -137,10 +220,16 @@ suite('issueReporter browser component', () => {
 		await page.getByRole('button', { name: 'Submit to GitHub' }).click();
 		await expect(page.getByRole('link', { name: 'Open issue #8' })).toBeVisible();
 		await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toBeDisabled();
-		const submitted = await page.evaluate(() => window.ashIssueReporterIntegration.requests.filter(request => request.method === 'issueReporter/submit'));
-		expect(submitted).toHaveLength(2); expect(submitted[1]!.params.body).toContain('Open the editor and press Tab.'); expect(submitted[1]!.params.body).not.toContain('example.syntax');
+		const submitted = await page.evaluate(() =>
+			window.ashIssueReporterIntegration.requests.filter(request => request.method === 'issueReporter/submit'),
+		);
+		expect(submitted).toHaveLength(2);
+		expect(submitted[1]!.params.body).toContain('Open the editor and press Tab.');
+		expect(submitted[1]!.params.body).not.toContain('example.syntax');
 		await page.getByRole('link', { name: 'Open issue #8' }).click();
-		expect(await page.evaluate(() => window.ashIssueReporterIntegration.opened)).toEqual(['https://github.com/chogng/ash/issues/8']);
+		expect(await page.evaluate(() => window.ashIssueReporterIntegration.opened)).toEqual([
+			'https://github.com/chogng/ash/issues/8',
+		]);
 		await page.getByRole('button', { name: 'New report' }).click();
 		await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('');
 	});
@@ -155,10 +244,20 @@ suite('issueReporter browser component', () => {
 		await expect(page.getByRole('status')).toContainText('Searching');
 		await page.getByRole('button', { name: 'Cancel search' }).click();
 		await expect(page.getByRole('button', { name: 'Search similar issues' })).toBeEnabled();
-		expect(await page.evaluate(() => window.ashIssueReporterIntegration.requests.filter(request => request.method === 'issueReporter/search/cancel').length)).toBe(1);
-		await page.evaluate(() => window.ashIssueReporterIntegration.close()); await page.evaluate(() => window.ashIssueReporterIntegration.open());
+		expect(
+			await page.evaluate(
+				() =>
+					window.ashIssueReporterIntegration.requests.filter(
+						request => request.method === 'issueReporter/search/cancel',
+					).length,
+			),
+		).toBe(1);
+		await page.evaluate(() => window.ashIssueReporterIntegration.close());
+		await page.evaluate(() => window.ashIssueReporterIntegration.open());
 		await expect(page.getByRole('textbox', { name: 'Title', exact: true })).toHaveValue('Preserved draft');
-		await expect(page.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('Steps remain after closing.');
+		await expect(page.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue(
+			'Steps remain after closing.',
+		);
 	});
 
 	test('a pending submission survives tab closure without creating another request', async function () {
@@ -170,11 +269,19 @@ suite('issueReporter browser component', () => {
 		await page.evaluate(() => window.ashIssueReporterIntegration.holdSubmit());
 		await page.getByRole('button', { name: 'Submit to GitHub' }).click();
 		await expect(page.getByRole('button', { name: 'Submitting…' })).toBeDisabled();
-		await page.evaluate(() => window.ashIssueReporterIntegration.close()); await page.evaluate(() => window.ashIssueReporterIntegration.open());
+		await page.evaluate(() => window.ashIssueReporterIntegration.close());
+		await page.evaluate(() => window.ashIssueReporterIntegration.open());
 		await expect(page.getByRole('button', { name: 'Submitting…' })).toBeDisabled();
 		await page.evaluate(() => window.ashIssueReporterIntegration.releaseSubmit());
 		await expect(page.getByRole('link', { name: 'Open issue #8' })).toBeVisible();
-		expect(await page.evaluate(() => window.ashIssueReporterIntegration.requests.filter(request => request.method === 'issueReporter/submit').length)).toBe(1);
+		expect(
+			await page.evaluate(
+				() =>
+					window.ashIssueReporterIntegration.requests.filter(
+						request => request.method === 'issueReporter/submit',
+					).length,
+			),
+		).toBe(1);
 	});
 
 	test('an uncertain submission keeps the report, warns against duplicate creation and renders theme tokens', async function () {
@@ -187,26 +294,38 @@ suite('issueReporter browser component', () => {
 		await page.getByRole('button', { name: 'Submit to GitHub' }).click();
 		await expect(page.getByRole('status')).toContainText('Check the repository before submitting again');
 		await expect(page.getByRole('textbox', { name: 'Description', exact: true })).toHaveValue('Keep these steps.');
-		const background = await page.locator('.ash-issue-reporter').evaluate(element => getComputedStyle(element).backgroundColor);
+		const background = await page
+			.locator('.ash-issue-reporter')
+			.evaluate(element => getComputedStyle(element).backgroundColor);
 		await page.evaluate(() => window.ashIssueReporterIntegration.theme('light'));
-		expect(await page.locator('.ash-issue-reporter').evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe(background);
+		expect(
+			await page.locator('.ash-issue-reporter').evaluate(element => getComputedStyle(element).backgroundColor),
+		).not.toBe(background);
 		await page.evaluate(() => window.ashIssueReporterIntegration.theme('highContrast'));
-		const description = page.getByRole('textbox', { name: 'Description', exact: true }); await description.focus();
-		expect(await description.evaluate(element => getComputedStyle(element).outlineColor)).toBe('rgb(255, 255, 255)');
-		expect(await page.locator('.ash-issue-reporter h1').evaluate(element => getComputedStyle(element).fontSize)).toBe('18px');
+		const description = page.getByRole('textbox', { name: 'Description', exact: true });
+		await description.focus();
+		expect(await description.evaluate(element => getComputedStyle(element).outlineColor)).toBe(
+			'rgb(255, 255, 255)',
+		);
+		expect(
+			await page.locator('.ash-issue-reporter h1').evaluate(element => getComputedStyle(element).fontSize),
+		).toBe('18px');
 	});
 
 	test('the reporter exposes Chinese form labels and submission guidance', async function () {
 		const { page } = browserTests;
 
-		await page.goto('/issueReporter.html?locale=zh-CN'); await page.evaluate(() => window.ashIssueReporterIntegration.open());
+		await page.goto('/issueReporter.html?locale=zh-CN');
+		await page.evaluate(() => window.ashIssueReporterIntegration.open());
 		await expect(page.getByRole('heading', { name: '报告问题' })).toBeVisible();
 		await page.getByRole('textbox', { name: '标题', exact: true }).fill('编辑器问题');
 		await page.getByRole('textbox', { name: '描述', exact: true }).fill('复现步骤');
 		await page.getByText('预览将要提交的报告', { exact: true }).click();
 		await expect(page.locator('.ash-issue-reporter pre')).toContainText('类型：缺陷');
 		await expect(page.locator('.ash-issue-reporter pre')).toContainText('系统信息');
-		await expect(page.locator('.ash-issue-reporter pre')).toContainText('App Server\nAsh：0.1.0-test\n操作系统：windows（x86_64）');
+		await expect(page.locator('.ash-issue-reporter pre')).toContainText(
+			'App Server\nAsh：0.1.0-test\n操作系统：windows（x86_64）',
+		);
 		await expect(page.locator('.ash-issue-reporter pre')).toContainText('浏览器：Mozilla/');
 		await page.getByRole('button', { name: '搜索相似问题' }).click();
 		await expect(page.getByRole('link', { name: 'Existing editor bug（未关闭）' })).toBeVisible();
@@ -217,11 +336,16 @@ suite('issueReporter browser component', () => {
 	test('extension discovery diagnostics can be reported with the available system diagnostics', async function () {
 		const { page } = browserTests;
 
-		await page.goto('/issueReporter.html?extensionsFailed'); await page.evaluate(() => window.ashIssueReporterIntegration.open());
+		await page.goto('/issueReporter.html?extensionsFailed');
+		await page.evaluate(() => window.ashIssueReporterIntegration.open());
 		await page.getByRole('textbox', { name: 'Title', exact: true }).fill('Cannot load extensions');
-		await page.getByRole('textbox', { name: 'Description', exact: true }).fill('The extension catalog fails to load.');
+		await page
+			.getByRole('textbox', { name: 'Description', exact: true })
+			.fill('The extension catalog fails to load.');
 		await page.getByText('Preview the report that will be submitted', { exact: true }).click();
-		await expect(page.locator('.ash-issue-reporter pre')).toContainText('sourceUnavailable: Extension source is unavailable.');
+		await expect(page.locator('.ash-issue-reporter pre')).toContainText(
+			'sourceUnavailable: Extension source is unavailable.',
+		);
 		await expect(page.locator('.ash-issue-reporter pre')).toContainText('0.1.0-test');
 		await page.getByRole('button', { name: 'Sign in to GitHub', exact: true }).click();
 		await page.getByRole('button', { name: 'Submit to GitHub' }).click();
@@ -231,7 +355,8 @@ suite('issueReporter browser component', () => {
 	test('a delayed signed-out snapshot cannot overwrite the completed GitHub login', async function () {
 		const { page } = browserTests;
 
-		await page.goto('/issueReporter.html?holdAccountRead'); await page.evaluate(() => window.ashIssueReporterIntegration.open());
+		await page.goto('/issueReporter.html?holdAccountRead');
+		await page.evaluate(() => window.ashIssueReporterIntegration.open());
 		await page.getByRole('button', { name: 'Sign in to GitHub', exact: true }).click();
 		await expect(page.getByText('Submitting as Test account')).toBeVisible();
 		await page.evaluate(() => window.ashIssueReporterIntegration.releaseAccountRead());
@@ -243,9 +368,30 @@ suite('issueReporter browser component', () => {
 		const { page } = browserTests;
 
 		await page.getByRole('button', { name: 'Sign in to GitHub', exact: true }).click();
-		await page.evaluate(() => window.ashIssueReporterIntegration.setAccounts([{ id: '99', host: 'github.com', login: 'Another cloud account', status: 'ready', credentialRevision: '1' }, { id: '42', host: 'github.com', login: 'Test account', status: 'ready', credentialRevision: '1' }]));
+		await page.evaluate(() =>
+			window.ashIssueReporterIntegration.setAccounts([
+				{
+					id: '99',
+					host: 'github.com',
+					login: 'Another cloud account',
+					status: 'ready',
+					credentialRevision: '1',
+				},
+				{ id: '42', host: 'github.com', login: 'Test account', status: 'ready', credentialRevision: '1' },
+			]),
+		);
 		await expect(page.getByText('Submitting as Another cloud account', { exact: true })).toBeVisible();
-		await page.evaluate(() => window.ashIssueReporterIntegration.setAccounts([{ id: 'ghe.example/42', host: 'ghe.example', login: 'Enterprise user', status: 'ready', credentialRevision: '1' }]));
+		await page.evaluate(() =>
+			window.ashIssueReporterIntegration.setAccounts([
+				{
+					id: 'ghe.example/42',
+					host: 'ghe.example',
+					login: 'Enterprise user',
+					status: 'ready',
+					credentialRevision: '1',
+				},
+			]),
+		);
 		await expect(page.getByRole('button', { name: 'Sign in to GitHub', exact: true })).toBeVisible();
 		await expect(page.getByText('Submitting as Enterprise user', { exact: true })).toHaveCount(0);
 	});

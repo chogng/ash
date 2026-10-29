@@ -10,7 +10,12 @@ suite('Fuzzy scorer', () => {
 	});
 
 	test('requires all characters in order and returns no score for empty inputs', () => {
-		for (const [target, query] of [['', 'a'], ['a', ''], ['ab', 'ba'], ['ab', 'abc']]) {
+		for (const [target, query] of [
+			['', 'a'],
+			['a', ''],
+			['ab', 'ba'],
+			['ab', 'abc'],
+		]) {
 			assert.deepEqual(scoreFuzzy(target!, query!, query!.toLowerCase(), true), [0, []]);
 		}
 	});
@@ -49,8 +54,15 @@ suite('Fuzzy scorer', () => {
 		assert.deepEqual(scoreFuzzy(target, query + 'b', query + 'b', false), [0, []]);
 		const repeated = 'a'.repeat(50_000);
 		assert.deepEqual(scoreFuzzy(repeated, query + 'b', query + 'b', false), [0, []]);
-		assert.deepEqual(scoreFuzzy(repeated + 'b', query + 'b', query + 'b', false)[1], Array.from({ length: query.length + 1 }, (_, index) => repeated.length - query.length + index));
-		assert.deepEqual(scoreFuzzy(prefix + 'İ😀', 'i😀', 'i😀', true)[1], [prefix.length, prefix.length + 1, prefix.length + 2]);
+		assert.deepEqual(
+			scoreFuzzy(repeated + 'b', query + 'b', query + 'b', false)[1],
+			Array.from({ length: query.length + 1 }, (_, index) => repeated.length - query.length + index),
+		);
+		assert.deepEqual(scoreFuzzy(prefix + 'İ😀', 'i😀', 'i😀', true)[1], [
+			prefix.length,
+			prefix.length + 1,
+			prefix.length + 2,
+		]);
 	});
 
 	test('breaks equal alignment scores by their earliest ending position', () => {

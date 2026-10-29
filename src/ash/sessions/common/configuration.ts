@@ -1,5 +1,8 @@
 import { localize } from '../../nls.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../platform/configuration/common/configurationRegistry.js';
+import {
+	Extensions as ConfigurationExtensions,
+	type IConfigurationRegistry,
+} from '../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../platform/registry/common/platform.js';
 import { ActivityBarPosition } from '../../workbench/common/configuration.js';
 
@@ -22,16 +25,32 @@ export const SessionsConfiguration = Object.freeze({
 		setting: {
 			included: false,
 			valueType: 'select',
-			get title() { return localize('sessions.activityBar.location.title', 'Activity Bar position'); },
-			get description() { return localize('sessions.activityBar.location.description', 'Place the Activity Bar on the side, top, or bottom, or hide it.'); },
+			get title() {
+				return localize('sessions.activityBar.location.title', 'Activity Bar position');
+			},
+			get description() {
+				return localize(
+					'sessions.activityBar.location.description',
+					'Place the Activity Bar on the side, top, or bottom, or hide it.',
+				);
+			},
 			get options() {
 				return [
-					{ value: ActivityBarPosition.DEFAULT, label: localize('workbench.activityBar.location.side', 'Side') },
+					{
+						value: ActivityBarPosition.DEFAULT,
+						label: localize('workbench.activityBar.location.side', 'Side'),
+					},
 					{ value: ActivityBarPosition.TOP, label: localize('workbench.activityBar.location.top', 'Top') },
-					{ value: ActivityBarPosition.BOTTOM, label: localize('workbench.activityBar.location.bottom', 'Bottom') },
-					{ value: ActivityBarPosition.HIDDEN, label: localize('workbench.activityBar.location.hidden', 'Hidden') },
+					{
+						value: ActivityBarPosition.BOTTOM,
+						label: localize('workbench.activityBar.location.bottom', 'Bottom'),
+					},
+					{
+						value: ActivityBarPosition.HIDDEN,
+						label: localize('workbench.activityBar.location.hidden', 'Hidden'),
+					},
 				] as const;
-			}
+			},
 		},
 	}),
 	layoutStyle: configurationRegistry.registerConfiguration<SessionsLayoutStyle>({
@@ -44,14 +63,21 @@ export const SessionsConfiguration = Object.freeze({
 		setting: {
 			included: false,
 			valueType: 'select',
-			get title() { return localize('sessions.layoutStyle.title', 'Layout style'); },
-			get description() { return localize('sessions.layoutStyle.description', 'Choose an inset frame (Modern) or edge-to-edge regions (Flat).'); },
+			get title() {
+				return localize('sessions.layoutStyle.title', 'Layout style');
+			},
+			get description() {
+				return localize(
+					'sessions.layoutStyle.description',
+					'Choose an inset frame (Modern) or edge-to-edge regions (Flat).',
+				);
+			},
 			get options() {
 				return [
 					{ value: 'modern', label: localize('sessions.layoutStyle.modern', 'Modern') },
 					{ value: 'flat', label: localize('sessions.layoutStyle.flat', 'Flat') },
 				] as const;
-			}
+			},
 		},
 	}),
 });

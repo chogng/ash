@@ -1,6 +1,9 @@
-import "./selections.css";
+import './selections.css';
 import { h, reset, svg } from '../../../../base/browser/dom.js';
-import { createStanzaVisualSelectionGeometry, type VisualSelectionRectangle } from '../../../common/viewModel/visualSelectionGeometry.js';
+import {
+	createStanzaVisualSelectionGeometry,
+	type VisualSelectionRectangle,
+} from '../../../common/viewModel/visualSelectionGeometry.js';
 import { EditorOption } from '../../../common/config/editorOptions.js';
 import { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { type Selection } from '../../../common/core/selection.js';
@@ -35,16 +38,36 @@ export class SelectionsOverlay extends DynamicViewOverlay {
 		super.dispose();
 	}
 
-	public override onConfigurationChanged(_event: viewEvents.ViewConfigurationChangedEvent): boolean { return true; }
-	public override onCursorStateChanged(_event: viewEvents.ViewCursorStateChangedEvent): boolean { return true; }
-	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean { return true; }
-	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return true; }
-	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean { return true; }
-	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
-	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
-	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean { return event.scrollTopChanged; }
-	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
-	public override onThemeChanged(_event: viewEvents.ViewThemeChangedEvent): boolean { return true; }
+	public override onConfigurationChanged(_event: viewEvents.ViewConfigurationChangedEvent): boolean {
+		return true;
+	}
+	public override onCursorStateChanged(_event: viewEvents.ViewCursorStateChangedEvent): boolean {
+		return true;
+	}
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean {
+		return true;
+	}
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
+		return true;
+	}
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean {
+		return true;
+	}
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean {
+		return true;
+	}
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean {
+		return true;
+	}
+	public override onScrollChanged(event: viewEvents.ViewScrollChangedEvent): boolean {
+		return event.scrollTopChanged;
+	}
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
+		return true;
+	}
+	public override onThemeChanged(_event: viewEvents.ViewThemeChangedEvent): boolean {
+		return true;
+	}
 
 	public prepareRender(context: RenderingContext): void {
 		const cursorStates = this.viewModel.getCursorStates();
@@ -62,9 +85,9 @@ export class SelectionsOverlay extends DynamicViewOverlay {
 				cursorStates.map(state => state.viewState.selection),
 				cursorStates.map(state => state.modelState.selection),
 				rows,
-				this.context.configuration.options.get(EditorOption.roundedSelection)
-				&& this.context.theme.type !== ColorScheme.HighContrastDark
-				&& this.context.theme.type !== ColorScheme.HighContrastLight,
+				this.context.configuration.options.get(EditorOption.roundedSelection) &&
+					this.context.theme.type !== ColorScheme.HighContrastDark &&
+					this.context.theme.type !== ColorScheme.HighContrastLight,
 				this.context.configuration.options.get(EditorOption.fontInfo).typicalHalfwidthCharacterWidth / 4,
 			);
 		});
@@ -89,12 +112,22 @@ function projectStanzaSelectionOverlays(
 ): void {
 	for (const row of rows.values()) reset(row);
 	// Include neighboring rows so scrolling does not turn a continuing selection into a rounded cap.
-	const renderLines = { startLineIndex: Math.max(0, context.viewportData.startLineNumber - 2), endLineIndexExclusive: context.viewportData.endLineNumber + 1 };
-	const geometry = createStanzaVisualSelectionGeometry(model, modelSelections, projection, renderLines, textLeft, textMeasurer);
+	const renderLines = {
+		startLineIndex: Math.max(0, context.viewportData.startLineNumber - 2),
+		endLineIndexExclusive: context.viewportData.endLineNumber + 1,
+	};
+	const geometry = createStanzaVisualSelectionGeometry(
+		model,
+		modelSelections,
+		projection,
+		renderLines,
+		textLeft,
+		textMeasurer,
+	);
 	const segments = new Map<number, Map<number, VisualSelectionRectangle[]>>();
 	for (const rectangle of geometry.selections) {
 		let lines = segments.get(rectangle.selectionIndex);
-		if (!lines) segments.set(rectangle.selectionIndex, lines = new Map());
+		if (!lines) segments.set(rectangle.selectionIndex, (lines = new Map()));
 		lines.set(rectangle.visualLineIndex, [rectangle]);
 	}
 	for (let selectionIndex = 0; selectionIndex < viewSelections.length; selectionIndex += 1) {
@@ -103,15 +136,18 @@ function projectStanzaSelectionOverlays(
 		const ranges = context.linesVisibleRangesForRange(selection, true);
 		if (!ranges) continue;
 		let lines = segments.get(selectionIndex);
-		if (!lines) segments.set(selectionIndex, lines = new Map());
+		if (!lines) segments.set(selectionIndex, (lines = new Map()));
 		for (const line of ranges) {
 			// Rendered ranges start at the text row; overlays are mounted beside the gutter.
-			lines.set(line.lineNumber - 1, line.ranges.map(range => ({
-				selectionIndex,
-				visualLineIndex: line.lineNumber - 1,
-				left: textLeft + range.left,
-				width: range.width,
-			})));
+			lines.set(
+				line.lineNumber - 1,
+				line.ranges.map(range => ({
+					selectionIndex,
+					visualLineIndex: line.lineNumber - 1,
+					left: textLeft + range.left,
+					width: range.width,
+				})),
+			);
 		}
 	}
 	for (const lines of segments.values()) {
@@ -119,7 +155,13 @@ function projectStanzaSelectionOverlays(
 		const roundLines = rounded && [...lines.values()].every(line => line.length === 1);
 		for (const [lineIndex, rectangles] of lines) {
 			for (const rectangle of rectangles) {
-				const element = appendSelection(rows, rectangle.selectionIndex, lineIndex, rectangle.left, rectangle.width);
+				const element = appendSelection(
+					rows,
+					rectangle.selectionIndex,
+					lineIndex,
+					rectangle.left,
+					rectangle.width,
+				);
 				if (!element || !roundLines) continue;
 				const above = lines.get(lineIndex - 1)?.[0];
 				const below = lines.get(lineIndex + 1)?.[0];
@@ -129,7 +171,13 @@ function projectStanzaSelectionOverlays(
 	}
 }
 
-function appendSelection(rows: ReadonlyMap<number, HTMLElement>, selectionIndex: number, visualLineIndex: number, left: number, width: number): HTMLElement | undefined {
+function appendSelection(
+	rows: ReadonlyMap<number, HTMLElement>,
+	selectionIndex: number,
+	visualLineIndex: number,
+	left: number,
+	width: number,
+): HTMLElement | undefined {
 	const row = rows.get(visualLineIndex);
 	if (!row) return;
 	const element = h(row.ownerDocument, 'div');
@@ -152,8 +200,12 @@ function roundSelectionSegment(
 	const radius = 3;
 	const left = segment.left;
 	const right = left + segment.width;
-	for (const [vertical, neighbor] of [['top', above], ['bottom', below]] as const) {
-		const connected = neighbor && neighbor.left < right - tolerance && neighbor.left + neighbor.width > left + tolerance;
+	for (const [vertical, neighbor] of [
+		['top', above],
+		['bottom', below],
+	] as const) {
+		const connected =
+			neighbor && neighbor.left < right - tolerance && neighbor.left + neighbor.width > left + tolerance;
 		for (const horizontal of ['left', 'right'] as const) {
 			const edge = horizontal === 'left' ? left : right;
 			const neighborEdge = neighbor ? neighbor.left + (horizontal === 'right' ? neighbor.width : 0) : edge;

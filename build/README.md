@@ -96,13 +96,14 @@ Electron restarts only when validated Main/Preload output contents change.
 
 Bun also runs the product-icon generator, localization generator, CSS checker
 and TypeScript/JavaScript formatter through their existing pnpm scripts.
-Configuration and documentation use the pinned `bun fmt`, retaining
+Sources, configuration and documentation use the pinned `bun fmt`, retaining
 `.prettierrc.toml` and `.editorconfig`. Full checks, sparse incremental snapshots
 and the VS Code stdin formatter explicitly read both `.gitignore` and
 `.prettierignore`; Markdown code fences are left to their owning language formatter.
-VS Code uses the recommended Custom Local Formatters extension to invoke the
+VS Code uses the recommended Simple LSP Client extension to invoke the
 workspace Bun executable. `pnpm test:format` compares that configured stdin
-command with file formatting for JSON, JSONC, YAML, Markdown, CSS and HTML.
+command with file formatting for TS, TSX, JS, JSX, JSON, JSONC, YAML, Markdown,
+CSS and HTML.
 The `bun: runtime:1.4.4` dependency lets pnpm install the official native runtime
 directly, with platform archives and SHA-256 checksums in `pnpm-lock.yaml`.
 There is no npm Bun installer or Bun dependency patch. The formatting CI job

@@ -12,7 +12,7 @@ export class ExplorerItem {
 		public readonly kind: FileKind,
 		public readonly children?: readonly ExplorerItem[],
 		public readonly mtime?: number,
-	) { }
+	) {}
 
 	public static fromFileEntry(entry: IFileEntry): ExplorerItem {
 		return new ExplorerItem(entry.resource, entry.name, entry.kind);
@@ -28,10 +28,12 @@ export class ExplorerModel extends Disposable {
 	constructor(workspace: IWorkspaceContextService) {
 		super();
 		this.currentRoot = explorerRoot(workspace.getWorkspace());
-		this._register(workspace.onDidChangeWorkspace(({ workspace }) => {
-			this.currentRoot = explorerRoot(workspace);
-			this.rootChanged.fire();
-		}));
+		this._register(
+			workspace.onDidChangeWorkspace(({ workspace }) => {
+				this.currentRoot = explorerRoot(workspace);
+				this.rootChanged.fire();
+			}),
+		);
 	}
 
 	get root(): ExplorerItem | undefined {

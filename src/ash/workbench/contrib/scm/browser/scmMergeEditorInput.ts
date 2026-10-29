@@ -1,6 +1,10 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
 import { URI } from '../../../../base/common/uri.js';
-import { EditorInputSerializers, requireRecord, requireString } from '../../../services/editor/common/editorInputSerializer.js';
+import {
+	EditorInputSerializers,
+	requireRecord,
+	requireString,
+} from '../../../services/editor/common/editorInputSerializer.js';
 import { EditorPaneMatch } from '../../../browser/parts/editor/editorPane.js';
 
 export const SCM_MERGE_EDITOR_ID = 'ash.editor.scmMerge';
@@ -13,7 +17,12 @@ export interface ScmMergeEditorInput extends IResourceEditorInput {
 	readonly resultResource: URI;
 }
 
-export function createScmMergeEditorInput(repositoryId: string, path: string, resource: URI, resultResource: URI): ScmMergeEditorInput {
+export function createScmMergeEditorInput(
+	repositoryId: string,
+	path: string,
+	resource: URI,
+	resultResource: URI,
+): ScmMergeEditorInput {
 	return {
 		resource,
 		contentType,
@@ -26,9 +35,15 @@ export function createScmMergeEditorInput(repositoryId: string, path: string, re
 }
 
 export function isScmMergeEditorInput(input: IResourceEditorInput): input is ScmMergeEditorInput {
-	return input.contentType === contentType && 'repositoryId' in input && typeof input.repositoryId === 'string'
-		&& 'path' in input && typeof input.path === 'string'
-		&& 'resultResource' in input && input.resultResource instanceof URI;
+	return (
+		input.contentType === contentType &&
+		'repositoryId' in input &&
+		typeof input.repositoryId === 'string' &&
+		'path' in input &&
+		typeof input.path === 'string' &&
+		'resultResource' in input &&
+		input.resultResource instanceof URI
+	);
 }
 
 export function matchScmMergeEditor(input: IResourceEditorInput): EditorPaneMatch {
@@ -40,7 +55,13 @@ EditorInputSerializers.registerStatic({
 	canSerialize: isScmMergeEditorInput,
 	serialize: input => {
 		if (!isScmMergeEditorInput(input)) throw new TypeError('SCM merge input required');
-		return { resource: input.resource.toString(), repositoryId: input.repositoryId, path: input.path, resultResource: input.resultResource.toString(), label: input.label };
+		return {
+			resource: input.resource.toString(),
+			repositoryId: input.repositoryId,
+			path: input.path,
+			resultResource: input.resultResource.toString(),
+			label: input.label,
+		};
 	},
 	deserialize: value => {
 		const record = requireRecord(value, 'SCM merge input');

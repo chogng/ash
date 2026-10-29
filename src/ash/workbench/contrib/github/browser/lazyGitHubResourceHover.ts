@@ -3,7 +3,12 @@ import { CancellationError } from '../../../../base/common/errors.js';
 import { Disposable, DisposableMap, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { observableValue, type IObservable } from '../../../../base/common/observable.js';
 import { URI } from '../../../../base/common/uri.js';
-import { IGitHubService, type GitHubChecks, type GitHubIssueDetails, type GitHubPullRequest } from '../../../../platform/github/common/githubService.js';
+import {
+	IGitHubService,
+	type GitHubChecks,
+	type GitHubIssueDetails,
+	type GitHubPullRequest,
+} from '../../../../platform/github/common/githubService.js';
 
 export type GitHubReferenceKind = 'pullRequest' | 'issue';
 
@@ -19,8 +24,7 @@ export interface IPullRequestHoverDetails {
 }
 
 export type LazyGitHubResourceState<T> =
-	| { readonly status: 'idle' | 'loading' | 'failed'; }
-	| { readonly status: 'resolved'; readonly value: T; };
+	{ readonly status: 'idle' | 'loading' | 'failed' } | { readonly status: 'resolved'; readonly value: T };
 
 interface ResourceEntry<T> extends IDisposable {
 	readonly cancellation: CancellationTokenSource;
@@ -29,12 +33,17 @@ interface ResourceEntry<T> extends IDisposable {
 	isComplete: boolean;
 }
 
-enum ResourceDetail { Core, Checks }
+enum ResourceDetail {
+	Core,
+	Checks,
+}
 
 /** Core metadata appears with the link; checks are requested only on hover intent. */
 export class LazyGitHubResourceResolver extends Disposable {
 	private readonly issues = this._register(new DisposableMap<string, ResourceEntry<GitHubIssueDetails>>());
-	private readonly pullRequests = this._register(new DisposableMap<string, ResourceEntry<IPullRequestHoverDetails>>());
+	private readonly pullRequests = this._register(
+		new DisposableMap<string, ResourceEntry<IPullRequestHoverDetails>>(),
+	);
 
 	constructor(@IGitHubService private readonly github: IGitHubService) {
 		super();
@@ -44,13 +53,17 @@ export class LazyGitHubResourceResolver extends Disposable {
 		return this.entry(this.issues, target).state;
 	}
 
-	public getPullRequestState(target: IGitHubReferenceTarget): IObservable<LazyGitHubResourceState<IPullRequestHoverDetails>> {
+	public getPullRequestState(
+		target: IGitHubReferenceTarget,
+	): IObservable<LazyGitHubResourceState<IPullRequestHoverDetails>> {
 		return this.entry(this.pullRequests, target).state;
 	}
 
 	public resolveIssue(target: IGitHubReferenceTarget): Promise<GitHubIssueDetails> {
 		const entry = this.entry(this.issues, target);
-		return this.load(entry, () => this.github.readIssue(repository(target), target.number, entry.cancellation.token));
+		return this.load(entry, () =>
+			this.github.readIssue(repository(target), target.number, entry.cancellation.token),
+		);
 	}
 
 	public prefetchPullRequest(target: IGitHubReferenceTarget): Promise<IPullRequestHoverDetails> {
@@ -68,29 +81,46 @@ export class LazyGitHubResourceResolver extends Disposable {
 		if (token.isCancellationRequested) {
 			throw new CancellationError();
 		}
-		return this.load(entry, async () => {
-			const state = entry.state.get();
-			if (state.status !== 'resolved') {
-				throw new Error('Pull request core metadata is not loaded');
-			}
-			const pullRequest = state.value.pullRequest;
-			const statuses: GitHubChecks['statuses'][number][] = [];
-			const checks: GitHubChecks['checks'][number][] = [];
-			let page: number | null = 1;
-			let result!: GitHubChecks;
-			while (page !== null) {
-				result = await this.github.readChecks(repository(target), pullRequest.headCommit, page, entry.cancellation.token);
-				statuses.push(...result.statuses);
-				checks.push(...result.checks);
-				page = result.nextPage;
-			}
-			return { pullRequest, checks: { ...result, statuses, checks } };
-		}, ResourceDetail.Checks);
+		return this.load(
+			entry,
+			async () => {
+				const state = entry.state.get();
+				if (state.status !== 'resolved') {
+					throw new Error('Pull request core metadata is not loaded');
+				}
+				const pullRequest = state.value.pullRequest;
+				const statuses: GitHubChecks['statuses'][number][] = [];
+				const checks: GitHubChecks['checks'][number][] = [];
+				let page: number | null = 1;
+				let result!: GitHubChecks;
+				while (page !== null) {
+					result = await this.github.readChecks(
+						repository(target),
+						pullRequest.headCommit,
+						page,
+						entry.cancellation.token,
+					);
+					statuses.push(...result.statuses);
+					checks.push(...result.checks);
+					page = result.nextPage;
+				}
+				return { pullRequest, checks: { ...result, statuses, checks } };
+			},
+			ResourceDetail.Checks,
+		);
 	}
 
-	public retain(references: readonly { readonly resource: URI; }[]): void {
-		for (const [cache, kind] of [[this.issues, 'issue'], [this.pullRequests, 'pullRequest']] as const) {
-			const retained = new Set(references.map(reference => parseGitHubReferenceTarget(reference.resource, kind)).filter(target => target !== undefined).map(referenceKey));
+	public retain(references: readonly { readonly resource: URI }[]): void {
+		for (const [cache, kind] of [
+			[this.issues, 'issue'],
+			[this.pullRequests, 'pullRequest'],
+		] as const) {
+			const retained = new Set(
+				references
+					.map(reference => parseGitHubReferenceTarget(reference.resource, kind))
+					.filter(target => target !== undefined)
+					.map(referenceKey),
+			);
 			for (const key of cache.keys()) {
 				if (!retained.has(key)) {
 					cache.deleteAndDispose(key);
@@ -105,12 +135,15 @@ export class LazyGitHubResourceResolver extends Disposable {
 		let entry = cache.get(key);
 		if (!entry) {
 			const cancellation = new CancellationTokenSource();
-			entry = Object.assign(toDisposable(() => cancellation.dispose(true)), {
-				cancellation,
-				state: observableValue<LazyGitHubResourceState<T>>(this, { status: 'idle' }),
-				pending: undefined,
-				isComplete: false,
-			});
+			entry = Object.assign(
+				toDisposable(() => cancellation.dispose(true)),
+				{
+					cancellation,
+					state: observableValue<LazyGitHubResourceState<T>>(this, { status: 'idle' }),
+					pending: undefined,
+					isComplete: false,
+				},
+			);
 			cache.set(key, entry);
 		}
 		return entry;
@@ -148,16 +181,24 @@ export class LazyGitHubResourceResolver extends Disposable {
 	}
 }
 
-export function parseGitHubReferenceTarget(resource: URI, kind: GitHubReferenceKind): IGitHubReferenceTarget | undefined {
+export function parseGitHubReferenceTarget(
+	resource: URI,
+	kind: GitHubReferenceKind,
+): IGitHubReferenceTarget | undefined {
 	const match = /^\/([\w.-]+)\/([\w.-]+)\/(issues|pull)\/([1-9]\d*)$/.exec(resource.path);
-	if (resource.scheme !== 'https' || resource.authority.toLowerCase() !== 'github.com' || !match || match[3] !== (kind === 'issue' ? 'issues' : 'pull')) {
+	if (
+		resource.scheme !== 'https' ||
+		resource.authority.toLowerCase() !== 'github.com' ||
+		!match ||
+		match[3] !== (kind === 'issue' ? 'issues' : 'pull')
+	) {
 		return undefined;
 	}
 	const number = Number(match[4]);
 	return Number.isSafeInteger(number) ? { owner: match[1], repo: match[2], number } : undefined;
 }
 
-function repository(target: IGitHubReferenceTarget): { host: string; owner: string; name: string; } {
+function repository(target: IGitHubReferenceTarget): { host: string; owner: string; name: string } {
 	return { host: 'github.com', owner: target.owner, name: target.repo };
 }
 

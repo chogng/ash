@@ -28,13 +28,32 @@ test('extension message identity comes from its authenticated caller, and second
 	const added = promiseWithResolvers<void>();
 	using listener = notifications.model.onDidAdd(() => added.resolve());
 	let managed: unknown;
-	using command = CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, options) => { managed = options; });
-	const result = messages.handle({ operation: 'showMessage', message: 'Git failed', severity: 'error', items: ['Output', 'Retry'] }, 'fixture.git', new AbortController().signal);
+	using command = CommandsRegistry.register(OPEN_EXTENSIONS_COMMAND_ID, (_accessor, options) => {
+		managed = options;
+	});
+	const result = messages.handle(
+		{ operation: 'showMessage', message: 'Git failed', severity: 'error', items: ['Output', 'Retry'] },
+		'fixture.git',
+		new AbortController().signal,
+	);
 	await added.promise;
 	const item = notifications.model.getNotifications()[0];
-	assert.deepEqual({ source: item.source, sourceId: item.sourceId, severity: item.severity, primary: item.actions?.primary?.map(action => action.label), secondary: item.actions?.secondary?.map(action => action.label) }, {
-		source: 'Git', sourceId: 'fixture.git', severity: Severity.Error, primary: ['Output', 'Retry'], secondary: ['Manage Extension'],
-	});
+	assert.deepEqual(
+		{
+			source: item.source,
+			sourceId: item.sourceId,
+			severity: item.severity,
+			primary: item.actions?.primary?.map(action => action.label),
+			secondary: item.actions?.secondary?.map(action => action.label),
+		},
+		{
+			source: 'Git',
+			sourceId: 'fixture.git',
+			severity: Severity.Error,
+			primary: ['Output', 'Retry'],
+			secondary: ['Manage Extension'],
+		},
+	);
 	await item.actions!.secondary![0].run();
 	assert.deepEqual(managed, { query: 'fixture.git' });
 	assert.deepEqual(notifications.model.getNotifications(), [item]);
@@ -54,7 +73,11 @@ for (const dismissal of ['remove', 'abort', 'dispose', 'removeOnArrival'] as con
 			added.resolve();
 		});
 		const controller = new AbortController();
-		const result = messages.handle({ operation: 'showMessage', message: 'Choose', severity: 'warning', items: ['Continue'] }, 'fixture.git', controller.signal);
+		const result = messages.handle(
+			{ operation: 'showMessage', message: 'Choose', severity: 'warning', items: ['Continue'] },
+			'fixture.git',
+			controller.signal,
+		);
 		await added.promise;
 		if (dismissal === 'remove') notifications.model.clear();
 		else if (dismissal === 'abort') controller.abort();
@@ -66,10 +89,29 @@ for (const dismissal of ['remove', 'abort', 'dispose', 'removeOnArrival'] as con
 
 test('an extension message without choices completes immediately with an identity fallback when the catalog is unavailable', async () => {
 	using services = createServices();
-	services.get(IExtensionApi).list = async () => { throw new Error('Catalog unavailable'); };
+	services.get(IExtensionApi).list = async () => {
+		throw new Error('Catalog unavailable');
+	};
 	using messages = services.createInstance(MainThreadMessageService);
-	assert.deepEqual(await messages.handle({ operation: 'showMessage', message: 'Hello', severity: 'information' }, 'fixture.unknown', new AbortController().signal), { result: 'done' });
-	assert.equal((services.get(INotificationService) as NotificationService).model.getNotifications()[0].source, 'fixture.unknown');
-	await assert.rejects(messages.handle({ operation: 'showMessage', message: 'Invalid', severity: 'error', items: [''] }, 'fixture.unknown', new AbortController().signal), /button labels/);
+	assert.deepEqual(
+		await messages.handle(
+			{ operation: 'showMessage', message: 'Hello', severity: 'information' },
+			'fixture.unknown',
+			new AbortController().signal,
+		),
+		{ result: 'done' },
+	);
+	assert.equal(
+		(services.get(INotificationService) as NotificationService).model.getNotifications()[0].source,
+		'fixture.unknown',
+	);
+	await assert.rejects(
+		messages.handle(
+			{ operation: 'showMessage', message: 'Invalid', severity: 'error', items: [''] },
+			'fixture.unknown',
+			new AbortController().signal,
+		),
+		/button labels/,
+	);
 	assert.equal((services.get(INotificationService) as NotificationService).model.getNotifications().length, 1);
 });

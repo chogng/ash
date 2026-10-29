@@ -2,9 +2,15 @@ import { Disposable, DisposableStore, MutableDisposable } from '../../../../base
 import { CancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import { ITerminalProcessService, type ICreateContributedTerminalProfileOptions } from '../../../../platform/terminal/common/terminal.js';
+import {
+	ITerminalProcessService,
+	type ICreateContributedTerminalProfileOptions,
+} from '../../../../platform/terminal/common/terminal.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { IEmbedderTerminalService, type EmbedderTerminal } from '../../../services/terminal/common/embedderTerminalService.js';
+import {
+	IEmbedderTerminalService,
+	type EmbedderTerminal,
+} from '../../../services/terminal/common/embedderTerminalService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
 import { ITerminalService } from './terminal.js';
@@ -28,22 +34,29 @@ export class TerminalMainContribution extends Disposable implements IWorkbenchCo
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {
 		super();
-		this._register(embedderTerminals.onDidCreateTerminal(config => {
-			void this.createTerminal(config as EmbedderTerminal).catch(onUnexpectedError);
-		}));
+		this._register(
+			embedderTerminals.onDidCreateTerminal(config => {
+				void this.createTerminal(config as EmbedderTerminal).catch(onUnexpectedError);
+			}),
+		);
 		this._register(workspace.onDidChangeWorkspace(() => this.updateProfile()));
 		let connectionRevision = 0;
-		this._register(processes.onConnectionState(state => {
-			connectionRevision++;
-			this.ready = state === 'ready';
-			this.updateProfile();
-		}));
+		this._register(
+			processes.onConnectionState(state => {
+				connectionRevision++;
+				this.ready = state === 'ready';
+				this.updateProfile();
+			}),
+		);
 		const initialRevision = connectionRevision;
-		void processes.getConnectionState().then(state => {
-			if (this.isDisposed || initialRevision !== connectionRevision) return;
-			this.ready = state === 'ready';
-			this.updateProfile();
-		}).catch(onUnexpectedError);
+		void processes
+			.getConnectionState()
+			.then(state => {
+				if (this.isDisposed || initialRevision !== connectionRevision) return;
+				this.ready = state === 'ready';
+				this.updateProfile();
+			})
+			.catch(onUnexpectedError);
 	}
 
 	private updateProfile(): void {
@@ -55,22 +68,33 @@ export class TerminalMainContribution extends Disposable implements IWorkbenchCo
 		const title = localize('terminal.agentHost.profile', 'Agent Host ({0})', name);
 		const registration = new DisposableStore();
 		this.profileRegistration.value = registration;
-		registration.add(this.profiles.registerTerminalProfileProvider('ash.code', 'cli', {
-			createContributedTerminalProfile: options => this.createAshCodeTerminal(options, generation),
-		}));
-		registration.add(this.profiles.registerInternalContributedProfile({
-			extensionIdentifier: 'ash.code', id: 'cli', title: localize('terminal.ashCode.profile', 'Ash Code'),
-		}));
+		registration.add(
+			this.profiles.registerTerminalProfileProvider('ash.code', 'cli', {
+				createContributedTerminalProfile: options => this.createAshCodeTerminal(options, generation),
+			}),
+		);
+		registration.add(
+			this.profiles.registerInternalContributedProfile({
+				extensionIdentifier: 'ash.code',
+				id: 'cli',
+				title: localize('terminal.ashCode.profile', 'Ash Code'),
+			}),
+		);
 		const id = scope.remoteAuthority ?? 'local';
-		registration.add(this.profiles.registerTerminalProfileProvider('ash.agent-host', id, {
-			createContributedTerminalProfile: options => this.createAgentTerminal(options, title, generation),
-		}));
-		registration.add(this.profiles.registerInternalContributedProfile({
-			extensionIdentifier: 'ash.agent-host', id, title,
-		}));
+		registration.add(
+			this.profiles.registerTerminalProfileProvider('ash.agent-host', id, {
+				createContributedTerminalProfile: options => this.createAgentTerminal(options, title, generation),
+			}),
+		);
+		registration.add(
+			this.profiles.registerInternalContributedProfile({ extensionIdentifier: 'ash.agent-host', id, title }),
+		);
 	}
 
-	private async createAshCodeTerminal(options: ICreateContributedTerminalProfileOptions, generation: number): Promise<number> {
+	private async createAshCodeTerminal(
+		options: ICreateContributedTerminalProfileOptions,
+		generation: number,
+	): Promise<number> {
 		const assertCurrent = (): void => {
 			if (this.isDisposed || generation !== this.generation) throw new CancellationError();
 		};
@@ -79,7 +103,9 @@ export class TerminalMainContribution extends Disposable implements IWorkbenchCo
 		// so selecting Ash Code as the default cannot recursively invoke this provider.
 		const instance = await this.terminals.createTerminal({
 			config: { name: 'Ash Code', icon: options.icon, color: options.color },
-			cwd: options.cwd, location: options.location, preserveFocus: options.preserveFocus,
+			cwd: options.cwd,
+			location: options.location,
+			preserveFocus: options.preserveFocus,
 			skipContributedProfileCheck: true,
 		});
 		try {
@@ -93,28 +119,45 @@ export class TerminalMainContribution extends Disposable implements IWorkbenchCo
 		}
 	}
 
-	private async createAgentTerminal(options: ICreateContributedTerminalProfileOptions, title: string, generation: number): Promise<number> {
+	private async createAgentTerminal(
+		options: ICreateContributedTerminalProfileOptions,
+		title: string,
+		generation: number,
+	): Promise<number> {
 		const assertCurrent = (): void => {
 			if (this.isDisposed || generation !== this.generation) throw new CancellationError();
 		};
 		assertCurrent();
 		const os = this.processes.operatingSystem;
 		if (os === undefined) throw new CancellationError();
-		const resource = URI.isUri(options.cwd) ? options.cwd : typeof options.cwd === 'string' ? URI.file(options.cwd) : undefined;
-		const folder = resource ? this.workspace.getWorkspaceFolder(resource) ?? undefined : undefined;
+		const resource = URI.isUri(options.cwd)
+			? options.cwd
+			: typeof options.cwd === 'string'
+				? URI.file(options.cwd)
+				: undefined;
+		const folder = resource ? (this.workspace.getWorkspaceFolder(resource) ?? undefined) : undefined;
 		const scope = terminalExecutionScope(this.workspace.getWorkspace());
 		const profile = await this.resolver.getDefaultProfile({
-			os, workspaceFolder: folder, remoteAuthority: scope.remoteAuthority, allowAgentHostShell: true,
+			os,
+			workspaceFolder: folder,
+			remoteAuthority: scope.remoteAuthority,
+			allowAgentHostShell: true,
 		});
 		assertCurrent();
 		// Pass explicit shell intent through the regular creation owner so global
 		// environment settings, workspace selection and collections apply once.
 		const instance = await this.terminals.createTerminal({
 			config: {
-				name: title, executable: profile.path, args: profile.args, env: profile.env,
-				icon: options.icon ?? profile.icon, color: options.color ?? profile.color,
+				name: title,
+				executable: profile.path,
+				args: profile.args,
+				env: profile.env,
+				icon: options.icon ?? profile.icon,
+				color: options.color ?? profile.color,
 			},
-			cwd: options.cwd, location: options.location, preserveFocus: options.preserveFocus,
+			cwd: options.cwd,
+			location: options.location,
+			preserveFocus: options.preserveFocus,
 		});
 		try {
 			assertCurrent();

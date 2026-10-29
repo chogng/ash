@@ -15,31 +15,50 @@ export class TerminalLogService extends Disposable implements ITerminalLogServic
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {
 		super();
-		this.logger = this._register(loggers.createLogger('terminal', { name: localize('terminal.editor.title', 'Terminal') }));
+		this.logger = this._register(
+			loggers.createLogger('terminal', { name: localize('terminal.editor.title', 'Terminal') }),
+		);
 		this.onDidChangeLogLevel = this.logger.onDidChangeLogLevel;
 		this.onDidDispose = this.logger.onDidDispose;
 	}
 
-	registerSink(sink: ILogSink, replay = false) { return this.logger.registerSink(sink, replay); }
+	registerSink(sink: ILogSink, replay = false) {
+		return this.logger.registerSink(sink, replay);
+	}
 
-	getLevel(): LogLevel { return this.logger.getLevel(); }
-	setLevel(level: LogLevel): void { this.logger.setLevel(level); }
-	flush(): Promise<void> { return this.logger.flush(); }
+	getLevel(): LogLevel {
+		return this.logger.getLevel();
+	}
+	setLevel(level: LogLevel): void {
+		this.logger.setLevel(level);
+	}
+	flush(): Promise<void> {
+		return this.logger.flush();
+	}
 
-	trace(message: string, ...args: unknown[]): void { this.logger.trace(this.message(message), ...args); }
-	debug(message: string, ...args: unknown[]): void { this.logger.debug(this.message(message), ...args); }
-	info(message: string, ...args: unknown[]): void { this.logger.info(this.message(message), ...args); }
-	warn(message: string, ...args: unknown[]): void { this.logger.warn(this.message(message), ...args); }
+	trace(message: string, ...args: unknown[]): void {
+		this.logger.trace(this.message(message), ...args);
+	}
+	debug(message: string, ...args: unknown[]): void {
+		this.logger.debug(this.message(message), ...args);
+	}
+	info(message: string, ...args: unknown[]): void {
+		this.logger.info(this.message(message), ...args);
+	}
+	warn(message: string, ...args: unknown[]): void {
+		this.logger.warn(this.message(message), ...args);
+	}
 	error(message: string | Error, ...args: unknown[]): void {
 		if (message instanceof Error) {
 			this.logger.error(this.message(message.message), message, ...args);
-		}
-		else {
+		} else {
 			this.logger.error(this.message(message), ...args);
 		}
 	}
 
 	private message(message: string): string {
-		return this.logger.getLevel() === LogLevel.Trace ? `[${this.workspace.getWorkspace().id.slice(0, 7)}] ${message}` : message;
+		return this.logger.getLevel() === LogLevel.Trace
+			? `[${this.workspace.getWorkspace().id.slice(0, 7)}] ${message}`
+			: message;
 	}
 }

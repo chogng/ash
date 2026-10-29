@@ -7,7 +7,10 @@ import { URI } from '../../../../../base/common/uri.js';
 import { formatNlsMessage, resetNlsResolver, setNlsResolver } from '../../../../../nls.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import {
+	Extensions as ConfigurationExtensions,
+	type IConfigurationRegistry,
+} from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { TestWorkspaceService } from '../../../../services/configuration/test/common/testServices.js';
 import type { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
@@ -17,12 +20,16 @@ import '../../browser/gettingStarted.contribution.js';
 
 test('Startup editor setting opens Welcome only when the selected workspace permits it', async () => {
 	using configuration = new InMemoryConfigurationService();
-	const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(StartupEditorConfigurationKey);
+	const setting = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(
+		StartupEditorConfigurationKey,
+	);
 	assert.equal(setting?.defaultValue, 'welcomePage');
 	assert.deepEqual(setting?.setting?.valueType, 'select');
 	const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 	try {
-		setNlsResolver((bundle, key, fallback, parameters) => formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters));
+		setNlsResolver((bundle, key, fallback, parameters) =>
+			formatNlsMessage(chinese.bundles[bundle]?.[key] ?? fallback, parameters),
+		);
 		assert.equal(setting?.setting?.title, '启动时的编辑器');
 		assert.equal(setting?.setting?.options?.[2]?.label, '仅空工作台显示欢迎页');
 	} finally {
@@ -33,10 +40,16 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 		...emptyEditorServiceState,
 		onDidActiveEditorChange: Event.None,
 		onDidVisibleEditorsChange: Event.None,
-		get activeEditor() { return opened.at(-1); },
-		get visibleEditors() { return opened; },
-		async openEditor(input: IResourceEditorInput) { opened.push(input); },
-		focusActiveEditor() { },
+		get activeEditor() {
+			return opened.at(-1);
+		},
+		get visibleEditors() {
+			return opened;
+		},
+		async openEditor(input: IResourceEditorInput) {
+			opened.push(input);
+		},
+		focusActiveEditor() {},
 	} satisfies IEditorService;
 	using workspace = new TestWorkspaceService({ id: 'empty', folders: [] });
 	using runner = new StartupPageRunnerContribution(configuration, editor, workspace);
@@ -47,7 +60,10 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 	assert.equal(opened.length, 1);
 
 	opened.length = 0;
-	workspace.updateWorkspace({ id: 'folder', folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }] });
+	workspace.updateWorkspace({
+		id: 'folder',
+		folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }],
+	});
 	await runner.onWorkspaceRestored();
 	assert.equal(opened.length, 1);
 	assert.equal(isGettingStartedInput(opened[0]!), true);
@@ -58,7 +74,10 @@ test('Startup editor setting opens Welcome only when the selected workspace perm
 	assert.equal(opened.length, 0);
 
 	await configuration.updateValue(StartupEditorConfigurationKey, 'welcomePageInEmptyWorkbench');
-	workspace.updateWorkspace({ id: 'folder', folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }] });
+	workspace.updateWorkspace({
+		id: 'folder',
+		folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }],
+	});
 	await runner.onWorkspaceRestored();
 	assert.equal(opened.length, 0);
 	await configuration.updateValue(StartupEditorConfigurationKey, 'welcomePage');
@@ -79,12 +98,21 @@ test('Welcome waits for restored editors and accepts only implemented startup mo
 		...emptyEditorServiceState,
 		onDidActiveEditorChange: Event.None,
 		onDidVisibleEditorsChange: Event.None,
-		get activeEditor() { return opened.at(-1); },
-		get visibleEditors() { return opened; },
-		async openEditor(input: IResourceEditorInput) { opened.push(input); },
-		focusActiveEditor() { },
+		get activeEditor() {
+			return opened.at(-1);
+		},
+		get visibleEditors() {
+			return opened;
+		},
+		async openEditor(input: IResourceEditorInput) {
+			opened.push(input);
+		},
+		focusActiveEditor() {},
 	} satisfies IEditorService;
-	using workspace = new TestWorkspaceService({ id: 'folder', folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }] });
+	using workspace = new TestWorkspaceService({
+		id: 'folder',
+		folders: [{ id: 'folder', uri: URI.file('/folder'), name: 'folder', index: 0 }],
+	});
 	using runner = new StartupPageRunnerContribution(configuration, editor, workspace);
 	await runner.onWorkspaceRestored();
 	assert.equal(opened.length, 1);

@@ -30,9 +30,7 @@ export class InlineCompletionsService extends Disposable implements IInlineCompl
 	private _recentCompletionIds: string[] = [];
 
 	get snoozeTimeLeft(): number {
-		return this._snoozeTimeEnd === undefined
-			? 0
-			: Math.max(0, this._snoozeTimeEnd - Date.now());
+		return this._snoozeTimeEnd === undefined ? 0 : Math.max(0, this._snoozeTimeEnd - Date.now());
 	}
 
 	snooze(durationMs: number = InlineCompletionsService.SNOOZE_DURATION): void {
@@ -69,7 +67,8 @@ export class InlineCompletionsService extends Disposable implements IInlineCompl
 	}
 
 	reportNewCompletion(requestUuid: string): void {
-		if (typeof requestUuid !== 'string' || requestUuid.length === 0) throw new TypeError('Inline completion request UUID must be a non-empty string');
+		if (typeof requestUuid !== 'string' || requestUuid.length === 0)
+			throw new TypeError('Inline completion request UUID must be a non-empty string');
 		this._lastCompletionId = requestUuid;
 		this._recentCompletionIds.unshift(requestUuid);
 		if (this._recentCompletionIds.length > 5) this._recentCompletionIds.pop();

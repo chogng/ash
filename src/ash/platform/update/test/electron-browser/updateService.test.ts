@@ -22,7 +22,8 @@ suite('Desktop update state', () => {
 			const snapshot = new DeferredPromise<unknown>();
 			services.registerInstance(IConfigurationService, configuration);
 			services.registerInstance(IMeteredConnectionService, {
-				_serviceBrand: undefined, isConnectionMetered: false,
+				_serviceBrand: undefined,
+				isConnectionMetered: false,
 				onDidChangeIsConnectionMetered: Event.None,
 				whenConnectionStateInitialized: Promise.resolve(),
 			});
@@ -41,7 +42,7 @@ suite('Desktop update state', () => {
 						},
 					};
 				},
-				registerChannel() { },
+				registerChannel() {},
 			});
 			using update = services.createInstance(ElectronUpdateService);
 			const states: UpdateState[] = [];

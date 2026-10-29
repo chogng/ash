@@ -18,19 +18,36 @@ test('file reloads debounce matching changes, cancel on navigation and release w
 		let reloads = 0;
 		let watches = 0;
 		const model = {
-			state: { url: 'file:///workspace/index.html' }, info: { owner: { type: 'user' } },
-			onDidChangeState: state.event, onWillDispose: closing.event,
-			reload: async () => { reloads++; },
+			state: { url: 'file:///workspace/index.html' },
+			info: { owner: { type: 'user' } },
+			onDidChangeState: state.event,
+			onWillDispose: closing.event,
+			reload: async () => {
+				reloads++;
+			},
 		} as unknown as IBrowserViewModel;
-		const files = { onDidChangeFiles: changes.event, watch: () => { watches++; return toDisposable(() => { watches--; }); } } as unknown as IFileService;
-		const workspace = { getWorkspace: () => ({ folders: [{ uri: URI.file('/workspace') }] }), onDidChangeWorkspace: Event.None } as unknown as IWorkspaceContextService;
+		const files = {
+			onDidChangeFiles: changes.event,
+			watch: () => {
+				watches++;
+				return toDisposable(() => {
+					watches--;
+				});
+			},
+		} as unknown as IFileService;
+		const workspace = {
+			getWorkspace: () => ({ folders: [{ uri: URI.file('/workspace') }] }),
+			onDidChangeWorkspace: Event.None,
+		} as unknown as IWorkspaceContextService;
 		using watcher = new BrowserAutoReloadWatcher(model, files, workspace);
 		watcher.update(true);
 		assert.equal(watches, 1);
 		changes.fire({ resources: [URI.file('/workspace/other.html')] });
 		mock.timers.tick(250);
 		assert.equal(reloads, 0);
-		for (let i = 0; i < 3; i++) { changes.fire({ resources: [URI.file('/workspace/index.html')] }); }
+		for (let i = 0; i < 3; i++) {
+			changes.fire({ resources: [URI.file('/workspace/index.html')] });
+		}
 		mock.timers.tick(250);
 		assert.equal(reloads, 1);
 		changes.fire({ resources: [URI.file('/workspace/index.html')] });
@@ -43,5 +60,7 @@ test('file reloads debounce matching changes, cancel on navigation and release w
 		assert.equal(watches, 1);
 		closing.fire();
 		assert.equal(watches, 0);
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });

@@ -1,14 +1,17 @@
-import { createTestComponentServices, registerTestComponentServices } from '../../../workbench/test/common/testEditorServices.js';
+import {
+	createTestComponentServices,
+	registerTestComponentServices,
+} from '../../../workbench/test/common/testEditorServices.js';
 import { IThemeService } from '../../../platform/theme/common/themeService.js';
 import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { sessionsPartIds } from '../../common/layoutConstants.js';
 import { Position, positionToString } from '../../../workbench/services/layout/browser/layoutService.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { JSDOM } from "jsdom";
-import { h } from "../../../base/browser/dom.js";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { h } from '../../../base/browser/dom.js';
 
-const browserEnvironment = new JSDOM("<!doctype html><body></body>");
+const browserEnvironment = new JSDOM('<!doctype html><body></body>');
 for (const [name, value] of Object.entries({
 	window: browserEnvironment.window,
 	document: browserEnvironment.window.document,
@@ -22,30 +25,41 @@ for (const [name, value] of Object.entries({
 	Object.defineProperty(globalThis, name, { configurable: true, value });
 }
 
-const { Dimension } = await import("../../../base/browser/dom.js");
-const { Part } = await import("../../../workbench/browser/part.js");
-const { WorkbenchWindowBarHeight } = await import("../../../workbench/browser/parts/workbenchPartDimensions.js");
-const { BrowserStorageService } = await import("../../../workbench/services/storage/browser/storageService.js");
-const { IStorageService, WillSaveStateReason } = await import("../../../platform/storage/common/storage.js");
+const { Dimension } = await import('../../../base/browser/dom.js');
+const { Part } = await import('../../../workbench/browser/part.js');
+const { WorkbenchWindowBarHeight } = await import('../../../workbench/browser/parts/workbenchPartDimensions.js');
+const { BrowserStorageService } = await import('../../../workbench/services/storage/browser/storageService.js');
+const { IStorageService, WillSaveStateReason } = await import('../../../platform/storage/common/storage.js');
 const { InstantiationService } = await import('../../../platform/instantiation/common/instantiationService.js');
-const { DesktopWorkbenchLayout } = await import("../../../sessions/browser/desktopWorkbench.js");
-const { SessionsModernUIContribution } = await import('../../../sessions/contrib/modernUI/browser/modernUI.contribution.js');
+const { DesktopWorkbenchLayout } = await import('../../../sessions/browser/desktopWorkbench.js');
+const { SessionsModernUIContribution } =
+	await import('../../../sessions/contrib/modernUI/browser/modernUI.contribution.js');
 const { SessionsConfiguration } = await import('../../../sessions/common/configuration.js');
 const { ActivityBarPosition, WorkbenchConfiguration } = await import('../../../workbench/common/configuration.js');
-const { TestConfigurationService: WorkbenchConfigurationService } = await import("../../../workbench/services/configuration/test/common/testServices.js");
+const { TestConfigurationService: WorkbenchConfigurationService } =
+	await import('../../../workbench/services/configuration/test/common/testServices.js');
 
-type SessionsPartId = import("../../common/layoutConstants.js").SessionsPartId;
-type WorkbenchPartInstance = import("../../../workbench/browser/part.js").Part;
+type SessionsPartId = import('../../common/layoutConstants.js').SessionsPartId;
+type WorkbenchPartInstance = import('../../../workbench/browser/part.js').Part;
 
 class TestSessionsPart extends Part {
-	public getTabsHeight(): number { return 35; }
+	public getTabsHeight(): number {
+		return 35;
+	}
 	public contentInset = 0;
 	public contentVisible = true;
-	public setContentRightInset(inset: number): void { this.contentInset = inset; }
-	public setEditorContentVisible(visible: boolean): void { this.contentVisible = visible; }
+	public setContentRightInset(inset: number): void {
+		this.contentInset = inset;
+	}
+	public setEditorContentVisible(visible: boolean): void {
+		this.contentVisible = visible;
+	}
 	readonly layouts: import('../../../base/browser/dom.js').Dimension[] = [];
 
-	constructor(readonly id: SessionsPartId, container: HTMLElement) {
+	constructor(
+		readonly id: SessionsPartId,
+		container: HTMLElement,
+	) {
 		const services = createTestComponentServices(undefined, undefined, container.ownerDocument);
 		super(container, id, services.get(IThemeService), services.get(IStorageService));
 		this._register(services);
@@ -57,9 +71,9 @@ class TestSessionsPart extends Part {
 	}
 
 	override get minimumWidth(): number {
-		if (this.id === "sidebar") return 170;
-		if (this.id === "sessions") return 320;
-		if (this.id === "auxiliarybar") return 270;
+		if (this.id === 'sidebar') return 170;
+		if (this.id === 'sessions') return 320;
+		if (this.id === 'auxiliarybar') return 270;
 		if (this.id === 'editor') return 300;
 		return 0;
 	}
@@ -68,8 +82,12 @@ class TestSessionsPart extends Part {
 		return Number.POSITIVE_INFINITY;
 	}
 
-	override get minimumHeight(): number { return this.id === "banner" ? 32 : this.id === "titlebar" ? WorkbenchWindowBarHeight : 0; }
-	override get maximumHeight(): number { return this.id === "banner" ? 32 : this.id === "titlebar" ? WorkbenchWindowBarHeight : Number.POSITIVE_INFINITY; }
+	override get minimumHeight(): number {
+		return this.id === 'banner' ? 32 : this.id === 'titlebar' ? WorkbenchWindowBarHeight : 0;
+	}
+	override get maximumHeight(): number {
+		return this.id === 'banner' ? 32 : this.id === 'titlebar' ? WorkbenchWindowBarHeight : Number.POSITIVE_INFINITY;
+	}
 }
 
 function createParts(ownerDocument: Document): Map<SessionsPartId, WorkbenchPartInstance> {
@@ -88,17 +106,25 @@ test('Sessions sidebar clamps at its minimum, snaps closed and restores from the
 			const sash = split.querySelector<HTMLElement>(':scope > .ash-sash')!;
 			assert.ok(sash);
 			sash.dispatchEvent(new dom.window.MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 240 }));
-			for (const type of ['pointermove', 'pointerup']) dom.window.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, button: 0, clientX: 240 + delta }));
+			for (const type of ['pointermove', 'pointerup'])
+				dom.window.dispatchEvent(
+					new dom.window.MouseEvent(type, { bubbles: true, button: 0, clientX: 240 + delta }),
+				);
 		};
 		const visibility: boolean[] = [];
-		using changes = layout.onDidChangePartVisibility(event => { if (event.partId === 'sidebar') visibility.push(event.visible); });
+		using changes = layout.onDidChangePartVisibility(event => {
+			if (event.partId === 'sidebar') visibility.push(event.visible);
+		});
 		drag(sidebar.minimumWidth - layout.getPartSize('sidebar').width - 20);
 		assert.equal(layout.isPartVisible('sidebar'), true);
 		assert.equal(layout.getPartSize('sidebar').width, sidebar.minimumWidth);
 		drag(-100);
 		assert.equal(layout.isPartVisible('sidebar'), false);
 		assert.equal(layout.state.sidebar.visible, false);
-		assert.equal(parts.get('titlebar')!.domNode.style.getPropertyValue('--ash-sessions-titlebar-sidebar-width'), '0px');
+		assert.equal(
+			parts.get('titlebar')!.domNode.style.getPropertyValue('--ash-sessions-titlebar-sidebar-width'),
+			'0px',
+		);
 		layout.setPanelPosition(Position.RIGHT);
 		assert.equal(layout.isPartVisible('sidebar'), false, 'Rebuilding the Grid retains the snapped state');
 		drag(110);
@@ -166,11 +192,22 @@ test('Sessions moves the retained Panel to all four edges and restores normal si
 			assert.equal(layout.isPartVisible('sessions'), true);
 			const panelFrame = parts.get('panel')!.domNode.parentElement!;
 			const parentSplit = panelFrame.parentElement!.parentElement!;
-			assert.equal(parentSplit.classList.contains(position === Position.TOP || position === Position.BOTTOM ? 'ash-split-view-vertical' : 'ash-split-view-horizontal'), true);
+			assert.equal(
+				parentSplit.classList.contains(
+					position === Position.TOP || position === Position.BOTTOM
+						? 'ash-split-view-vertical'
+						: 'ash-split-view-horizontal',
+				),
+				true,
+			);
 			const leading = position === Position.TOP || position === Position.LEFT;
 			const sessionsFrame = parts.get('sessions')!.domNode.parentElement!;
-			assert.equal(!!(panelFrame.compareDocumentPosition(sessionsFrame) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING), leading);
-			if (position === Position.TOP || position === Position.BOTTOM) assert.equal(layout.getPartSize('panel').height, 280);
+			assert.equal(
+				!!(panelFrame.compareDocumentPosition(sessionsFrame) & dom.window.Node.DOCUMENT_POSITION_FOLLOWING),
+				leading,
+			);
+			if (position === Position.TOP || position === Position.BOTTOM)
+				assert.equal(layout.getPartSize('panel').height, 280);
 			else layout.resizePart('panel', new Dimension(360, layout.getPartSize('panel').height));
 		}
 		assert.deepEqual(events, ['left', 'top', 'right', 'bottom']);
@@ -215,10 +252,20 @@ test('Sessions moves the retained Panel to all four edges and restores normal si
 
 test('Sessions restores Panel position and both axis sizes from the profile while hidden', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://sessions-panel.test' });
-	const createStorage = () => new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'sessions', profileId: 'panel-positions', backend: dom.window.localStorage, flushInterval: 0 });
+	const createStorage = () =>
+		new BrowserStorageService({
+			ownerWindow: dom.window as unknown as Window,
+			workspaceId: 'sessions',
+			profileId: 'panel-positions',
+			backend: dom.window.localStorage,
+			flushInterval: 0,
+		});
 	const firstParts = createParts(dom.window.document);
 	const storage = createStorage();
-	const first = createLayout(dom.window.document.body, firstParts, { storageService: storage, initialDimension: new Dimension(1_600, 1_000) });
+	const first = createLayout(dom.window.document.body, firstParts, {
+		storageService: storage,
+		initialDimension: new Dimension(1_600, 1_000),
+	});
 	first.layout(new Dimension(1_600, 1_000));
 	first.showPart('panel');
 	first.resizePart('panel', new Dimension(first.getPartSize('panel').width, 280));
@@ -232,7 +279,10 @@ test('Sessions restores Panel position and both axis sizes from the profile whil
 	const restoredParts = createParts(dom.window.document);
 	try {
 		using restoredStorage = createStorage();
-		using restored = createLayout(dom.window.document.body, restoredParts, { storageService: restoredStorage, initialDimension: new Dimension(1_600, 1_000) });
+		using restored = createLayout(dom.window.document.body, restoredParts, {
+			storageService: restoredStorage,
+			initialDimension: new Dimension(1_600, 1_000),
+		});
 		restored.layout(new Dimension(1_600, 1_000));
 		assert.equal(restored.getPanelPosition(), Position.RIGHT);
 		assert.equal(restored.isPartVisible('panel'), false);
@@ -252,13 +302,16 @@ test('Custom Views cover retained content without changing its desired visibilit
 	parts.set('customview', new TestSessionsPart('customview', dom.window.document.body));
 	try {
 		using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1600, 1000) });
-		layout.showPart('editor'); layout.showPart('auxiliarybar'); layout.showPart('panel');
+		layout.showPart('editor');
+		layout.showPart('auxiliarybar');
+		layout.showPart('panel');
 		const previous = layout.state;
 		layout.setCustomViewVisible(true);
 		layout.toggleMaximizedPanel();
 		assert.equal(layout.isPanelMaximized(), false);
 		assert.equal(layout.isPartVisible('customview'), true);
-		for (const id of ['sessions', 'editor', 'auxiliarybar', 'panel'] as const) assert.equal(layout.isPartVisible(id), false);
+		for (const id of ['sessions', 'editor', 'auxiliarybar', 'panel'] as const)
+			assert.equal(layout.isPartVisible(id), false);
 		assert.equal(layout.isPartVisible('sidebar'), true);
 		assert.deepEqual(layout.state, previous);
 		layout.hidePart('sidebar');
@@ -271,12 +324,17 @@ test('Custom Views cover retained content without changing its desired visibilit
 		assert.equal(layout.state.auxiliarybar.width, previous.auxiliarybar.width);
 		layout.setCustomViewVisible(false);
 		assert.equal(layout.isPartVisible('customview'), false);
-		for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const) assert.equal(layout.isPartVisible(id), true);
+		for (const id of ['sidebar', 'sessions', 'editor', 'auxiliarybar', 'panel'] as const)
+			assert.equal(layout.isPartVisible(id), true);
 		assert.equal(layout.getPartSize('sidebar').width, previous.sidebar.width);
 		layout.hidePart('sidebar');
 		layout.setCustomViewVisible(true);
 		layout.setCustomViewVisible(false);
-		assert.equal(layout.isPartVisible('sidebar'), false, 'Returning from an independent page preserves a closed sidebar');
+		assert.equal(
+			layout.isPartVisible('sidebar'),
+			false,
+			'Returning from an independent page preserves a closed sidebar',
+		);
 	} finally {
 		for (const part of parts.values()) part.dispose();
 		dom.window.close();
@@ -307,7 +365,8 @@ test('Code docks Details below one tab strip and preserves the side pane boundar
 	layout.hidePart('editor');
 	assert.equal(editor.contentVisible, false);
 	const editorFrame = editor.domNode.parentElement!;
-	const editorInsets = Number.parseFloat(editorFrame.style.paddingLeft) + Number.parseFloat(editorFrame.style.paddingRight);
+	const editorInsets =
+		Number.parseFloat(editorFrame.style.paddingLeft) + Number.parseFloat(editorFrame.style.paddingRight);
 	assert.equal(layout.getPartSize('editor').width - editorInsets, 300);
 	layout.hidePart('auxiliarybar');
 	assert.equal(layout.isPartVisible('editor'), false);
@@ -316,21 +375,21 @@ test('Code docks Details below one tab strip and preserves the side pane boundar
 	dom.window.close();
 });
 
-test("Sessions layout owns a fixed Sessions-first Part topology", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const container = h(dom.window.document, "main");
+test('Sessions layout owns a fixed Sessions-first Part topology', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const container = h(dom.window.document, 'main');
 	dom.window.document.body.append(container);
 	const parts = createParts(dom.window.document);
 	const layout = createLayout(container, parts, { initialDimension: new Dimension(1_200, 800) });
 
 	layout.layout(new Dimension(1_200, 800));
 
-	assert.deepEqual(layout.getPartSize("titlebar"), new Dimension(1_200, WorkbenchWindowBarHeight));
+	assert.deepEqual(layout.getPartSize('titlebar'), new Dimension(1_200, WorkbenchWindowBarHeight));
 	assert.equal(container.querySelector('[data-part="activitybar"]'), null);
-	assert.equal(Math.abs(layout.getPartSize("sidebar").width - 300) <= 1, true);
-	assert.equal(Math.abs(layout.getPartSize("auxiliarybar").width - 340) <= 1, true);
-	assert.equal(layout.getPartSize("sessions").height, 800 - WorkbenchWindowBarHeight);
-	assert.equal(layout.getPartSize("sessions").width > 400, true);
+	assert.equal(Math.abs(layout.getPartSize('sidebar').width - 300) <= 1, true);
+	assert.equal(Math.abs(layout.getPartSize('auxiliarybar').width - 340) <= 1, true);
+	assert.equal(layout.getPartSize('sessions').height, 800 - WorkbenchWindowBarHeight);
+	assert.equal(layout.getPartSize('sessions').width > 400, true);
 	assert.equal(layout.isPartVisible('editor'), false);
 	assert.equal(layout.state.editor.width, 600);
 	assert.equal(layout.state.panel.height, 300);
@@ -378,13 +437,13 @@ test('Sessions layout style changes without changing the IDE preference or visib
 	}
 });
 
-test("Sessions layout toggles the sidebar and auxiliary Part while keeping the primary Part visible", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const container = h(dom.window.document, "main");
+test('Sessions layout toggles the sidebar and auxiliary Part while keeping the primary Part visible', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const container = h(dom.window.document, 'main');
 	dom.window.document.body.append(container);
 	const parts = createParts(dom.window.document);
 	const layout = createLayout(container, parts, { initialDimension: new Dimension(1_000, 700) });
-	const changes: Array<{ partId: SessionsPartId; visible: boolean; }> = [];
+	const changes: Array<{ partId: SessionsPartId; visible: boolean }> = [];
 	const subscription = layout.onDidChangePartVisibility(change => changes.push(change));
 
 	layout.layout(new Dimension(1_000, 700));
@@ -397,14 +456,14 @@ test("Sessions layout toggles the sidebar and auxiliary Part while keeping the p
 	layout.showPart('sidebar');
 	assert.equal(layout.isPartVisible('sidebar'), true);
 	assert.equal(layout.getPartSize('sidebar').width, sidebarWidth);
-	layout.showPart("auxiliarybar");
-	layout.hidePart("auxiliarybar");
+	layout.showPart('auxiliarybar');
+	layout.hidePart('auxiliarybar');
 
-	assert.equal(layout.isPartVisible("auxiliarybar"), false);
-	assert.equal(layout.getPartSize("sessions").width > 500, true);
-	assert.equal(changes.at(-1)?.partId, "auxiliarybar");
+	assert.equal(layout.isPartVisible('auxiliarybar'), false);
+	assert.equal(layout.getPartSize('sessions').width > 500, true);
+	assert.equal(changes.at(-1)?.partId, 'auxiliarybar');
 	assert.equal(changes.at(-1)?.visible, false);
-	assert.throws(() => layout.hidePart("sessions"), /Required Sessions Part/);
+	assert.throws(() => layout.hidePart('sessions'), /Required Sessions Part/);
 	assert.throws(() => layout.hidePart('titlebar'), /Required Sessions Part/);
 
 	subscription.dispose();
@@ -448,7 +507,9 @@ test('Sessions entry changes preserve navigation width when replacing the only v
 				layout.setPartAvailable('sidebar', sidebarAvailable);
 				layout.setPrimaryPart('editor');
 				layout.showPart('editor');
-				if (!sidebarAvailable) { layout.hidePart('sidebar'); }
+				if (!sidebarAvailable) {
+					layout.hidePart('sidebar');
+				}
 			});
 			assert.equal(layout.state.sidebar.width, 300, 'Opening a product page retains the navigation width');
 			layout.updateParts(() => {
@@ -490,7 +551,11 @@ test('Sessions navigation collapses with the sidebar without reserving an icon r
 		layout.setActivityBarLocation(ActivityBarPosition.BOTTOM);
 		layout.setActivityBarLocation(ActivityBarPosition.DEFAULT);
 		layout.setPanelPosition(Position.RIGHT);
-		assert.equal(container.querySelector('[data-part="activitybar"]'), null, 'Position changes and grid rebuilds do not create a separate navigation Part');
+		assert.equal(
+			container.querySelector('[data-part="activitybar"]'),
+			null,
+			'Position changes and grid rebuilds do not create a separate navigation Part',
+		);
 		assert.equal(layout.getPartSize('sessions').width, 1_200);
 		layout.showPart('sidebar');
 		layout.setActivityBarLocation(ActivityBarPosition.HIDDEN);
@@ -502,11 +567,11 @@ test('Sessions navigation collapses with the sidebar without reserving an icon r
 	}
 });
 
-test("Sessions layout validates its complete Part set", () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
-	const container = h(dom.window.document, "main");
+test('Sessions layout validates its complete Part set', () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
+	const container = h(dom.window.document, 'main');
 	const parts = createParts(dom.window.document);
-	parts.delete("auxiliarybar");
+	parts.delete('auxiliarybar');
 
 	assert.throws(() => createLayout(container, parts), /missing Parts: auxiliarybar/);
 	parts.set('auxiliarybar', new TestSessionsPart('auxiliarybar', dom.window.document.body));
@@ -517,24 +582,28 @@ test("Sessions layout validates its complete Part set", () => {
 	dom.window.close();
 });
 
-test("Sessions layout restores its profile-scoped geometry and auxiliary visibility", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>", { url: "https://ash.test" });
-	const createStorage = () => new BrowserStorageService({
-		ownerWindow: dom.window as unknown as Window,
-		workspaceId: "sessions",
-		profileId: "code-sessions",
-		backend: dom.window.localStorage,
-		flushInterval: 0,
-	});
+test('Sessions layout restores its profile-scoped geometry and auxiliary visibility', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
+	const createStorage = () =>
+		new BrowserStorageService({
+			ownerWindow: dom.window as unknown as Window,
+			workspaceId: 'sessions',
+			profileId: 'code-sessions',
+			backend: dom.window.localStorage,
+			flushInterval: 0,
+		});
 	const firstStorage = createStorage();
-	const firstContainer = h(dom.window.document, "main");
+	const firstContainer = h(dom.window.document, 'main');
 	const firstParts = createParts(dom.window.document);
-	const first = createLayout(firstContainer, firstParts, { initialDimension: new Dimension(1_100, 700), storageService: firstStorage });
+	const first = createLayout(firstContainer, firstParts, {
+		initialDimension: new Dimension(1_100, 700),
+		storageService: firstStorage,
+	});
 	first.layout(new Dimension(1_100, 700));
-	first.resizePart("sidebar", new Dimension(320, first.getPartSize("sidebar").height));
-	first.resizePart("auxiliarybar", new Dimension(360, first.getPartSize("auxiliarybar").height));
+	first.resizePart('sidebar', new Dimension(320, first.getPartSize('sidebar').height));
+	first.resizePart('auxiliarybar', new Dimension(360, first.getPartSize('auxiliarybar').height));
 	first.hidePart('sidebar');
-	first.hidePart("auxiliarybar");
+	first.hidePart('auxiliarybar');
 	first.showPart('editor');
 	first.resizePart('editor', new Dimension(420, first.getPartSize('editor').height));
 	await firstStorage.flush(WillSaveStateReason.SHUTDOWN);
@@ -543,17 +612,24 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
 	firstStorage.dispose();
 
 	const restoredStorage = createStorage();
-	const restoredContainer = h(dom.window.document, "main");
+	const restoredContainer = h(dom.window.document, 'main');
 	const restoredParts = createParts(dom.window.document);
-	const restored = createLayout(restoredContainer, restoredParts, { initialDimension: new Dimension(1_100, 700), storageService: restoredStorage });
+	const restored = createLayout(restoredContainer, restoredParts, {
+		initialDimension: new Dimension(1_100, 700),
+		storageService: restoredStorage,
+	});
 	restored.layout(new Dimension(1_100, 700));
 
-	assert.equal(Math.abs(restored.getPartSize("sidebar").width - 320) <= 1, true);
+	assert.equal(Math.abs(restored.getPartSize('sidebar').width - 320) <= 1, true);
 	assert.equal(restored.isPartVisible('sidebar'), false);
-	assert.equal(restoredContainer.querySelector('[data-part="activitybar"]'), null, 'Restoring a closed sidebar does not create an icon rail');
+	assert.equal(
+		restoredContainer.querySelector('[data-part="activitybar"]'),
+		null,
+		'Restoring a closed sidebar does not create an icon rail',
+	);
 	assert.equal(restored.getPartSize('sessions').width + restored.getPartSize('editor').width, 1_100);
-	assert.equal(Math.abs(restored.getPartSize("auxiliarybar").width - 360) <= 1, true);
-	assert.equal(restored.isPartVisible("auxiliarybar"), false);
+	assert.equal(Math.abs(restored.getPartSize('auxiliarybar').width - 360) <= 1, true);
+	assert.equal(restored.isPartVisible('auxiliarybar'), false);
 	assert.equal(restored.isPartVisible('editor'), true);
 	assert.equal(Math.abs(restored.getPartSize('editor').width - 420) <= 1, true);
 
@@ -566,11 +642,19 @@ test("Sessions layout restores its profile-scoped geometry and auxiliary visibil
 test('Sessions ignores persisted editor widths captured below the usable minimum', async () => {
 	const { StorageScope, StorageTarget } = await import('../../../platform/storage/common/storage.js');
 	const dom = new JSDOM('', { url: 'https://editor-sizing.test' });
-	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'editor-sizing', backend: dom.window.localStorage, flushInterval: 0 });
+	using storage = new BrowserStorageService({
+		ownerWindow: dom.window as unknown as Window,
+		workspaceId: 'editor-sizing',
+		backend: dom.window.localStorage,
+		flushInterval: 0,
+	});
 	const parts = createParts(dom.window.document);
 	try {
 		storage.store('sessions.layout.editor.width', 120, StorageScope.PROFILE, StorageTarget.MACHINE);
-		using layout = createLayout(dom.window.document.body, parts, { storageService: storage, initialDimension: new Dimension(1600, 900) });
+		using layout = createLayout(dom.window.document.body, parts, {
+			storageService: storage,
+			initialDimension: new Dimension(1600, 900),
+		});
 		layout.layout(new Dimension(1600, 900));
 		assert.equal(layout.state.editor.width, 600);
 	} finally {
@@ -586,9 +670,23 @@ test('Sessions layout completion exposes settled Parts through the window contai
 	const parts = createParts(dom.window.document);
 	using layout = createLayout(container, parts, { initialDimension: new Dimension(1_200, 800) });
 	const observed: unknown[] = [];
-	using subscription = layout.onDidLayoutMainContainer(dimension => observed.push({ dimension, titlebar: layout.getPartSize('titlebar'), height: layout.getPartSize('sessions').height, offset: layout.mainContainerOffset.top }));
+	using subscription = layout.onDidLayoutMainContainer(dimension =>
+		observed.push({
+			dimension,
+			titlebar: layout.getPartSize('titlebar'),
+			height: layout.getPartSize('sessions').height,
+			offset: layout.mainContainerOffset.top,
+		}),
+	);
 	layout.layout(new Dimension(1_400, 900));
-	assert.deepEqual(observed, [{ dimension: new Dimension(1_400, 900), titlebar: new Dimension(1_400, WorkbenchWindowBarHeight), height: 900 - WorkbenchWindowBarHeight, offset: WorkbenchWindowBarHeight }]);
+	assert.deepEqual(observed, [
+		{
+			dimension: new Dimension(1_400, 900),
+			titlebar: new Dimension(1_400, WorkbenchWindowBarHeight),
+			height: 900 - WorkbenchWindowBarHeight,
+			offset: WorkbenchWindowBarHeight,
+		},
+	]);
 	assert.equal(layout.mainContainer, container);
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();
@@ -596,21 +694,37 @@ test('Sessions layout completion exposes settled Parts through the window contai
 
 test('Sessions Part availability preserves user visibility and cached widths during persistence', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
-	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
+	using storage = new BrowserStorageService({
+		ownerWindow: dom.window as unknown as Window,
+		workspaceId: 'sessions',
+		flushInterval: 0,
+	});
 	const parts = createParts(dom.window.document);
-	using layout = createLayout(dom.window.document.body, parts, { initialDimension: new Dimension(1_200, 800), storageService: storage });
+	using layout = createLayout(dom.window.document.body, parts, {
+		initialDimension: new Dimension(1_200, 800),
+		storageService: storage,
+	});
 	layout.layout(new Dimension(1_200, 800));
 	layout.showPart('auxiliarybar');
 	layout.resizePart('auxiliarybar', new Dimension(280, 800));
 	layout.setPartAvailable('auxiliarybar', false);
 	await storage.flush(WillSaveStateReason.SHUTDOWN);
-	assert.deepEqual({ visible: layout.isPartVisible('auxiliarybar'), desired: layout.state.auxiliarybar }, { visible: false, desired: { width: 280, visible: true } });
+	assert.deepEqual(
+		{ visible: layout.isPartVisible('auxiliarybar'), desired: layout.state.auxiliarybar },
+		{ visible: false, desired: { width: 280, visible: true } },
+	);
 	layout.setPartAvailable('auxiliarybar', true);
-	assert.deepEqual({ visible: layout.isPartVisible('auxiliarybar'), width: layout.getPartSize('auxiliarybar').width }, { visible: true, width: 280 });
+	assert.deepEqual(
+		{ visible: layout.isPartVisible('auxiliarybar'), width: layout.getPartSize('auxiliarybar').width },
+		{ visible: true, width: 280 },
+	);
 	layout.setPartAvailable('auxiliarybar', false);
 	layout.hidePart('auxiliarybar');
 	layout.setPartAvailable('auxiliarybar', true);
-	assert.deepEqual({ visible: layout.isPartVisible('auxiliarybar'), desired: layout.state.auxiliarybar.visible }, { visible: false, desired: false });
+	assert.deepEqual(
+		{ visible: layout.isPartVisible('auxiliarybar'), desired: layout.state.auxiliarybar.visible },
+		{ visible: false, desired: false },
+	);
 	for (const part of parts.values()) part.dispose();
 	dom.window.close();
 });
@@ -659,14 +773,26 @@ test('Design replaces Sessions with a flexible page and preserves both side pane
 
 test('Design keeps the editor primary beside Agent and preserves conversation width through switching and restoration', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
-	using storage = new BrowserStorageService({ ownerWindow: dom.window as unknown as Window, workspaceId: 'sessions', flushInterval: 0 });
+	using storage = new BrowserStorageService({
+		ownerWindow: dom.window as unknown as Window,
+		workspaceId: 'sessions',
+		flushInterval: 0,
+	});
 	const parts = createParts(dom.window.document);
-	const layout = createLayout(dom.window.document.body, parts, { storageService: storage, initialDimension: new Dimension(1600, 900) });
+	const layout = createLayout(dom.window.document.body, parts, {
+		storageService: storage,
+		initialDimension: new Dimension(1600, 900),
+	});
 	try {
 		layout.layout(new Dimension(1600, 900));
-		layout.updateParts(() => { layout.setPrimaryPart('editor'); layout.showPart('editor'); layout.showPart('auxiliarybar'); });
+		layout.updateParts(() => {
+			layout.setPrimaryPart('editor');
+			layout.showPart('editor');
+			layout.showPart('auxiliarybar');
+		});
 		layout.resizePart('sessions', new Dimension(380, 900));
-		const widths = () => ['sidebar', 'sessions', 'editor', 'auxiliarybar'].map(id => layout.getPartSize(id as SessionsPartId).width);
+		const widths = () =>
+			['sidebar', 'sessions', 'editor', 'auxiliarybar'].map(id => layout.getPartSize(id as SessionsPartId).width);
 		const before = widths();
 		assert.equal(parts.get('editor')!.domNode.contains(parts.get('auxiliarybar')!.domNode), false);
 		layout.layout(new Dimension(1800, 900));
@@ -675,37 +801,80 @@ test('Design keeps the editor primary beside Agent and preserves conversation wi
 		layout.layout(new Dimension(1600, 900));
 		layout.setPartAvailable('sessions', true);
 		assert.deepEqual(widths(), before);
-		layout.updateParts(() => { layout.setPrimaryPart('sessions'); layout.hidePart('editor'); layout.hidePart('auxiliarybar'); });
-		layout.updateParts(() => { layout.setPrimaryPart('editor'); layout.showPart('editor'); layout.showPart('auxiliarybar'); });
+		layout.updateParts(() => {
+			layout.setPrimaryPart('sessions');
+			layout.hidePart('editor');
+			layout.hidePart('auxiliarybar');
+		});
+		layout.updateParts(() => {
+			layout.setPrimaryPart('editor');
+			layout.showPart('editor');
+			layout.showPart('auxiliarybar');
+		});
 		assert.deepEqual(widths(), before);
 		await storage.flush(WillSaveStateReason.SHUTDOWN);
-	} finally { layout.dispose(); for (const part of parts.values()) part.dispose(); }
+	} finally {
+		layout.dispose();
+		for (const part of parts.values()) part.dispose();
+	}
 	const restoredParts = createParts(dom.window.document);
-	const restored = createLayout(dom.window.document.body, restoredParts, { storageService: storage, initialDimension: new Dimension(1600, 900) });
+	const restored = createLayout(dom.window.document.body, restoredParts, {
+		storageService: storage,
+		initialDimension: new Dimension(1600, 900),
+	});
 	try {
 		restored.layout(new Dimension(1600, 900));
-		restored.updateParts(() => { restored.setPrimaryPart('editor'); restored.showPart('editor'); restored.showPart('auxiliarybar'); restored.setPartAvailable('sessions', true); });
+		restored.updateParts(() => {
+			restored.setPrimaryPart('editor');
+			restored.showPart('editor');
+			restored.showPart('auxiliarybar');
+			restored.setPartAvailable('sessions', true);
+		});
 		assert.equal(restored.getPartSize('sessions').width, 380);
-	} finally { restored.dispose(); for (const part of restoredParts.values()) part.dispose(); dom.window.close(); }
+	} finally {
+		restored.dispose();
+		for (const part of restoredParts.values()) part.dispose();
+		dom.window.close();
+	}
 });
 
 test('Sessions product page group survives legacy document group restoration', async () => {
 	const { EditorPart } = await import('../../browser/parts/editorPart.js');
 	const { createTestEditorServices } = await import('../../../workbench/test/common/testEditorServices.js');
 	using services = createTestEditorServices();
-	using editor = registerTestComponentServices(services).createInstance(EditorPart, browserEnvironment.window.document.body, {});
+	using editor = registerTestComponentServices(services).createInstance(
+		EditorPart,
+		browserEnvironment.window.document.body,
+		{},
+	);
 	const pages = editor.groups.find(group => group.id === editor.pageGroupId)!;
-	await editor.applyWorkingSet({ id: 'legacy', activeGroupIndex: 1, groups: [1, 2].map(id => ({ id: 'editor-group-' + id, editors: [], activeEditorIndex: -1, size: 0.5 })) } as unknown as import('../../../workbench/services/editor/common/editorWorkingSet.js').EditorWorkingSet, { preserveGroups: [pages.id] });
-	assert.equal(editor.groups.find(group => group.id === pages.id), pages);
+	await editor.applyWorkingSet(
+		{
+			id: 'legacy',
+			activeGroupIndex: 1,
+			groups: [1, 2].map(id => ({ id: 'editor-group-' + id, editors: [], activeEditorIndex: -1, size: 0.5 })),
+		} as unknown as import('../../../workbench/services/editor/common/editorWorkingSet.js').EditorWorkingSet,
+		{ preserveGroups: [pages.id] },
+	);
+	assert.equal(
+		editor.groups.find(group => group.id === pages.id),
+		pages,
+	);
 	assert.equal(editor.isGroupVisible(pages.id), false);
 	assert.equal(typeof editor.activeGroup.id, 'number');
 	assert.notEqual(editor.activeGroup.id, pages.id);
 	const documents = editor.saveWorkingSet('numeric-documents', [pages.id]);
 	const firstId = documents.groups[0]!.id;
-	const collision = JSON.parse(JSON.stringify(documents, (key, value) =>
-		(key === 'id' || key === 'groupId') && value === firstId ? pages.id : value)) as typeof documents;
+	const collision = JSON.parse(
+		JSON.stringify(documents, (key, value) =>
+			(key === 'id' || key === 'groupId') && value === firstId ? pages.id : value,
+		),
+	) as typeof documents;
 	await editor.applyWorkingSet(collision, { preserveGroups: [pages.id] });
-	assert.equal(editor.groups.find(group => group.id === pages.id), pages);
+	assert.equal(
+		editor.groups.find(group => group.id === pages.id),
+		pages,
+	);
 	assert.equal(new Set(editor.groups.map(group => group.id)).size, editor.groups.length);
 	assert.notEqual(editor.activeGroup.id, pages.id);
 
@@ -716,13 +885,20 @@ test('Sessions recreates its document host when the last document group closes',
 	const { EditorPart } = await import('../../browser/parts/editorPart.js');
 	const { createTestEditorServices } = await import('../../../workbench/test/common/testEditorServices.js');
 	using services = createTestEditorServices();
-	using editor = registerTestComponentServices(services).createInstance(EditorPart, browserEnvironment.window.document.body, {});
+	using editor = registerTestComponentServices(services).createInstance(
+		EditorPart,
+		browserEnvironment.window.document.body,
+		{},
+	);
 	const pages = editor.groups.find(group => group.id === editor.pageGroupId)!;
 	const documents = editor.activeGroup;
 	await editor.removeGroup(documents);
 	const remainingDocuments = editor.groups.filter(group => group.id !== pages.id);
 	assert.equal(remainingDocuments.length, 1);
-	assert.equal(editor.groups.find(group => group.id === pages.id), pages);
+	assert.equal(
+		editor.groups.find(group => group.id === pages.id),
+		pages,
+	);
 	assert.notEqual(remainingDocuments[0]!.id, documents.id);
 	assert.equal(editor.activeGroup, remainingDocuments[0]);
 	assert.equal(editor.isGroupVisible(remainingDocuments[0]!.id), true);
@@ -732,7 +908,11 @@ test('Sessions recreates a hidden document host without activating it over a pro
 	const { EditorPart } = await import('../../browser/parts/editorPart.js');
 	const { createTestEditorServices } = await import('../../../workbench/test/common/testEditorServices.js');
 	using services = createTestEditorServices();
-	using editor = registerTestComponentServices(services).createInstance(EditorPart, browserEnvironment.window.document.body, {});
+	using editor = registerTestComponentServices(services).createInstance(
+		EditorPart,
+		browserEnvironment.window.document.body,
+		{},
+	);
 	const documents = editor.activeGroup;
 	const pages = editor.groups.find(group => group.id === editor.pageGroupId)!;
 	editor.setGroupVisible(pages.id, true);
@@ -748,15 +928,33 @@ test('Sessions recreates a hidden document host without activating it over a pro
 test('Sessions layout creation requires the registered storage service', () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
 	using services = new InstantiationService();
-	assert.throws(() => services.createInstance(DesktopWorkbenchLayout, dom.window.document.body, {}), /storageService|StorageService/);
+	assert.throws(
+		() => services.createInstance(DesktopWorkbenchLayout, dom.window.document.body, {}),
+		/storageService|StorageService/,
+	);
 	dom.window.close();
 });
 
 const layoutTestResources = new DisposableStore();
 suiteTeardown(() => layoutTestResources.dispose());
 
-function createLayout(container: HTMLElement, parts: ReadonlyMap<SessionsPartId, WorkbenchPartInstance>, options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & { storageService?: import('../../../platform/storage/common/storage.js').IStorageService; } = {}): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
-	const ownedStorage = options.storageService ? undefined : layoutTestResources.add(new BrowserStorageService({ ownerWindow: container.ownerDocument.defaultView!, workspaceId: 'sessions', flushInterval: 0, onError: () => { } }));
+function createLayout(
+	container: HTMLElement,
+	parts: ReadonlyMap<SessionsPartId, WorkbenchPartInstance>,
+	options: import('../../browser/desktopWorkbench.js').SessionsWorkbenchLayoutOptions & {
+		storageService?: import('../../../platform/storage/common/storage.js').IStorageService;
+	} = {},
+): import('../../browser/desktopWorkbench.js').DesktopWorkbenchLayout {
+	const ownedStorage = options.storageService
+		? undefined
+		: layoutTestResources.add(
+				new BrowserStorageService({
+					ownerWindow: container.ownerDocument.defaultView!,
+					workspaceId: 'sessions',
+					flushInterval: 0,
+					onError: () => {},
+				}),
+			);
 	const storage = options.storageService ?? ownedStorage!;
 	using services = new InstantiationService();
 	services.registerInstance(IStorageService, storage);
@@ -787,5 +985,8 @@ test('Sessions banner stays above conversation and panel compositions without en
 		layout.hidePart('banner');
 		assert.equal(layout.mainContainerOffset.top, WorkbenchWindowBarHeight);
 		assert.equal('banner' in layout.state, false);
-	} finally { for (const part of parts.values()) part.dispose(); dom.window.close(); }
+	} finally {
+		for (const part of parts.values()) part.dispose();
+		dom.window.close();
+	}
 });

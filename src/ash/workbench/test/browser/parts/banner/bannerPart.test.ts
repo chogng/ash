@@ -6,7 +6,9 @@ suite('banner browser component', () => {
 	const browserTests = useBrowserTests();
 	setup(function () {
 		const { page } = browserTests;
-		page.on('pageerror', error => { throw error; });
+		page.on('pageerror', error => {
+			throw error;
+		});
 	});
 
 	for (const locale of ['en', 'zh']) {
@@ -24,7 +26,11 @@ suite('banner browser component', () => {
 					await page.evaluate(theme => window.ashBannerIntegration.setTheme(theme), theme);
 					for (const target of [close, banner.locator('.ash-banner-message')]) {
 						await target.hover();
-						await expect(tooltip).toHaveText(target === close ? (await close.getAttribute('aria-label'))! : (await target.textContent())!);
+						await expect(tooltip).toHaveText(
+							target === close
+								? (await close.getAttribute('aria-label'))!
+								: (await target.textContent())!,
+						);
 						const bounds = (await tooltip.boundingBox())!;
 						const anchor = (await target.boundingBox())!;
 						expect(bounds.y).toBeGreaterThanOrEqual(anchor.y + anchor.height);
@@ -60,15 +66,22 @@ suite('banner browser component', () => {
 			await editor.fill('unsaved draft');
 			await page.evaluate(() => window.ashBannerIntegration.setRecovery('recovering'));
 			await expect(banner).toBeVisible();
-			await expect(banner).toContainText(locale === 'zh' ? '正在重新连接到 Agent Host…' : 'Reconnecting to the Agent Host…');
+			await expect(banner).toContainText(
+				locale === 'zh' ? '正在重新连接到 Agent Host…' : 'Reconnecting to the Agent Host…',
+			);
 			await expect(editor).toBeFocused();
 			expect((await page.locator('[data-part="editor"]').boundingBox())!.y).toBe(editorTop + 32);
 			await page.evaluate(() => window.ashBannerIntegration.setRecovery('failed'));
-			const reconnect = banner.getByRole('button', { name: locale === 'zh' ? '重新连接' : 'Reconnect', exact: true });
+			const reconnect = banner.getByRole('button', {
+				name: locale === 'zh' ? '重新连接' : 'Reconnect',
+				exact: true,
+			});
 			await expect(reconnect).toBeVisible();
 			await page.evaluate(() => window.ashBannerIntegration.focus());
 			await banner.press('ArrowLeft');
-			await expect(banner.getByRole('button', { name: locale === 'zh' ? '关闭横幅' : 'Close Banner' })).toBeFocused();
+			await expect(
+				banner.getByRole('button', { name: locale === 'zh' ? '关闭横幅' : 'Close Banner' }),
+			).toBeFocused();
 			await banner.press('ArrowRight');
 			await expect(reconnect).toBeFocused();
 			await reconnect.press('Space');
@@ -81,7 +94,11 @@ suite('banner browser component', () => {
 			for (const index of [0, 1, 2, 3]) {
 				await page.evaluate(index => window.ashBannerIntegration.setTheme(index), index);
 				await page.screenshot({ path: testInfo.outputPath(`banner-${locale}-theme-${index}.png`) });
-				const colors = await banner.evaluate(node => ({ background: getComputedStyle(node).backgroundColor, foreground: getComputedStyle(node).color, border: getComputedStyle(node).borderBottomColor }));
+				const colors = await banner.evaluate(node => ({
+					background: getComputedStyle(node).backgroundColor,
+					foreground: getComputedStyle(node).color,
+					border: getComputedStyle(node).borderBottomColor,
+				}));
 				expect(colors.background).not.toBe(colors.foreground);
 				if (index > 1) expect(colors.border).not.toBe(colors.background);
 			}
@@ -178,12 +195,18 @@ suite('banner browser component', () => {
 		await expect(close).toBeFocused();
 		await close.press('Escape');
 		await expect(banner).toBeFocused();
-		await page.evaluate(() => window.ashBannerIntegration.setBindings([{ key: 'down', command: 'workbench.banner.focusPreviousAction', when: 'bannerFocused' }]));
+		await page.evaluate(() =>
+			window.ashBannerIntegration.setBindings([
+				{ key: 'down', command: 'workbench.banner.focusPreviousAction', when: 'bannerFocused' },
+			]),
+		);
 		await banner.press('ArrowDown');
 		await expect(close).toBeFocused();
 		await page.evaluate(() => window.ashBannerIntegration.command('workbench.banner.focusNextAction'));
 		await expect(reconnect).toBeFocused();
-		await page.evaluate(() => window.ashBannerIntegration.setBindings([{ key: 'escape', command: '-workbench.banner.focusBanner' }]));
+		await page.evaluate(() =>
+			window.ashBannerIntegration.setBindings([{ key: 'escape', command: '-workbench.banner.focusBanner' }]),
+		);
 		await reconnect.press('Escape');
 		await expect(reconnect).toBeFocused();
 		await page.evaluate(() => window.ashBannerIntegration.command('workbench.banner.focusBanner'));
@@ -239,7 +262,10 @@ suite('banner browser component', () => {
 			const editor = page.locator('.ash-workspace-trust-editor');
 			const heading = editor.getByRole('heading', { level: 2 });
 			const trust = editor.getByRole('button', { name: zh ? '信任工作区' : 'Trust workspace', exact: true });
-			const readOnly = editor.getByRole('button', { name: zh ? '以只读方式打开' : 'Open read-only', exact: true });
+			const readOnly = editor.getByRole('button', {
+				name: zh ? '以只读方式打开' : 'Open read-only',
+				exact: true,
+			});
 			await expect(heading).toHaveText(zh ? '只读工作区' : 'Read-only workspace');
 			await expect(editor.getByRole('switch')).toHaveCount(0);
 			await expect(editor.getByRole('combobox')).toHaveCount(0);
@@ -250,7 +276,11 @@ suite('banner browser component', () => {
 			await trust.press('Enter');
 			const dialog = page.getByRole('dialog');
 			await expect(dialog).toContainText(zh ? '信任' : 'Trust');
-			await expect(dialog).toContainText(zh ? '可能终止正在运行的终端命令和调试会话' : 'may terminate running terminal commands and debug sessions');
+			await expect(dialog).toContainText(
+				zh
+					? '可能终止正在运行的终端命令和调试会话'
+					: 'may terminate running terminal commands and debug sessions',
+			);
 			await dialog.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true }).click();
 			await expect(heading).toHaveText(zh ? '只读工作区' : 'Read-only workspace');
 			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
@@ -264,12 +294,19 @@ suite('banner browser component', () => {
 			await expect(editor.getByRole('button')).toHaveCount(1);
 			for (const index of [0, 1, 2, 3]) {
 				await page.evaluate(index => window.ashBannerIntegration.setTheme(index), index);
-				const colors = await editor.evaluate(node => ({ foreground: getComputedStyle(node).color, background: getComputedStyle(node).backgroundColor }));
+				const colors = await editor.evaluate(node => ({
+					foreground: getComputedStyle(node).color,
+					background: getComputedStyle(node).backgroundColor,
+				}));
 				expect(colors.foreground).not.toBe(colors.background);
 				await page.screenshot({ path: testInfo.outputPath(`trust-${locale}-theme-${index}.png`) });
 			}
 			await readOnly.click();
-			await expect(dialog).toContainText(zh ? '可能终止正在运行的终端命令和调试会话' : 'may terminate running terminal commands and debug sessions');
+			await expect(dialog).toContainText(
+				zh
+					? '可能终止正在运行的终端命令和调试会话'
+					: 'may terminate running terminal commands and debug sessions',
+			);
 			await expect(dialog).toContainText(zh ? '进程中未保存的状态可能丢失' : 'Unsaved process state may be lost');
 			await dialog.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true }).click();
 			await expect(heading).toHaveText(zh ? '已信任工作区' : 'Trusted workspace');
@@ -291,16 +328,33 @@ suite('banner browser component', () => {
 			const geometry = await editor.evaluate(node => {
 				const content = node.querySelector<HTMLElement>('.workspace-trust-content')!;
 				const viewport = content.parentElement!;
-				return { width: content.clientWidth, scrollWidth: content.scrollWidth, scrollHeight: viewport.scrollHeight, height: viewport.clientHeight };
+				return {
+					width: content.clientWidth,
+					scrollWidth: content.scrollWidth,
+					scrollHeight: viewport.scrollHeight,
+					height: viewport.clientHeight,
+				};
 			});
 			expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.width);
 			await advanced.focus();
 			await advanced.press('Enter');
-			await expect.poll(() => editor.locator('.workspace-trust-content').evaluate(content => content.parentElement!.scrollHeight > content.parentElement!.clientHeight)).toBe(true);
+			await expect
+				.poll(() =>
+					editor
+						.locator('.workspace-trust-content')
+						.evaluate(content => content.parentElement!.scrollHeight > content.parentElement!.clientHeight),
+				)
+				.toBe(true);
 			const mutation = editor.getByRole('switch', { name: zh ? '修改仓库' : 'Modify repository', exact: true });
 			await mutation.focus();
 			await expect(mutation).toBeFocused();
-			await expect(editor.locator('.ash-switch').filter({ has: page.getByRole('switch', { name: zh ? '修改仓库' : 'Modify repository', exact: true }) })).toBeInViewport();
+			await expect(
+				editor
+					.locator('.ash-switch')
+					.filter({
+						has: page.getByRole('switch', { name: zh ? '修改仓库' : 'Modify repository', exact: true }),
+					}),
+			).toBeInViewport();
 			await page.screenshot({ path: testInfo.outputPath(`trust-${locale}-narrow-advanced.png`) });
 			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(2);
 		});
@@ -324,11 +378,17 @@ suite('banner browser component', () => {
 			await page.keyboard.press('Alt+F1');
 			const help = page.getByRole('textbox', { name: 'Accessibility Help', exact: true });
 			await expect(help).toHaveValue(zh ? /工作区信任/ : /Workspace Trust/);
-			await expect(help).toHaveValue(zh ? /可能终止正在运行的终端命令和调试会话/ : /may terminate running terminal commands and debug sessions/);
+			await expect(help).toHaveValue(
+				zh
+					? /可能终止正在运行的终端命令和调试会话/
+					: /may terminate running terminal commands and debug sessions/,
+			);
 			await help.press('Escape');
 			await expect(editor).toBeFocused();
 			const development = async () => {
-				await editor.getByRole('combobox', { name: zh ? '权限预设' : 'Permission preset', exact: true }).click();
+				await editor
+					.getByRole('combobox', { name: zh ? '权限预设' : 'Permission preset', exact: true })
+					.click();
 				await page.getByRole('option', { name: zh ? '开发' : 'Development', exact: true }).click();
 			};
 			await development();
@@ -344,7 +404,9 @@ suite('banner browser component', () => {
 			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
 			await save.click();
 			await dialog.getByRole('button', { name: zh ? '保存权限' : 'Save permissions', exact: true }).click();
-			await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().grantWrites)).toBe(1);
+			await expect
+				.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().grantWrites))
+				.toBe(1);
 			await expect(banner).toBeHidden();
 			await expect(save).toBeDisabled();
 			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
@@ -352,13 +414,19 @@ suite('banner browser component', () => {
 			await write.focus();
 			await write.press('Space');
 			await save.click();
-			await expect(dialog).toContainText(zh ? '可能终止正在运行的终端命令和调试会话' : 'may terminate running terminal commands and debug sessions');
+			await expect(dialog).toContainText(
+				zh
+					? '可能终止正在运行的终端命令和调试会话'
+					: 'may terminate running terminal commands and debug sessions',
+			);
 			await expect(dialog).toContainText(zh ? '进程中未保存的状态可能丢失' : 'Unsaved process state may be lost');
 			await dialog.getByRole('button', { name: zh ? '取消' : 'Cancel', exact: true }).click();
 			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(1);
 			await save.click();
 			await dialog.getByRole('button', { name: zh ? '保存权限' : 'Save permissions', exact: true }).click();
-			await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().grantWrites)).toBe(2);
+			await expect
+				.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().grantWrites))
+				.toBe(2);
 			const saved = (await page.evaluate(() => window.ashBannerIntegration.managementState())).saved;
 			expect(saved).toContain('writeFiles');
 			expect(saved).not.toContain('executeCommands');
@@ -393,7 +461,8 @@ suite('banner browser component', () => {
 			await write.press('Space');
 			await save.click();
 			await expect(page.getByRole('dialog')).toBeVisible();
-			if (change === 'workspace') await page.evaluate(() => window.ashBannerIntegration.switchWorkspace('second'));
+			if (change === 'workspace')
+				await page.evaluate(() => window.ashBannerIntegration.switchWorkspace('second'));
 			else await page.evaluate(() => window.ashBannerIntegration.bumpConnection());
 			await page.getByRole('dialog').getByRole('button', { name: 'Save permissions', exact: true }).click();
 			await expect(write).not.toBeChecked();
@@ -427,7 +496,10 @@ suite('banner browser component', () => {
 			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
 			const origin = page.getByRole('textbox', { name: 'Editor draft' });
 			await origin.focus();
-			await page.evaluate(() => { window.ashBannerIntegration.requestTrust(); window.ashBannerIntegration.requestTrust(); });
+			await page.evaluate(() => {
+				window.ashBannerIntegration.requestTrust();
+				window.ashBannerIntegration.requestTrust();
+			});
 			const dialog = page.getByRole('dialog', { name: zh ? '工作区信任' : 'Workspace Trust', exact: true });
 			await expect(dialog).toHaveCount(1);
 			await expect(dialog).toContainText(zh ? '你是否信任此工作区中文件的作者' : 'Do you trust the authors');
@@ -435,14 +507,18 @@ suite('banner browser component', () => {
 			await dialog.press('Escape');
 			await expect(dialog).toBeHidden();
 			await expect(origin).toBeFocused();
-			await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled', 'canceled']);
+			await expect
+				.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses))
+				.toEqual(['canceled', 'canceled']);
 			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
 			await page.evaluate(() => window.ashBannerIntegration.requestTrust());
 			const trust = dialog.getByRole('button', { name: zh ? '信任工作区' : 'Trust workspace', exact: true });
 			await trust.focus();
 			await trust.press('Enter');
 			await expect(dialog).toBeHidden();
-			await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled', 'canceled', 'trusted']);
+			await expect
+				.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses))
+				.toEqual(['canceled', 'canceled', 'trusted']);
 			expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(1);
 			expect((await page.evaluate(() => window.ashBannerIntegration.state())).retries).toBe(1);
 			await expect(page.locator('[data-part="banner"]')).toBeHidden();
@@ -453,16 +529,23 @@ suite('banner browser component', () => {
 		const { page } = browserTests;
 		await page.goto('/banner.html');
 		await page.waitForFunction(() => !!window.ashBannerIntegration);
-		await page.evaluate(() => { window.ashBannerIntegration.setPermissions('readonly'); window.ashBannerIntegration.requestTrust(); });
+		await page.evaluate(() => {
+			window.ashBannerIntegration.setPermissions('readonly');
+			window.ashBannerIntegration.requestTrust();
+		});
 		const dialog = page.getByRole('dialog', { name: 'Workspace Trust', exact: true });
 		await expect(dialog).toBeVisible();
 		await page.evaluate(() => window.ashBannerIntegration.switchWorkspace('replacement'));
 		await expect(dialog).toBeHidden();
-		await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled']);
+		await expect
+			.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses))
+			.toEqual(['canceled']);
 		expect((await page.evaluate(() => window.ashBannerIntegration.managementState())).grantWrites).toBe(0);
 		await page.evaluate(() => window.ashBannerIntegration.requestTrust());
 		await expect(dialog).toBeVisible();
 		await dialog.getByRole('button', { name: 'Cancel', exact: true }).click();
-		await expect.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses)).toEqual(['canceled', 'canceled']);
+		await expect
+			.poll(() => page.evaluate(() => window.ashBannerIntegration.managementState().trustResponses))
+			.toEqual(['canceled', 'canceled']);
 	});
 });

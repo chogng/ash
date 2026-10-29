@@ -1,16 +1,36 @@
 import { CallbackIterable, compareBy } from '../../../../base/common/arrays.js';
 import { Emitter } from '../../../../base/common/event.js';
-import { Disposable, DisposableStore, IDisposable, IReference, MutableDisposable } from '../../../../base/common/lifecycle.js';
+import {
+	Disposable,
+	DisposableStore,
+	IDisposable,
+	IReference,
+	MutableDisposable,
+} from '../../../../base/common/lifecycle.js';
 import { IPosition, Position } from '../../core/position.js';
 import { Range } from '../../core/range.js';
-import { ResolvedLanguageConfiguration, LanguageConfigurationServiceChangeEvent } from '../../languages/languageConfigurationRegistry.js';
+import {
+	ResolvedLanguageConfiguration,
+	LanguageConfigurationServiceChangeEvent,
+} from '../../languages/languageConfigurationRegistry.js';
 import { ignoreBracketsInToken } from '../../languages/supports.js';
 import { LanguageBracketsConfiguration } from '../../languages/supports/languageBracketsConfiguration.js';
 import { BracketsUtils, RichEditBracket, RichEditBrackets } from '../../languages/supports/richEditBrackets.js';
 import { BracketPairsTree } from './bracketPairsTree/bracketPairsTree.js';
 import { TextModel } from '../textModel.js';
-import { BracketInfo, BracketPairInfo, BracketPairWithMinIndentationInfo, IBracketPairsTextModelPart, IFoundBracket } from '../../textModelBracketPairs.js';
-import { IModelContentChangedEvent, IModelLanguageChangedEvent, IModelOptionsChangedEvent, IModelTokensChangedEvent } from '../../textModelEvents.js';
+import {
+	BracketInfo,
+	BracketPairInfo,
+	BracketPairWithMinIndentationInfo,
+	IBracketPairsTextModelPart,
+	IFoundBracket,
+} from '../../textModelBracketPairs.js';
+import {
+	IModelContentChangedEvent,
+	IModelLanguageChangedEvent,
+	IModelOptionsChangedEvent,
+	IModelTokensChangedEvent,
+} from '../../textModelEvents.js';
 import { LineTokens } from '../../tokens/lineTokens.js';
 
 export class BracketPairsTextModelPart extends Disposable implements IBracketPairsTextModelPart {
@@ -21,14 +41,17 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 
 	private get canBuildAST() {
 		const maxSupportedDocumentLength = /* max lines */ 50_000 * /* average column count */ 100;
-		return this.textModel.tokenization.syntaxTree !== undefined || this.textModel.getValueLength() <= maxSupportedDocumentLength;
+		return (
+			this.textModel.tokenization.syntaxTree !== undefined ||
+			this.textModel.getValueLength() <= maxSupportedDocumentLength
+		);
 	}
 
 	private bracketsRequested = false;
 
 	public constructor(
 		private readonly textModel: TextModel,
-		private readonly resolveLanguageConfiguration: (languageId: string) => ResolvedLanguageConfiguration
+		private readonly resolveLanguageConfiguration: (languageId: string) => ResolvedLanguageConfiguration,
 	) {
 		super();
 	}
@@ -61,7 +84,11 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 	}
 
 	public handleDidChangeTokens(e: IModelTokensChangedEvent): void {
-		if (this.textModel.tokenization.syntaxTree) { this.bracketPairsTree.clear(); this.onDidChangeEmitter.fire(); return; }
+		if (this.textModel.tokenization.syntaxTree) {
+			this.bracketPairsTree.clear();
+			this.onDidChangeEmitter.fire();
+			return;
+		}
 		this.bracketPairsTree.value?.object.handleDidChangeTokens(e);
 	}
 
@@ -74,11 +101,11 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 
 				this.bracketPairsTree.value = createDisposableRef(
 					store.add(
-						new BracketPairsTree(this.textModel, (languageId) => {
+						new BracketPairsTree(this.textModel, languageId => {
 							return this.resolveLanguageConfiguration(languageId);
-						})
+						}),
 					),
-					store
+					store,
 				);
 				store.add(this.bracketPairsTree.value.object.onDidChange(e => this.onDidChangeEmitter.fire(e)));
 				this.onDidChangeEmitter.fire();
@@ -95,7 +122,7 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 	/**
 	 * Returns all bracket pairs that intersect the given range.
 	 * The result is sorted by the start position.
-	*/
+	 */
 	public getBracketPairsInRange(range: Range): CallbackIterable<BracketPairInfo> {
 		if (this.textModel.tokenization.syntaxTree) return this.sharedBracketPairs(range);
 		this.bracketsRequested = true;
@@ -115,26 +142,63 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 			const brackets: BracketInfo[] = [];
 			this.sharedBracketPairs(range).forEach(pair => {
 				if (!onlyColorizedBrackets || pair.closingBracketInfo?.closesColorized(pair.openingBracketInfo)) {
-					if (Range.areIntersectingOrTouching(pair.openingBracketRange, range)) brackets.push(new BracketInfo(pair.openingBracketRange, pair.nestingLevel, pair.nestingLevelOfEqualBracketType, false));
-					if (pair.closingBracketRange && Range.areIntersectingOrTouching(pair.closingBracketRange, range)) brackets.push(new BracketInfo(pair.closingBracketRange, pair.nestingLevel, pair.nestingLevelOfEqualBracketType, false));
+					if (Range.areIntersectingOrTouching(pair.openingBracketRange, range))
+						brackets.push(
+							new BracketInfo(
+								pair.openingBracketRange,
+								pair.nestingLevel,
+								pair.nestingLevelOfEqualBracketType,
+								false,
+							),
+						);
+					if (pair.closingBracketRange && Range.areIntersectingOrTouching(pair.closingBracketRange, range))
+						brackets.push(
+							new BracketInfo(
+								pair.closingBracketRange,
+								pair.nestingLevel,
+								pair.nestingLevelOfEqualBracketType,
+								false,
+							),
+						);
 				}
 			});
 			brackets.sort((a, b) => Range.compareRangesUsingStarts(a.range, b.range));
-			return new CallbackIterable(callback => { for (const bracket of brackets) if (!callback(bracket)) break; });
+			return new CallbackIterable(callback => {
+				for (const bracket of brackets) if (!callback(bracket)) break;
+			});
 		}
 		this.bracketsRequested = true;
 		this.updateBracketPairsTree();
-		return this.bracketPairsTree.value?.object.getBracketsInRange(range, onlyColorizedBrackets) || CallbackIterable.empty;
+		return (
+			this.bracketPairsTree.value?.object.getBracketsInRange(range, onlyColorizedBrackets) ||
+			CallbackIterable.empty
+		);
 	}
 
 	private sharedBracketPairs(range: Range): CallbackIterable<BracketPairWithMinIndentationInfo> {
 		const config = this.resolveLanguageConfiguration(this.textModel.getLanguageId()).bracketsNew;
 		const pairs = this.textModel.tokenization.syntaxTree!.getBracketPairs(range).flatMap(pair => {
-			const opening = config.getOpeningBracketInfo(pair.text), closing = pair.closeText ? config.getClosingBracketInfo(pair.closeText) : undefined;
+			const opening = config.getOpeningBracketInfo(pair.text),
+				closing = pair.closeText ? config.getClosingBracketInfo(pair.closeText) : undefined;
 			if (!opening) return [];
-			return [new BracketPairWithMinIndentationInfo(Range.lift(pair.range), Range.lift(pair.opening), pair.closing ? Range.lift(pair.closing) : undefined, pair.level, pair.equalLevel, { openingBracket: { bracketInfo: opening }, closingBracket: closing ? { bracketInfo: closing } : null }, pair.minIndent)];
+			return [
+				new BracketPairWithMinIndentationInfo(
+					Range.lift(pair.range),
+					Range.lift(pair.opening),
+					pair.closing ? Range.lift(pair.closing) : undefined,
+					pair.level,
+					pair.equalLevel,
+					{
+						openingBracket: { bracketInfo: opening },
+						closingBracket: closing ? { bracketInfo: closing } : null,
+					},
+					pair.minIndent,
+				),
+			];
 		});
-		return new CallbackIterable(callback => { for (const pair of pairs) if (!callback(pair)) break; });
+		return new CallbackIterable(callback => {
+			for (const pair of pairs) if (!callback(pair)) break;
+		});
 	}
 
 	public findMatchingBracketUp(_bracket: string, _position: IPosition, maxDuration?: number): Range | null {
@@ -142,15 +206,15 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 		const languageId = this.textModel.getLanguageIdAtPosition(position.lineNumber, position.column);
 
 		if (this.canBuildAST) {
-			const closingBracketInfo = this.resolveLanguageConfiguration(languageId)
-				.bracketsNew.getClosingBracketInfo(_bracket);
+			const closingBracketInfo =
+				this.resolveLanguageConfiguration(languageId).bracketsNew.getClosingBracketInfo(_bracket);
 
 			if (!closingBracketInfo) {
 				return null;
 			}
 
-			const bracketPair = this.getBracketPairsInRange(Range.fromPositions(_position, _position)).findLast((b) =>
-				closingBracketInfo.closes(b.openingBracketInfo)
+			const bracketPair = this.getBracketPairsInRange(Range.fromPositions(_position, _position)).findLast(b =>
+				closingBracketInfo.closes(b.openingBracketInfo),
 			);
 
 			if (bracketPair) {
@@ -173,28 +237,29 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 				return null;
 			}
 
-			return stripBracketSearchCanceled(this._findMatchingBracketUp(data, position, createTimeBasedContinueBracketSearchPredicate(maxDuration)));
+			return stripBracketSearchCanceled(
+				this._findMatchingBracketUp(data, position, createTimeBasedContinueBracketSearchPredicate(maxDuration)),
+			);
 		}
 	}
 
 	public matchBracket(position: IPosition, maxDuration?: number): [Range, Range] | null {
 		if (this.canBuildAST) {
-			const bracketPair =
-				this.getBracketPairsInRange(
-					Range.fromPositions(position, position)
-				).filter(
-					(item) =>
+			const bracketPair = this.getBracketPairsInRange(Range.fromPositions(position, position))
+				.filter(
+					item =>
 						item.closingBracketRange !== undefined &&
 						(item.openingBracketRange.containsPosition(position) ||
-							item.closingBracketRange.containsPosition(position))
-				).findLastMaxBy(
+							item.closingBracketRange.containsPosition(position)),
+				)
+				.findLastMaxBy(
 					compareBy(
-						(item) =>
+						item =>
 							item.openingBracketRange.containsPosition(position)
 								? item.openingBracketRange
 								: item.closingBracketRange,
-						Range.compareRangesUsingStarts
-					)
+						Range.compareRangesUsingStarts,
+					),
 				);
 			if (bracketPair) {
 				return [bracketPair.openingBracketRange, bracketPair.closingBracketRange!];
@@ -207,7 +272,12 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 		}
 	}
 
-	private _establishBracketSearchOffsets(position: Position, lineTokens: LineTokens, modeBrackets: RichEditBrackets, tokenIndex: number) {
+	private _establishBracketSearchOffsets(
+		position: Position,
+		lineTokens: LineTokens,
+		modeBrackets: RichEditBrackets,
+		tokenIndex: number,
+	) {
 		const tokenCount = lineTokens.getCount();
 		const currentLanguageId = lineTokens.getLanguageId(tokenIndex);
 
@@ -218,20 +288,29 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 			if (tokenEndOffset <= searchStartOffset) {
 				break;
 			}
-			if (ignoreBracketsInToken(lineTokens.getStandardTokenType(i)) || lineTokens.getLanguageId(i) !== currentLanguageId) {
+			if (
+				ignoreBracketsInToken(lineTokens.getStandardTokenType(i)) ||
+				lineTokens.getLanguageId(i) !== currentLanguageId
+			) {
 				searchStartOffset = tokenEndOffset;
 				break;
 			}
 		}
 
 		// limit search to not go after `maxBracketLength`
-		let searchEndOffset = Math.min(lineTokens.getLineContent().length, position.column - 1 + modeBrackets.maxBracketLength);
+		let searchEndOffset = Math.min(
+			lineTokens.getLineContent().length,
+			position.column - 1 + modeBrackets.maxBracketLength,
+		);
 		for (let i = tokenIndex + 1; i < tokenCount; i++) {
 			const tokenStartOffset = lineTokens.getStartOffset(i);
 			if (tokenStartOffset >= searchEndOffset) {
 				break;
 			}
-			if (ignoreBracketsInToken(lineTokens.getStandardTokenType(i)) || lineTokens.getLanguageId(i) !== currentLanguageId) {
+			if (
+				ignoreBracketsInToken(lineTokens.getStandardTokenType(i)) ||
+				lineTokens.getLanguageId(i) !== currentLanguageId
+			) {
 				searchEndOffset = tokenStartOffset;
 				break;
 			}
@@ -240,7 +319,10 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 		return { searchStartOffset, searchEndOffset };
 	}
 
-	private _matchBracket(position: Position, continueSearchPredicate: ContinueBracketSearchPredicate): [Range, Range] | null {
+	private _matchBracket(
+		position: Position,
+		continueSearchPredicate: ContinueBracketSearchPredicate,
+	): [Range, Range] | null {
 		const lineNumber = position.lineNumber;
 		const lineTokens = this.textModel.tokenization.getLineTokens(lineNumber);
 		const lineText = this.textModel.getLineContent(lineNumber);
@@ -253,14 +335,24 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 
 		// check that the token is not to be ignored
 		if (currentModeBrackets && !ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex))) {
-
-			let { searchStartOffset, searchEndOffset } = this._establishBracketSearchOffsets(position, lineTokens, currentModeBrackets, tokenIndex);
+			let { searchStartOffset, searchEndOffset } = this._establishBracketSearchOffsets(
+				position,
+				lineTokens,
+				currentModeBrackets,
+				tokenIndex,
+			);
 
 			// it might be the case that [currentTokenStart -> currentTokenEnd] contains multiple brackets
 			// `bestResult` will contain the most right-side result
 			let bestResult: [Range, Range] | null = null;
 			while (true) {
-				const foundBracket = BracketsUtils.findNextBracketInRange(currentModeBrackets.forwardRegex, lineNumber, lineText, searchStartOffset, searchEndOffset);
+				const foundBracket = BracketsUtils.findNextBracketInRange(
+					currentModeBrackets.forwardRegex,
+					lineNumber,
+					lineText,
+					searchStartOffset,
+					searchEndOffset,
+				);
 				if (!foundBracket) {
 					// there are no more brackets in this text
 					break;
@@ -268,8 +360,15 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 
 				// check that we didn't hit a bracket too far away from position
 				if (foundBracket.startColumn <= position.column && position.column <= foundBracket.endColumn) {
-					const foundBracketText = lineText.substring(foundBracket.startColumn - 1, foundBracket.endColumn - 1).toLowerCase();
-					const r = this._matchFoundBracket(foundBracket, currentModeBrackets.textIsBracket[foundBracketText], currentModeBrackets.textIsOpenBracket[foundBracketText], continueSearchPredicate);
+					const foundBracketText = lineText
+						.substring(foundBracket.startColumn - 1, foundBracket.endColumn - 1)
+						.toLowerCase();
+					const r = this._matchFoundBracket(
+						foundBracket,
+						currentModeBrackets.textIsBracket[foundBracketText],
+						currentModeBrackets.textIsOpenBracket[foundBracketText],
+						continueSearchPredicate,
+					);
 					if (r) {
 						if (r instanceof BracketSearchCanceled) {
 							return null;
@@ -289,19 +388,42 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 		// If position is in between two tokens, try also looking in the previous token
 		if (tokenIndex > 0 && lineTokens.getStartOffset(tokenIndex) === position.column - 1) {
 			const prevTokenIndex = tokenIndex - 1;
-			const prevModeBrackets = this.resolveLanguageConfiguration(lineTokens.getLanguageId(prevTokenIndex)).brackets;
+			const prevModeBrackets = this.resolveLanguageConfiguration(
+				lineTokens.getLanguageId(prevTokenIndex),
+			).brackets;
 
 			// check that previous token is not to be ignored
 			if (prevModeBrackets && !ignoreBracketsInToken(lineTokens.getStandardTokenType(prevTokenIndex))) {
+				const { searchStartOffset, searchEndOffset } = this._establishBracketSearchOffsets(
+					position,
+					lineTokens,
+					prevModeBrackets,
+					prevTokenIndex,
+				);
 
-				const { searchStartOffset, searchEndOffset } = this._establishBracketSearchOffsets(position, lineTokens, prevModeBrackets, prevTokenIndex);
-
-				const foundBracket = BracketsUtils.findPrevBracketInRange(prevModeBrackets.reversedRegex, lineNumber, lineText, searchStartOffset, searchEndOffset);
+				const foundBracket = BracketsUtils.findPrevBracketInRange(
+					prevModeBrackets.reversedRegex,
+					lineNumber,
+					lineText,
+					searchStartOffset,
+					searchEndOffset,
+				);
 
 				// check that we didn't hit a bracket too far away from position
-				if (foundBracket && foundBracket.startColumn <= position.column && position.column <= foundBracket.endColumn) {
-					const foundBracketText = lineText.substring(foundBracket.startColumn - 1, foundBracket.endColumn - 1).toLowerCase();
-					const r = this._matchFoundBracket(foundBracket, prevModeBrackets.textIsBracket[foundBracketText], prevModeBrackets.textIsOpenBracket[foundBracketText], continueSearchPredicate);
+				if (
+					foundBracket &&
+					foundBracket.startColumn <= position.column &&
+					position.column <= foundBracket.endColumn
+				) {
+					const foundBracketText = lineText
+						.substring(foundBracket.startColumn - 1, foundBracket.endColumn - 1)
+						.toLowerCase();
+					const r = this._matchFoundBracket(
+						foundBracket,
+						prevModeBrackets.textIsBracket[foundBracketText],
+						prevModeBrackets.textIsOpenBracket[foundBracketText],
+						continueSearchPredicate,
+					);
 					if (r) {
 						if (r instanceof BracketSearchCanceled) {
 							return null;
@@ -315,16 +437,19 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 		return null;
 	}
 
-	private _matchFoundBracket(foundBracket: Range, data: RichEditBracket, isOpen: boolean, continueSearchPredicate: ContinueBracketSearchPredicate): [Range, Range] | null | BracketSearchCanceled {
+	private _matchFoundBracket(
+		foundBracket: Range,
+		data: RichEditBracket,
+		isOpen: boolean,
+		continueSearchPredicate: ContinueBracketSearchPredicate,
+	): [Range, Range] | null | BracketSearchCanceled {
 		if (!data) {
 			return null;
 		}
 
-		const matched = (
-			isOpen
-				? this._findMatchingBracketDown(data, foundBracket.getEndPosition(), continueSearchPredicate)
-				: this._findMatchingBracketUp(data, foundBracket.getStartPosition(), continueSearchPredicate)
-		);
+		const matched = isOpen
+			? this._findMatchingBracketDown(data, foundBracket.getEndPosition(), continueSearchPredicate)
+			: this._findMatchingBracketUp(data, foundBracket.getStartPosition(), continueSearchPredicate);
 
 		if (!matched) {
 			return null;
@@ -337,7 +462,11 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 		return [foundBracket, matched];
 	}
 
-	private _findMatchingBracketUp(bracket: RichEditBracket, position: Position, continueSearchPredicate: ContinueBracketSearchPredicate): Range | null | BracketSearchCanceled {
+	private _findMatchingBracketUp(
+		bracket: RichEditBracket,
+		position: Position,
+		continueSearchPredicate: ContinueBracketSearchPredicate,
+	): Range | null | BracketSearchCanceled {
 		// console.log('_findMatchingBracketUp: ', 'bracket: ', JSON.stringify(bracket), 'startPosition: ', String(position));
 
 		const languageId = bracket.languageId;
@@ -345,12 +474,23 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 		let count = -1;
 
 		let totalCallCount = 0;
-		const searchPrevMatchingBracketInRange = (lineNumber: number, lineText: string, searchStartOffset: number, searchEndOffset: number): Range | null | BracketSearchCanceled => {
+		const searchPrevMatchingBracketInRange = (
+			lineNumber: number,
+			lineText: string,
+			searchStartOffset: number,
+			searchEndOffset: number,
+		): Range | null | BracketSearchCanceled => {
 			while (true) {
-				if (continueSearchPredicate && (++totalCallCount) % 100 === 0 && !continueSearchPredicate()) {
+				if (continueSearchPredicate && ++totalCallCount % 100 === 0 && !continueSearchPredicate()) {
 					return BracketSearchCanceled.INSTANCE;
 				}
-				const r = BracketsUtils.findPrevBracketInRange(reversedBracketRegex, lineNumber, lineText, searchStartOffset, searchEndOffset);
+				const r = BracketsUtils.findPrevBracketInRange(
+					reversedBracketRegex,
+					lineNumber,
+					lineText,
+					searchStartOffset,
+					searchEndOffset,
+				);
 				if (!r) {
 					break;
 				}
@@ -388,7 +528,9 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 
 			let prevSearchInToken = true;
 			for (; tokenIndex >= 0; tokenIndex--) {
-				const searchInToken = (lineTokens.getLanguageId(tokenIndex) === languageId && !ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex)));
+				const searchInToken =
+					lineTokens.getLanguageId(tokenIndex) === languageId &&
+					!ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex));
 
 				if (searchInToken) {
 					// this token should be searched
@@ -403,7 +545,12 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 				} else {
 					// this token should not be searched
 					if (prevSearchInToken && searchStartOffset !== searchEndOffset) {
-						const r = searchPrevMatchingBracketInRange(lineNumber, lineText, searchStartOffset, searchEndOffset);
+						const r = searchPrevMatchingBracketInRange(
+							lineNumber,
+							lineText,
+							searchStartOffset,
+							searchEndOffset,
+						);
 						if (r) {
 							return r;
 						}
@@ -424,7 +571,11 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 		return null;
 	}
 
-	private _findMatchingBracketDown(bracket: RichEditBracket, position: Position, continueSearchPredicate: ContinueBracketSearchPredicate): Range | null | BracketSearchCanceled {
+	private _findMatchingBracketDown(
+		bracket: RichEditBracket,
+		position: Position,
+		continueSearchPredicate: ContinueBracketSearchPredicate,
+	): Range | null | BracketSearchCanceled {
 		// console.log('_findMatchingBracketDown: ', 'bracket: ', JSON.stringify(bracket), 'startPosition: ', String(position));
 
 		const languageId = bracket.languageId;
@@ -432,12 +583,23 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 		let count = 1;
 
 		let totalCallCount = 0;
-		const searchNextMatchingBracketInRange = (lineNumber: number, lineText: string, searchStartOffset: number, searchEndOffset: number): Range | null | BracketSearchCanceled => {
+		const searchNextMatchingBracketInRange = (
+			lineNumber: number,
+			lineText: string,
+			searchStartOffset: number,
+			searchEndOffset: number,
+		): Range | null | BracketSearchCanceled => {
 			while (true) {
-				if (continueSearchPredicate && (++totalCallCount) % 100 === 0 && !continueSearchPredicate()) {
+				if (continueSearchPredicate && ++totalCallCount % 100 === 0 && !continueSearchPredicate()) {
 					return BracketSearchCanceled.INSTANCE;
 				}
-				const r = BracketsUtils.findNextBracketInRange(bracketRegex, lineNumber, lineText, searchStartOffset, searchEndOffset);
+				const r = BracketsUtils.findNextBracketInRange(
+					bracketRegex,
+					lineNumber,
+					lineText,
+					searchStartOffset,
+					searchEndOffset,
+				);
 				if (!r) {
 					break;
 				}
@@ -476,7 +638,9 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 
 			let prevSearchInToken = true;
 			for (; tokenIndex < tokenCount; tokenIndex++) {
-				const searchInToken = (lineTokens.getLanguageId(tokenIndex) === languageId && !ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex)));
+				const searchInToken =
+					lineTokens.getLanguageId(tokenIndex) === languageId &&
+					!ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex));
 
 				if (searchInToken) {
 					// this token should be searched
@@ -491,7 +655,12 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 				} else {
 					// this token should not be searched
 					if (prevSearchInToken && searchStartOffset !== searchEndOffset) {
-						const r = searchNextMatchingBracketInRange(lineNumber, lineText, searchStartOffset, searchEndOffset);
+						const r = searchNextMatchingBracketInRange(
+							lineNumber,
+							lineText,
+							searchStartOffset,
+							searchEndOffset,
+						);
 						if (r) {
 							return r;
 						}
@@ -551,7 +720,13 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 				if (languageId !== tokenLanguageId) {
 					// language id change!
 					if (modeBrackets && bracketConfig && prevSearchInToken && searchStartOffset !== searchEndOffset) {
-						const r = BracketsUtils.findPrevBracketInRange(modeBrackets.reversedRegex, lineNumber, lineText, searchStartOffset, searchEndOffset);
+						const r = BracketsUtils.findPrevBracketInRange(
+							modeBrackets.reversedRegex,
+							lineNumber,
+							lineText,
+							searchStartOffset,
+							searchEndOffset,
+						);
 						if (r) {
 							return this._toFoundBracket(bracketConfig, r);
 						}
@@ -562,7 +737,8 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 					bracketConfig = this.resolveLanguageConfiguration(languageId).bracketsNew;
 				}
 
-				const searchInToken = (!!modeBrackets && !ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex)));
+				const searchInToken =
+					!!modeBrackets && !ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex));
 
 				if (searchInToken) {
 					// this token should be searched
@@ -577,7 +753,13 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 				} else {
 					// this token should not be searched
 					if (bracketConfig && modeBrackets && prevSearchInToken && searchStartOffset !== searchEndOffset) {
-						const r = BracketsUtils.findPrevBracketInRange(modeBrackets.reversedRegex, lineNumber, lineText, searchStartOffset, searchEndOffset);
+						const r = BracketsUtils.findPrevBracketInRange(
+							modeBrackets.reversedRegex,
+							lineNumber,
+							lineText,
+							searchStartOffset,
+							searchEndOffset,
+						);
 						if (r) {
 							return this._toFoundBracket(bracketConfig, r);
 						}
@@ -588,7 +770,13 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 			}
 
 			if (bracketConfig && modeBrackets && prevSearchInToken && searchStartOffset !== searchEndOffset) {
-				const r = BracketsUtils.findPrevBracketInRange(modeBrackets.reversedRegex, lineNumber, lineText, searchStartOffset, searchEndOffset);
+				const r = BracketsUtils.findPrevBracketInRange(
+					modeBrackets.reversedRegex,
+					lineNumber,
+					lineText,
+					searchStartOffset,
+					searchEndOffset,
+				);
 				if (r) {
 					return this._toFoundBracket(bracketConfig, r);
 				}
@@ -639,7 +827,13 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 				if (languageId !== tokenLanguageId) {
 					// language id change!
 					if (bracketConfig && modeBrackets && prevSearchInToken && searchStartOffset !== searchEndOffset) {
-						const r = BracketsUtils.findNextBracketInRange(modeBrackets.forwardRegex, lineNumber, lineText, searchStartOffset, searchEndOffset);
+						const r = BracketsUtils.findNextBracketInRange(
+							modeBrackets.forwardRegex,
+							lineNumber,
+							lineText,
+							searchStartOffset,
+							searchEndOffset,
+						);
 						if (r) {
 							return this._toFoundBracket(bracketConfig, r);
 						}
@@ -650,7 +844,8 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 					bracketConfig = this.resolveLanguageConfiguration(languageId).bracketsNew;
 				}
 
-				const searchInToken = (!!modeBrackets && !ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex)));
+				const searchInToken =
+					!!modeBrackets && !ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex));
 				if (searchInToken) {
 					// this token should be searched
 					if (prevSearchInToken) {
@@ -664,7 +859,13 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 				} else {
 					// this token should not be searched
 					if (bracketConfig && modeBrackets && prevSearchInToken && searchStartOffset !== searchEndOffset) {
-						const r = BracketsUtils.findNextBracketInRange(modeBrackets.forwardRegex, lineNumber, lineText, searchStartOffset, searchEndOffset);
+						const r = BracketsUtils.findNextBracketInRange(
+							modeBrackets.forwardRegex,
+							lineNumber,
+							lineText,
+							searchStartOffset,
+							searchEndOffset,
+						);
 						if (r) {
 							return this._toFoundBracket(bracketConfig, r);
 						}
@@ -675,7 +876,13 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 			}
 
 			if (bracketConfig && modeBrackets && prevSearchInToken && searchStartOffset !== searchEndOffset) {
-				const r = BracketsUtils.findNextBracketInRange(modeBrackets.forwardRegex, lineNumber, lineText, searchStartOffset, searchEndOffset);
+				const r = BracketsUtils.findNextBracketInRange(
+					modeBrackets.forwardRegex,
+					lineNumber,
+					lineText,
+					searchStartOffset,
+					searchEndOffset,
+				);
 				if (r) {
 					return this._toFoundBracket(bracketConfig, r);
 				}
@@ -690,10 +897,9 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 
 		if (this.canBuildAST) {
 			const range = Range.fromPositions(position);
-			const bracketPair =
-				this.getBracketPairsInRange(Range.fromPositions(position, position)).findLast(
-					(item) => item.closingBracketRange !== undefined && item.range.strictContainsRange(range)
-				);
+			const bracketPair = this.getBracketPairsInRange(Range.fromPositions(position, position)).findLast(
+				item => item.closingBracketRange !== undefined && item.range.strictContainsRange(range),
+			);
 			if (bracketPair) {
 				return [bracketPair.openingBracketRange, bracketPair.closingBracketRange!];
 			}
@@ -717,12 +923,24 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 		};
 
 		let totalCallCount = 0;
-		const searchInRange = (modeBrackets: RichEditBrackets, lineNumber: number, lineText: string, searchStartOffset: number, searchEndOffset: number): [Range, Range] | null | BracketSearchCanceled => {
+		const searchInRange = (
+			modeBrackets: RichEditBrackets,
+			lineNumber: number,
+			lineText: string,
+			searchStartOffset: number,
+			searchEndOffset: number,
+		): [Range, Range] | null | BracketSearchCanceled => {
 			while (true) {
-				if (continueSearchPredicate && (++totalCallCount) % 100 === 0 && !continueSearchPredicate()) {
+				if (continueSearchPredicate && ++totalCallCount % 100 === 0 && !continueSearchPredicate()) {
 					return BracketSearchCanceled.INSTANCE;
 				}
-				const r = BracketsUtils.findNextBracketInRange(modeBrackets.forwardRegex, lineNumber, lineText, searchStartOffset, searchEndOffset);
+				const r = BracketsUtils.findNextBracketInRange(
+					modeBrackets.forwardRegex,
+					lineNumber,
+					lineText,
+					searchStartOffset,
+					searchEndOffset,
+				);
 				if (!r) {
 					break;
 				}
@@ -786,7 +1004,8 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 					resetCounts(languageId, modeBrackets);
 				}
 
-				const searchInToken = (!!modeBrackets && !ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex)));
+				const searchInToken =
+					!!modeBrackets && !ignoreBracketsInToken(lineTokens.getStandardTokenType(tokenIndex));
 				if (searchInToken) {
 					// this token should be searched
 					if (prevSearchInToken) {
@@ -834,31 +1053,26 @@ export class BracketPairsTextModelPart extends Disposable implements IBracketPai
 			return null;
 		}
 
-		return {
-			range: r,
-			bracketInfo
-		};
+		return { range: r, bracketInfo };
 	}
 }
 
 function createDisposableRef<T>(object: T, disposable?: IDisposable): IReference<T> {
 	const dispose = () => disposable?.dispose();
-	return {
-		object,
-		dispose,
-		[Symbol.dispose]: dispose,
-	};
+	return { object, dispose, [Symbol.dispose]: dispose };
 }
 
-type ContinueBracketSearchPredicate = (() => boolean);
+type ContinueBracketSearchPredicate = () => boolean;
 
-function createTimeBasedContinueBracketSearchPredicate(maxDuration: number | undefined): ContinueBracketSearchPredicate {
+function createTimeBasedContinueBracketSearchPredicate(
+	maxDuration: number | undefined,
+): ContinueBracketSearchPredicate {
 	if (typeof maxDuration === 'undefined') {
 		return () => true;
 	} else {
 		const startTime = Date.now();
 		return () => {
-			return (Date.now() - startTime <= maxDuration);
+			return Date.now() - startTime <= maxDuration;
 		};
 	}
 }
@@ -866,7 +1080,7 @@ function createTimeBasedContinueBracketSearchPredicate(maxDuration: number | und
 class BracketSearchCanceled {
 	public static INSTANCE = new BracketSearchCanceled();
 	_searchCanceledBrand = undefined;
-	private constructor() { }
+	private constructor() {}
 }
 
 function stripBracketSearchCanceled<T>(result: T | null | BracketSearchCanceled): T | null {

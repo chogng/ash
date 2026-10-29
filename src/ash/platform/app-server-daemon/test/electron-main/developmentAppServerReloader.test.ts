@@ -3,31 +3,93 @@ import { mkdtemp, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { test } from 'mocha';
-import { DisposableStore, DisposableTracker, installDisposableTracker, toDisposable } from '../../../../base/common/lifecycle.js';
+import {
+	DisposableStore,
+	DisposableTracker,
+	installDisposableTracker,
+	toDisposable,
+} from '../../../../base/common/lifecycle.js';
 import type { AppServerConnectionState } from '../../../agentHost/common/appServerApi.js';
 import { AppServerDaemonLauncher } from '../../electron-main/appServerDaemonLauncher.js';
-import { DevelopmentAppServerReloader, readDevelopmentAppServerGeneration } from '../../electron-main/developmentAppServerReloader.js';
+import {
+	DevelopmentAppServerReloader,
+	readDevelopmentAppServerGeneration,
+} from '../../electron-main/developmentAppServerReloader.js';
 import type { IDevelopmentAppServerRuntime } from '../../electron-main/developmentAppServerRuntime.js';
 import { DeferredPromise, disposableTimeout } from '../../../../base/common/async.js';
 
 const oldRuntime = resolve('/test/old');
 const newRuntime = resolve('/test/new');
 
-function connection(resources: DisposableStore, name: string, events: string[], initial: AppServerConnectionState = 'ready') {
-	const launcher = resources.add(new AppServerDaemonLauncher({ executable: resolve('/test/daemon'), args: ['connect-selected'], environment: { ASH_DEV_RUNTIME_ROOT: oldRuntime, ASH_APP_SERVER_PATH: resolve(oldRuntime, 'bin/ash-app-server') }, fileExists: () => true }));
+function connection(
+	resources: DisposableStore,
+	name: string,
+	events: string[],
+	initial: AppServerConnectionState = 'ready',
+) {
+	const launcher = resources.add(
+		new AppServerDaemonLauncher({
+			executable: resolve('/test/daemon'),
+			args: ['connect-selected'],
+			environment: {
+				ASH_DEV_RUNTIME_ROOT: oldRuntime,
+				ASH_APP_SERVER_PATH: resolve(oldRuntime, 'bin/ash-app-server'),
+			},
+			fileExists: () => true,
+		}),
+	);
 	const listeners = new Set<(state: AppServerConnectionState) => void>();
 	let state = initial;
 	const supervisor = {
-		get state() { return state; },
-		onStateChange(listener: (state: AppServerConnectionState) => void) { listeners.add(listener); return toDisposable(() => { listeners.delete(listener); }); },
-		stop: async () => { events.push(`stop:${name}`); state = 'stopped'; },
-		start: async () => { await launcher.validate(); events.push(`start:${name}`); state = 'ready'; },
+		get state() {
+			return state;
+		},
+		onStateChange(listener: (state: AppServerConnectionState) => void) {
+			listeners.add(listener);
+			return toDisposable(() => {
+				listeners.delete(listener);
+			});
+		},
+		stop: async () => {
+			events.push(`stop:${name}`);
+			state = 'stopped';
+		},
+		start: async () => {
+			await launcher.validate();
+			events.push(`start:${name}`);
+			state = 'ready';
+		},
 	};
-	return { launcher, supervisor, listeners, setState(value: AppServerConnectionState) { state = value; for (const listener of listeners) listener(value); } };
+	return {
+		launcher,
+		supervisor,
+		listeners,
+		setState(value: AppServerConnectionState) {
+			state = value;
+			for (const listener of listeners) listener(value);
+		},
+	};
 }
 
-function coordinator(resources: DisposableStore, restartDaemon: (launcher: AppServerDaemonLauncher) => Promise<void>, readGeneration: () => Promise<string | undefined> = async () => newRuntime) {
-	return resources.add(new DevelopmentAppServerReloader({ generationFile: resolve('/test/current.json'), watchGeneration: () => toDisposable(() => { }), readGeneration, acquireGeneration: async () => Object.assign(toDisposable(() => { }), { runtime: (await readGeneration())!, assertActive: () => { } }), restartDaemon, log: () => { } }));
+function coordinator(
+	resources: DisposableStore,
+	restartDaemon: (launcher: AppServerDaemonLauncher) => Promise<void>,
+	readGeneration: () => Promise<string | undefined> = async () => newRuntime,
+) {
+	return resources.add(
+		new DevelopmentAppServerReloader({
+			generationFile: resolve('/test/current.json'),
+			watchGeneration: () => toDisposable(() => {}),
+			readGeneration,
+			acquireGeneration: async () =>
+				Object.assign(
+					toDisposable(() => {}),
+					{ runtime: (await readGeneration())!, assertActive: () => {} },
+				),
+			restartDaemon,
+			log: () => {},
+		}),
+	);
 }
 
 test('development change notifications validate pointers without opening collected runtime files', async () => {
@@ -36,11 +98,20 @@ test('development change notifications validate pointers without opening collect
 		const runtimePath = `generations/${'a'.repeat(64)}`;
 		const runtime = join(directory, runtimePath);
 		for (const name of ['bin', 'ash-path', 'ash-resources']) await mkdir(join(runtime, name), { recursive: true });
-		for (const name of ['ash-development.json', `bin/ash-app-server${process.platform === 'win32' ? '.exe' : ''}`, `bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`]) await writeFile(join(runtime, name), 'file');
+		for (const name of [
+			'ash-development.json',
+			`bin/ash-app-server${process.platform === 'win32' ? '.exe' : ''}`,
+			`bin/ash-app-server-daemon${process.platform === 'win32' ? '.exe' : ''}`,
+		])
+			await writeFile(join(runtime, name), 'file');
 		const file = join(directory, 'current.json');
 		await writeFile(file, JSON.stringify({ version: 3, runtime: runtimePath }));
 		assert.equal(await readDevelopmentAppServerGeneration(file), runtime);
-		for (const invalid of [{ version: 3, runtime: `../${runtimePath}` }, { version: 2, package: runtimePath }, { version: 3, runtime: runtimePath, extra: true }]) {
+		for (const invalid of [
+			{ version: 3, runtime: `../${runtimePath}` },
+			{ version: 2, package: runtimePath },
+			{ version: 3, runtime: runtimePath, extra: true },
+		]) {
 			await writeFile(file, JSON.stringify(invalid));
 			await assert.rejects(readDevelopmentAppServerGeneration(file), /invalid/u);
 		}
@@ -63,27 +134,38 @@ test('atomic runtime pointer replacement reaches the profile reloader without na
 		const events: string[] = [];
 		const window = connection(resources, 'workbench', events);
 		const completed = new DeferredPromise<void>();
-		const reloader = resources.add(new DevelopmentAppServerReloader({
-			generationFile,
-			acquireGeneration: async () => Object.assign(toDisposable(() => { }), {
-				runtime: (await readDevelopmentAppServerGeneration(generationFile))!, assertActive() { },
+		const reloader = resources.add(
+			new DevelopmentAppServerReloader({
+				generationFile,
+				acquireGeneration: async () =>
+					Object.assign(
+						toDisposable(() => {}),
+						{ runtime: (await readDevelopmentAppServerGeneration(generationFile))!, assertActive() {} },
+					),
+				restartDaemon: async launcher => {
+					assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, join(directory, second));
+					events.push('restart');
+				},
+				log: (_message, error) => {
+					if (error) void completed.error(error);
+					else void completed.complete();
+				},
 			}),
-			restartDaemon: async launcher => {
-				assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, join(directory, second));
-				events.push('restart');
-			},
-			log: (_message, error) => { if (error) void completed.error(error); else void completed.complete(); },
-		}));
+		);
 		resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 		await window.launcher.validate();
 		assert.equal(window.launcher.environment.ASH_DEV_RUNTIME_ROOT, join(directory, first));
 		const replacement = join(directory, 'next.json');
 		await writeFile(replacement, JSON.stringify({ version: 3, runtime: second }));
-		using timeout = disposableTimeout(() => { void completed.error(new Error('Runtime pointer replacement was not observed')); }, 5_000);
+		using timeout = disposableTimeout(() => {
+			void completed.error(new Error('Runtime pointer replacement was not observed'));
+		}, 5_000);
 		await rename(replacement, generationFile);
 		await completed.p;
 		assert.deepEqual(events, ['stop:workbench', 'restart', 'start:workbench']);
-	} finally { await rm(directory, { recursive: true, force: true }); }
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
 });
 
 test('Workbench and Agents stop together, restart one daemon, and reconnect without leaks', async () => {
@@ -94,14 +176,19 @@ test('Workbench and Agents stop together, restart one daemon, and reconnect with
 		const events: string[] = [];
 		const workbench = connection(resources, 'workbench', events);
 		const agents = connection(resources, 'agents', events);
-		const reloader = coordinator(resources, async launcher => { assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, newRuntime); events.push('restart'); });
+		const reloader = coordinator(resources, async launcher => {
+			assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, newRuntime);
+			events.push('restart');
+		});
 		resources.add(reloader.registerConnection(workbench.launcher, workbench.supervisor));
 		resources.add(reloader.registerConnection(agents.launcher, agents.supervisor));
 		await reloader.reloadNow();
 		await reloader.reloadNow();
 		assert.deepEqual(events, ['stop:workbench', 'stop:agents', 'restart', 'start:workbench', 'start:agents']);
 		assert.equal(agents.launcher.environment.ASH_DEV_RUNTIME_ROOT, newRuntime);
-	} finally { resources.dispose(); }
+	} finally {
+		resources.dispose();
+	}
 	tracker.assertNoLeaks();
 });
 
@@ -113,21 +200,41 @@ test('an older runtime acquisition cannot roll back a newer completed reload', a
 	let runtime = newRuntime;
 	let acquisitions = 0;
 	let staleReleased = false;
-	const stale = Object.assign(toDisposable(() => { staleReleased = true; }), { runtime: newRuntime, assertActive() { assert.equal(staleReleased, false); } });
-	const newest = Object.assign(toDisposable(() => { }), { runtime: newestRuntime, assertActive() { } });
+	const stale = Object.assign(
+		toDisposable(() => {
+			staleReleased = true;
+		}),
+		{
+			runtime: newRuntime,
+			assertActive() {
+				assert.equal(staleReleased, false);
+			},
+		},
+	);
+	const newest = Object.assign(
+		toDisposable(() => {}),
+		{ runtime: newestRuntime, assertActive() {} },
+	);
 	const acquiring = new DeferredPromise<void>();
 	const acquired = new DeferredPromise<IDevelopmentAppServerRuntime>();
-	const reloader = resources.add(new DevelopmentAppServerReloader({
-		generationFile: resolve('/test/current.json'),
-		watchGeneration: () => toDisposable(() => { }),
-		readGeneration: async () => runtime,
-		acquireGeneration: async () => {
-			if (++acquisitions === 1) { void acquiring.complete(); return acquired.p; }
-			return newest;
-		},
-		restartDaemon: async () => { events.push('restart'); },
-		log: () => { },
-	}));
+	const reloader = resources.add(
+		new DevelopmentAppServerReloader({
+			generationFile: resolve('/test/current.json'),
+			watchGeneration: () => toDisposable(() => {}),
+			readGeneration: async () => runtime,
+			acquireGeneration: async () => {
+				if (++acquisitions === 1) {
+					void acquiring.complete();
+					return acquired.p;
+				}
+				return newest;
+			},
+			restartDaemon: async () => {
+				events.push('restart');
+			},
+			log: () => {},
+		}),
+	);
 	resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 	const pending = reloader.reloadNow();
 	await acquiring.p;
@@ -146,11 +253,40 @@ test('a pending runtime remains leased while old connections stop and releases a
 	const window = connection(resources, 'workbench', events);
 	let finishStop!: () => void;
 	let stopped!: () => void;
-	const stopping = new Promise<void>(resolvePromise => { stopped = resolvePromise; });
-	window.supervisor.stop = async () => { stopped(); await new Promise<void>(resolvePromise => { finishStop = resolvePromise; }); };
+	const stopping = new Promise<void>(resolvePromise => {
+		stopped = resolvePromise;
+	});
+	window.supervisor.stop = async () => {
+		stopped();
+		await new Promise<void>(resolvePromise => {
+			finishStop = resolvePromise;
+		});
+	};
 	let released = false;
-	const lease: IDevelopmentAppServerRuntime = Object.assign(toDisposable(() => { released = true; }), { runtime: newRuntime, assertActive: () => { assert.equal(released, false); } });
-	const reloader = resources.add(new DevelopmentAppServerReloader({ generationFile: resolve('/test/current.json'), watchGeneration: () => toDisposable(() => { }), readGeneration: async () => newRuntime, acquireGeneration: async () => lease, restartDaemon: async launcher => { assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, newRuntime); assert.equal(released, false); }, log: () => { } }));
+	const lease: IDevelopmentAppServerRuntime = Object.assign(
+		toDisposable(() => {
+			released = true;
+		}),
+		{
+			runtime: newRuntime,
+			assertActive: () => {
+				assert.equal(released, false);
+			},
+		},
+	);
+	const reloader = resources.add(
+		new DevelopmentAppServerReloader({
+			generationFile: resolve('/test/current.json'),
+			watchGeneration: () => toDisposable(() => {}),
+			readGeneration: async () => newRuntime,
+			acquireGeneration: async () => lease,
+			restartDaemon: async launcher => {
+				assert.equal(launcher.environment.ASH_DEV_RUNTIME_ROOT, newRuntime);
+				assert.equal(released, false);
+			},
+			log: () => {},
+		}),
+	);
 	resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 	const reload = reloader.reloadNow();
 	await stopping;
@@ -166,10 +302,24 @@ test('closing the runtime owner during startup releases a lease that arrives aft
 	using resources = new DisposableStore();
 	const window = connection(resources, 'agents', [], 'stopped');
 	let finishSelection!: (lease: IDevelopmentAppServerRuntime) => void;
-	const selected = new Promise<IDevelopmentAppServerRuntime>(resolvePromise => { finishSelection = resolvePromise; });
+	const selected = new Promise<IDevelopmentAppServerRuntime>(resolvePromise => {
+		finishSelection = resolvePromise;
+	});
 	let released = false;
-	const lease = Object.assign(toDisposable(() => { released = true; }), { runtime: oldRuntime, assertActive: () => { } });
-	const reloader = resources.add(new DevelopmentAppServerReloader({ generationFile: resolve('/test/current.json'), watchGeneration: () => toDisposable(() => { }), acquireGeneration: async () => selected, log: () => { } }));
+	const lease = Object.assign(
+		toDisposable(() => {
+			released = true;
+		}),
+		{ runtime: oldRuntime, assertActive: () => {} },
+	);
+	const reloader = resources.add(
+		new DevelopmentAppServerReloader({
+			generationFile: resolve('/test/current.json'),
+			watchGeneration: () => toDisposable(() => {}),
+			acquireGeneration: async () => selected,
+			log: () => {},
+		}),
+	);
 	resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 	const startup = window.launcher.validate();
 	await new Promise<void>(resolvePromise => setImmediate(resolvePromise));
@@ -183,7 +333,9 @@ test('a generation waits for every window to finish initialization', async () =>
 	using resources = new DisposableStore();
 	const events: string[] = [];
 	const window = connection(resources, 'agents', events, 'initializing');
-	const reloader = coordinator(resources, async () => { events.push('restart'); });
+	const reloader = coordinator(resources, async () => {
+		events.push('restart');
+	});
 	resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 	await reloader.reloadNow();
 	assert.deepEqual(events, []);
@@ -196,7 +348,9 @@ test('closed windows unregister listeners and are not restarted', async () => {
 	using resources = new DisposableStore();
 	const events: string[] = [];
 	const window = connection(resources, 'agents', events);
-	const reloader = coordinator(resources, async () => { events.push('restart'); });
+	const reloader = coordinator(resources, async () => {
+		events.push('restart');
+	});
 	const registration = reloader.registerConnection(window.launcher, window.supervisor);
 	registration.dispose();
 	await reloader.reloadNow();
@@ -209,7 +363,10 @@ test('windows closed during daemon restart are not reconnected', async () => {
 	const events: string[] = [];
 	const window = connection(resources, 'agents', events);
 	let registration: ReturnType<DevelopmentAppServerReloader['registerConnection']>;
-	const reloader = coordinator(resources, async () => { events.push('restart'); registration.dispose(); });
+	const reloader = coordinator(resources, async () => {
+		events.push('restart');
+		registration.dispose();
+	});
 	registration = resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 	await reloader.reloadNow();
 	assert.deepEqual(events, ['stop:agents', 'restart']);
@@ -221,9 +378,16 @@ test('new window startup waits for the shared daemon restart', async () => {
 	const window = connection(resources, 'workbench', events);
 	let signalRestart!: () => void;
 	let finishRestart!: () => void;
-	const restarting = new Promise<void>(resolvePromise => { signalRestart = resolvePromise; });
-	const proceed = new Promise<void>(resolvePromise => { finishRestart = resolvePromise; });
-	const reloader = coordinator(resources, async () => { signalRestart(); await proceed; });
+	const restarting = new Promise<void>(resolvePromise => {
+		signalRestart = resolvePromise;
+	});
+	const proceed = new Promise<void>(resolvePromise => {
+		finishRestart = resolvePromise;
+	});
+	const reloader = coordinator(resources, async () => {
+		signalRestart();
+		await proceed;
+	});
 	resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 	const reload = reloader.reloadNow();
 	await restarting;
@@ -242,7 +406,15 @@ test('a rejected generation leaves every running window untouched', async () => 
 	using resources = new DisposableStore();
 	const events: string[] = [];
 	const window = connection(resources, 'agents', events);
-	const reloader = coordinator(resources, async () => { events.push('restart'); }, async () => { throw new Error('invalid generation'); });
+	const reloader = coordinator(
+		resources,
+		async () => {
+			events.push('restart');
+		},
+		async () => {
+			throw new Error('invalid generation');
+		},
+	);
 	resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 	await assert.rejects(reloader.reloadNow(), /invalid generation/u);
 	assert.deepEqual(events, []);
@@ -253,7 +425,10 @@ test('a failed restart reports the selected generation failure without a second 
 	using resources = new DisposableStore();
 	const events: string[] = [];
 	const window = connection(resources, 'agents', events);
-	const reloader = coordinator(resources, async () => { events.push('restart'); throw new Error('restart failed'); });
+	const reloader = coordinator(resources, async () => {
+		events.push('restart');
+		throw new Error('restart failed');
+	});
 	resources.add(reloader.registerConnection(window.launcher, window.supervisor));
 	await assert.rejects(reloader.reloadNow(), /restart failed/u);
 	assert.deepEqual(events, ['stop:agents', 'restart']);

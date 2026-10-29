@@ -47,21 +47,41 @@ interface PointerGesture {
 export class CanvasInputController extends Disposable {
 	private gesture: PointerGesture | undefined;
 
-	constructor(private readonly host: CanvasInputHost, private readonly viewport: CanvasViewport, private readonly participant: CanvasInputParticipant) {
+	constructor(
+		private readonly host: CanvasInputHost,
+		private readonly viewport: CanvasViewport,
+		private readonly participant: CanvasInputParticipant,
+	) {
 		super();
-		this._register(addDisposableListener(host.domNode, 'wheel', (event: WheelEvent) => this.handleWheel(event), { passive: false }));
-		this._register(addDisposableListener(host.domNode, 'pointerdown', (event: PointerEvent) => this.handlePointerDown(event)));
-		this._register(addDisposableListener(host.domNode, 'pointermove', (event: PointerEvent) => this.handlePointerMove(event)));
-		this._register(addDisposableListener(host.domNode, 'pointerup', (event: PointerEvent) => this.handlePointerUp(event)));
+		this._register(
+			addDisposableListener(host.domNode, 'wheel', (event: WheelEvent) => this.handleWheel(event), {
+				passive: false,
+			}),
+		);
+		this._register(
+			addDisposableListener(host.domNode, 'pointerdown', (event: PointerEvent) => this.handlePointerDown(event)),
+		);
+		this._register(
+			addDisposableListener(host.domNode, 'pointermove', (event: PointerEvent) => this.handlePointerMove(event)),
+		);
+		this._register(
+			addDisposableListener(host.domNode, 'pointerup', (event: PointerEvent) => this.handlePointerUp(event)),
+		);
 		for (const type of ['pointercancel', 'lostpointercapture']) {
-			this._register(addDisposableListener(host.domNode, type, (event: PointerEvent) => {
-				if (event.pointerId === this.gesture?.pointerId) { this.cancel(); }
-			}));
+			this._register(
+				addDisposableListener(host.domNode, type, (event: PointerEvent) => {
+					if (event.pointerId === this.gesture?.pointerId) {
+						this.cancel();
+					}
+				}),
+			);
 		}
 		this._register(toDisposable(() => this.cancel()));
 	}
 
-	public get isGesturing(): boolean { return this.gesture !== undefined; }
+	public get isGesturing(): boolean {
+		return this.gesture !== undefined;
+	}
 
 	private toViewportPoint(event: MouseEvent): CanvasPoint {
 		const bounds = this.host.domNode.getBoundingClientRect();
@@ -74,19 +94,34 @@ export class CanvasInputController extends Disposable {
 	}
 
 	private handleWheel(event: WheelEvent): void {
-		if (this.isGesturing || !this.participant.canNavigate()) { event.preventDefault(); return; }
+		if (this.isGesturing || !this.participant.canNavigate()) {
+			event.preventDefault();
+			return;
+		}
 		const wheel = new StandardWheelEvent(event);
-		if (wheel.ctrlKey || wheel.metaKey) { this.viewport.zoomAt(this.toViewportPoint(event), Math.exp(-wheel.deltaY * WHEEL_ZOOM_SENSITIVITY)); }
-		else { this.viewport.panBy(-wheel.deltaX, -wheel.deltaY); }
+		if (wheel.ctrlKey || wheel.metaKey) {
+			this.viewport.zoomAt(this.toViewportPoint(event), Math.exp(-wheel.deltaY * WHEEL_ZOOM_SENSITIVITY));
+		} else {
+			this.viewport.panBy(-wheel.deltaX, -wheel.deltaY);
+		}
 		this.host.applyTransform();
 		wheel.stop();
 	}
 
 	private handlePointerDown(event: PointerEvent): void {
-		if (event.defaultPrevented || !event.isPrimary || (event.button !== 0 && event.button !== 1) || this.isGesturing) { return; }
+		if (
+			event.defaultPrevented ||
+			!event.isPrimary ||
+			(event.button !== 0 && event.button !== 1) ||
+			this.isGesturing
+		) {
+			return;
+		}
 		const input = this.input(event);
 		const action = this.participant.begin(input);
-		if (action === CanvasPointerAction.None) { return; }
+		if (action === CanvasPointerAction.None) {
+			return;
+		}
 		if (action !== CanvasPointerAction.Handled) {
 			this.gesture = { pointerId: event.pointerId, action, last: input.point };
 			this.host.domNode.setPointerCapture(event.pointerId);
@@ -99,7 +134,9 @@ export class CanvasInputController extends Disposable {
 
 	private handlePointerMove(event: PointerEvent): void {
 		const gesture = this.gesture;
-		if (!gesture || event.pointerId !== gesture.pointerId) { return; }
+		if (!gesture || event.pointerId !== gesture.pointerId) {
+			return;
+		}
 		const input = this.input(event);
 		if (gesture.action === CanvasPointerAction.Pan) {
 			this.viewport.panBy(input.point.x - gesture.last.x, input.point.y - gesture.last.y);
@@ -113,10 +150,14 @@ export class CanvasInputController extends Disposable {
 
 	private handlePointerUp(event: PointerEvent): void {
 		const gesture = this.gesture;
-		if (!gesture || event.pointerId !== gesture.pointerId) { return; }
+		if (!gesture || event.pointerId !== gesture.pointerId) {
+			return;
+		}
 		const input = this.input(event);
 		this.releaseGesture();
-		if (gesture.action !== CanvasPointerAction.Pan) { this.participant.end(input); }
+		if (gesture.action !== CanvasPointerAction.Pan) {
+			this.participant.end(input);
+		}
 		event.preventDefault();
 	}
 
@@ -124,7 +165,9 @@ export class CanvasInputController extends Disposable {
 		const gesture = this.gesture;
 		// Clear before release: lostpointercapture must not cancel a completed edit.
 		this.gesture = undefined;
-		if (gesture && this.host.domNode.hasPointerCapture(gesture.pointerId)) { this.host.domNode.releasePointerCapture(gesture.pointerId); }
+		if (gesture && this.host.domNode.hasPointerCapture(gesture.pointerId)) {
+			this.host.domNode.releasePointerCapture(gesture.pointerId);
+		}
 		this.host.domNode.classList.remove('panning', 'moving');
 	}
 

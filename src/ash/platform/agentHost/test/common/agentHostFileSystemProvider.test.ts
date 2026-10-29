@@ -13,14 +13,24 @@ import { createDisconnectedFileApi } from '../../../files/browser/fileApi.js';
 import type { IFileApi, IFileSystemDirectory } from '../../../files/common/fileApi.js';
 import { FileService } from '../../../files/common/fileService.js';
 import { createDisconnectedResourceApi } from '../../browser/appServerApi.js';
-import { AgentHostFileSystemProvider, type IRemoteFilesystemConnection } from '../../common/agentHostFileSystemProvider.js';
+import {
+	AgentHostFileSystemProvider,
+	type IRemoteFilesystemConnection,
+} from '../../common/agentHostFileSystemProvider.js';
 import type { IResourceApi } from '../../common/appServerApi.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 
-const unavailable = (): never => { throw new Error('Unexpected backend operation'); };
+const unavailable = (): never => {
+	throw new Error('Unexpected backend operation');
+};
 const root = URI.from({ scheme: Schemas.ashRemote, authority: 'ssh+host', path: '/srv' });
 
-function connection(resource: URI, label: string, api: Partial<IFileApi> = {}, resources: Partial<IResourceApi> = {}): IRemoteFilesystemConnection {
+function connection(
+	resource: URI,
+	label: string,
+	api: Partial<IFileApi> = {},
+	resources: Partial<IResourceApi> = {},
+): IRemoteFilesystemConnection {
 	return {
 		api: {
 			...createDisconnectedFileApi(unavailable),
@@ -45,7 +55,14 @@ suite('Agent Host filesystem authority routes', () => {
 		using parent = provider.registerAuthority(root.authority, connection(root, 'parent'));
 		using child = provider.registerAuthority(root.authority, connection(nested, 'nested'));
 		using other = provider.registerAuthority(root.authority, connection(sibling, 'sibling'));
-		assert.deepEqual(await Promise.all([root, nested, sibling].map(resource => files.readFile(URI.joinPath(resource, 'main.ts'), 'utf8').then(value => value.content))), ['parent', 'nested', 'sibling']);
+		assert.deepEqual(
+			await Promise.all(
+				[root, nested, sibling].map(resource =>
+					files.readFile(URI.joinPath(resource, 'main.ts'), 'utf8').then(value => value.content),
+				),
+			),
+			['parent', 'nested', 'sibling'],
+		);
 		child.dispose();
 		await assert.rejects(files.readFile(URI.joinPath(nested, 'main.ts'), 'utf8'));
 		assert.equal((await files.readFile(URI.joinPath(root, 'main.ts'), 'utf8')).content, 'parent');
@@ -70,11 +87,17 @@ suite('Agent Host filesystem authority routes', () => {
 		using registration = provider.registerAuthority(root.authority, connection(root, 'remote'));
 		const upper = root.with({ authority: 'ssh+HOST' });
 		assert.equal((await files.readFile(URI.joinPath(upper, 'main.ts'), 'utf8')).content, 'remote');
-		const translations = JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'));
+		const translations = JSON.parse(
+			readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8'),
+		);
 		setNlsMessages('zh-CN', translations);
 		try {
-			assert.throws(() => provider.registerAuthority(upper.authority, connection(upper, 'conflict')), { message: '已有文件系统连接拥有此资源根目录。' });
-		} finally { resetNlsResolver(); }
+			assert.throws(() => provider.registerAuthority(upper.authority, connection(upper, 'conflict')), {
+				message: '已有文件系统连接拥有此资源根目录。',
+			});
+		} finally {
+			resetNlsResolver();
+		}
 		assert.equal((await files.readFile(URI.joinPath(upper, 'main.ts'), 'utf8')).content, 'remote');
 		registration.dispose();
 		await assert.rejects(files.readFile(URI.joinPath(upper, 'main.ts'), 'utf8'));
@@ -86,9 +109,15 @@ suite('Agent Host filesystem authority routes', () => {
 		using mounted = files.registerProvider(Schemas.ashRemote, provider);
 		const started = new DeferredPromise<void>();
 		const response = new DeferredPromise<Awaited<ReturnType<IFileApi['readFile']>>>();
-		using original = provider.registerAuthority(root.authority, connection(root, 'old', {
-			readFile: () => { void started.complete(); return response.p; },
-		}));
+		using original = provider.registerAuthority(
+			root.authority,
+			connection(root, 'old', {
+				readFile: () => {
+					void started.complete();
+					return response.p;
+				},
+			}),
+		);
 		const pending = files.readFile(URI.joinPath(root, 'main.ts'), 'utf8');
 		const rejected = assert.rejects(pending, isCancellationError);
 		await started.p;
@@ -100,7 +129,9 @@ suite('Agent Host filesystem authority routes', () => {
 			await response.complete({ content: 'late old result', revision: 'old' });
 			assert.equal((await files.readFile(URI.joinPath(root, 'main.ts'), 'utf8')).content, 'new');
 		} finally {
-			if (!response.isSettled) { await response.complete({ content: 'cleanup', revision: 'old' }); }
+			if (!response.isSettled) {
+				await response.complete({ content: 'cleanup', revision: 'old' });
+			}
 		}
 	});
 
@@ -110,7 +141,13 @@ suite('Agent Host filesystem authority routes', () => {
 		const primaryReads: unknown[] = [];
 		using provider = new AgentHostFileSystemProvider({
 			...base,
-			api: { ...base.api, readFile: async params => { primaryReads.push(params); return { content: 'wrong host', revision: 'primary' }; } },
+			api: {
+				...base.api,
+				readFile: async params => {
+					primaryReads.push(params);
+					return { content: 'wrong host', revision: 'primary' };
+				},
+			},
 			directories: () => projected,
 		});
 		using files = new FileService();
@@ -139,10 +176,15 @@ suite('Agent Host filesystem authority routes', () => {
 			...host,
 			api: {
 				...host.api,
-				get connectionGeneration() { return generation; },
+				get connectionGeneration() {
+					return generation;
+				},
 				onDidChangeConnection: changed.event,
 				readFile: async () => {
-					if (++calls === 1) { void started.complete(); return response.p; }
+					if (++calls === 1) {
+						void started.complete();
+						return response.p;
+					}
 					return { content: `generation ${generation}`, revision: String(generation) };
 				},
 			},
@@ -158,20 +200,31 @@ suite('Agent Host filesystem authority routes', () => {
 			await response.complete({ content: 'stale generation', revision: '1' });
 			assert.equal((await files.readFile(URI.joinPath(root, 'main.ts'), 'utf8')).content, 'generation 2');
 		} finally {
-			if (!response.isSettled) { await response.complete({ content: 'cleanup', revision: '1' }); }
+			if (!response.isSettled) {
+				await response.complete({ content: 'cleanup', revision: '1' });
+			}
 		}
 	});
 
 	test('unmounting before a resolved file target resumes prevents a late backend write', async () => {
 		using provider = new AgentHostFileSystemProvider(connection(URI.file('/workspace'), 'primary'));
 		const mutations: unknown[] = [];
-		using registration = provider.registerAuthority(root.authority, connection(root, 'remote', {
-			writeFile: async params => {
-				mutations.push(params);
-				return { metadata: { fileType: 'file', sizeBytes: 1, readonly: false, modifiedAtMillis: null }, revision: 'unexpected' };
-			},
-		}));
-		const pending = provider.writeTextFile(URI.joinPath(root, 'main.ts'), 'new content', 'utf8', { create: true, overwrite: true });
+		using registration = provider.registerAuthority(
+			root.authority,
+			connection(root, 'remote', {
+				writeFile: async params => {
+					mutations.push(params);
+					return {
+						metadata: { fileType: 'file', sizeBytes: 1, readonly: false, modifiedAtMillis: null },
+						revision: 'unexpected',
+					};
+				},
+			}),
+		);
+		const pending = provider.writeTextFile(URI.joinPath(root, 'main.ts'), 'new content', 'utf8', {
+			create: true,
+			overwrite: true,
+		});
 		registration.dispose();
 		await assert.rejects(pending, isCancellationError);
 		assert.deepEqual(mutations, []);
@@ -182,15 +235,24 @@ suite('Agent Host filesystem authority routes', () => {
 			let parentCalls = 0;
 			let nestedCalls = 0;
 			const parent = connection(root, 'parent', {
-				getMetadata: async () => { parentCalls++; return { fileType: 'file', sizeBytes: 1, readonly: false, modifiedAtMillis: null }; },
+				getMetadata: async () => {
+					parentCalls++;
+					return { fileType: 'file', sizeBytes: 1, readonly: false, modifiedAtMillis: null };
+				},
 			});
-			using provider = new AgentHostFileSystemProvider(primary ? parent : connection(URI.file('/workspace'), 'primary'));
+			using provider = new AgentHostFileSystemProvider(
+				primary ? parent : connection(URI.file('/workspace'), 'primary'),
+			);
 			using parentMount = primary ? undefined : provider.registerAuthority(root.authority, parent);
 			using scope = provider.acquireCopyScope(root);
 			const nested = URI.joinPath(root, 'nested');
-			const nestedConnection = (uri: URI) => connection(uri, 'nested', {
-				getMetadata: async () => { nestedCalls++; return { fileType: 'file', sizeBytes: 1, readonly: false, modifiedAtMillis: null }; },
-			});
+			const nestedConnection = (uri: URI) =>
+				connection(uri, 'nested', {
+					getMetadata: async () => {
+						nestedCalls++;
+						return { fileType: 'file', sizeBytes: 1, readonly: false, modifiedAtMillis: null };
+					},
+				});
 			using existing = provider.registerAuthority(root.authority, nestedConnection(nested));
 			await assert.rejects(scope.stat(URI.joinPath(nested, 'file.ts')), isCancellationError);
 			const late = URI.joinPath(root, 'late');
@@ -205,14 +267,24 @@ suite('Agent Host filesystem authority routes', () => {
 	test('a staged sibling cannot publish or recursively clean through a newly mounted descendant', async () => {
 		const mutations: unknown[] = [];
 		using provider = new AgentHostFileSystemProvider(connection(URI.file('/workspace'), 'primary'));
-		using parent = provider.registerAuthority(root.authority, connection(root, 'parent', {
-			rename: async params => { mutations.push(params); },
-			delete: async params => { mutations.push(params); },
-		}));
+		using parent = provider.registerAuthority(
+			root.authority,
+			connection(root, 'parent', {
+				rename: async params => {
+					mutations.push(params);
+				},
+				delete: async params => {
+					mutations.push(params);
+				},
+			}),
+		);
 		const target = URI.joinPath(root, 'copied');
 		const temporary = URI.joinPath(root, '.ash-copy-private');
 		using scope = provider.acquireCopyScope(target);
-		using nested = provider.registerAuthority(root.authority, connection(URI.joinPath(temporary, 'nested'), 'nested'));
+		using nested = provider.registerAuthority(
+			root.authority,
+			connection(URI.joinPath(temporary, 'nested'), 'nested'),
+		);
 		await assert.rejects(scope.rename(temporary, target, 'error'), isCancellationError);
 		await assert.rejects(scope.delete(temporary, 'ignore', 'recursive'), isCancellationError);
 		assert.deepEqual(mutations, []);
@@ -233,9 +305,17 @@ suite('Agent Host filesystem authority routes', () => {
 			directories: () => directories,
 			api: {
 				...target.api,
-				resolvePath: () => { void started.complete(); return resolved.p; },
-				writeBinaryFile: async () => { writes++; throw new Error('Cancelled copy must not publish'); },
-				delete: async () => { cleanups++; },
+				resolvePath: () => {
+					void started.complete();
+					return resolved.p;
+				},
+				writeBinaryFile: async () => {
+					writes++;
+					throw new Error('Cancelled copy must not publish');
+				},
+				delete: async () => {
+					cleanups++;
+				},
 			},
 		});
 		using sourceScope = provider.acquireCopyScope(sourceRoot);
@@ -243,7 +323,12 @@ suite('Agent Host filesystem authority routes', () => {
 		using cancellation = new CancellationTokenSource(sourceScope.token);
 		directories = [{ uri: root.with({ path: '/other' }), target: { type: 'environment', dirId: 'other' } }];
 		const resource = URI.joinPath(root, 'copied.bin');
-		const writing = targetScope.writeFile(resource, new Uint8Array([42]), { create: true, overwrite: false }, cancellation.token);
+		const writing = targetScope.writeFile(
+			resource,
+			new Uint8Array([42]),
+			{ create: true, overwrite: false },
+			cancellation.token,
+		);
 		const rejected = assert.rejects(writing, isCancellationError);
 		await started.p;
 		sourceMount.dispose();
@@ -258,15 +343,21 @@ suite('Agent Host filesystem authority routes', () => {
 			await targetScope.delete(resource, 'ignore', 'recursive');
 			assert.equal(cleanups, 1);
 		} finally {
-			if (!resolved.isSettled) { await resolved.complete({ uri: root, target: { type: 'environment', dirId: 'target' } }); }
+			if (!resolved.isSettled) {
+				await resolved.complete({ uri: root, target: { type: 'environment', dirId: 'target' } });
+			}
 		}
 	});
 
 	test('native cross-connection copy and rename fail before either backend receives a mutation', async () => {
 		const mutations: string[] = [];
 		const api = (label: string): Partial<IFileApi> => ({
-			copy: async () => { mutations.push(`${label}:copy`); },
-			rename: async () => { mutations.push(`${label}:rename`); },
+			copy: async () => {
+				mutations.push(`${label}:copy`);
+			},
+			rename: async () => {
+				mutations.push(`${label}:rename`);
+			},
 		});
 		using provider = new AgentHostFileSystemProvider(connection(URI.file('/workspace'), 'primary', api('primary')));
 		using files = new FileService();
@@ -288,17 +379,26 @@ suite('Agent Host filesystem authority routes', () => {
 		using files = new FileService();
 		using mounted = files.registerProvider(Schemas.ashRemote, provider);
 		const resource = URI.joinPath(root, 'File.TS');
-		using original = provider.registerAuthority(root.authority, connection(root, 'old', {
-			readPathCaseSensitivity: async () => ({ scopes: [{ path: '.', sensitivity: 'insensitive' }] }),
-		}));
+		using original = provider.registerAuthority(
+			root.authority,
+			connection(root, 'old', {
+				readPathCaseSensitivity: async () => ({ scopes: [{ path: '.', sensitivity: 'insensitive' }] }),
+			}),
+		);
 		using identity = files.retainPathIdentity(resource);
 		await files.resolvePathIdentity(resource);
-		assert.equal(files.getPathIdentity(resource)!.comparisonResource.toString(), URI.joinPath(root, 'file.ts').toString());
+		assert.equal(
+			files.getPathIdentity(resource)!.comparisonResource.toString(),
+			URI.joinPath(root, 'file.ts').toString(),
+		);
 		original.dispose();
 		assert.equal(files.getPathIdentity(resource)!.comparisonResource.toString(), resource.toString());
-		using replacement = provider.registerAuthority(root.authority, connection(root, 'new', {
-			readPathCaseSensitivity: async () => ({ scopes: [{ path: '.', sensitivity: 'sensitive' }] }),
-		}));
+		using replacement = provider.registerAuthority(
+			root.authority,
+			connection(root, 'new', {
+				readPathCaseSensitivity: async () => ({ scopes: [{ path: '.', sensitivity: 'sensitive' }] }),
+			}),
+		);
 		await files.resolvePathIdentity(resource);
 		assert.equal(files.getPathIdentity(resource)!.comparisonResource.toString(), resource.toString());
 	});
@@ -311,26 +411,60 @@ suite('Agent Host filesystem authority routes', () => {
 		const snapshot = new DeferredPromise<Awaited<ReturnType<IFileApi['readBinaryFile']>>>();
 		const releasedSnapshot = new DeferredPromise<void>();
 		const released: string[] = [];
-		using original = provider.registerAuthority(root.authority, connection(root, 'old', {
-			readBinaryFile: () => { void started.complete(); return snapshot.p; },
-		}, { release: async request => { released.push(`old:${request.resourceId}`); await releasedSnapshot.complete(); } }));
+		using original = provider.registerAuthority(
+			root.authority,
+			connection(
+				root,
+				'old',
+				{
+					readBinaryFile: () => {
+						void started.complete();
+						return snapshot.p;
+					},
+				},
+				{
+					release: async request => {
+						released.push(`old:${request.resourceId}`);
+						await releasedSnapshot.complete();
+					},
+				},
+			),
+		);
 		const content = await files.readFileStream(URI.joinPath(root, 'paper.pdf'));
 		const consumed = consumeStream(content.value);
 		const rejected = assert.rejects(consumed, isCancellationError);
 		await started.p;
 		original.dispose();
-		using replacement = provider.registerAuthority(root.authority, connection(root, 'new', {}, {
-			release: async request => { released.push(`new:${request.resourceId}`); },
-		}));
+		using replacement = provider.registerAuthority(
+			root.authority,
+			connection(
+				root,
+				'new',
+				{},
+				{
+					release: async request => {
+						released.push(`new:${request.resourceId}`);
+					},
+				},
+			),
+		);
 		try {
 			await rejected;
 			assert.equal(snapshot.isSettled, false);
-			await snapshot.complete({ resource: { resourceId: 'late', mimeType: 'application/pdf', size: 1, sha256: 'digest' }, revision: 'old' });
+			await snapshot.complete({
+				resource: { resourceId: 'late', mimeType: 'application/pdf', size: 1, sha256: 'digest' },
+				revision: 'old',
+			});
 			await releasedSnapshot.p;
 			assert.deepEqual(released, ['old:late']);
 			assert.equal((await files.readFile(URI.joinPath(root, 'main.ts'), 'utf8')).content, 'new');
 		} finally {
-			if (!snapshot.isSettled) { await snapshot.complete({ resource: { resourceId: 'cleanup', mimeType: 'application/pdf', size: 0, sha256: 'digest' }, revision: 'old' }); }
+			if (!snapshot.isSettled) {
+				await snapshot.complete({
+					resource: { resourceId: 'cleanup', mimeType: 'application/pdf', size: 0, sha256: 'digest' },
+					revision: 'old',
+				});
+			}
 			content.value.destroy();
 		}
 	});

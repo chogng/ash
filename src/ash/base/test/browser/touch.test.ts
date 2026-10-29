@@ -19,10 +19,33 @@ suite('Gesture', () => {
 			const first = resources.add(Gesture.addTarget(child));
 			const second = resources.add(Gesture.addTarget(child));
 			const targets: EventTarget[] = [];
-			resources.add(addDisposableListener(parent, EventType.Tap, event => { targets.push(event.target!); stopEvent(event); }));
+			resources.add(
+				addDisposableListener(parent, EventType.Tap, event => {
+					targets.push(event.target!);
+					stopEvent(event);
+				}),
+			);
 			const tap = (): void => {
-				child.dispatchEvent(new dom.window.PointerEvent('pointerdown', { pointerId: 1, pointerType: 'touch', isPrimary: true, button: 0, bubbles: true, cancelable: true }));
-				child.dispatchEvent(new dom.window.PointerEvent('pointerup', { pointerId: 1, pointerType: 'touch', isPrimary: true, button: 0, bubbles: true, cancelable: true }));
+				child.dispatchEvent(
+					new dom.window.PointerEvent('pointerdown', {
+						pointerId: 1,
+						pointerType: 'touch',
+						isPrimary: true,
+						button: 0,
+						bubbles: true,
+						cancelable: true,
+					}),
+				);
+				child.dispatchEvent(
+					new dom.window.PointerEvent('pointerup', {
+						pointerId: 1,
+						pointerType: 'touch',
+						isPrimary: true,
+						button: 0,
+						bubbles: true,
+						cancelable: true,
+					}),
+				);
 			};
 			tap();
 			first.dispose();
@@ -31,7 +54,14 @@ suite('Gesture', () => {
 			tap();
 			assert.deepEqual(targets, [child, child, parent]);
 			resources.dispose();
-			const down = new dom.window.PointerEvent('pointerdown', { pointerId: 2, pointerType: 'touch', isPrimary: true, button: 0, bubbles: true, cancelable: true });
+			const down = new dom.window.PointerEvent('pointerdown', {
+				pointerId: 2,
+				pointerType: 'touch',
+				isPrimary: true,
+				button: 0,
+				bubbles: true,
+				cancelable: true,
+			});
 			child.dispatchEvent(down);
 			assert.equal(down.defaultPrevented, false);
 		} finally {
@@ -44,14 +74,27 @@ suite('Gesture', () => {
 		const second = new JSDOM('<body><button>Second</button></body>');
 		try {
 			using resources = new DisposableStore();
-			const targets = [first.window.document.querySelector('button')!, second.window.document.querySelector('button')!];
+			const targets = [
+				first.window.document.querySelector('button')!,
+				second.window.document.querySelector('button')!,
+			];
 			const taps: string[] = [];
 			for (const target of targets) {
 				resources.add(Gesture.addTarget(target));
 				resources.add(addDisposableListener(target, EventType.Tap, () => taps.push(target.textContent!)));
 			}
 			const dispatch = (dom: JSDOM, target: HTMLElement, type: string, x = 0): void => {
-				target.dispatchEvent(new dom.window.PointerEvent(type, { pointerId: 1, pointerType: 'pen', isPrimary: true, button: 0, clientX: x, bubbles: true, cancelable: true }));
+				target.dispatchEvent(
+					new dom.window.PointerEvent(type, {
+						pointerId: 1,
+						pointerType: 'pen',
+						isPrimary: true,
+						button: 0,
+						clientX: x,
+						bubbles: true,
+						cancelable: true,
+					}),
+				);
 			};
 			dispatch(first, targets[0]!, 'pointerdown');
 			dispatch(first, targets[0]!, 'pointermove', 30);

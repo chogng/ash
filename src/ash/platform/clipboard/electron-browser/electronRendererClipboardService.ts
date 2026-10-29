@@ -40,12 +40,17 @@ export class ElectronRendererClipboardService implements IClipboardService {
 	}
 
 	public async readResources(): Promise<IClipboardResources> {
-		const { resources, operation } = await invoke<{ resources: string[]; operation: 'copy' | 'move'; }>('ash:host:readClipboardResources');
+		const { resources, operation } = await invoke<{ resources: string[]; operation: 'copy' | 'move' }>(
+			'ash:host:readClipboardResources',
+		);
 		return { resources: resources.map(value => URI.parse(value)), operation };
 	}
 
 	public writeResources(resources: readonly URI[], operation: 'copy' | 'move'): Promise<void> {
-		return invoke<void>('ash:host:writeClipboardResources', { resources: resources.map(resource => resource.toString()), operation });
+		return invoke<void>('ash:host:writeClipboardResources', {
+			resources: resources.map(resource => resource.toString()),
+			operation,
+		});
 	}
 
 	public hasResources(): Promise<boolean> {

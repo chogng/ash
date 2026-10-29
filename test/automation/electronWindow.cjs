@@ -1,7 +1,9 @@
 const { app } = require('electron');
 
 // The product must not interpret this test-only preload path as an app entry or file to open.
-const preloadIndex = process.argv.findIndex((argument, index) => argument === '--require' && process.argv[index + 1] === __filename);
+const preloadIndex = process.argv.findIndex(
+	(argument, index) => argument === '--require' && process.argv[index + 1] === __filename,
+);
 if (preloadIndex >= 0) process.argv.splice(preloadIndex, 2);
 const inlinePreloadIndex = process.argv.indexOf(`--require=${__filename}`);
 if (inlinePreloadIndex >= 0) process.argv.splice(inlinePreloadIndex, 1);
@@ -16,7 +18,7 @@ if (process.platform === 'darwin') app.setActivationPolicy('accessory');
 app.on('browser-window-created', (_event, window) => {
 	window.setFocusable(false);
 	window.webContents.setBackgroundThrottling(false);
-	window.show = mode === 'inactive' ? window.showInactive.bind(window) : () => { };
+	window.show = mode === 'inactive' ? window.showInactive.bind(window) : () => {};
 	if (mode === 'hidden') {
 		// Restore/maximize and auxiliary windows can show without calling show().
 		window.on('show', () => window.hide());

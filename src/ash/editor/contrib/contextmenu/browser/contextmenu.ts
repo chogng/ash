@@ -9,7 +9,13 @@ import { IConfigurationService } from '../../../../platform/configuration/common
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { type ICodeEditor, type IEditorMouseEvent, MouseTargetType } from '../../../browser/editorBrowser.js';
-import { EditorAction, EditorContributionInstantiation, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
+import {
+	EditorAction,
+	EditorContributionInstantiation,
+	registerEditorAction,
+	registerEditorContribution,
+	type ServicesAccessor,
+} from '../../../browser/editorFeatureRegistration.js';
 import { EditorOption, type IEditorMinimapOptions } from '../../../common/config/editorOptions.js';
 import { EditorMinimapConfiguration } from '../../../common/config/editorConfigurationSchema.js';
 import { Range } from '../../../common/core/range.js';
@@ -34,23 +40,27 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 		super();
 		this._register(editor.onContextMenu(event => this.onContextMenu(event)));
 		this._register(editor.onKeyDown(event => this.onKeyDown(event)));
-		this._register(editor.onMouseWheel(() => {
-			if (this.activeMenu) {
-				this.contextMenuService.hideContextMenu();
-			}
-		}));
-		this._register(toDisposable(() => {
-			if (this.activeMenu) {
-				this.contextMenuService.hideContextMenu();
-			}
-		}));
+		this._register(
+			editor.onMouseWheel(() => {
+				if (this.activeMenu) {
+					this.contextMenuService.hideContextMenu();
+				}
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				if (this.activeMenu) {
+					this.contextMenuService.hideContextMenu();
+				}
+			}),
+		);
 	}
 
 	public showContextMenu(anchor?: IMouseEvent | null): void {
 		if (!this.editor.hasModel() || !this.editor.getOption(EditorOption.contextmenu)) return;
 		const resolvedAnchor = anchor ? this.mouseAnchor(anchor) : this.keyboardAnchor();
 		if (!resolvedAnchor) return;
-		const menu = this.activeMenu = {};
+		const menu = (this.activeMenu = {});
 		this.contextMenuService.showContextMenu({
 			menuId: this.editor.contextMenuId,
 			contextKeyService: this.contextKeyService,
@@ -64,10 +74,15 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 		if (!this.editor.hasModel()) return;
 		if (!this.editor.getOption(EditorOption.contextmenu)) {
 			this.editor.focus();
-			if (event.target.position && !this.editor.getSelection()?.containsPosition(event.target.position)) this.editor.setPosition(event.target.position);
+			if (event.target.position && !this.editor.getSelection()?.containsPosition(event.target.position))
+				this.editor.setPosition(event.target.position);
 			return;
 		}
-		if (event.target.type === MouseTargetType.OVERLAY_WIDGET || event.target.type === MouseTargetType.CONTENT_WIDGET) return;
+		if (
+			event.target.type === MouseTargetType.OVERLAY_WIDGET ||
+			event.target.type === MouseTargetType.CONTENT_WIDGET
+		)
+			return;
 		if (event.target.type === MouseTargetType.CONTENT_TEXT && event.target.detail.injectedText) return;
 		event.event.preventDefault();
 		event.event.stopPropagation();
@@ -75,12 +90,16 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 			this.showScrollbarContextMenu(event.event);
 			return;
 		}
-		if (event.target.type !== MouseTargetType.CONTENT_TEXT
-			&& event.target.type !== MouseTargetType.CONTENT_EMPTY
-			&& event.target.type !== MouseTargetType.TEXTAREA) return;
+		if (
+			event.target.type !== MouseTargetType.CONTENT_TEXT &&
+			event.target.type !== MouseTargetType.CONTENT_EMPTY &&
+			event.target.type !== MouseTargetType.TEXTAREA
+		)
+			return;
 		this.editor.focus();
 		const position = event.target.position;
-		if (position && !(this.editor.getSelections() ?? []).some(selection => selection.containsPosition(position))) this.editor.setPosition(position, 'contextmenu');
+		if (position && !(this.editor.getSelections() ?? []).some(selection => selection.containsPosition(position)))
+			this.editor.setPosition(position, 'contextmenu');
 		this.showContextMenu(event.target.type === MouseTargetType.TEXTAREA ? null : event.event);
 	}
 
@@ -96,27 +115,19 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 		const choice = <K extends 'size' | 'showSlider' | 'side'>(
 			key: K,
 			label: string,
-			options: readonly { label: string; value: NonNullable<IEditorMinimapOptions[K]>; }[],
+			options: readonly { label: string; value: NonNullable<IEditorMinimapOptions[K]> }[],
 		): IAction => {
 			if (!minimap.enabled) {
-				return {
-					id: `editor.minimap.${key}`,
-					label,
-					tooltip: '',
-					enabled: false,
-					run() { },
-				};
+				return { id: `editor.minimap.${key}`, label, tooltip: '', enabled: false, run() {} };
 			}
 			return new SubmenuAction(
 				`editor.minimap.${key}`,
 				label,
-				options.map(({ label: optionLabel, value }) => action(
-					`editor.minimap.${key}.${value}`,
-					optionLabel,
-					minimap[key] === value,
-					true,
-					() => this.updateMinimapOption(key, value),
-				)),
+				options.map(({ label: optionLabel, value }) =>
+					action(`editor.minimap.${key}.${value}`, optionLabel, minimap[key] === value, true, () =>
+						this.updateMinimapOption(key, value),
+					),
+				),
 			);
 		};
 		const actions: IAction[] = [
@@ -149,7 +160,7 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 				{ label: nls.localize('context.minimap.side.left', 'Left'), value: 'left' },
 			]),
 		];
-		const menu = this.activeMenu = {};
+		const menu = (this.activeMenu = {});
 		this.contextMenuService.showContextMenu({
 			getAnchor: () => this.mouseAnchor(event),
 			getActions: () => actions,
@@ -183,8 +194,9 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 	}
 
 	private onKeyDown(event: IKeyboardEvent): void {
-		const isContextMenuKey = event.keyCode === KeyCode.ContextMenu
-			|| (event.keyCode === KeyCode.F10 && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey);
+		const isContextMenuKey =
+			event.keyCode === KeyCode.ContextMenu ||
+			(event.keyCode === KeyCode.F10 && event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey);
 		if (!isContextMenuKey || !this.editor.getOption(EditorOption.contextmenu)) return;
 		event.stop();
 		this.showContextMenu();
@@ -216,7 +228,11 @@ export class ContextMenuController extends Disposable implements IEditorContribu
 
 class ShowContextMenu extends EditorAction {
 	constructor() {
-		super({ id: 'editor.action.showContextMenu', label: nls.localize2('action.showContextMenu.label', 'Show Editor Context Menu'), precondition: undefined });
+		super({
+			id: 'editor.action.showContextMenu',
+			label: nls.localize2('action.showContextMenu.label', 'Show Editor Context Menu'),
+			precondition: undefined,
+		});
 	}
 
 	public run(_accessor: ServicesAccessor, editor: ICodeEditor): void {
@@ -224,5 +240,9 @@ class ShowContextMenu extends EditorAction {
 	}
 }
 
-registerEditorContribution(ContextMenuController.ID, ContextMenuController, EditorContributionInstantiation.BeforeFirstInteraction);
+registerEditorContribution(
+	ContextMenuController.ID,
+	ContextMenuController,
+	EditorContributionInstantiation.BeforeFirstInteraction,
+);
 registerEditorAction(ShowContextMenu);

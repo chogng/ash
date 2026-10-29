@@ -1,4 +1,4 @@
-import type { ISandboxGlobals } from "./sandboxTypes.js";
+import type { ISandboxGlobals } from './sandboxTypes.js';
 
 interface ISandboxGlobal {
 	readonly ash?: ISandboxGlobals;
@@ -6,7 +6,7 @@ interface ISandboxGlobal {
 
 const globals = (globalThis as unknown as ISandboxGlobal).ash;
 if (!globals) {
-	throw new Error("Ash sandbox preload bridge is unavailable");
+	throw new Error('Ash sandbox preload bridge is unavailable');
 }
 
 /** IPC capability installed by the sandbox preload. */

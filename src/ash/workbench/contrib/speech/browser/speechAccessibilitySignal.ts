@@ -1,6 +1,12 @@
-import { IChatSpeechToTextService, ChatSpeechToTextState } from '../../chat/browser/speechToText/chatSpeechToTextService.js';
+import {
+	IChatSpeechToTextService,
+	ChatSpeechToTextState,
+} from '../../chat/browser/speechToText/chatSpeechToTextService.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { AccessibilitySignal, IAccessibilitySignalService } from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
+import {
+	AccessibilitySignal,
+	IAccessibilitySignalService,
+} from '../../../../platform/accessibilitySignal/browser/accessibilitySignalService.js';
 import { ISpeechService } from '../common/speechService.js';
 
 export class SpeechAccessibilitySignalContribution extends Disposable {
@@ -18,10 +24,22 @@ export class SpeechAccessibilitySignalContribution extends Disposable {
 			const recording = extensionRecording || dictation.state === ChatSpeechToTextState.Recording;
 			if (recording === recordingAnnounced) return;
 			recordingAnnounced = recording;
-			void signals.playSignal(recording ? AccessibilitySignal.voiceRecordingStarted : AccessibilitySignal.voiceRecordingStopped);
+			void signals.playSignal(
+				recording ? AccessibilitySignal.voiceRecordingStarted : AccessibilitySignal.voiceRecordingStopped,
+			);
 		};
-		this._register(speech.onDidStartSpeechToTextSession(() => { extensionRecording = true; update(); }));
-		this._register(speech.onDidEndSpeechToTextSession(() => { extensionRecording = false; update(); }));
+		this._register(
+			speech.onDidStartSpeechToTextSession(() => {
+				extensionRecording = true;
+				update();
+			}),
+		);
+		this._register(
+			speech.onDidEndSpeechToTextSession(() => {
+				extensionRecording = false;
+				update();
+			}),
+		);
 		this._register(dictation.onDidChangeState(update));
 	}
 }

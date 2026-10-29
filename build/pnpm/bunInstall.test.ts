@@ -32,11 +32,25 @@ test('the frozen lockfile pins native Bun archives and checksums for supported D
 	assert.equal(lock.patchedDependencies?.[`bun@${specifier.slice('runtime:'.length)}`], undefined);
 	const runtime = lock.packages[`bun@${specifier}`];
 	assert.equal(runtime.resolution.type, 'variations');
-	for (const [os, cpu] of [['darwin', 'arm64'], ['darwin', 'x64'], ['win32', 'arm64'], ['win32', 'x64'], ['linux', 'arm64'], ['linux', 'x64']]) {
-		const variant = runtime.resolution.variants.find((entry: { targets: { os: string; cpu: string; libc?: string; }[]; }) => entry.targets.some(target => target.os === os && target.cpu === cpu && !target.libc));
+	for (const [os, cpu] of [
+		['darwin', 'arm64'],
+		['darwin', 'x64'],
+		['win32', 'arm64'],
+		['win32', 'x64'],
+		['linux', 'arm64'],
+		['linux', 'x64'],
+	]) {
+		const variant = runtime.resolution.variants.find(
+			(entry: { targets: { os: string; cpu: string; libc?: string }[] }) =>
+				entry.targets.some(target => target.os === os && target.cpu === cpu && !target.libc),
+		);
 		assert.ok(variant, `${os} ${cpu}`);
 		assert.equal(variant.resolution.type, 'binary');
 		assert.match(variant.resolution.integrity, /^sha256-[A-Za-z0-9+/]+=*$/);
-		assert.ok(variant.resolution.url.startsWith(`https://github.com/oven-sh/bun/releases/download/bun-v${runtime.version}/`));
+		assert.ok(
+			variant.resolution.url.startsWith(
+				`https://github.com/oven-sh/bun/releases/download/bun-v${runtime.version}/`,
+			),
+		);
 	}
 });

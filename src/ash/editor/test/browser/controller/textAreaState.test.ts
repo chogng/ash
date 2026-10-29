@@ -7,7 +7,10 @@ test('textarea state derives inserted text from two snapshots', () => {
 	const before = new TextAreaState('ac', 1, 1, null, 0);
 	const after = new TextAreaState('abc', 2, 2, null, 0);
 	assert.deepEqual(TextAreaState.deduceInput(before, after, false), {
-		text: 'b', replacePrevCharCnt: 0, replaceNextCharCnt: 0, positionDelta: 0,
+		text: 'b',
+		replacePrevCharCnt: 0,
+		replaceNextCharCnt: 0,
+		positionDelta: 0,
 	});
 });
 

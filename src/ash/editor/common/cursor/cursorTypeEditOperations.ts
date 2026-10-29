@@ -1,4 +1,11 @@
-import { ReplaceCommand, ReplaceCommandThatPreservesSelection, ReplaceCommandWithoutChangingPosition, ReplaceCommandWithOffsetCursorState, ReplaceOvertypeCommand, ReplaceOvertypeCommandOnCompositionEnd } from '../commands/replaceCommand.js';
+import {
+	ReplaceCommand,
+	ReplaceCommandThatPreservesSelection,
+	ReplaceCommandWithoutChangingPosition,
+	ReplaceCommandWithOffsetCursorState,
+	ReplaceOvertypeCommand,
+	ReplaceOvertypeCommandOnCompositionEnd,
+} from '../commands/replaceCommand.js';
 import { ShiftCommand } from '../commands/shiftCommand.js';
 import { type CursorConfiguration, EditOperationResult, EditOperationType } from '../cursorCommon.js';
 import { Selection } from '../core/selection.js';
@@ -21,23 +28,39 @@ export interface SelectionEdit {
 }
 
 export class TypeWithoutInterceptorsOperation {
-	public static getEdits(prevEditOperationType: EditOperationType, selections: Selection[], text: string): EditOperationResult {
+	public static getEdits(
+		prevEditOperationType: EditOperationType,
+		selections: Selection[],
+		text: string,
+	): EditOperationResult {
 		const normalized = normalizeTextLineEndings(text);
 		const type = typingOperationType(normalized, prevEditOperationType);
-		return new EditOperationResult(type, selections.map(selection => new ReplaceCommand(selection, normalized)), {
-			shouldPushStackElementBefore: shouldSeparateTyping(prevEditOperationType, type),
-			shouldPushStackElementAfter: false,
-		});
+		return new EditOperationResult(
+			type,
+			selections.map(selection => new ReplaceCommand(selection, normalized)),
+			{
+				shouldPushStackElementBefore: shouldSeparateTyping(prevEditOperationType, type),
+				shouldPushStackElementAfter: false,
+			},
+		);
 	}
 }
 
 export class SimpleCharacterTypeOperation {
-	public static getEdits(config: CursorConfiguration, prevEditOperationType: EditOperationType, selections: Selection[], text: string, isDoingComposition: boolean): EditOperationResult {
+	public static getEdits(
+		config: CursorConfiguration,
+		prevEditOperationType: EditOperationType,
+		selections: Selection[],
+		text: string,
+		isDoingComposition: boolean,
+	): EditOperationResult {
 		const normalized = normalizeTextLineEndings(text);
 		const type = typingOperationType(normalized, prevEditOperationType);
-		const commands = selections.map(selection => config.inputMode === 'overtype' && !isDoingComposition
-			? new GraphemeOvertypeCommand(selection, normalized)
-			: new ReplaceCommand(selection, normalized));
+		const commands = selections.map(selection =>
+			config.inputMode === 'overtype' && !isDoingComposition
+				? new GraphemeOvertypeCommand(selection, normalized)
+				: new ReplaceCommand(selection, normalized),
+		);
 		return new EditOperationResult(type, commands, {
 			shouldPushStackElementBefore: shouldSeparateTyping(prevEditOperationType, type),
 			shouldPushStackElementAfter: false,
@@ -47,7 +70,11 @@ export class SimpleCharacterTypeOperation {
 
 /** Creates the canonical commands for inserting a blank line adjacent to each cursor line. */
 export class EnterOperation {
-	public static lineInsertBefore(_config: CursorConfiguration, model: ITextModel | null, selections: Selection[] | null): ICommand[] {
+	public static lineInsertBefore(
+		_config: CursorConfiguration,
+		model: ITextModel | null,
+		selections: Selection[] | null,
+	): ICommand[] {
 		if (!model || !selections) return [];
 		return selections.map(selection => {
 			const lineNumber = selection.positionLineNumber;
@@ -60,7 +87,11 @@ export class EnterOperation {
 		});
 	}
 
-	public static lineInsertAfter(_config: CursorConfiguration, model: ITextModel | null, selections: Selection[] | null): ICommand[] {
+	public static lineInsertAfter(
+		_config: CursorConfiguration,
+		model: ITextModel | null,
+		selections: Selection[] | null,
+	): ICommand[] {
 		if (!model || !selections) return [];
 		return selections.map(selection => {
 			const lineNumber = selection.positionLineNumber;
@@ -70,12 +101,17 @@ export class EnterOperation {
 	}
 }
 
-
-
-
-
 export class CompositionOperation {
-	public static getEdits(prevEditOperationType: EditOperationType, _config: CursorConfiguration, model: ITextModel, selections: Selection[], text: string, replacePrevCharCnt: number, replaceNextCharCnt: number, positionDelta: number): EditOperationResult {
+	public static getEdits(
+		prevEditOperationType: EditOperationType,
+		_config: CursorConfiguration,
+		model: ITextModel,
+		selections: Selection[],
+		text: string,
+		replacePrevCharCnt: number,
+		replaceNextCharCnt: number,
+		positionDelta: number,
+	): EditOperationResult {
 		const normalized = normalizeTextLineEndings(text);
 		const commands = selections.map(selection => {
 			if (!selection.isEmpty()) {
@@ -83,8 +119,16 @@ export class CompositionOperation {
 			}
 			const position = selection.getPosition();
 			const startColumn = Math.max(1, position.column - replacePrevCharCnt);
-			const endColumn = Math.min(model.getLineMaxColumn(position.lineNumber), position.column + replaceNextCharCnt);
-			return new ReplaceCommandWithOffsetCursorState(new Range(position.lineNumber, startColumn, position.lineNumber, endColumn), normalized, 0, positionDelta);
+			const endColumn = Math.min(
+				model.getLineMaxColumn(position.lineNumber),
+				position.column + replaceNextCharCnt,
+			);
+			return new ReplaceCommandWithOffsetCursorState(
+				new Range(position.lineNumber, startColumn, position.lineNumber, endColumn),
+				normalized,
+				0,
+				positionDelta,
+			);
 		});
 		return new EditOperationResult(EditOperationType.TypingOther, commands, {
 			shouldPushStackElementBefore: shouldSeparateTyping(prevEditOperationType, EditOperationType.TypingOther),
@@ -94,7 +138,10 @@ export class CompositionOperation {
 }
 
 export class CompositionEndOvertypeOperation {
-	public static getEdits(config: CursorConfiguration, compositions: CompositionOutcome[]): EditOperationResult | null {
+	public static getEdits(
+		config: CursorConfiguration,
+		compositions: CompositionOutcome[],
+	): EditOperationResult | null {
 		if (config.inputMode !== 'overtype') return null;
 		return new EditOperationResult(
 			EditOperationType.TypingOther,
@@ -105,14 +152,26 @@ export class CompositionEndOvertypeOperation {
 }
 
 export class PasteOperation {
-	public static getEdits(config: CursorConfiguration, model: ICursorSimpleModel, selections: Selection[], text: string, pasteOnNewLine: boolean, multicursorText: string[]): EditOperationResult {
+	public static getEdits(
+		config: CursorConfiguration,
+		model: ICursorSimpleModel,
+		selections: Selection[],
+		text: string,
+		pasteOnNewLine: boolean,
+		multicursorText: string[],
+	): EditOperationResult {
 		const normalized = normalizeTextLineEndings(text);
 		const texts = this.distributePasteToCursors(config, selections, normalized, pasteOnNewLine, multicursorText);
 		if (texts) selections.sort(Range.compareRangesUsingStarts);
 		const commands = selections.map((selection, index): ICommand => {
 			const value = texts?.[index] ?? normalized;
 			if (pasteOnNewLine && selection.isEmpty() && value.endsWith('\n')) {
-				return new ReplaceCommandThatPreservesSelection(new Range(selection.positionLineNumber, 1, selection.positionLineNumber, 1), value, selection, true);
+				return new ReplaceCommandThatPreservesSelection(
+					new Range(selection.positionLineNumber, 1, selection.positionLineNumber, 1),
+					value,
+					selection,
+					true,
+				);
 			}
 			return config.overtypeOnPaste && config.inputMode === 'overtype'
 				? new ReplaceOvertypeCommand(selection, value)
@@ -124,7 +183,13 @@ export class PasteOperation {
 		});
 	}
 
-	private static distributePasteToCursors(config: CursorConfiguration, selections: Selection[], text: string, pasteOnNewLine: boolean, multicursorText: string[]): string[] | null {
+	private static distributePasteToCursors(
+		config: CursorConfiguration,
+		selections: Selection[],
+		text: string,
+		pasteOnNewLine: boolean,
+		multicursorText: string[],
+	): string[] | null {
 		if (selections.length === 1) return null;
 		if (multicursorText.length === selections.length) return multicursorText.map(normalizeTextLineEndings);
 		if (pasteOnNewLine || config.multiCursorPaste !== 'spread') return null;
@@ -140,14 +205,18 @@ export class TabOperation {
 
 	private static getCommand(config: CursorConfiguration, model: ITextModel, selection: Selection): ICommand {
 		if (shouldIndentLines(model, selection)) {
-			return new ShiftCommand(selection, {
-				isUnshift: false,
-				tabSize: config.tabSize,
-				indentSize: config.indentSize,
-				insertSpaces: config.insertSpaces,
-				useTabStops: config.useTabStops,
-				autoIndent: config.autoIndent,
-			}, config.languageConfigurationService);
+			return new ShiftCommand(
+				selection,
+				{
+					isUnshift: false,
+					tabSize: config.tabSize,
+					indentSize: config.indentSize,
+					insertSpaces: config.insertSpaces,
+					useTabStops: config.useTabStops,
+					autoIndent: config.autoIndent,
+				},
+				config.languageConfigurationService,
+			);
 		}
 
 		if (!config.insertSpaces) {
@@ -161,7 +230,12 @@ export class TabOperation {
 }
 
 class SelectionEditCommand extends ReplaceCommand {
-	constructor(range: Range, text: string, private readonly anchorOffsetInText: number, private readonly activeOffsetInText: number) {
+	constructor(
+		range: Range,
+		text: string,
+		private readonly anchorOffsetInText: number,
+		private readonly activeOffsetInText: number,
+	) {
 		super(range, text);
 	}
 
@@ -175,13 +249,19 @@ class SelectionEditCommand extends ReplaceCommand {
 }
 
 class GraphemeOvertypeCommand implements ICommand {
-	constructor(private readonly selection: Selection, private readonly text: string) { }
+	constructor(
+		private readonly selection: Selection,
+		private readonly text: string,
+	) {}
 
 	public getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
 		let range: Range = this.selection;
 		if (this.selection.isEmpty() && !this.text.includes('\n')) {
 			const position = this.selection.getPosition();
-			range = Range.fromPositions(position, advancePositionInLine(model, position, getTextGraphemeBoundaries(this.text).length - 1));
+			range = Range.fromPositions(
+				position,
+				advancePositionInLine(model, position, getTextGraphemeBoundaries(this.text).length - 1),
+			);
 		}
 		builder.addTrackedEditOperation(range, this.text);
 	}
@@ -195,19 +275,36 @@ export class BaseTypeWithAutoClosingCommand extends SelectionEditCommand {
 	public closeCharacterRange: Range | null = null;
 	public enclosingRange: Range | null = null;
 
-	constructor(selection: Range, text: string, anchorOffsetInText: number, activeOffsetInText: number, private readonly openCharacter: string, private readonly closeCharacter: string) {
+	constructor(
+		selection: Range,
+		text: string,
+		anchorOffsetInText: number,
+		activeOffsetInText: number,
+		private readonly openCharacter: string,
+		private readonly closeCharacter: string,
+	) {
 		super(selection, text, anchorOffsetInText, activeOffsetInText);
 	}
 
 	public override computeCursorState(model: ITextModel, helper: ICursorStateComputerData): Selection {
 		const insertedRange = helper.getInverseEditOperations()[0]!.range;
-		this.closeCharacterRange = Range.fromPositions(model.modifyPosition(insertedRange.getStartPosition(), insertedRangeLength(model, insertedRange) - this.closeCharacter.length), insertedRange.getEndPosition());
-		this.enclosingRange = Range.fromPositions(model.modifyPosition(insertedRange.getEndPosition(), -this.openCharacter.length - this.closeCharacter.length), insertedRange.getEndPosition());
+		this.closeCharacterRange = Range.fromPositions(
+			model.modifyPosition(
+				insertedRange.getStartPosition(),
+				insertedRangeLength(model, insertedRange) - this.closeCharacter.length,
+			),
+			insertedRange.getEndPosition(),
+		);
+		this.enclosingRange = Range.fromPositions(
+			model.modifyPosition(
+				insertedRange.getEndPosition(),
+				-this.openCharacter.length - this.closeCharacter.length,
+			),
+			insertedRange.getEndPosition(),
+		);
 		return super.computeCursorState(model, helper);
 	}
 }
-
-
 
 function advancePositionInLine(model: ITextModel, position: Position, count: number): Position {
 	let current = position;
@@ -220,15 +317,17 @@ function advancePositionInLine(model: ITextModel, position: Position, count: num
 }
 
 function typingOperationType(text: string, previous: EditOperationType): EditOperationType {
-	if (text === ' ') return previous === EditOperationType.TypingFirstSpace || previous === EditOperationType.TypingConsecutiveSpace
-		? EditOperationType.TypingConsecutiveSpace
-		: EditOperationType.TypingFirstSpace;
+	if (text === ' ')
+		return previous === EditOperationType.TypingFirstSpace || previous === EditOperationType.TypingConsecutiveSpace
+			? EditOperationType.TypingConsecutiveSpace
+			: EditOperationType.TypingFirstSpace;
 	return EditOperationType.TypingOther;
 }
 
 function shouldSeparateTyping(previous: EditOperationType, next: EditOperationType): boolean {
 	if (previous === EditOperationType.TypingFirstSpace) return false;
-	const previousGroup = previous === EditOperationType.TypingConsecutiveSpace ? EditOperationType.TypingFirstSpace : previous;
+	const previousGroup =
+		previous === EditOperationType.TypingConsecutiveSpace ? EditOperationType.TypingFirstSpace : previous;
 	const nextGroup = next === EditOperationType.TypingConsecutiveSpace ? EditOperationType.TypingFirstSpace : next;
 	return previousGroup !== nextGroup;
 }

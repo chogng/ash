@@ -6,14 +6,21 @@ import type { NewChatContextAttachments } from './newChatContextAttachments.js';
 export class NewChatInputPasteTarget extends Disposable {
 	constructor(container: HTMLElement, attachments: NewChatContextAttachments) {
 		super();
-		this._register(addDisposableListener(container, 'paste', event => {
-			const files = [...(event.clipboardData?.files ?? [])];
-			if (files.length === 0) {
-				return;
-			}
-			event.preventDefault();
-			event.stopPropagation();
-			void attachments.attachFiles(files);
-		}, true));
+		this._register(
+			addDisposableListener(
+				container,
+				'paste',
+				event => {
+					const files = [...(event.clipboardData?.files ?? [])];
+					if (files.length === 0) {
+						return;
+					}
+					event.preventDefault();
+					event.stopPropagation();
+					void attachments.attachFiles(files);
+				},
+				true,
+			),
+		);
 	}
 }

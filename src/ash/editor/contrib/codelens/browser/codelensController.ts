@@ -40,31 +40,42 @@ export class CodeLensContribution extends Disposable {
 	) {
 		super();
 		this.bindProviderListeners();
-		this._register(providers.onDidChange(() => {
-			this.bindProviderListeners();
-			this.scheduleRefresh();
-		}));
-		this._register(viewport.textModel.onDidChangeContent(() => {
-			this.setModel(CodeLensModel.Empty);
-			this.clearWidgets();
-			this.scheduleRefresh();
-		}));
-		this._register(viewport.textModel.onDidChangeLanguage(() => {
-			if (this.resource) {
-				this.cache.delete(this.resource);
-			}
-			this.clear();
-			this.bindProviderListeners();
-			this.scheduleRefresh();
-		}));
-		this._register(editor.onDidChangeConfiguration(event => {
-			if (event.hasChanged(EditorOption.codeLens)) {
-				this.clear();
+		this._register(
+			providers.onDidChange(() => {
+				this.bindProviderListeners();
 				this.scheduleRefresh();
-			}
-		}));
+			}),
+		);
+		this._register(
+			viewport.textModel.onDidChangeContent(() => {
+				this.setModel(CodeLensModel.Empty);
+				this.clearWidgets();
+				this.scheduleRefresh();
+			}),
+		);
+		this._register(
+			viewport.textModel.onDidChangeLanguage(() => {
+				if (this.resource) {
+					this.cache.delete(this.resource);
+				}
+				this.clear();
+				this.bindProviderListeners();
+				this.scheduleRefresh();
+			}),
+		);
+		this._register(
+			editor.onDidChangeConfiguration(event => {
+				if (event.hasChanged(EditorOption.codeLens)) {
+					this.clear();
+					this.scheduleRefresh();
+				}
+			}),
+		);
 		this._register(viewport.onDidChangeLayout(() => this.layoutAndResolve()));
-		const cachedModel = resource && editor.getOption(EditorOption.codeLens) ? this.cache.get(resource, viewport.textModel.lineCount) : undefined;
+		const cachedModel =
+			resource && editor.getOption(EditorOption.codeLens)
+				? this.cache.get(resource, viewport.textModel.lineCount)
+				: undefined;
 		if (cachedModel) {
 			this.cachedModel = cachedModel;
 			this.setModel(cachedModel);
@@ -122,7 +133,7 @@ export class CodeLensContribution extends Disposable {
 			this.showCachedModelUntilExpiry();
 			return;
 		}
-		const request = this.request = new CancellationTokenSource();
+		const request = (this.request = new CancellationTokenSource());
 		const model = await getCodeLensModel(this.providers, this.viewport.textModel, request.token);
 		if (request.token.isCancellationRequested || request !== this.request) {
 			if (model !== CodeLensModel.Empty) model.dispose();
@@ -148,7 +159,9 @@ export class CodeLensContribution extends Disposable {
 	}
 
 	private showCachedModelUntilExpiry(): void {
-		const cachedModel = this.resource ? this.cache.get(this.resource, this.viewport.textModel.lineCount) : undefined;
+		const cachedModel = this.resource
+			? this.cache.get(this.resource, this.viewport.textModel.lineCount)
+			: undefined;
 		if (!cachedModel) {
 			this.cachedModel = undefined;
 			this.setModel(CodeLensModel.Empty);
@@ -181,7 +194,14 @@ export class CodeLensContribution extends Disposable {
 					current.updateCodeLensItems(lineItems);
 					continue;
 				}
-				this.widgets.set(lineNumber, new CodeLensWidget(this.viewport, lineItems, this.onExecuteCommand ? command => this.executeCommand(command) : undefined));
+				this.widgets.set(
+					lineNumber,
+					new CodeLensWidget(
+						this.viewport,
+						lineItems,
+						this.onExecuteCommand ? command => this.executeCommand(command) : undefined,
+					),
+				);
 			}
 		} finally {
 			scrollState.restore(this.editor);
@@ -201,11 +221,15 @@ export class CodeLensContribution extends Disposable {
 		for (const [, widget] of this.widgets) widget.layout();
 		const request = this.request;
 		if (!request || request.token.isCancellationRequested) return;
-		const visible = [...this.widgets].map(([, widget]) => widget).filter(widget => widget.isVisible() && widget.needsResolve && !this.resolvingWidgets.has(widget));
+		const visible = [...this.widgets]
+			.map(([, widget]) => widget)
+			.filter(widget => widget.isVisible() && widget.needsResolve && !this.resolvingWidgets.has(widget));
 		if (visible.length === 0) return;
 		const batchPromise = Promise.all(visible.map(widget => this.resolveWidget(widget, request))).then(
 			() => undefined,
-			error => { if (!request.token.isCancellationRequested) this.onError(error); },
+			error => {
+				if (!request.token.isCancellationRequested) this.onError(error);
+			},
 		);
 		const previousPromise = this.resolvePromise;
 		const resolvePromise = previousPromise
@@ -222,7 +246,13 @@ export class CodeLensContribution extends Disposable {
 		const items = widget.getItems();
 		try {
 			const symbols = await Promise.all(items.map(item => this.resolveItem(item, request)));
-			if (request.token.isCancellationRequested || request !== this.request || widget.getItems() !== items || widget.isDisposed) return;
+			if (
+				request.token.isCancellationRequested ||
+				request !== this.request ||
+				widget.getItems() !== items ||
+				widget.isDisposed
+			)
+				return;
 			widget.updateCommands(symbols);
 			this.replaceResolvedItems(items, widget.getItems());
 			this.updateCache();
@@ -239,7 +269,11 @@ export class CodeLensContribution extends Disposable {
 	private async resolveItem(item: CodeLensItem, request: CancellationTokenSource): Promise<CodeLens | undefined> {
 		if (item.symbol.command || !item.provider.resolveCodeLens) return item.symbol;
 		try {
-			return await Promise.resolve(item.provider.resolveCodeLens(this.viewport.textModel, item.symbol, request.token)) ?? undefined;
+			return (
+				(await Promise.resolve(
+					item.provider.resolveCodeLens(this.viewport.textModel, item.symbol, request.token),
+				)) ?? undefined
+			);
 		} catch (error) {
 			if (!request.token.isCancellationRequested) this.onError(error);
 			return undefined;
@@ -258,7 +292,7 @@ export class CodeLensContribution extends Disposable {
 	private executeCommand(command: Command): void {
 		try {
 			const result = this.onExecuteCommand!(command.id, command.arguments);
-			if (result && typeof (result as { readonly then?: unknown; }).then === 'function') {
+			if (result && typeof (result as { readonly then?: unknown }).then === 'function') {
 				void Promise.resolve(result as PromiseLike<void>).catch(this.onError);
 			}
 		} catch (error) {

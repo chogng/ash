@@ -69,7 +69,7 @@ const BaseEditorInputSerializer = Object.freeze({ typeId: 'workbench.editorInput
 
 function serializeBaseEditorInput(input: IResourceEditorInput): unknown {
 	const icon = input.getIcon?.();
-	let serializedIcon: string | { id: string; color?: string; } | undefined;
+	let serializedIcon: string | { id: string; color?: string } | undefined;
 	if (icon instanceof URI) {
 		serializedIcon = icon.toString();
 	} else if (icon) {
@@ -87,7 +87,9 @@ function serializeBaseEditorInput(input: IResourceEditorInput): unknown {
 		...(input.readOnly === undefined ? {} : { readOnly: input.readOnly }),
 		...(input.showBreadcrumbs === undefined ? {} : { showBreadcrumbs: input.showBreadcrumbs }),
 		...(input.initialText === undefined ? {} : { initialText: input.initialText }),
-		...(input.initialBytes === undefined ? {} : { initialBytes: encodeBase64(VSBuffer.wrap(new Uint8Array(input.initialBytes))) }),
+		...(input.initialBytes === undefined
+			? {}
+			: { initialBytes: encodeBase64(VSBuffer.wrap(new Uint8Array(input.initialBytes))) }),
 	});
 }
 
@@ -103,7 +105,12 @@ function deserializeBaseEditorInput(value: unknown): IResourceEditorInput {
 	const showBreadcrumbs = optionalBoolean(record.showBreadcrumbs, 'serialized editor breadcrumbs');
 	const initialText = optionalString(record.initialText, 'serialized editor initial text');
 	const encodedBytes = optionalString(record.initialBytes, 'serialized editor initial bytes');
-	if (encodedBytes !== undefined && (encodedBytes.length > 180 * 1024 * 1024 || encodedBytes.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/u.test(encodedBytes))) {
+	if (
+		encodedBytes !== undefined &&
+		(encodedBytes.length > 180 * 1024 * 1024 ||
+			encodedBytes.length % 4 !== 0 ||
+			!/^[A-Za-z0-9+/]*={0,2}$/u.test(encodedBytes))
+	) {
 		throw new TypeError('Serialized editor initial bytes must be bounded base64');
 	}
 	const initialBytes = encodedBytes === undefined ? undefined : decodeBase64(encodedBytes).buffer;
@@ -133,9 +140,14 @@ function deserializeIcon(value: unknown): ThemeIcon | URI | undefined {
 }
 
 export function isSerializedEditorInput(value: unknown): value is SerializedEditorInput {
-	return typeof value === 'object' && value !== null &&
-		'typeId' in value && typeof value.typeId === 'string' && value.typeId.length > 0 &&
-		'value' in value;
+	return (
+		typeof value === 'object' &&
+		value !== null &&
+		'typeId' in value &&
+		typeof value.typeId === 'string' &&
+		value.typeId.length > 0 &&
+		'value' in value
+	);
 }
 
 export function requireSerializedEditorInput(value: unknown, label: string): SerializedEditorInput {
@@ -144,7 +156,8 @@ export function requireSerializedEditorInput(value: unknown, label: string): Ser
 }
 
 export function requireRecord(value: unknown, label: string): Record<string, unknown> {
-	if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new TypeError(`${label} must be an object`);
+	if (typeof value !== 'object' || value === null || Array.isArray(value))
+		throw new TypeError(`${label} must be an object`);
 	return value as Record<string, unknown>;
 }
 

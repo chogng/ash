@@ -34,24 +34,38 @@ export class PromptLanguageFeaturesProvider extends Disposable {
 		@IPromptsService prompts: IPromptsService,
 	) {
 		super();
-		this._register(features.completionProvider.register(instantiationService.createInstance(PromptHeaderAutocompletion)));
+		this._register(
+			features.completionProvider.register(instantiationService.createInstance(PromptHeaderAutocompletion)),
+		);
 		this._register(features.hoverProvider.register(['markdown'], new PromptHoverProvider()));
 		this._register(features.linkProvider.register(['markdown'], new PromptLinkProvider()));
-		this._register(textModels.registerTextModelContentProvider(Schemas.internal, {
-			provideTextContent: async resource => {
-				if (resource.authority !== 'skill') return null;
-				if (this.isDisposed) return null;
-				const existing = this.modelService.getModel(resource);
-				if (existing) return existing;
-				const cancellation = new CancellationTokenSource();
-				const cleanup = this.readers.add(toDisposable(() => cancellation.dispose(true)));
-				try {
-					const parsed = await prompts.parseNew(resource, cancellation.token);
-					if (this.isDisposed || cancellation.token.isCancellationRequested) return null;
-					return this.modelService.getModel(resource) ?? this.modelService.createModel(parsed.content, languages.createByFilepathOrFirstLine(resource, parsed.content.split('\n', 1)[0]), resource);
-				} finally { this.readers.delete(cleanup); cleanup.dispose(); }
-			},
-		}));
+		this._register(
+			textModels.registerTextModelContentProvider(Schemas.internal, {
+				provideTextContent: async resource => {
+					if (resource.authority !== 'skill') return null;
+					if (this.isDisposed) return null;
+					const existing = this.modelService.getModel(resource);
+					if (existing) return existing;
+					const cancellation = new CancellationTokenSource();
+					const cleanup = this.readers.add(toDisposable(() => cancellation.dispose(true)));
+					try {
+						const parsed = await prompts.parseNew(resource, cancellation.token);
+						if (this.isDisposed || cancellation.token.isCancellationRequested) return null;
+						return (
+							this.modelService.getModel(resource) ??
+							this.modelService.createModel(
+								parsed.content,
+								languages.createByFilepathOrFirstLine(resource, parsed.content.split('\n', 1)[0]),
+								resource,
+							)
+						);
+					} finally {
+						this.readers.delete(cleanup);
+						cleanup.dispose();
+					}
+				},
+			}),
+		);
 		this._register(modelService.onModelAdded(model => this.track(model)));
 		this._register(modelService.onModelLanguageChanged(({ model }) => this.track(model)));
 		this._register(modelService.onModelRemoved(model => this.models.deleteAndDispose(model)));
@@ -67,15 +81,20 @@ export class PromptLanguageFeaturesProvider extends Disposable {
 		const lifetime = this.models.set(model, new DisposableStore());
 		const validate = () => {
 			const diagnostics = this.validator.validate(this.parser.parse(model.uri, model.getValue()));
-			this.markerService.changeOne(PromptLanguageFeaturesProvider.ID, model.uri, diagnostics.map(diagnostic => ({
-				startLineNumber: diagnostic.range.startLineNumber,
-				startColumn: diagnostic.range.startColumn,
-				endLineNumber: diagnostic.range.endLineNumber,
-				endColumn: diagnostic.range.endColumn,
-				severity: diagnostic.severity === 'warning' ? MarkerSeverity.Warning : MarkerSeverity.Error,
-				message: diagnostic.message, source: diagnostic.source,
-				...(diagnostic.code === undefined ? {} : { code: String(diagnostic.code) }),
-			})));
+			this.markerService.changeOne(
+				PromptLanguageFeaturesProvider.ID,
+				model.uri,
+				diagnostics.map(diagnostic => ({
+					startLineNumber: diagnostic.range.startLineNumber,
+					startColumn: diagnostic.range.startColumn,
+					endLineNumber: diagnostic.range.endLineNumber,
+					endColumn: diagnostic.range.endColumn,
+					severity: diagnostic.severity === 'warning' ? MarkerSeverity.Warning : MarkerSeverity.Error,
+					message: diagnostic.message,
+					source: diagnostic.source,
+					...(diagnostic.code === undefined ? {} : { code: String(diagnostic.code) }),
+				})),
+			);
 		};
 		const scheduled = lifetime.add(new RunOnceScheduler(validate, 100));
 		lifetime.add(model.onDidChangeContent(() => scheduled.schedule()));

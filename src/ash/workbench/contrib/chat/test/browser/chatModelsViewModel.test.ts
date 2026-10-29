@@ -9,12 +9,30 @@ import { InstantiationService } from '../../../../../platform/instantiation/comm
 import type { ModelProviderCredentialStatus } from '../../../../../platform/agentHost/common/agentModels.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../../services/chat/common/modelCatalog.js';
 import { ILanguageModelsService } from '../../common/languageModels.js';
-import { ChatModelsViewModel, isLanguageModelProviderEntry, isStatusEntry, type ILanguageModelEntry, type IViewModelEntry } from '../../browser/chatManagement/chatModelsViewModel.js';
+import {
+	ChatModelsViewModel,
+	isLanguageModelProviderEntry,
+	isStatusEntry,
+	type ILanguageModelEntry,
+	type IViewModelEntry,
+} from '../../browser/chatManagement/chatModelsViewModel.js';
 import { getModelHoverContent } from '../../browser/chatManagement/chatModelsWidget.js';
 
 const catalog: readonly ModelCatalogEntry[] = [
-	{ model: { provider: 'first', model: 'newest' }, displayName: 'New Model', longContext: null, inputModalities: ['text', 'image'], description: 'A supplied description.', contextWindow: 128000 },
-	{ model: { provider: 'first', model: 'older' }, displayName: 'Older Model', longContext: null, inputModalities: ['text'] },
+	{
+		model: { provider: 'first', model: 'newest' },
+		displayName: 'New Model',
+		longContext: null,
+		inputModalities: ['text', 'image'],
+		description: 'A supplied description.',
+		contextWindow: 128000,
+	},
+	{
+		model: { provider: 'first', model: 'older' },
+		displayName: 'Older Model',
+		longContext: null,
+		inputModalities: ['text'],
+	},
 	{ model: { provider: 'second', model: 'other' }, displayName: 'Other', longContext: null },
 ];
 
@@ -22,13 +40,14 @@ function setup(resources: DisposableStore) {
 	const services = resources.add(new InstantiationService());
 	const changed = resources.add(new Emitter<void>());
 	const enabled = new Set([modelRefIdentity(catalog[0].model)]);
-	const writes: { provider: string; model: string; visible: boolean; }[] = [];
+	const writes: { provider: string; model: string; visible: boolean }[] = [];
 	const source = {
 		read: async (): Promise<readonly ModelCatalogEntry[]> => catalog,
-		providers: async (): Promise<readonly ModelProviderCredentialStatus[]> => [
-			{ connection: 'first', provider: 'vendor-a', displayName: 'First Provider' },
-			{ connection: 'second', provider: 'vendor-b', displayName: 'Second Provider' },
-		] as ModelProviderCredentialStatus[],
+		providers: async (): Promise<readonly ModelProviderCredentialStatus[]> =>
+			[
+				{ connection: 'first', provider: 'vendor-a', displayName: 'First Provider' },
+				{ connection: 'second', provider: 'vendor-b', displayName: 'Second Provider' },
+			] as ModelProviderCredentialStatus[],
 		failWrite: false,
 	};
 	services.registerInstance(ILanguageModelsService, {
@@ -37,14 +56,21 @@ function setup(resources: DisposableStore) {
 		listModelProviders: () => source.providers(),
 		isModelVisible: model => enabled.has(modelRefIdentity(model)),
 		setModelVisible: async (model, visible) => {
-			if (source.failWrite) { throw new Error('Write rejected'); }
+			if (source.failWrite) {
+				throw new Error('Write rejected');
+			}
 			writes.push({ ...model, visible });
-			if (visible) { enabled.add(modelRefIdentity(model)); } else { enabled.delete(modelRefIdentity(model)); }
+			if (visible) {
+				enabled.add(modelRefIdentity(model));
+			} else {
+				enabled.delete(modelRefIdentity(model));
+			}
 			changed.fire();
 		},
 	} as ILanguageModelsService);
 	const view = resources.add(services.createInstance(ChatModelsViewModel));
-	const models = (filter: string): ILanguageModelEntry[] => view.filter(filter).filter((entry): entry is ILanguageModelEntry => entry.type === 'model');
+	const models = (filter: string): ILanguageModelEntry[] =>
+		view.filter(filter).filter((entry): entry is ILanguageModelEntry => entry.type === 'model');
 	return { view, source, changed, enabled, writes, models };
 }
 
@@ -54,10 +80,12 @@ test('Catalog construction requires its domain service and refresh produces real
 	assert.throws(() => empty.createInstance(ChatModelsViewModel), /languageModelsService/);
 	const { view } = setup(resources);
 	const projection: IViewModelEntry[] = [];
-	resources.add(view.onDidChange(event => {
-		projection.splice(event.at, event.removed, ...event.added);
-		assert.deepEqual(projection, view.viewModelEntries);
-	}));
+	resources.add(
+		view.onDidChange(event => {
+			projection.splice(event.at, event.removed, ...event.added);
+			assert.deepEqual(projection, view.viewModelEntries);
+		}),
+	);
 	assert.equal(view.shouldRefilter(), true);
 	await view.refresh();
 	assert.equal(view.shouldRefilter(), false);
@@ -69,9 +97,15 @@ test('Catalog filters quoted provider names, OR providers, text and declared vis
 	using resources = new DisposableStore();
 	const { view, models } = setup(resources);
 	await view.refresh();
-	assert.deepEqual(models('@provider:"FIRST Provider"').map(entry => entry.model.model.model), ['newest', 'older']);
+	assert.deepEqual(
+		models('@provider:"FIRST Provider"').map(entry => entry.model.model.model),
+		['newest', 'older'],
+	);
 	assert.equal(models('@provider:first @provider:second').length, 3);
-	assert.deepEqual(models('@provider:first @capability:vision "new model"').map(entry => entry.model.model.model), ['newest']);
+	assert.deepEqual(
+		models('@provider:first @capability:vision "new model"').map(entry => entry.model.model.model),
+		['newest'],
+	);
 	assert.equal(models('@capability:tools').length, 0);
 	assert.equal(models('@capability:agent').length, 0);
 	assert.equal(models('@capability:vision @provider:second').length, 0);
@@ -83,17 +117,35 @@ test('Catalog filters quoted provider names, OR providers, text and declared vis
 test('Group visibility is scoped by connection identity even when provider labels are identical', async () => {
 	using resources = new DisposableStore();
 	const { view, source, writes, models } = setup(resources);
-	source.providers = async () => ['first', 'second'].map(connection => ({ connection, provider: 'same-vendor', displayName: 'Same name' })) as ModelProviderCredentialStatus[];
+	source.providers = async () =>
+		['first', 'second'].map(connection => ({
+			connection,
+			provider: 'same-vendor',
+			displayName: 'Same name',
+		})) as ModelProviderCredentialStatus[];
 	await view.refresh();
 	const groups = view.viewModelEntries.filter(isLanguageModelProviderEntry);
 	assert.equal(groups.length, 2);
 	assert.notEqual(groups[0].id, groups[1].id);
-	assert.deepEqual(view.getModelsForGroup(groups[0]).map(model => model.model.model), ['newest', 'older']);
+	assert.deepEqual(
+		view.getModelsForGroup(groups[0]).map(model => model.model.model),
+		['newest', 'older'],
+	);
 	view.filter('@provider:first older');
 	const filteredGroup = view.viewModelEntries.find(isLanguageModelProviderEntry)!;
-	assert.equal(filteredGroup.hidden, false, 'A hidden search result does not hide another enabled model in the same connection');
+	assert.equal(
+		filteredGroup.hidden,
+		false,
+		'A hidden search result does not hide another enabled model in the same connection',
+	);
 	await view.toggleGroupHidden(filteredGroup);
-	assert.deepEqual(writes.map(write => [write.provider, write.model, write.visible]), [['first', 'newest', false], ['first', 'older', false]]);
+	assert.deepEqual(
+		writes.map(write => [write.provider, write.model, write.visible]),
+		[
+			['first', 'newest', false],
+			['first', 'older', false],
+		],
+	);
 	assert.equal(models('@provider:second')[0].model.hidden, true);
 	await view.setModelsHidden(models('@provider:first'), false);
 	assert.ok(models('@provider:first').every(entry => !entry.model.hidden));
@@ -114,7 +166,11 @@ test('Collapsing provider groups and searching uses one projection and preserves
 	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 2);
 	assert.equal(models('other').length, 1, 'A new search expands its matching groups');
 	view.collapseAll();
-	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 0, 'Collapse remains effective while searching');
+	assert.equal(
+		view.viewModelEntries.filter(entry => entry.type === 'model').length,
+		0,
+		'Collapse remains effective while searching',
+	);
 	assert.equal(models('').length, 3);
 });
 
@@ -125,8 +181,14 @@ test('Catalog refresh is independent of a pending provider credential observatio
 	source.providers = () => providers.p;
 	await view.refresh();
 	assert.equal(models('').length, 3);
-	assert.deepEqual(view.getConfiguredVendors().map(provider => provider.group.vendor), ['first', 'second']);
-	assert.deepEqual(view.getVendors().map(provider => provider.vendor), ['first', 'second']);
+	assert.deepEqual(
+		view.getConfiguredVendors().map(provider => provider.group.vendor),
+		['first', 'second'],
+	);
+	assert.deepEqual(
+		view.getVendors().map(provider => provider.vendor),
+		['first', 'second'],
+	);
 	await providers.complete([]);
 });
 
@@ -140,21 +202,29 @@ test('Retired refresh results and failures cannot overwrite a successor catalog 
 	await view.refresh();
 	await first.complete([catalog[0]]);
 	await retired;
-	assert.deepEqual(models('').map(entry => entry.model.displayName), ['Other']);
+	assert.deepEqual(
+		models('').map(entry => entry.model.displayName),
+		['Other'],
+	);
 	const late = new DeferredPromise<readonly ModelCatalogEntry[]>();
 	source.read = () => late.p;
 	const pending = view.refresh();
 	view.dispose();
 	await late.complete(catalog);
 	await pending;
-	assert.deepEqual(view.viewModelEntries.filter(entry => entry.type === 'model').map(entry => entry.model.displayName), ['Other']);
+	assert.deepEqual(
+		view.viewModelEntries.filter(entry => entry.type === 'model').map(entry => entry.model.displayName),
+		['Other'],
+	);
 });
 
 test('A failed refresh keeps the last catalog with an error status and a failed visibility write keeps service truth', async () => {
 	using resources = new DisposableStore();
 	const { view, source, models } = setup(resources);
 	await view.refresh();
-	source.read = async () => { throw new Error('Offline'); };
+	source.read = async () => {
+		throw new Error('Offline');
+	};
 	await assert.rejects(view.refresh(), /Offline/);
 	assert.equal(view.viewModelEntries.filter(entry => entry.type === 'model').length, 3);
 	assert.ok(view.viewModelEntries.some(isStatusEntry));

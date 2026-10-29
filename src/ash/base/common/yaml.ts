@@ -11,7 +11,7 @@ export interface YamlScalarNode {
 
 export interface YamlMapNode {
 	readonly type: 'map';
-	readonly properties: { key: YamlScalarNode; value: YamlNode; }[];
+	readonly properties: { key: YamlScalarNode; value: YamlNode }[];
 	readonly style: 'block' | 'flow';
 	readonly startOffset: number;
 	readonly endOffset: number;
@@ -46,7 +46,9 @@ export interface ParseOptions {
  */
 export function parse(input: string, errors: YamlParseError[] = [], options: ParseOptions = {}): YamlNode | undefined {
 	const document = parseDocument(input, {
-		schema: 'failsafe', prettyErrors: false, stringKeys: true,
+		schema: 'failsafe',
+		prettyErrors: false,
+		stringKeys: true,
 		uniqueKeys: !options.allowDuplicateKeys,
 	});
 	for (const error of [...document.errors, ...document.warnings]) {
@@ -59,11 +61,23 @@ export function parse(input: string, errors: YamlParseError[] = [], options: Par
 	const convert = (node: Node | null | undefined, accept: (value: YamlNode) => void): void => {
 		const startOffset = node?.range?.[0] ?? 0;
 		const endOffset = node?.range?.[1] ?? startOffset;
-		const code = isAlias(node) ? 'YAML_ALIAS' : node?.tag ? 'YAML_TAG'
-			: node && 'anchor' in node && node.anchor ? 'YAML_ANCHOR' : undefined;
+		const code = isAlias(node)
+			? 'YAML_ALIAS'
+			: node?.tag
+				? 'YAML_TAG'
+				: node && 'anchor' in node && node.anchor
+					? 'YAML_ANCHOR'
+					: undefined;
 		if (code) {
 			errors.push({ code, message: 'YAML aliases, anchors and tags are not supported.', startOffset, endOffset });
-			accept({ type: 'scalar', value: '', rawValue: input.slice(startOffset, endOffset), format: 'none', startOffset, endOffset });
+			accept({
+				type: 'scalar',
+				value: '',
+				rawValue: input.slice(startOffset, endOffset),
+				format: 'none',
+				startOffset,
+				endOffset,
+			});
 			return;
 		}
 		if (isMap(node)) {
@@ -71,10 +85,16 @@ export function parse(input: string, errors: YamlParseError[] = [], options: Par
 			accept({ type: 'map', properties, style: node.flow ? 'flow' : 'block', startOffset, endOffset });
 			for (let index = node.items.length - 1; index >= 0; index--) {
 				const pair = node.items[index]!;
-				pending.push(() => convert(isNode(pair.key) ? pair.key : undefined, key => {
-					if (key.type !== 'scalar') return;
-					pending.push(() => convert(isNode(pair.value) ? pair.value : undefined, value => properties.push({ key, value })));
-				}));
+				pending.push(() =>
+					convert(isNode(pair.key) ? pair.key : undefined, key => {
+						if (key.type !== 'scalar') return;
+						pending.push(() =>
+							convert(isNode(pair.value) ? pair.value : undefined, value =>
+								properties.push({ key, value }),
+							),
+						);
+					}),
+				);
 			}
 			return;
 		}
@@ -83,18 +103,41 @@ export function parse(input: string, errors: YamlParseError[] = [], options: Par
 			accept({ type: 'sequence', items, style: node.flow ? 'flow' : 'block', startOffset, endOffset });
 			for (let index = node.items.length - 1; index >= 0; index--) {
 				const item = node.items[index];
-				pending.push(() => convert(isNode(item) ? item : undefined, value => { items[index] = value; }));
+				pending.push(() =>
+					convert(isNode(item) ? item : undefined, value => {
+						items[index] = value;
+					}),
+				);
 			}
 			return;
 		}
 		const format = isScalar(node)
-			? ({ QUOTE_SINGLE: 'single', QUOTE_DOUBLE: 'double', BLOCK_LITERAL: 'literal', BLOCK_FOLDED: 'folded', PLAIN: 'none' } as const)[node.type ?? 'PLAIN']
+			? (
+					{
+						QUOTE_SINGLE: 'single',
+						QUOTE_DOUBLE: 'double',
+						BLOCK_LITERAL: 'literal',
+						BLOCK_FOLDED: 'folded',
+						PLAIN: 'none',
+					} as const
+				)[node.type ?? 'PLAIN']
 			: 'none';
-		accept({ type: 'scalar', value: isScalar(node) ? String(node.value ?? '') : '', rawValue: input.slice(startOffset, endOffset), format, startOffset, endOffset });
+		accept({
+			type: 'scalar',
+			value: isScalar(node) ? String(node.value ?? '') : '',
+			rawValue: input.slice(startOffset, endOffset),
+			format,
+			startOffset,
+			endOffset,
+		});
 	};
 	// The syntax layer has no product-specific depth limit and does not recurse
 	// through an arbitrarily deep library tree on the JavaScript call stack.
-	pending.push(() => convert(document.contents, value => { root = value; }));
+	pending.push(() =>
+		convert(document.contents, value => {
+			root = value;
+		}),
+	);
 	while (pending.length) pending.pop()!();
 	return root;
 }

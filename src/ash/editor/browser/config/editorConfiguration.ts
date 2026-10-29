@@ -200,7 +200,8 @@ export class EditorConfiguration extends Disposable implements IEditorConfigurat
 			accessibilitySupport: this.accessibilityService.isScreenReaderOptimized()
 				? AccessibilitySupport.Enabled
 				: this.accessibilityService.getAccessibilitySupport(),
-			editContextSupported: typeof (this.targetWindow as Window & { EditContext?: unknown; }).EditContext === 'function',
+			editContextSupported:
+				typeof (this.targetWindow as Window & { EditContext?: unknown }).EditContext === 'function',
 		};
 	}
 
@@ -219,11 +220,9 @@ export class EditorConfiguration extends Disposable implements IEditorConfigurat
 
 	private computeOptions(): ComputedEditorOptions {
 		const browserEnv = this._readEnvConfiguration();
-		const fontInfo = this._readFontInfo(createBareFontInfoFromValidatedSettings(
-			this.validatedOptions,
-			browserEnv.pixelRatio,
-			this.isSimpleWidget,
-		));
+		const fontInfo = this._readFontInfo(
+			createBareFontInfoFromValidatedSettings(this.validatedOptions, browserEnv.pixelRatio, this.isSimpleWidget),
+		);
 		const env: IEnvironmentalOptions = {
 			memory: this.computeMemory,
 			outerWidth: browserEnv.outerWidth,
@@ -244,7 +243,8 @@ export class EditorConfiguration extends Disposable implements IEditorConfigurat
 		const result = new ComputedEditorOptions();
 		for (const option of editorOptionsRegistry) {
 			let value = option.compute(env, result, this.validatedOptions._read(option.id));
-			if (option.id === EditorOption.minimap && !hasTextViewFeature('minimap')) value = { ...(value as EditorMinimapOptions), enabled: false };
+			if (option.id === EditorOption.minimap && !hasTextViewFeature('minimap'))
+				value = { ...(value as EditorMinimapOptions), enabled: false };
 			result._write(option.id, value);
 		}
 		return result;
@@ -259,7 +259,10 @@ function validateOptions(options: IEditorOptions): ValidatedEditorOptions {
 	return result;
 }
 
-function changedOptions(previous: ComputedEditorOptions, next: ComputedEditorOptions): ConfigurationChangedEvent | undefined {
+function changedOptions(
+	previous: ComputedEditorOptions,
+	next: ComputedEditorOptions,
+): ConfigurationChangedEvent | undefined {
 	const changed: boolean[] = [];
 	let anyChanged = false;
 	for (const option of editorOptionsRegistry) {
@@ -274,11 +277,19 @@ function sameValue(left: unknown, right: unknown): boolean {
 	if (Object.is(left, right)) return true;
 	if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
 	if (Array.isArray(left) || Array.isArray(right)) {
-		return Array.isArray(left) && Array.isArray(right) && left.length === right.length && left.every((value, index) => sameValue(value, right[index]));
+		return (
+			Array.isArray(left) &&
+			Array.isArray(right) &&
+			left.length === right.length &&
+			left.every((value, index) => sameValue(value, right[index]))
+		);
 	}
 	const leftEntries = Object.entries(left);
 	const rightRecord = right as Record<string, unknown>;
-	return leftEntries.length === Object.keys(rightRecord).length && leftEntries.every(([key, value]) => sameValue(value, rightRecord[key]));
+	return (
+		leftEntries.length === Object.keys(rightRecord).length &&
+		leftEntries.every(([key, value]) => sameValue(value, rightRecord[key]))
+	);
 }
 
 function cloneAndMigrate(options: Readonly<IEditorOptions>): IEditorOptions {

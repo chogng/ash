@@ -1,6 +1,6 @@
-import { Disposable } from "../../../../base/common/lifecycle.js";
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import type { Event } from '../../../../base/common/event.js';
-import { localize } from "../../../../nls.js";
+import { localize } from '../../../../nls.js';
 import {
 	type IConfirmationDialogOptions,
 	type IConfirmationDialogResult,
@@ -12,16 +12,15 @@ import {
 	type IMessageDialogOptions,
 	DialogResult,
 	DialogSeverity,
-} from "../../../../platform/dialogs/common/dialogs.js";
-import { DialogsModel } from "../../../common/dialogs.js";
+} from '../../../../platform/dialogs/common/dialogs.js';
+import { DialogsModel } from '../../../common/dialogs.js';
 import packageMetadata from '../../../../../../package.json' with { type: 'json' };
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 
 /**
  * Maps the platform dialog API onto the workbench-owned dialog model.
  */
-export class DialogService extends Disposable
-	implements IDialogService {
+export class DialogService extends Disposable implements IDialogService {
 	readonly model = this._register(new DialogsModel());
 	readonly onWillShowDialog: Event<void> = (listener, thisArgs, disposables) =>
 		this.model.onWillShowDialog(() => listener.call(thisArgs, undefined), undefined, disposables);
@@ -30,7 +29,7 @@ export class DialogService extends Disposable
 
 	async showMessage(options: IMessageDialogOptions): Promise<void> {
 		const handle = this.model.show({
-			kind: "message",
+			kind: 'message',
 			...options,
 			title: options.title ?? messageTitle(options.severity),
 			primaryButton: options.primaryButton ?? localize('dialog.ok', 'OK'),
@@ -52,7 +51,7 @@ export class DialogService extends Disposable
 
 	async confirm(options: IConfirmationDialogOptions): Promise<IConfirmationDialogResult> {
 		const handle = this.model.show({
-			kind: "confirmation",
+			kind: 'confirmation',
 			...options,
 			title: options.title ?? localize('dialog.confirm', 'Confirm'),
 			primaryButton: options.primaryButton ?? localize('dialog.confirm', 'Confirm'),
@@ -71,19 +70,24 @@ export class DialogService extends Disposable
 			severity: options.severity,
 			checkbox: options.checkbox,
 			buttons: options.buttons.map(button => button.label),
-			cancelButton: typeof options.cancelButton === 'object'
-				? options.cancelButton.label : options.cancelButton ?? localize('dialog.cancel', 'Cancel'),
+			cancelButton:
+				typeof options.cancelButton === 'object'
+					? options.cancelButton.label
+					: (options.cancelButton ?? localize('dialog.cancel', 'Cancel')),
 		}).result;
 		const checkbox = { checkboxChecked: result.checkboxChecked };
-		const action = result.buttonIndex === undefined
-			? typeof options.cancelButton === 'object' ? options.cancelButton : undefined
-			: options.buttons[result.buttonIndex];
+		const action =
+			result.buttonIndex === undefined
+				? typeof options.cancelButton === 'object'
+					? options.cancelButton
+					: undefined
+				: options.buttons[result.buttonIndex];
 		return { result: action ? await action.run(checkbox) : undefined, ...checkbox };
 	}
 
 	async input(options: IInputDialogOptions): Promise<IInputDialogResult> {
 		const result = await this.model.show({
-			kind: "input",
+			kind: 'input',
 			...options,
 			title: options.title ?? localize('dialog.input', 'Input'),
 			primaryButton: options.primaryButton ?? localize('dialog.ok', 'OK'),

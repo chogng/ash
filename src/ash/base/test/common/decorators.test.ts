@@ -8,7 +8,7 @@ suite('Decorators', () => {
 	test('memoize caches methods and getters independently per instance', () => {
 		class Example {
 			public calls = 0;
-			constructor(private readonly result: number | null) { }
+			constructor(private readonly result: number | null) {}
 
 			@memoize
 			public value(): number | null {
@@ -25,14 +25,17 @@ suite('Decorators', () => {
 
 		const first = new Example(null);
 		const second = new Example(2);
-		assert.deepEqual([first.value(), first.value(), first.label, first.label, first.calls], [null, null, 'null', 'null', 2]);
+		assert.deepEqual(
+			[first.value(), first.value(), first.label, first.label, first.calls],
+			[null, null, 'null', 'null', 2],
+		);
 		assert.deepEqual([second.value(), second.label, second.calls], [2, '2', 2]);
 		assert.deepEqual(Object.keys(first).sort(), ['calls', 'result']);
 	});
 
 	test('debounce sends the reduced value once after the quiet period', async () => {
 		let complete!: (value: number) => void;
-		const result = new Promise<number>(resolve => complete = resolve);
+		const result = new Promise<number>(resolve => (complete = resolve));
 		class Example {
 			@debounce(0, (total: number, value: number) => total + value, () => 0)
 			public report(value: number): void {
@@ -47,7 +50,7 @@ suite('Decorators', () => {
 
 	test('debounce forwards the final call arguments without a reducer', async () => {
 		let complete!: (value: string) => void;
-		const result = new Promise<string>(resolve => complete = resolve);
+		const result = new Promise<string>(resolve => (complete = resolve));
 		class Example {
 			@debounce(0)
 			public report(value: string): void {
@@ -63,7 +66,7 @@ suite('Decorators', () => {
 	test('throttle runs immediately and reduces calls within the interval', async () => {
 		const seen: number[] = [];
 		let complete!: (value: number[]) => void;
-		const result = new Promise<number[]>(resolve => complete = resolve);
+		const result = new Promise<number[]>(resolve => (complete = resolve));
 		class Example {
 			@throttle(10, (total: number, value: number) => total + value, () => 0)
 			public report(value: number): void {

@@ -38,10 +38,15 @@ suite('Streams', () => {
 		source.write(0);
 		source.write(1);
 		const producer = (async () => {
-			for (let index = 2; index < 20; index++) { await source.write(index); }
+			for (let index = 2; index < 20; index++) {
+				await source.write(index);
+			}
 			source.end();
 		})();
-		assert.equal(await consumeStream(result, values => values.join('')), Array.from({ length: 20 }, (_, index) => String(index)).join(''));
+		assert.equal(
+			await consumeStream(result, values => values.join('')),
+			Array.from({ length: 20 }, (_, index) => String(index)).join(''),
+		);
 		await producer;
 	});
 });

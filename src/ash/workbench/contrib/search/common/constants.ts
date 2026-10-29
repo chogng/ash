@@ -1,7 +1,7 @@
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 
-export const SEARCH_VIEW_ID = "ash.searchView";
-export const FOCUS_SEARCH_COMMAND_ID = "workbench.action.findInFiles";
+export const SEARCH_VIEW_ID = 'ash.searchView';
+export const FOCUS_SEARCH_COMMAND_ID = 'workbench.action.findInFiles';
 
 export const enum SearchCommandIds {
 	RemoveActionId = 'search.action.remove',
@@ -23,5 +23,8 @@ export const SearchContext = {
 	SearchResultListFocusedKey: new RawContextKey<boolean>('searchResultListFocus', false),
 	SearchViewFocusedKey: new RawContextKey<boolean>('searchViewletFocus', false),
 	FileMatchOrMatchFocusKey: new RawContextKey<boolean>('fileMatchOrMatchFocus', false),
-	FileMatchOrFolderMatchWithResourceFocusKey: new RawContextKey<boolean>('fileMatchOrFolderMatchWithResourceFocus', false),
+	FileMatchOrFolderMatchWithResourceFocusKey: new RawContextKey<boolean>(
+		'fileMatchOrFolderMatchWithResourceFocus',
+		false,
+	),
 };

@@ -21,7 +21,13 @@ export class ChatImageGenerationProgressPart extends Disposable {
 		this._register(toDisposable(() => this.domNode.remove()));
 	}
 
-	get size(): number | undefined { return this.domNode.getBoundingClientRect().width || undefined; }
-	takeSurface(): GlyphSurface | undefined { return this.surface.clearAndLeak(); }
-	setVisible(visible: boolean): void { this.surface.value?.setVisible(visible); }
+	get size(): number | undefined {
+		return this.domNode.getBoundingClientRect().width || undefined;
+	}
+	takeSurface(): GlyphSurface | undefined {
+		return this.surface.clearAndLeak();
+	}
+	setVisible(visible: boolean): void {
+		this.surface.value?.setVisible(visible);
+	}
 }

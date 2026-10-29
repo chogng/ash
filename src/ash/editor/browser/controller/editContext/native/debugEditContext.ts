@@ -1,7 +1,7 @@
 import { text, h } from '../../../../../base/browser/dom.js';
 import { EditContext } from './editContextFactory.js';
 
-type DebugMarker = { readonly dispose: () => void; };
+type DebugMarker = { readonly dispose: () => void };
 type EventHandler = (this: unknown, event: Event) => unknown;
 
 interface EditContextInit {
@@ -69,33 +69,61 @@ export class DebugEditContext {
 		this.document = window.document;
 		const editContext = EditContext.create(window, options);
 		if (
-			typeof (editContext as Partial<BrowserEditContext>).characterBoundsRangeStart !== 'number'
-			|| typeof editContext.updateControlBounds !== 'function'
-			|| typeof editContext.updateSelectionBounds !== 'function'
-			|| typeof editContext.updateCharacterBounds !== 'function'
-			|| typeof (editContext as Partial<BrowserEditContext>).attachedElements !== 'function'
-			|| typeof (editContext as Partial<BrowserEditContext>).characterBounds !== 'function'
+			typeof (editContext as Partial<BrowserEditContext>).characterBoundsRangeStart !== 'number' ||
+			typeof editContext.updateControlBounds !== 'function' ||
+			typeof editContext.updateSelectionBounds !== 'function' ||
+			typeof editContext.updateCharacterBounds !== 'function' ||
+			typeof (editContext as Partial<BrowserEditContext>).attachedElements !== 'function' ||
+			typeof (editContext as Partial<BrowserEditContext>).characterBounds !== 'function'
 		) {
 			throw new TypeError('Debug EditContext requires the complete browser API');
 		}
 		this.editContext = editContext as BrowserEditContext;
 	}
 
-	get text(): string { return this.editContext.text; }
-	get selectionStart(): number { return this.editContext.selectionStart; }
-	get selectionEnd(): number { return this.editContext.selectionEnd; }
-	get characterBoundsRangeStart(): number { return this.editContext.characterBoundsRangeStart; }
+	get text(): string {
+		return this.editContext.text;
+	}
+	get selectionStart(): number {
+		return this.editContext.selectionStart;
+	}
+	get selectionEnd(): number {
+		return this.editContext.selectionEnd;
+	}
+	get characterBoundsRangeStart(): number {
+		return this.editContext.characterBoundsRangeStart;
+	}
 
-	get ontextupdate(): EventHandler | null { return this.textUpdate.value; }
-	set ontextupdate(value: EventHandler | null) { this.textUpdate.value = value; }
-	get ontextformatupdate(): EventHandler | null { return this.textFormatUpdate.value; }
-	set ontextformatupdate(value: EventHandler | null) { this.textFormatUpdate.value = value; }
-	get oncharacterboundsupdate(): EventHandler | null { return this.characterBoundsUpdate.value; }
-	set oncharacterboundsupdate(value: EventHandler | null) { this.characterBoundsUpdate.value = value; }
-	get oncompositionstart(): EventHandler | null { return this.compositionStart.value; }
-	set oncompositionstart(value: EventHandler | null) { this.compositionStart.value = value; }
-	get oncompositionend(): EventHandler | null { return this.compositionEnd.value; }
-	set oncompositionend(value: EventHandler | null) { this.compositionEnd.value = value; }
+	get ontextupdate(): EventHandler | null {
+		return this.textUpdate.value;
+	}
+	set ontextupdate(value: EventHandler | null) {
+		this.textUpdate.value = value;
+	}
+	get ontextformatupdate(): EventHandler | null {
+		return this.textFormatUpdate.value;
+	}
+	set ontextformatupdate(value: EventHandler | null) {
+		this.textFormatUpdate.value = value;
+	}
+	get oncharacterboundsupdate(): EventHandler | null {
+		return this.characterBoundsUpdate.value;
+	}
+	set oncharacterboundsupdate(value: EventHandler | null) {
+		this.characterBoundsUpdate.value = value;
+	}
+	get oncompositionstart(): EventHandler | null {
+		return this.compositionStart.value;
+	}
+	set oncompositionstart(value: EventHandler | null) {
+		this.compositionStart.value = value;
+	}
+	get oncompositionend(): EventHandler | null {
+		return this.compositionEnd.value;
+	}
+	set oncompositionend(value: EventHandler | null) {
+		this.compositionEnd.value = value;
+	}
 
 	updateText(start: number, end: number, text: string): void {
 		this.editContext.updateText(start, end, text);
@@ -125,11 +153,23 @@ export class DebugEditContext {
 		this.renderDebug();
 	}
 
-	attachedElements(): HTMLElement[] { return this.editContext.attachedElements(); }
-	characterBounds(): DOMRect[] { return this.editContext.characterBounds(); }
+	attachedElements(): HTMLElement[] {
+		return this.editContext.attachedElements();
+	}
+	characterBounds(): DOMRect[] {
+		return this.editContext.characterBounds();
+	}
 
-	addEventListener<K extends keyof EditContextEventHandlersEventMap>(type: K, listener: (this: GlobalEventHandlers, event: EditContextEventHandlersEventMap[K]) => void, options?: boolean | AddEventListenerOptions): void;
-	addEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void {
+	addEventListener<K extends keyof EditContextEventHandlersEventMap>(
+		type: K,
+		listener: (this: GlobalEventHandlers, event: EditContextEventHandlersEventMap[K]) => void,
+		options?: boolean | AddEventListenerOptions,
+	): void;
+	addEventListener(
+		type: string,
+		listener: EventListenerOrEventListenerObject,
+		options?: boolean | AddEventListenerOptions,
+	): void {
 		if (!listener) return;
 		const wrapped: EventListener = event => {
 			if (this.debugging) {
@@ -144,7 +184,11 @@ export class DebugEditContext {
 		this.renderDebug();
 	}
 
-	removeEventListener(type: string, listener: EventListenerOrEventListenerObject | null, options?: boolean | EventListenerOptions): void {
+	removeEventListener(
+		type: string,
+		listener: EventListenerOrEventListenerObject | null,
+		options?: boolean | EventListenerOptions,
+	): void {
 		if (!listener) return;
 		const wrapped = this.listeners.get(listener);
 		if (!wrapped) return;
@@ -153,7 +197,9 @@ export class DebugEditContext {
 		this.renderDebug();
 	}
 
-	dispatchEvent(event: Event): boolean { return this.editContext.dispatchEvent(event); }
+	dispatchEvent(event: Event): boolean {
+		return this.editContext.dispatchEvent(event);
+	}
 
 	startDebugging(): void {
 		this.debugging = true;
@@ -217,9 +263,14 @@ export class DebugEditContext {
 class HandlerSlot {
 	private handler: EventHandler | null = null;
 
-	constructor(private readonly type: keyof EditContextEventHandlersEventMap, private readonly target: DebugEditContext) { }
+	constructor(
+		private readonly type: keyof EditContextEventHandlersEventMap,
+		private readonly target: DebugEditContext,
+	) {}
 
-	get value(): EventHandler | null { return this.handler; }
+	get value(): EventHandler | null {
+		return this.handler;
+	}
 	set value(handler: EventHandler | null) {
 		if (this.handler) this.target.removeEventListener(this.type, this.handler);
 		this.handler = handler;

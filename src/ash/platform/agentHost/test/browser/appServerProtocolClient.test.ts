@@ -14,7 +14,16 @@ import { LogService } from '../../../log/common/logServiceImpl.js';
 import { AppServerProtocolIncompatibleError } from '../../common/appServerProtocolCompatibility.js';
 import { appServerRequest } from '../../browser/appServerRequest.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
-import { AppServerFrame, type AppServerTransport, WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION } from '../../common/appServerTransport.js';
+import {
+	AppServerFrame,
+	type AppServerTransport,
+	WEB_APP_SERVER_CLOSED_EVENT,
+	WEB_APP_SERVER_CONNECTED_EVENT,
+	WEB_APP_SERVER_CONNECT_EVENT,
+	WEB_APP_SERVER_DISCONNECT_EVENT,
+	WEB_APP_SERVER_FRAME_EVENT,
+	WEB_APP_SERVER_PROTOCOL_VERSION,
+} from '../../common/appServerTransport.js';
 import { createTestInitializeResult } from '../common/testAppServerProtocol.js';
 import { SSH_REMOTE_INITIALIZE_TIMEOUT_MS } from '../../../remote/common/remote.js';
 import { AppServerFrameDecoder } from '../../browser/appServerFrameDecoder.js';
@@ -31,39 +40,66 @@ class ProtocolTransport implements AppServerTransport {
 	public onInitialize: (() => void) | undefined;
 	public onDisconnect: (() => void) | undefined;
 	public rejectFrameWrites = false;
-	constructor(private readonly initialize: () => unknown = createTestInitializeResult) { }
+	constructor(private readonly initialize: () => unknown = createTestInitializeResult) {}
 
 	public on(event: string, listener: (payload: unknown) => void): void {
 		let listeners = this.listeners.get(event);
-		if (!listeners) { this.listeners.set(event, listeners = new Set()); }
+		if (!listeners) {
+			this.listeners.set(event, (listeners = new Set()));
+		}
 		listeners.add(listener);
 	}
 
-	public off(event: string, listener: (payload: unknown) => void): void { this.listeners.get(event)?.delete(listener); }
+	public off(event: string, listener: (payload: unknown) => void): void {
+		this.listeners.get(event)?.delete(listener);
+	}
 
 	public send(event: string, payload?: unknown): void {
 		if (event === WEB_APP_SERVER_CONNECT_EVENT) {
-			this.emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION, workspaceId: 'workspace', workspaceRoot: '/workspace' });
+			this.emit(WEB_APP_SERVER_CONNECTED_EVENT, {
+				protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION,
+				workspaceId: 'workspace',
+				workspaceRoot: '/workspace',
+			});
 		} else if (event === WEB_APP_SERVER_DISCONNECT_EVENT) {
 			this.onDisconnect?.();
-			if (this.shouldCloseSynchronously) { this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true }); }
+			if (this.shouldCloseSynchronously) {
+				this.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true });
+			}
 		} else if (event === WEB_APP_SERVER_FRAME_EVENT) {
 			if (this.rejectFrameWrites) throw new Error('Peer socket already closed');
-			const frame = JSON.parse((payload as { frame: string; }).frame) as Record<string, unknown>;
+			const frame = JSON.parse((payload as { frame: string }).frame) as Record<string, unknown>;
 			this.frames.push(frame);
 			if (frame.method === 'initialize') {
-				const reply = () => { this.frame({ id: frame.id, result: this.initialize() }); this.onInitialize?.(); };
-				if (this.initializeDelayMs) { setTimeout(reply, this.initializeDelayMs); } else { reply(); }
+				const reply = () => {
+					this.frame({ id: frame.id, result: this.initialize() });
+					this.onInitialize?.();
+				};
+				if (this.initializeDelayMs) {
+					setTimeout(reply, this.initializeDelayMs);
+				} else {
+					reply();
+				}
 			}
 		}
 	}
 
-	public frame(value: Record<string, unknown>): void { this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', ...value }) }); }
+	public frame(value: Record<string, unknown>): void {
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', ...value }) });
+	}
 
-	public emit(event: string, payload: unknown): void { for (const listener of this.listeners.get(event) ?? []) { listener(payload); } }
+	public emit(event: string, payload: unknown): void {
+		for (const listener of this.listeners.get(event) ?? []) {
+			listener(payload);
+		}
+	}
 
 	public hostRequest(id: string): void {
-		this.frame({ id, method: 'browser/create', params: { threadId: '00000000-0000-4000-8000-000000000001', url: 'https://example.test' } });
+		this.frame({
+			id,
+			method: 'browser/create',
+			params: { threadId: '00000000-0000-4000-8000-000000000001', url: 'https://example.test' },
+		});
 	}
 }
 
@@ -75,16 +111,27 @@ test('extension results wake through decoded completion notifications and stop w
 		const client = new AppServerProtocolClient(transport);
 		using cleanup = toDisposable(() => client.dispose());
 		await client.connect();
-		const pending = createAppServerExtensionHostApi(client).invoke({
-			extensionId: 'acme.demo', registrationId: 'command', activationGeneration: 1,
-			incarnation: 1, operation: 'execute', payload: null, deadlineUnixMillis: Date.now() + 5000,
-		}, new AbortController().signal);
+		const pending = createAppServerExtensionHostApi(client).invoke(
+			{
+				extensionId: 'acme.demo',
+				registrationId: 'command',
+				activationGeneration: 1,
+				incarnation: 1,
+				operation: 'execute',
+				payload: null,
+				deadlineUnixMillis: Date.now() + 5000,
+			},
+			new AbortController().signal,
+		);
 		const settled = outcome === 'disconnect' ? assert.rejects(pending, /closed|not ready/) : pending;
 		const started = transport.frames.find(frame => frame.method === 'extensionHost/invoke/start')!;
 		assert.ok(started);
 		transport.frame({ id: started.id, result: { invocationId: 'eh-1-1' } });
 		await flushHandlers();
-		assert.equal(transport.frames.some(frame => frame.method === 'extensionHost/invoke/read'), false);
+		assert.equal(
+			transport.frames.some(frame => frame.method === 'extensionHost/invoke/read'),
+			false,
+		);
 		if (outcome === 'disconnect') {
 			transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'connection closed' });
 			await settled;
@@ -107,7 +154,9 @@ test('readiness waits through replacement and initialization without opening a c
 	await client.whenReady();
 	client.disconnect();
 	let ready = false;
-	const waiting = client.whenReady().then(() => { ready = true; });
+	const waiting = client.whenReady().then(() => {
+		ready = true;
+	});
 	await flushHandlers();
 	assert.equal(ready, false);
 	assert.equal(transport.frames.filter(frame => frame.method === 'initialize').length, 1);
@@ -131,7 +180,9 @@ test('readiness has a bounded deadline without failing or starting the connectio
 		await client.connect();
 		await client.whenReady();
 		assert.equal(client.state, 'ready');
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('readiness is not satisfied by an acquired but uninitialized connection', async () => {
@@ -142,7 +193,9 @@ test('readiness is not satisfied by an acquired but uninitialized connection', a
 		const client = new AppServerProtocolClient(transport);
 		using cleanup = toDisposable(() => client.dispose());
 		let ready = false;
-		const waiting = client.whenReady().then(() => { ready = true; });
+		const waiting = client.whenReady().then(() => {
+			ready = true;
+		});
 		const connecting = client.connect();
 		await flushHandlers();
 		mock.timers.tick(99);
@@ -152,7 +205,9 @@ test('readiness is not satisfied by an acquired but uninitialized connection', a
 		mock.timers.tick(1);
 		await Promise.all([connecting, waiting]);
 		assert.equal(client.state, 'ready');
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('disposing an already stopped client rejects all readiness waits and future waits', async () => {
@@ -170,7 +225,10 @@ test('SSH cold package initialization can outlast ordinary request deadlines', a
 	try {
 		const transport = new ProtocolTransport();
 		transport.initializeDelayMs = 65_000;
-		const client = new AppServerProtocolClient(transport, { initializeTimeoutMs: SSH_REMOTE_INITIALIZE_TIMEOUT_MS, requestTimeoutMs: 100 });
+		const client = new AppServerProtocolClient(transport, {
+			initializeTimeoutMs: SSH_REMOTE_INITIALIZE_TIMEOUT_MS,
+			requestTimeoutMs: 100,
+		});
 		using cleanup = toDisposable(() => client.dispose());
 		const connected = client.connect();
 		await flushHandlers();
@@ -181,7 +239,9 @@ test('SSH cold package initialization can outlast ordinary request deadlines', a
 		mock.timers.tick(100);
 		await request;
 		assert.equal(client.state, 'crashed');
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 function largeFrame(transport: ProtocolTransport, value: Record<string, unknown>, byteLength?: number): AppServerFrame {
@@ -198,18 +258,25 @@ test('asynchronous responses preserve wire order, host cancellation and read con
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
 	let signal: AbortSignal | undefined;
-	let finish!: (value: { targetId: string; }) => void;
+	let finish!: (value: { targetId: string }) => void;
 	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
 		signal = context.signal;
-		return new Promise(resolve => { finish = resolve; });
+		return new Promise(resolve => {
+			finish = resolve;
+		});
 	});
 	transport.hostRequest('approval');
 	await flushHandlers();
 	const order: string[] = [];
-	const pending = appServerRequest(client, 'session/list', {}).then(value => { order.push('response'); return value; });
+	const pending = appServerRequest(client, 'session/list', {}).then(value => {
+		order.push('response');
+		return value;
+	});
 	const payload = largeFrame(transport, { id: transport.frames.at(-1)!.id, result: { sessions: [] } });
 	let consumed = false;
-	void payload.consumed!.then(() => { consumed = true; });
+	void payload.consumed!.then(() => {
+		consumed = true;
+	});
 	const cancel = JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 'approval' } });
 	const cancellation = new AppServerFrame(cancel, Buffer.byteLength(cancel));
 	transport.emit(WEB_APP_SERVER_FRAME_EVENT, cancellation);
@@ -224,7 +291,10 @@ test('asynchronous responses preserve wire order, host cancellation and read con
 	assert.equal(signal!.aborted, true);
 	finish({ targetId: 'late' });
 	await flushHandlers();
-	assert.deepEqual(transport.frames.filter(frame => frame.id === 'approval'), [{ jsonrpc: '2.0', id: 'approval', error: { code: -32800, message: 'Host request cancelled', data: null } }]);
+	assert.deepEqual(
+		transport.frames.filter(frame => frame.id === 'approval'),
+		[{ jsonrpc: '2.0', id: 'approval', error: { code: -32800, message: 'Host request cancelled', data: null } }],
+	);
 	assert.deepEqual(order, ['response']);
 	assert.equal(client.state, 'ready');
 });
@@ -251,18 +321,29 @@ test('host deadlines cancel work while EOF is waiting for Worker decoding withou
 	try {
 		const transport = new ProtocolTransport();
 		const port = new TestAppServerDecodePort();
-		const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 100 }, new AppServerFrameDecoder(() => port));
+		const client = new AppServerProtocolClient(
+			transport,
+			{ requestTimeoutMs: 100 },
+			new AppServerFrameDecoder(() => port),
+		);
 		using cleanup = toDisposable(() => client.dispose());
 		await client.connect();
 		let signal!: AbortSignal;
 		let finish!: () => void;
 		let effects = 0;
-		using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], async (_params, context) => {
-			signal = context.signal;
-			await new Promise<void>(resolve => { finish = resolve; });
-			if (!signal.aborted) { effects++; }
-			return { targetId: 'late' };
-		});
+		using handler = client.registerRequestHandler(
+			APP_SERVER_SERVER_REQUESTS['browser/create'],
+			async (_params, context) => {
+				signal = context.signal;
+				await new Promise<void>(resolve => {
+					finish = resolve;
+				});
+				if (!signal.aborted) {
+					effects++;
+				}
+				return { targetId: 'late' };
+			},
+		);
 		transport.hostRequest('deadline');
 		await flushHandlers();
 		mock.timers.tick(50);
@@ -275,17 +356,30 @@ test('host deadlines cancel work while EOF is waiting for Worker decoding withou
 		finish();
 		await flushHandlers();
 		assert.equal(effects, 0);
-		assert.equal(transport.frames.some(frame => frame.id === 'deadline'), false);
+		assert.equal(
+			transport.frames.some(frame => frame.id === 'deadline'),
+			false,
+		);
 		await port.release();
 		await payload.consumed;
 		assert.equal(client.state, 'crashed');
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('retirement settles queued consumption and cannot dispatch an old Worker reply into a replacement', async () => {
 	const transport = new ProtocolTransport();
 	const ports: TestAppServerDecodePort[] = [];
-	const client = new AppServerProtocolClient(transport, {}, new AppServerFrameDecoder(() => { const port = new TestAppServerDecodePort(); ports.push(port); return port; }));
+	const client = new AppServerProtocolClient(
+		transport,
+		{},
+		new AppServerFrameDecoder(() => {
+			const port = new TestAppServerDecodePort();
+			ports.push(port);
+			return port;
+		}),
+	);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
 	const first = assert.rejects(appServerRequest(client, 'session/list', {}), /replaced/);
@@ -304,20 +398,26 @@ test('retirement settles queued consumption and cannot dispatch an old Worker re
 	await replacement.consumed;
 });
 
-for (const limit of ['bytes', 'count'] as const) test(`asynchronous decode queue bounds ${limit} and fails without dropping waiters`, async () => {
-	const transport = new ProtocolTransport();
-	const port = new TestAppServerDecodePort();
-	const client = new AppServerProtocolClient(transport, {}, new AppServerFrameDecoder(() => port));
-	using cleanup = toDisposable(() => client.dispose());
-	await client.connect();
-	const rejected = assert.rejects(appServerRequest(client, 'session/list', {}), /queue capacity/);
-	const payload = largeFrame(transport, { id: transport.frames.at(-1)!.id, result: { sessions: [] } }, limit === 'bytes' ? 320 * 1024 * 1024 : undefined);
-	for (let i = 0; i < (limit === 'count' ? 4096 : 1); i++) transport.frame({ method: '$/cancelRequest', params: { id: 'x' } });
-	await rejected;
-	await payload.consumed;
-	assert.equal(port.isDisposed, true);
-	assert.equal(client.state, 'crashed');
-});
+for (const limit of ['bytes', 'count'] as const)
+	test(`asynchronous decode queue bounds ${limit} and fails without dropping waiters`, async () => {
+		const transport = new ProtocolTransport();
+		const port = new TestAppServerDecodePort();
+		const client = new AppServerProtocolClient(transport, {}, new AppServerFrameDecoder(() => port));
+		using cleanup = toDisposable(() => client.dispose());
+		await client.connect();
+		const rejected = assert.rejects(appServerRequest(client, 'session/list', {}), /queue capacity/);
+		const payload = largeFrame(
+			transport,
+			{ id: transport.frames.at(-1)!.id, result: { sessions: [] } },
+			limit === 'bytes' ? 320 * 1024 * 1024 : undefined,
+		);
+		for (let i = 0; i < (limit === 'count' ? 4096 : 1); i++)
+			transport.frame({ method: '$/cancelRequest', params: { id: 'x' } });
+		await rejected;
+		await payload.consumed;
+		assert.equal(port.isDisposed, true);
+		assert.equal(client.state, 'crashed');
+	});
 
 test('invalid large response schemas fail the connection and release read credit', async () => {
 	const transport = new ProtocolTransport();
@@ -333,37 +433,52 @@ test('invalid large response schemas fail the connection and release read credit
 	assert.equal(client.state, 'crashed');
 });
 
-for (const compatible of [false, true]) test(`large asynchronous initialize responses ${compatible ? 'release host calls after compatibility' : 'reject incompatibility before host effects'}`, async () => {
-	const transport = new ProtocolTransport(() => {
-		const result = createTestInitializeResult();
-		return { ...result, serverInfo: { ...result.serverInfo, version: 'x'.repeat(256 * 1024) }, ...(!compatible ? { schemaHash: '0'.repeat(64) } : {}) };
+for (const compatible of [false, true])
+	test(`large asynchronous initialize responses ${compatible ? 'release host calls after compatibility' : 'reject incompatibility before host effects'}`, async () => {
+		const transport = new ProtocolTransport(() => {
+			const result = createTestInitializeResult();
+			return {
+				...result,
+				serverInfo: { ...result.serverInfo, version: 'x'.repeat(256 * 1024) },
+				...(!compatible ? { schemaHash: '0'.repeat(64) } : {}),
+			};
+		});
+		const port = new TestAppServerDecodePort();
+		const client = new AppServerProtocolClient(transport, {}, new AppServerFrameDecoder(() => port));
+		using cleanup = toDisposable(() => client.dispose());
+		let calls = 0;
+		let started!: () => void;
+		const hostStarted = new Promise<void>(resolve => {
+			started = resolve;
+		});
+		using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => {
+			calls++;
+			started();
+			return { targetId: 'browser' };
+		});
+		transport.onInitialize = () => transport.hostRequest('during-initialize');
+		const connected = client.connect();
+		const settled = compatible ? connected : assert.rejects(connected, AppServerProtocolIncompatibleError);
+		await flushHandlers();
+		assert.equal(calls, 0);
+		assert.equal(client.state, 'initializing');
+		await port.release();
+		await settled;
+		if (compatible) await hostStarted;
+		assert.equal(calls, compatible ? 1 : 0);
+		assert.equal(client.state, compatible ? 'ready' : 'crashed');
 	});
-	const port = new TestAppServerDecodePort();
-	const client = new AppServerProtocolClient(transport, {}, new AppServerFrameDecoder(() => port));
-	using cleanup = toDisposable(() => client.dispose());
-	let calls = 0;
-	let started!: () => void;
-	const hostStarted = new Promise<void>(resolve => { started = resolve; });
-	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => { calls++; started(); return { targetId: 'browser' }; });
-	transport.onInitialize = () => transport.hostRequest('during-initialize');
-	const connected = client.connect();
-	const settled = compatible ? connected : assert.rejects(connected, AppServerProtocolIncompatibleError);
-	await flushHandlers();
-	assert.equal(calls, 0);
-	assert.equal(client.state, 'initializing');
-	await port.release();
-	await settled;
-	if (compatible) await hostStarted;
-	assert.equal(calls, compatible ? 1 : 0);
-	assert.equal(client.state, compatible ? 'ready' : 'crashed');
-});
 
 test('request timeout during Worker decode terminates work and releases every queued frame', async () => {
 	mock.timers.enable({ apis: ['setTimeout'] });
 	try {
 		const transport = new ProtocolTransport();
 		const port = new TestAppServerDecodePort();
-		const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 10 }, new AppServerFrameDecoder(() => port));
+		const client = new AppServerProtocolClient(
+			transport,
+			{ requestTimeoutMs: 10 },
+			new AppServerFrameDecoder(() => port),
+		);
 		using cleanup = toDisposable(() => client.dispose());
 		await client.connect();
 		const rejected = assert.rejects(appServerRequest(client, 'session/list', {}), /timed out/);
@@ -373,7 +488,9 @@ test('request timeout during Worker decode terminates work and releases every qu
 		await Promise.all([rejected, first.consumed, queued.consumed]);
 		assert.equal(port.isDisposed, true);
 		assert.equal(client.state, 'crashed');
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('peer closure waits for earlier responses while refusing new requests', async () => {
@@ -401,11 +518,19 @@ test('EOF drains notifications after cancellation without starting host effects 
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
 	let finishClose!: () => void;
-	const closed = new Promise<void>(resolve => { finishClose = resolve; });
-	using stateListener = client.onStateChange(state => { if (state === 'crashed') finishClose(); });
+	const closed = new Promise<void>(resolve => {
+		finishClose = resolve;
+	});
+	using stateListener = client.onStateChange(state => {
+		if (state === 'crashed') finishClose();
+	});
 	let calls = 0;
 	let signal: AbortSignal | undefined;
-	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => { calls++; signal = context.signal; return new Promise(() => { }); });
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
+		calls++;
+		signal = context.signal;
+		return new Promise(() => {});
+	});
 	transport.hostRequest('existing');
 	await flushHandlers();
 	const notifications: unknown[] = [];
@@ -425,7 +550,10 @@ test('EOF drains notifications after cancellation without starting host effects 
 	assert.equal(calls, 1);
 	assert.equal(signal!.aborted, true);
 	assert.deepEqual(notifications, [{ method: 'session/deleted', params: { sessionId: 'delivered' } }]);
-	assert.deepEqual(transport.frames.filter(frame => frame.id === 'existing' || frame.id === 'after-EOF'), []);
+	assert.deepEqual(
+		transport.frames.filter(frame => frame.id === 'existing' || frame.id === 'after-EOF'),
+		[],
+	);
 });
 
 test('an unresponsive notification decode has a deadline without any pending client requests', async () => {
@@ -433,7 +561,11 @@ test('an unresponsive notification decode has a deadline without any pending cli
 	try {
 		const transport = new ProtocolTransport();
 		const port = new TestAppServerDecodePort();
-		const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 10 }, new AppServerFrameDecoder(() => port));
+		const client = new AppServerProtocolClient(
+			transport,
+			{ requestTimeoutMs: 10 },
+			new AppServerFrameDecoder(() => port),
+		);
 		using cleanup = toDisposable(() => client.dispose());
 		await client.connect();
 		const payload = largeFrame(transport, { method: '$/cancelRequest', params: { id: 'x' } });
@@ -441,7 +573,9 @@ test('an unresponsive notification decode has a deadline without any pending cli
 		await payload.consumed;
 		assert.equal(port.isDisposed, true);
 		assert.equal(client.state, 'crashed');
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('transport-checked frames reuse wire length without re-encoding their JSON', async () => {
@@ -456,7 +590,9 @@ test('transport-checked frames reuse wire length without re-encoding their JSON'
 		transport.emit(WEB_APP_SERVER_FRAME_EVENT, new AppServerFrame(frame, Buffer.byteLength(frame)));
 		assert.deepEqual(await pending, { sessions: [] });
 		assert.equal(encode.mock.calls.length, 0);
-	} finally { encode.mock.restore(); }
+	} finally {
+		encode.mock.restore();
+	}
 });
 
 test('plain frames cannot impersonate a transport-checked length', async () => {
@@ -493,11 +629,15 @@ test('connection recovery coalesces replacement, preserves the cause and reuses 
 		const entries: LogEntry[] = [];
 		using logger = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
 		let opens = 0;
-		using recovery = new AppServerConnectionRecovery(client, async () => {
-			opens++;
-			client.disconnect();
-			await client.connect();
-		}, (message, error) => logger.error('app-server', message, error));
+		using recovery = new AppServerConnectionRecovery(
+			client,
+			async () => {
+				opens++;
+				client.disconnect();
+				await client.connect();
+			},
+			(message, error) => logger.error('app-server', message, error),
+		);
 		const first = recovery.connect();
 		assert.equal(recovery.connect(), first);
 		await first;
@@ -516,7 +656,9 @@ test('connection recovery coalesces replacement, preserves the cause and reuses 
 		assert.equal(client.generation, 3);
 		assert.equal(entries.length, 1);
 		assert.match((entries[0].error as Error).message, /Carrier exited with code 23/);
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('connection recovery bounds failed acquisition attempts and a manual request can recover afterward', async () => {
@@ -530,12 +672,18 @@ test('connection recovery bounds failed acquisition attempts and a manual reques
 		let opens = 0;
 		let unavailable = false;
 		const failure = new Error('port acquisition failed');
-		using recovery = new AppServerConnectionRecovery(client, async () => {
-			opens++;
-			client.disconnect();
-			if (unavailable) { throw failure; }
-			await client.connect();
-		}, (message, error) => logger.error('app-server', message, error));
+		using recovery = new AppServerConnectionRecovery(
+			client,
+			async () => {
+				opens++;
+				client.disconnect();
+				if (unavailable) {
+					throw failure;
+				}
+				await client.connect();
+			},
+			(message, error) => logger.error('app-server', message, error),
+		);
 		await recovery.connect();
 		unavailable = true;
 		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'carrier lost' });
@@ -551,7 +699,9 @@ test('connection recovery bounds failed acquisition attempts and a manual reques
 		await recovery.connect();
 		assert.equal(client.state, 'ready');
 		assert.equal(opens, 5);
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('connection recovery stops timers and releases its state listener on disposal', async () => {
@@ -563,11 +713,15 @@ test('connection recovery stops timers and releases its state listener on dispos
 		const entries: LogEntry[] = [];
 		using logger = new LogService({ sinks: [{ log: entry => entries.push(entry) }] });
 		let opens = 0;
-		using recovery = new AppServerConnectionRecovery(client, async () => {
-			opens++;
-			client.disconnect();
-			await client.connect();
-		}, (message, error) => logger.error('app-server', message, error));
+		using recovery = new AppServerConnectionRecovery(
+			client,
+			async () => {
+				opens++;
+				client.disconnect();
+				await client.connect();
+			},
+			(message, error) => logger.error('app-server', message, error),
+		);
 		await recovery.connect();
 		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'carrier lost' });
 		recovery.dispose();
@@ -576,7 +730,9 @@ test('connection recovery stops timers and releases its state listener on dispos
 		await client.connect();
 		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'after disposal' });
 		assert.equal(entries.length, 1, 'disposed recovery must release its state listener');
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('connection recovery reports initial failure without starting background retries', async () => {
@@ -586,14 +742,20 @@ test('connection recovery reports initial failure without starting background re
 		using cleanup = toDisposable(() => client.dispose());
 		using logger = new LogService({ sinks: [] });
 		let opens = 0;
-		using recovery = new AppServerConnectionRecovery(client, async () => {
-			opens++;
-			throw new Error('initial acquisition failed');
-		}, (message, error) => logger.error('app-server', message, error));
+		using recovery = new AppServerConnectionRecovery(
+			client,
+			async () => {
+				opens++;
+				throw new Error('initial acquisition failed');
+			},
+			(message, error) => logger.error('app-server', message, error),
+		);
 		await assert.rejects(recovery.connect(), /initial acquisition failed/);
 		mock.timers.tick(10000);
 		assert.equal(opens, 1);
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('closing a connection withdraws its negotiated capabilities before observers run', async () => {
@@ -603,7 +765,11 @@ test('closing a connection withdraws its negotiated capabilities before observer
 	await client.connect();
 	assert.equal(client.capabilities?.sessions, true);
 	let observed: unknown = 'not called';
-	using observer = client.onStateChange(state => { if (state === 'stopped') { observed = client.capabilities; } });
+	using observer = client.onStateChange(state => {
+		if (state === 'stopped') {
+			observed = client.capabilities;
+		}
+	});
 	client.disconnect();
 	assert.equal(observed, undefined);
 	assert.equal(client.capabilities, undefined);
@@ -614,8 +780,10 @@ test('unexpected closure delivers its cause to recovery observers while delibera
 	const transport = new ProtocolTransport();
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
-	const failures: { state: string; error: Error; }[] = [];
-	using observer = client.onStateChange((state, error) => { if (error) failures.push({ state, error }); });
+	const failures: { state: string; error: Error }[] = [];
+	using observer = client.onStateChange((state, error) => {
+		if (error) failures.push({ state, error });
+	});
 	await client.connect();
 	client.disconnect();
 	assert.equal(failures.length, 0);
@@ -631,17 +799,26 @@ test('a retired host result is discarded before decoding and cannot crash its re
 	const transport = new ProtocolTransport();
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
-	let finish!: (value: { targetId: string; }) => void;
-	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => new Promise(resolve => { finish = resolve; }));
+	let finish!: (value: { targetId: string }) => void;
+	using handler = client.registerRequestHandler(
+		APP_SERVER_SERVER_REQUESTS['browser/create'],
+		() =>
+			new Promise(resolve => {
+				finish = resolve;
+			}),
+	);
 	await client.connect();
 	transport.hostRequest('retired');
 	await flushHandlers();
 	client.disconnect();
 	await client.connect();
-	finish({ targetId: 42 } as unknown as { targetId: string; });
+	finish({ targetId: 42 } as unknown as { targetId: string });
 	await flushHandlers();
 	assert.equal(client.state, 'ready');
-	assert.equal(transport.frames.some(frame => frame.id === 'retired'), false);
+	assert.equal(
+		transport.frames.some(frame => frame.id === 'retired'),
+		false,
+	);
 });
 
 test('cancelling a queued host request prevents the handler from starting and replies once', async () => {
@@ -649,13 +826,25 @@ test('cancelling a queued host request prevents the handler from starting and re
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	let calls = 0;
-	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => { calls++; return { targetId: 'target' }; });
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => {
+		calls++;
+		return { targetId: 'target' };
+	});
 	await client.connect();
 	transport.hostRequest('cancel-before-start');
 	transport.frame({ method: '$/cancelRequest', params: { id: 'cancel-before-start' } });
 	await flushHandlers();
 	assert.equal(calls, 0);
-	assert.deepEqual(transport.frames.filter(frame => frame.id === 'cancel-before-start'), [{ jsonrpc: '2.0', id: 'cancel-before-start', error: { code: -32800, message: 'Host request cancelled', data: null } }]);
+	assert.deepEqual(
+		transport.frames.filter(frame => frame.id === 'cancel-before-start'),
+		[
+			{
+				jsonrpc: '2.0',
+				id: 'cancel-before-start',
+				error: { code: -32800, message: 'Host request cancelled', data: null },
+			},
+		],
+	);
 });
 
 test('recovery observers acquire a replacement only after the old carrier is released', async () => {
@@ -665,7 +854,11 @@ test('recovery observers acquire a replacement only after the old carrier is rel
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
 	let replacement: Promise<unknown> | undefined;
-	using observer = client.onStateChange(state => { if (state === 'crashed') { replacement = client.connect(); } });
+	using observer = client.onStateChange(state => {
+		if (state === 'crashed') {
+			replacement = client.connect();
+		}
+	});
 	transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'remote closed' });
 	assert.ok(replacement);
 	await replacement;
@@ -692,7 +885,10 @@ test('same request IDs on separate clients complete only their own pending metho
 	const rightTransport = new ProtocolTransport();
 	const left = new AppServerProtocolClient(leftTransport);
 	const right = new AppServerProtocolClient(rightTransport);
-	using cleanup = toDisposable(() => { left.dispose(); right.dispose(); });
+	using cleanup = toDisposable(() => {
+		left.dispose();
+		right.dispose();
+	});
 	await Promise.all([left.connect(), right.connect()]);
 	const leftPending = appServerRequest(left, 'session/list', {});
 	const rightPending = appServerRequest(right, 'automation/list', {});
@@ -762,21 +958,30 @@ test('a cancelled host ID can be reused without accepting the retired handler re
 	const transport = new ProtocolTransport();
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
-	const completions: ((value: { targetId: string; }) => void)[] = [];
-	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => new Promise(resolve => { completions.push(resolve); }));
+	const completions: ((value: { targetId: string }) => void)[] = [];
+	using handler = client.registerRequestHandler(
+		APP_SERVER_SERVER_REQUESTS['browser/create'],
+		() =>
+			new Promise(resolve => {
+				completions.push(resolve);
+			}),
+	);
 	await client.connect();
 	transport.hostRequest('reused');
 	await flushHandlers();
 	transport.frame({ method: '$/cancelRequest', params: { id: 'reused' } });
 	transport.hostRequest('reused');
 	await flushHandlers();
-	completions[0]({ targetId: 42 } as unknown as { targetId: string; });
+	completions[0]({ targetId: 42 } as unknown as { targetId: string });
 	completions[1]({ targetId: 'new-target' });
 	await flushHandlers();
-	assert.deepEqual(transport.frames.filter(frame => frame.id === 'reused'), [
-		{ jsonrpc: '2.0', id: 'reused', error: { code: -32800, message: 'Host request cancelled', data: null } },
-		{ jsonrpc: '2.0', id: 'reused', result: { targetId: 'new-target' } },
-	]);
+	assert.deepEqual(
+		transport.frames.filter(frame => frame.id === 'reused'),
+		[
+			{ jsonrpc: '2.0', id: 'reused', error: { code: -32800, message: 'Host request cancelled', data: null } },
+			{ jsonrpc: '2.0', id: 'reused', result: { targetId: 'new-target' } },
+		],
+	);
 	assert.equal(client.state, 'ready');
 });
 
@@ -786,8 +991,15 @@ test('an abort listener reconnecting the client cannot send its cancellation to 
 	using cleanup = toDisposable(() => client.dispose());
 	let replacement: Promise<unknown> | undefined;
 	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
-		context.signal.addEventListener('abort', () => { client.disconnect(); replacement = client.connect(); }, { once: true });
-		return new Promise(() => { });
+		context.signal.addEventListener(
+			'abort',
+			() => {
+				client.disconnect();
+				replacement = client.connect();
+			},
+			{ once: true },
+		);
+		return new Promise(() => {});
 	});
 	await client.connect();
 	transport.hostRequest('old-cancel');
@@ -796,26 +1008,36 @@ test('an abort listener reconnecting the client cannot send its cancellation to 
 	assert.ok(replacement);
 	await replacement;
 	assert.equal(client.state, 'ready');
-	assert.equal(transport.frames.some(frame => frame.id === 'old-cancel'), false);
+	assert.equal(
+		transport.frames.some(frame => frame.id === 'old-cancel'),
+		false,
+	);
 });
 
 test('timed out host work is aborted and produces exactly one terminal reply', async () => {
 	const transport = new ProtocolTransport();
 	const client = new AppServerProtocolClient(transport, { requestTimeoutMs: 10 });
 	using cleanup = toDisposable(() => client.dispose());
-	let finish!: (value: { targetId: string; }) => void;
+	let finish!: (value: { targetId: string }) => void;
 	let cancelled!: () => void;
-	const cancellation = new Promise<void>(resolve => { cancelled = resolve; });
+	const cancellation = new Promise<void>(resolve => {
+		cancelled = resolve;
+	});
 	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
 		context.signal.addEventListener('abort', cancelled, { once: true });
-		return new Promise(resolve => { finish = resolve; });
+		return new Promise(resolve => {
+			finish = resolve;
+		});
 	});
 	await client.connect();
 	transport.hostRequest('timed-out');
 	await cancellation;
-	finish({ targetId: 42 } as unknown as { targetId: string; });
+	finish({ targetId: 42 } as unknown as { targetId: string });
 	await flushHandlers();
-	assert.deepEqual(transport.frames.filter(frame => frame.id === 'timed-out'), [{ jsonrpc: '2.0', id: 'timed-out', error: { code: -32000, message: 'Host request timed out', data: null } }]);
+	assert.deepEqual(
+		transport.frames.filter(frame => frame.id === 'timed-out'),
+		[{ jsonrpc: '2.0', id: 'timed-out', error: { code: -32000, message: 'Host request timed out', data: null } }],
+	);
 	assert.equal(client.state, 'ready');
 });
 
@@ -823,15 +1045,24 @@ for (const compatible of [false, true]) {
 	test(`host calls buffered behind initialization ${compatible ? 'run after compatibility' : 'are dropped on incompatibility'}`, async () => {
 		const transport = new ProtocolTransport(() => {
 			const initialized = createTestInitializeResult();
-			if (!compatible) { initialized.capabilities.turns = false; }
+			if (!compatible) {
+				initialized.capabilities.turns = false;
+			}
 			return initialized;
 		});
 		const client = new AppServerProtocolClient(transport);
 		using cleanup = toDisposable(() => client.dispose());
 		let stateDuringHandler: string | undefined;
-		using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => { stateDuringHandler = client.state; return { targetId: 'target' }; });
+		using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => {
+			stateDuringHandler = client.state;
+			return { targetId: 'target' };
+		});
 		transport.onInitialize = () => transport.hostRequest('during-initialize');
-		if (compatible) { await client.connect(); } else { await assert.rejects(client.connect(), /turns/); }
+		if (compatible) {
+			await client.connect();
+		} else {
+			await assert.rejects(client.connect(), /turns/);
+		}
 		await flushHandlers();
 		assert.equal(stateDuringHandler, compatible ? 'ready' : undefined);
 		assert.equal(client.state, compatible ? 'ready' : 'crashed');
@@ -844,14 +1075,20 @@ test('initialization buffering is bounded and rejects the handshake without star
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	let calls = 0;
-	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => { calls++; return { targetId: 'target' }; });
-	transport.onInitialize = () => { for (let index = 0; index < 129; index++) { transport.hostRequest(`queued-${index}`); } };
+	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], () => {
+		calls++;
+		return { targetId: 'target' };
+	});
+	transport.onInitialize = () => {
+		for (let index = 0; index < 129; index++) {
+			transport.hostRequest(`queued-${index}`);
+		}
+	};
 	await assert.rejects(client.connect());
 	await flushHandlers();
 	assert.equal(calls, 0);
 	assert.equal(client.state, 'crashed');
 });
-
 
 test('terminal transport closure retains its diagnostic while withdrawing the handshake', async () => {
 	const message = 'authorization revoked: open another authenticated link';
@@ -866,28 +1103,36 @@ test('terminal transport closure retains its diagnostic while withdrawing the ha
 	assert.equal(client.capabilities, undefined);
 });
 
-
 test('an abort listener cannot acquire a new pending request while shutdown retires its connection', async () => {
 	const transport = new ProtocolTransport();
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	let reentrant: Promise<string> | undefined;
 	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
-		context.signal.addEventListener('abort', () => {
-			reentrant = appServerRequest(client, 'session/list', {}).then(() => 'fulfilled', () => 'rejected');
-		}, { once: true });
-		return new Promise(() => { });
+		context.signal.addEventListener(
+			'abort',
+			() => {
+				reentrant = appServerRequest(client, 'session/list', {}).then(
+					() => 'fulfilled',
+					() => 'rejected',
+				);
+			},
+			{ once: true },
+		);
+		return new Promise(() => {});
 	});
 	await client.connect();
 	transport.hostRequest('closing');
 	await flushHandlers();
 	client.disconnect();
 	assert.ok(reentrant);
-	assert.equal(transport.frames.some(frame => frame.method === 'session/list'), false);
+	assert.equal(
+		transport.frames.some(frame => frame.method === 'session/list'),
+		false,
+	);
 	assert.equal(await reentrant, 'rejected');
 	assert.equal(client.state, 'stopped');
 });
-
 
 test('frames emitted by a releasing carrier cannot start host work during shutdown', async () => {
 	const transport = new ProtocolTransport();
@@ -903,17 +1148,21 @@ test('frames emitted by a releasing carrier cannot start host work during shutdo
 	client.disconnect();
 	await flushHandlers();
 	assert.equal(calls, 0);
-	assert.equal(transport.frames.some(frame => frame.id === 'during-release'), false);
+	assert.equal(
+		transport.frames.some(frame => frame.id === 'during-release'),
+		false,
+	);
 	assert.equal(client.state, 'stopped');
 });
-
 
 test('directory grant hosts declare the canonical capability during initialization', async () => {
 	const transport = new ProtocolTransport();
 	const client = new AppServerProtocolClient(transport, { capabilities: { directoryGrantsHost: { version: 1 } } });
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	const initialized = transport.frames.find(frame => frame.method === 'initialize')?.params as { capabilities: Record<string, unknown>; };
+	const initialized = transport.frames.find(frame => frame.method === 'initialize')?.params as {
+		capabilities: Record<string, unknown>;
+	};
 	assert.deepEqual(initialized.capabilities.directoryGrantsHost, { version: 1 });
 	assert.equal(initialized.capabilities.dirPermissionsHost, undefined);
 });
@@ -922,11 +1171,13 @@ test('directory grant clients reject a different schema before sending domain re
 	const transport = new ProtocolTransport(() => ({ ...createTestInitializeResult(), schemaHash: '0'.repeat(64) }));
 	const client = new AppServerProtocolClient(transport, { capabilities: { directoryGrantsHost: { version: 1 } } });
 	using cleanup = toDisposable(() => client.dispose());
-	await assert.rejects(client.connect(), error => error instanceof AppServerProtocolIncompatibleError && error.incompatibility.kind === 'schemaHash');
+	await assert.rejects(
+		client.connect(),
+		error => error instanceof AppServerProtocolIncompatibleError && error.incompatibility.kind === 'schemaHash',
+	);
 	assert.notEqual(client.state, 'ready');
 	assert.ok(transport.frames.every(frame => frame.method === 'initialize'));
 });
-
 
 test('recovery publishes exhaustion once, retries manually and never replays an uncertain mutation', async () => {
 	mock.timers.enable({ apis: ['setTimeout'] });
@@ -935,15 +1186,26 @@ test('recovery publishes exhaustion once, retries manually and never replays an 
 		const client = new AppServerProtocolClient(transport);
 		using cleanup = toDisposable(() => client.dispose());
 		let fail = false;
-		using recovery = new AppServerConnectionRecovery(client, async () => {
-			client.disconnect();
-			if (fail) throw new Error('synthetic offline');
-			await client.connect();
-		}, () => { });
+		using recovery = new AppServerConnectionRecovery(
+			client,
+			async () => {
+				client.disconnect();
+				if (fail) throw new Error('synthetic offline');
+				await client.connect();
+			},
+			() => {},
+		);
 		const states: string[] = [];
 		using listener = recovery.onDidChange(() => states.push(recovery.status));
 		await recovery.connect();
-		const write = assert.rejects(appServerRequest(client, 'session/request', { commandId: 'uncertain', sessionId: '00000000-0000-4000-8000-000000000001', request: { type: 'archive' } }), /lost/);
+		const write = assert.rejects(
+			appServerRequest(client, 'session/request', {
+				commandId: 'uncertain',
+				sessionId: '00000000-0000-4000-8000-000000000001',
+				request: { type: 'archive' },
+			}),
+			/lost/,
+		);
 		fail = true;
 		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
 		await write;
@@ -962,7 +1224,9 @@ test('recovery publishes exhaustion once, retries manually and never replays an 
 		assert.equal(recovery.status, 'idle');
 		assert.equal(recovery.error, undefined);
 		assert.equal(transport.frames.filter(frame => frame.method === 'session/request').length, 1);
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('OS sleep pauses retries and wake restores an exhausted connection without replacing a healthy lease', async () => {
@@ -973,12 +1237,16 @@ test('OS sleep pauses retries and wake restores an exhausted connection without 
 		using cleanup = toDisposable(() => client.dispose());
 		let fail = false;
 		let opens = 0;
-		using recovery = new AppServerConnectionRecovery(client, async () => {
-			opens++;
-			client.disconnect();
-			if (fail) throw new Error('offline after wake');
-			await client.connect();
-		}, () => { });
+		using recovery = new AppServerConnectionRecovery(
+			client,
+			async () => {
+				opens++;
+				client.disconnect();
+				if (fail) throw new Error('offline after wake');
+				await client.connect();
+			},
+			() => {},
+		);
 		await recovery.connect();
 		recovery.suspend();
 		recovery.resume();
@@ -1007,7 +1275,9 @@ test('OS sleep pauses retries and wake restores an exhausted connection without 
 		recovery.resume();
 		mock.timers.tick(10_000);
 		assert.equal(opens, 6);
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('authorization withdrawal during a recovery attempt is terminal across OS wake', async () => {
@@ -1018,13 +1288,21 @@ test('authorization withdrawal during a recovery attempt is terminal across OS w
 		using cleanup = toDisposable(() => client.dispose());
 		let revoked = false;
 		let opens = 0;
-		using recovery = new AppServerConnectionRecovery(client, async () => {
-			opens++;
-			client.disconnect();
-			const connecting = client.connect();
-			if (revoked) transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { intentional: true, message: 'Authorization revoked' });
-			await connecting;
-		}, () => { });
+		using recovery = new AppServerConnectionRecovery(
+			client,
+			async () => {
+				opens++;
+				client.disconnect();
+				const connecting = client.connect();
+				if (revoked)
+					transport.emit(WEB_APP_SERVER_CLOSED_EVENT, {
+						intentional: true,
+						message: 'Authorization revoked',
+					});
+				await connecting;
+			},
+			() => {},
+		);
 		await recovery.connect();
 		revoked = true;
 		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
@@ -1036,7 +1314,9 @@ test('authorization withdrawal during a recovery attempt is terminal across OS w
 		mock.timers.tick(1_000_000);
 		assert.equal(opens, 2);
 		assert.equal(recovery.status, 'unavailable');
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('a recovery observer can retry synchronously without leaving a second timer', async () => {
@@ -1046,11 +1326,15 @@ test('a recovery observer can retry synchronously without leaving a second timer
 		const client = new AppServerProtocolClient(transport);
 		using cleanup = toDisposable(() => client.dispose());
 		let opens = 0;
-		using recovery = new AppServerConnectionRecovery(client, async () => {
-			opens++;
-			client.disconnect();
-			await client.connect();
-		}, () => { });
+		using recovery = new AppServerConnectionRecovery(
+			client,
+			async () => {
+				opens++;
+				client.disconnect();
+				await client.connect();
+			},
+			() => {},
+		);
 		await recovery.connect();
 		using listener = recovery.onDidChange(() => {
 			if (recovery.status === 'recovering') void recovery.reconnect();
@@ -1059,9 +1343,10 @@ test('a recovery observer can retry synchronously without leaving a second timer
 		await recovery.whenConnected();
 		mock.timers.tick(10_000);
 		assert.equal(opens, 2);
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
-
 
 test('Web recovery retains its elapsed budget across attempts and excludes reported OS sleep', async () => {
 	mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 10_000 });
@@ -1071,18 +1356,23 @@ test('Web recovery retains its elapsed budget across attempts and excludes repor
 		using cleanup = toDisposable(() => client.dispose());
 		let offline = false;
 		let opens = 0;
-		using recovery = new AppServerConnectionRecovery(client, async () => {
-			opens++;
-			client.disconnect();
-			if (offline) throw new Error('Web offline');
-			await client.connect();
-		}, () => { }, {
-			autoRestore: true,
-			initialDelayMs: 500,
-			maxDelayMs: 500,
-			maxAttempts: Number.POSITIVE_INFINITY,
-			maxElapsedTimeMs: 1_000,
-		});
+		using recovery = new AppServerConnectionRecovery(
+			client,
+			async () => {
+				opens++;
+				client.disconnect();
+				if (offline) throw new Error('Web offline');
+				await client.connect();
+			},
+			() => {},
+			{
+				autoRestore: true,
+				initialDelayMs: 500,
+				maxDelayMs: 500,
+				maxAttempts: Number.POSITIVE_INFINITY,
+				maxElapsedTimeMs: 1_000,
+			},
+		);
 		await recovery.connect();
 		offline = true;
 		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
@@ -1101,7 +1391,9 @@ test('Web recovery retains its elapsed budget across attempts and excludes repor
 		mock.timers.tick(500);
 		await recovery.whenConnected();
 		assert.equal(recovery.status, 'idle');
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('recovery uses capped exponential delays and resets the attempt limit after manual recovery', async () => {
@@ -1112,19 +1404,19 @@ test('recovery uses capped exponential delays and resets the attempt limit after
 		using cleanup = toDisposable(() => client.dispose());
 		let offline = false;
 		let opens = 0;
-		using recovery = new AppServerConnectionRecovery(client, async () => {
-			opens++;
-			client.disconnect();
-			if (offline) {
-				throw new Error('offline');
-			}
-			await client.connect();
-		}, () => { }, {
-			autoRestore: true,
-			initialDelayMs: 500,
-			maxDelayMs: 1_500,
-			maxAttempts: 3,
-		});
+		using recovery = new AppServerConnectionRecovery(
+			client,
+			async () => {
+				opens++;
+				client.disconnect();
+				if (offline) {
+					throw new Error('offline');
+				}
+				await client.connect();
+			},
+			() => {},
+			{ autoRestore: true, initialDelayMs: 500, maxDelayMs: 1_500, maxAttempts: 3 },
+		);
 		await recovery.connect();
 		offline = true;
 		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
@@ -1146,7 +1438,9 @@ test('recovery uses capped exponential delays and resets the attempt limit after
 		await recovery.whenConnected();
 		assert.equal(opens, 6);
 		assert.equal(recovery.status, 'idle');
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('a policy disabling automatic restore still allows explicit reconnect', async () => {
@@ -1156,16 +1450,16 @@ test('a policy disabling automatic restore still allows explicit reconnect', asy
 		const client = new AppServerProtocolClient(transport);
 		using cleanup = toDisposable(() => client.dispose());
 		let opens = 0;
-		using recovery = new AppServerConnectionRecovery(client, async () => {
-			opens++;
-			client.disconnect();
-			await client.connect();
-		}, () => { }, {
-			autoRestore: false,
-			initialDelayMs: 500,
-			maxDelayMs: 1_500,
-			maxAttempts: 3,
-		});
+		using recovery = new AppServerConnectionRecovery(
+			client,
+			async () => {
+				opens++;
+				client.disconnect();
+				await client.connect();
+			},
+			() => {},
+			{ autoRestore: false, initialDelayMs: 500, maxDelayMs: 1_500, maxAttempts: 3 },
+		);
 		await recovery.connect();
 		transport.emit(WEB_APP_SERVER_CLOSED_EVENT, { message: 'lost' });
 		assert.equal(recovery.status, 'failed');
@@ -1181,9 +1475,10 @@ test('a policy disabling automatic restore still allows explicit reconnect', asy
 		assert.equal(opens, 2);
 		assert.equal(client.state, 'ready');
 		assert.equal(recovery.status, 'idle');
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
-
 
 test('canceled reads retire large payloads while preserving remote lifetime and ordered carrier consumption', async () => {
 	const transport = new ProtocolTransport();
@@ -1192,7 +1487,10 @@ test('canceled reads retire large payloads while preserving remote lifetime and 
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
 	const controller = new AbortController();
-	const canceledRead = assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }), CancellationError);
+	const canceledRead = assert.rejects(
+		client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }),
+		CancellationError,
+	);
 	const canceledId = transport.frames.at(-1)!.id;
 	controller.abort();
 	// An out-of-order live response still validates and reaches its consumer.
@@ -1223,7 +1521,10 @@ test('canceling a read already queued in the Worker cannot publish its late vali
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
 	const controller = new AbortController();
-	const result = assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }), CancellationError);
+	const result = assert.rejects(
+		client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }),
+		CancellationError,
+	);
 	const frame = largeFrame(transport, { id: transport.frames.at(-1)!.id, result: { sessions: [] } });
 	controller.abort();
 	await port.release();
@@ -1242,7 +1543,10 @@ test('canceled routing slots keep the existing request bound and deadline rather
 		const canceledReads: Promise<void>[] = [];
 		for (let i = 0; i < 128; i++) {
 			const controller = new AbortController();
-			const rejected = assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }), /timed out/);
+			const rejected = assert.rejects(
+				client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }),
+				/timed out/,
+			);
 			canceledReads.push(rejected);
 			controller.abort();
 		}
@@ -1257,7 +1561,9 @@ test('canceled routing slots keep the existing request bound and deadline rather
 		transport.frame({ id: transport.frames.at(-1)!.id, result: { sessions: [] } });
 		assert.deepEqual(await read, { sessions: [] });
 		assert.equal(client.state, 'ready');
-	} finally { mock.timers.reset(); }
+	} finally {
+		mock.timers.reset();
+	}
 });
 
 test('aborted input sends no request and completion removes its abort listener before later cancellation', async () => {
@@ -1267,7 +1573,10 @@ test('aborted input sends no request and completion removes its abort listener b
 	await client.connect();
 	const controller = new AbortController();
 	controller.abort();
-	await assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }), CancellationError);
+	await assert.rejects(
+		client.request(APP_SERVER_METHODS['session/list'], {}, { signal: controller.signal }),
+		CancellationError,
+	);
 	assert.equal(transport.frames.length, 1);
 	const completed = new AbortController();
 	const result = client.request(APP_SERVER_METHODS['session/list'], {}, { signal: completed.signal });
@@ -1287,13 +1596,17 @@ test('GitHub read cancellation keeps refresh coalescing until remote retirement 
 	await client.connect();
 	const service = new AppServerGitHubService(client);
 	let settled = false;
-	const read = assert.rejects(service.listAccounts(source.token), CancellationError).then(() => { settled = true; });
+	const read = assert.rejects(service.listAccounts(source.token), CancellationError).then(() => {
+		settled = true;
+	});
 	const original = transport.frames.at(-1)!;
 	source.cancel();
 	await flushHandlers();
 	assert.equal(settled, false);
 	assert.equal(transport.frames.at(-1)!.method, 'github/cancel');
-	assert.deepEqual(transport.frames.at(-1)!.params, { operationId: (original.params as { operationId: string; }).operationId });
+	assert.deepEqual(transport.frames.at(-1)!.params, {
+		operationId: (original.params as { operationId: string }).operationId,
+	});
 	transport.frame({ id: transport.frames.at(-1)!.id, result: { status: 'requested' } });
 	transport.frame({ id: original.id, result: { noLongerNeeded: 'large canceled graph' } });
 	await read;
@@ -1308,7 +1621,9 @@ test('GitHub write cancellation preserves the original committed outcome and nev
 	await client.connect();
 	const service = new AppServerGitHubService(client);
 	let settled = false;
-	const write = service.markNotificationRead('account', 'notification', source.token).then(() => { settled = true; });
+	const write = service.markNotificationRead('account', 'notification', source.token).then(() => {
+		settled = true;
+	});
 	const original = transport.frames.at(-1)!;
 	source.cancel();
 	await flushHandlers();
@@ -1332,8 +1647,30 @@ test('GitHub CI operations use generated contracts, selected grants and immutabl
 	const reading = service.readCheckDetails(repository, target, 2);
 	const request = transport.frames.at(-1)!;
 	assert.equal(request.method, 'github/check/details');
-	assert.deepEqual(request.params, { operationId: (request.params as { operationId: string; }).operationId, accountId: 'selected-grant', repository: { host: 'ghe.example', owner: 'team', name: 'repo' }, ...target, page: 2 });
-	const details = { title: 'Failure', summary: 'Build failed', text: 'Output', annotations: [{ path: 'src/main.rs', startLine: 3, endLine: 4, annotationLevel: 'failure', message: 'Error', title: null }], nextPage: null, actionsJob: true };
+	assert.deepEqual(request.params, {
+		operationId: (request.params as { operationId: string }).operationId,
+		accountId: 'selected-grant',
+		repository: { host: 'ghe.example', owner: 'team', name: 'repo' },
+		...target,
+		page: 2,
+	});
+	const details = {
+		title: 'Failure',
+		summary: 'Build failed',
+		text: 'Output',
+		annotations: [
+			{
+				path: 'src/main.rs',
+				startLine: 3,
+				endLine: 4,
+				annotationLevel: 'failure',
+				message: 'Error',
+				title: null,
+			},
+		],
+		nextPage: null,
+		actionsJob: true,
+	};
 	transport.frame({ id: request.id, result: details });
 	assert.deepEqual(await reading, details);
 	using canceled = new CancellationTokenSource();

@@ -13,34 +13,71 @@ test('a TypeScript author installs the packed Ash SDK and builds outside the che
 	try {
 		const project = join(directory, 'extension');
 		const artifacts = join(directory, 'packages');
-		await mkdir(project); await mkdir(artifacts);
+		await mkdir(project);
+		await mkdir(artifacts);
 		// pnpm's pinned Node runtime need not contain npm. Resolve the host npm CLI
 		// from PATH, avoiding npm.cmd's shell requirement on Windows.
 		let npm: string | undefined;
 		// pnpm can hardlink Node into node_modules/.bin, which has no adjacent npm.
 		const node = await realpath(process.env.npm_node_execpath ?? process.execPath);
-		for (const bin of [dirname(node), dirname(process.execPath), ...(process.env.PATH ?? '').split(delimiter).filter(Boolean)]) {
+		for (const bin of [
+			dirname(node),
+			dirname(process.execPath),
+			...(process.env.PATH ?? '').split(delimiter).filter(Boolean),
+		]) {
 			try {
-				npm = await realpath(resolve(bin, process.platform === 'win32' ? 'node_modules/npm/bin/npm-cli.js' : 'npm'));
+				npm = await realpath(
+					resolve(bin, process.platform === 'win32' ? 'node_modules/npm/bin/npm-cli.js' : 'npm'),
+				);
 				break;
 			} catch (error) {
 				if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
 			}
 		}
 		assert.ok(npm, 'The independent author installation test requires npm on PATH');
-		const runNpm = (args: string[], cwd: string) => execFileSync(process.execPath, [npm, ...args, '--offline', '--ignore-scripts', '--no-audit', '--no-fund', '--cache', join(directory, 'cache')], { cwd, encoding: 'utf8', timeout: 30_000 });
-		const packed = JSON.parse(runNpm(['pack', join(repository, 'sdk/typescript'), '--json', '--pack-destination', artifacts], directory)) as { filename: string; files: { path: string; }[]; }[];
+		const runNpm = (args: string[], cwd: string) =>
+			execFileSync(
+				process.execPath,
+				[
+					npm,
+					...args,
+					'--offline',
+					'--ignore-scripts',
+					'--no-audit',
+					'--no-fund',
+					'--cache',
+					join(directory, 'cache'),
+				],
+				{ cwd, encoding: 'utf8', timeout: 30_000 },
+			);
+		const packed = JSON.parse(
+			runNpm(['pack', join(repository, 'sdk/typescript'), '--json', '--pack-destination', artifacts], directory),
+		) as { filename: string; files: { path: string }[] }[];
 		assert.equal(packed.length, 1);
 		const archive = join(artifacts, packed[0].filename);
-		await writeFile(join(project, 'package.json'), JSON.stringify({ name: 'independent-ash-extension', version: '1.0.0', private: true, type: 'module' }));
+		await writeFile(
+			join(project, 'package.json'),
+			JSON.stringify({ name: 'independent-ash-extension', version: '1.0.0', private: true, type: 'module' }),
+		);
 		runNpm(['install', archive, '--package-lock=false'], project);
 		const installed = join(project, 'node_modules/@ash/sdk');
-		assert.equal(await realpath(installed), join(await realpath(project), 'node_modules/@ash/sdk'), 'the author receives a package copy, not a link into the Ash checkout');
+		assert.equal(
+			await realpath(installed),
+			join(await realpath(project), 'node_modules/@ash/sdk'),
+			'the author receives a package copy, not a link into the Ash checkout',
+		);
 		const manifest = JSON.parse(await readFile(join(installed, 'package.json'), 'utf8'));
 		assert.equal(manifest.name, '@ash/sdk');
 		assert.deepEqual(Object.keys(manifest.dependencies ?? {}), [], 'the author does not install Ash internals');
-		assert(!packed[0].files.some(file => /(?:^|\/)(?:Cargo\.(?:toml|lock)|crates|resources\/extension-host)(?:\/|$)/u.test(file.path)), 'Rust and host implementations stay in the Ash product');
-		await writeFile(join(project, 'extension.ts'), `import * as ash from '@ash/sdk';
+		assert(
+			!packed[0].files.some(file =>
+				/(?:^|\/)(?:Cargo\.(?:toml|lock)|crates|resources\/extension-host)(?:\/|$)/u.test(file.path),
+			),
+			'Rust and host implementations stay in the Ash product',
+		);
+		await writeFile(
+			join(project, 'extension.ts'),
+			`import * as ash from '@ash/sdk';
 export function activate(context: ash.ExtensionContext): void {
   context.subscriptions.push(ash.commands.register('example.state', async () => {
     await context.storage.update('count', 1);
@@ -110,11 +147,30 @@ export function activate(context: ash.ExtensionContext): void {
   // @ts-expect-error This completion kind is not supported by the host.
   void ash.CompletionItemKind.Color;
 }
-`);
-		await writeFile(join(project, 'tsconfig.json'), JSON.stringify({ compilerOptions: { strict: true, target: 'ES2022', module: 'NodeNext', moduleResolution: 'NodeNext', types: [], lib: ['ES2022'], outDir: 'dist' }, include: ['extension.ts'] }));
+`,
+		);
+		await writeFile(
+			join(project, 'tsconfig.json'),
+			JSON.stringify({
+				compilerOptions: {
+					strict: true,
+					target: 'ES2022',
+					module: 'NodeNext',
+					moduleResolution: 'NodeNext',
+					types: [],
+					lib: ['ES2022'],
+					outDir: 'dist',
+				},
+				include: ['extension.ts'],
+			}),
+		);
 		const require = createRequire(import.meta.url);
 		const compiler = resolve(dirname(require.resolve('@ash/typescript-compiler/package.json')), 'bin/tsc');
-		const built = spawnSync(process.execPath, [compiler, '--project', join(project, 'tsconfig.json')], { cwd: project, encoding: 'utf8', timeout: 30_000 });
+		const built = spawnSync(process.execPath, [compiler, '--project', join(project, 'tsconfig.json')], {
+			cwd: project,
+			encoding: 'utf8',
+			timeout: 30_000,
+		});
 		assert.ifError(built.error);
 		assert.equal(built.status, 0, built.stdout + built.stderr);
 		const compiled = await readFile(join(project, 'dist/extension.js'), 'utf8');
@@ -128,7 +184,11 @@ export function activate(context: ash.ExtensionContext): void {
 		for (const name of ['extension.ts', 'package.json', 'tsconfig.json']) {
 			await copyFile(join(repository, 'examples/extensions/inspect', name), join(example, name));
 		}
-		const exampleBuild = spawnSync(process.execPath, [compiler, '--project', join(example, 'tsconfig.json')], { cwd: example, encoding: 'utf8', timeout: 30_000 });
+		const exampleBuild = spawnSync(process.execPath, [compiler, '--project', join(example, 'tsconfig.json')], {
+			cwd: example,
+			encoding: 'utf8',
+			timeout: 30_000,
+		});
 		assert.ifError(exampleBuild.error);
 		assert.equal(exampleBuild.status, 0, exampleBuild.stdout + exampleBuild.stderr);
 		const exampleScript = await readFile(join(example, 'dist/extension.js'), 'utf8');
@@ -136,11 +196,21 @@ export function activate(context: ash.ExtensionContext): void {
 		assert.doesNotMatch(exampleScript, /src\/ash|Cargo|vscode/u);
 		// Successful installation does not grant a standalone Node program any
 		// product authority. The host must provide the current extension's bridge.
-		execFileSync(process.execPath, ['--input-type=module', '-e', `
+		execFileSync(
+			process.execPath,
+			[
+				'--input-type=module',
+				'-e',
+				`
 import assert from 'node:assert/strict';
 import * as ash from '@ash/sdk';
 assert.throws(() => ash.commands.register('outside.read', () => undefined), /Ash.*host|unavailable|not.*host/i);
 await assert.rejects(async () => ash.files.readTextFile('notes.txt'), /Ash.*host|unavailable|not.*host/i);
-`], { cwd: project, stdio: 'pipe', timeout: 10_000 });
-	} finally { await rm(directory, { recursive: true, force: true }); }
+`,
+			],
+			{ cwd: project, stdio: 'pipe', timeout: 10_000 },
+		);
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
 });

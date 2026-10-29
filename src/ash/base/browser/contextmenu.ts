@@ -1,13 +1,9 @@
-import type { IAction, IActionRunner } from "../common/actions.js";
-import type { CancellationToken } from "../common/cancellation.js";
-import type { ResolvedKeybinding } from "../common/keybindings.js";
-import type {
-	AnchorAlignment,
-	AnchorAxisAlignment,
-	AnchorPosition,
-} from "./ui/contextview/contextview.js";
-import type { ActionViewItem } from "./ui/actionbar/actionViewItems.js";
-import type { MenuActionViewItemOptions } from "./ui/menu/menu.js";
+import type { IAction, IActionRunner } from '../common/actions.js';
+import type { CancellationToken } from '../common/cancellation.js';
+import type { ResolvedKeybinding } from '../common/keybindings.js';
+import type { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from './ui/contextview/contextview.js';
+import type { ActionViewItem } from './ui/actionbar/actionViewItems.js';
+import type { MenuActionViewItemOptions } from './ui/menu/menu.js';
 
 export interface IContextMenuPoint {
 	readonly x: number;
@@ -30,11 +26,8 @@ export interface IContextMenuDelegate {
 	getAnchor(): ContextMenuAnchor;
 	getActions(): readonly IAction[];
 	getActionsContext?(event?: IContextMenuEvent): unknown;
-	getCheckedActionsRepresentation?(action: IAction): "radio" | "checkbox";
-	getActionViewItem?(
-		action: IAction,
-		options: MenuActionViewItemOptions,
-	): ActionViewItem | undefined;
+	getCheckedActionsRepresentation?(action: IAction): 'radio' | 'checkbox';
+	getActionViewItem?(action: IAction, options: MenuActionViewItemOptions): ActionViewItem | undefined;
 	getKeyBinding?(action: IAction): ResolvedKeybinding | undefined;
 	/** Applies caller-owned styling and selects browser rendering on Desktop. */
 	getMenuClassName?(): string;

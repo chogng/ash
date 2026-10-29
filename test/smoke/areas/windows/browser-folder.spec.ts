@@ -3,169 +3,247 @@ import { readFile, writeFile } from 'node:fs/promises';
 
 test.use({ openWorkspace: false });
 
-test('standalone browser searches granted files and disables process commands', { tag: ['@browser-ui'] }, async ({ target, workbench, driver }) => {
-	const page = workbench.page;
-	await page.evaluate(async () => {
-		const root = await navigator.storage.getDirectory();
-		const folder = await root.getDirectoryHandle(`ash-search-${crypto.randomUUID()}`, { create: true });
-		for (const [name, text] of [['main.txt', 'browser needle\nother line'], ['ignore.txt', 'browser needle'], ['main.js', 'const value = "web";']]) {
-			const writer = await (await folder.getFileHandle(name, { create: true })).createWritable();
-			await writer.write(text);
-			await writer.close();
-		}
-		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
-	});
-	await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-	const scmWelcome = page.locator('[data-view-id="ash.gitView"]').getByRole('region', { name: 'Welcome', exact: true });
-	await scmWelcome.getByRole('button', { name: 'Open Folder', exact: true }).click();
-	await page.getByRole('tab', { name: 'Search', exact: true }).click();
-	const search = page.getByRole('textbox', { name: 'Search workspace' });
-	await expect(search).toBeVisible();
-	await page.getByRole('button', { name: 'Toggle Search Details', exact: true }).click();
-	await page.getByRole('textbox', { name: 'Files to include' }).fill('**/*.txt');
-	await page.getByRole('textbox', { name: 'Files to exclude' }).fill('ignore.txt');
-	await search.fill('browser needle');
-	await search.press('Enter');
-	await expect(page.locator('.ash-search-status')).toContainText('1');
-	await expect(page.locator('.ash-search-results')).toContainText('main.txt');
-	await expect(page.locator('.ash-search-results')).not.toContainText('ignore.txt');
-	await workbench.quickaccess.open('>workbench.action.tasks.runTask');
-	await expect(workbench.quickaccess.items.filter({ has: page.locator('.ash-quick-pick-row-description').getByText('workbench.action.tasks.runTask', { exact: true }) })).toHaveCount(0);
-	await workbench.quickaccess.close();
-	await expect(page.getByRole('button', { name: 'Accounts', exact: true })).toHaveCount(0);
-	await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
-	await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.js', exact: true }).dblclick();
-	await expect(page.getByRole('button', { name: 'Language JavaScript', exact: true })).toBeVisible();
-	const tokens = workbench.editors.groupAt(0).content.locator('.stanza-editor-token');
-	const keyword = tokens.filter({ hasText: 'const' }).first();
-	const string = tokens.filter({ hasText: 'web' }).first();
-	await expect(keyword).toBeVisible();
-	await expect(string).toBeVisible();
-	await expect.poll(() => keyword.evaluate(element => getComputedStyle(element).color)).not.toBe(await string.evaluate(element => getComputedStyle(element).color));
-	expect(driver.diagnostics.pageErrors).toEqual([]);
-	expect(driver.diagnostics.consoleErrors.filter(error => /WebAppServerUnavailable|Unable to create workbench contribution/.test(error))).toEqual([]);
-});
+test(
+	'standalone browser searches granted files and disables process commands',
+	{ tag: ['@browser-ui'] },
+	async ({ target, workbench, driver }) => {
+		const page = workbench.page;
+		await page.evaluate(async () => {
+			const root = await navigator.storage.getDirectory();
+			const folder = await root.getDirectoryHandle(`ash-search-${crypto.randomUUID()}`, { create: true });
+			for (const [name, text] of [
+				['main.txt', 'browser needle\nother line'],
+				['ignore.txt', 'browser needle'],
+				['main.js', 'const value = "web";'],
+			]) {
+				const writer = await (await folder.getFileHandle(name, { create: true })).createWritable();
+				await writer.write(text);
+				await writer.close();
+			}
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		});
+		await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+		const scmWelcome = page
+			.locator('[data-view-id="ash.gitView"]')
+			.getByRole('region', { name: 'Welcome', exact: true });
+		await scmWelcome.getByRole('button', { name: 'Open Folder', exact: true }).click();
+		await page.getByRole('tab', { name: 'Search', exact: true }).click();
+		const search = page.getByRole('textbox', { name: 'Search workspace' });
+		await expect(search).toBeVisible();
+		await page.getByRole('button', { name: 'Toggle Search Details', exact: true }).click();
+		await page.getByRole('textbox', { name: 'Files to include' }).fill('**/*.txt');
+		await page.getByRole('textbox', { name: 'Files to exclude' }).fill('ignore.txt');
+		await search.fill('browser needle');
+		await search.press('Enter');
+		await expect(page.locator('.ash-search-status')).toContainText('1');
+		await expect(page.locator('.ash-search-results')).toContainText('main.txt');
+		await expect(page.locator('.ash-search-results')).not.toContainText('ignore.txt');
+		await workbench.quickaccess.open('>workbench.action.tasks.runTask');
+		await expect(
+			workbench.quickaccess.items.filter({
+				has: page
+					.locator('.ash-quick-pick-row-description')
+					.getByText('workbench.action.tasks.runTask', { exact: true }),
+			}),
+		).toHaveCount(0);
+		await workbench.quickaccess.close();
+		await expect(page.getByRole('button', { name: 'Accounts', exact: true })).toHaveCount(0);
+		await page.getByRole('tab', { name: 'Explorer', exact: true }).click();
+		await page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.js', exact: true }).dblclick();
+		await expect(page.getByRole('button', { name: 'Language JavaScript', exact: true })).toBeVisible();
+		const tokens = workbench.editors.groupAt(0).content.locator('.stanza-editor-token');
+		const keyword = tokens.filter({ hasText: 'const' }).first();
+		const string = tokens.filter({ hasText: 'web' }).first();
+		await expect(keyword).toBeVisible();
+		await expect(string).toBeVisible();
+		await expect
+			.poll(() => keyword.evaluate(element => getComputedStyle(element).color))
+			.not.toBe(await string.evaluate(element => getComputedStyle(element).color));
+		expect(driver.diagnostics.pageErrors).toEqual([]);
+		expect(
+			driver.diagnostics.consoleErrors.filter(error =>
+				/WebAppServerUnavailable|Unable to create workbench contribution/.test(error),
+			),
+		).toEqual([]);
+	},
+);
 
-test('standalone browser executes its extension command in a Worker and retires it on reload', { tag: '@browser-ui' }, async ({ target, workbench }) => {
-	test.skip(target.kind !== 'browser' || target.appServerMode !== 'disabled' || !process.env.ASH_WEB_EXTENSION_PATHS?.includes('web-extension'));
-	const page = workbench.page;
-	await workbench.quickaccess.runCommand('ash.web.fixture.run');
-	let extensionWorker: ReturnType<typeof page.workers>[number] | undefined;
-	await expect.poll(async () => {
-		for (const worker of page.workers()) {
-			const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown; }).ashWebExtensionFixture);
-			if (state) { extensionWorker = worker; return state; }
-		}
-		return undefined;
-	}).toEqual({ count: 1, operation: 'execute', payload: { arguments: [] }, worker: true });
-	const stopped = new Promise<void>(resolve => extensionWorker!.once('close', () => resolve()));
-	await page.reload();
-	await stopped;
-	await workbench.waitForReady();
-	await workbench.quickaccess.runCommand('ash.web.fixture.run');
-	await expect.poll(async () => {
-		for (const worker of page.workers()) {
-			const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown; }).ashWebExtensionFixture);
-			if (state) { return state; }
-		}
-		return undefined;
-	}).toEqual({ count: 1, operation: 'execute', payload: { arguments: [] }, worker: true });
-	if (process.env.ASH_PLAYWRIGHT_SERVER === 'development') {
-		const entry = new URL('../../../fixtures/web-extension/extension.js', import.meta.url);
-		const original = await readFile(entry, 'utf8');
-		try {
-			const reloaded = page.waitForEvent('domcontentloaded');
-			await writeFile(entry, original.replace('count: 0', 'count: 10'));
-			await reloaded;
-			await workbench.waitForReady();
-			await workbench.quickaccess.runCommand('ash.web.fixture.run');
-			await expect.poll(async () => {
+test(
+	'standalone browser executes its extension command in a Worker and retires it on reload',
+	{ tag: '@browser-ui' },
+	async ({ target, workbench }) => {
+		test.skip(
+			target.kind !== 'browser' ||
+				target.appServerMode !== 'disabled' ||
+				!process.env.ASH_WEB_EXTENSION_PATHS?.includes('web-extension'),
+		);
+		const page = workbench.page;
+		await workbench.quickaccess.runCommand('ash.web.fixture.run');
+		let extensionWorker: ReturnType<typeof page.workers>[number] | undefined;
+		await expect
+			.poll(async () => {
 				for (const worker of page.workers()) {
-					const state = await worker.evaluate(() => (globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown; }).ashWebExtensionFixture);
-					if (state) { return state; }
+					const state = await worker.evaluate(
+						() =>
+							(globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown })
+								.ashWebExtensionFixture,
+					);
+					if (state) {
+						extensionWorker = worker;
+						return state;
+					}
 				}
 				return undefined;
-			}).toEqual({ count: 11, operation: 'execute', payload: { arguments: [] }, worker: true });
-		} finally {
-			const restored = page.waitForEvent('domcontentloaded');
-			await writeFile(entry, original);
-			await restored;
-			await workbench.waitForReady();
+			})
+			.toEqual({ count: 1, operation: 'execute', payload: { arguments: [] }, worker: true });
+		const stopped = new Promise<void>(resolve => extensionWorker!.once('close', () => resolve()));
+		await page.reload();
+		await stopped;
+		await workbench.waitForReady();
+		await workbench.quickaccess.runCommand('ash.web.fixture.run');
+		await expect
+			.poll(async () => {
+				for (const worker of page.workers()) {
+					const state = await worker.evaluate(
+						() =>
+							(globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown })
+								.ashWebExtensionFixture,
+					);
+					if (state) {
+						return state;
+					}
+				}
+				return undefined;
+			})
+			.toEqual({ count: 1, operation: 'execute', payload: { arguments: [] }, worker: true });
+		if (process.env.ASH_PLAYWRIGHT_SERVER === 'development') {
+			const entry = new URL('../../../fixtures/web-extension/extension.js', import.meta.url);
+			const original = await readFile(entry, 'utf8');
+			try {
+				const reloaded = page.waitForEvent('domcontentloaded');
+				await writeFile(entry, original.replace('count: 0', 'count: 10'));
+				await reloaded;
+				await workbench.waitForReady();
+				await workbench.quickaccess.runCommand('ash.web.fixture.run');
+				await expect
+					.poll(async () => {
+						for (const worker of page.workers()) {
+							const state = await worker.evaluate(
+								() =>
+									(globalThis as typeof globalThis & { ashWebExtensionFixture?: unknown })
+										.ashWebExtensionFixture,
+							);
+							if (state) {
+								return state;
+							}
+						}
+						return undefined;
+					})
+					.toEqual({ count: 11, operation: 'execute', payload: { arguments: [] }, worker: true });
+			} finally {
+				const restored = page.waitForEvent('domcontentloaded');
+				await writeFile(entry, original);
+				await restored;
+				await workbench.waitForReady();
+			}
 		}
-	}
-});
+	},
+);
 
-test('browser reload restores its folder, dirty editor and stable directory identity', { tag: ['@browser-ui'] }, async ({ target, driver, workbench }) => {
-	const page = workbench.page;
-	const folderName = await page.evaluate(async () => {
-		const root = await navigator.storage.getDirectory();
-		const folder = await root.getDirectoryHandle(`ash-reload-%中-${crypto.randomUUID()}`, { create: true });
-		const file = await folder.getFileHandle('main.txt', { create: true });
-		const writer = await file.createWritable();
-		await writer.write('saved content');
-		await writer.close();
-		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
-		return folder.name;
-	});
-	await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
-	const file = page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.txt', exact: true });
-	await expect(file).toBeVisible();
-	const folderUri = new URL(page.url()).searchParams.get('folder');
-	expect(folderUri).toContain('/@browser/');
-	await file.dblclick();
-	const editor = workbench.editors.groupAt(0).editor;
-	await editor.waitForEditorFocus();
-	await editor.input.press('ControlOrMeta+A');
-	await editor.waitForTypeInEditor('draft survives reload');
-	await expect.poll(() => page.evaluate(async () => {
-		const database = await new Promise<IDBDatabase>((resolve, reject) => {
-			const request = indexedDB.open('ash-working-copy-backups', 1);
-			request.onsuccess = () => resolve(request.result);
-			request.onerror = () => reject(request.error);
+test(
+	'browser reload restores its folder, dirty editor and stable directory identity',
+	{ tag: ['@browser-ui'] },
+	async ({ target, driver, workbench }) => {
+		const page = workbench.page;
+		const folderName = await page.evaluate(async () => {
+			const root = await navigator.storage.getDirectory();
+			const folder = await root.getDirectoryHandle(`ash-reload-%中-${crypto.randomUUID()}`, { create: true });
+			const file = await folder.getFileHandle('main.txt', { create: true });
+			const writer = await file.createWritable();
+			await writer.write('saved content');
+			await writer.close();
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+			return folder.name;
 		});
-		try {
-			return await new Promise<boolean>((resolve, reject) => {
-				const request = database.transaction('backups').objectStore('backups').getAll();
-				request.onsuccess = () => resolve(request.result.some(record => record.content === 'draft survives reload'));
-				request.onerror = () => reject(request.error);
-			});
-		} finally { database.close(); }
-	})).toBe(true);
-	await page.reload();
-	await expect(workbench.element).toBeVisible();
-	await expect(file).toBeVisible();
-	await expect(page.getByRole('tab', { name: 'Explorer, 1 unsaved file' })).toBeVisible();
-	await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toHaveText('draft survives reload');
-	expect(new URL(page.url()).searchParams.get('folder')).toBe(folderUri);
-	await editor.input.focus();
-	await editor.input.press('ControlOrMeta+S');
-	await expect.poll(() => page.evaluate(async name => {
-		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-		return (await (await folder.getFileHandle('main.txt')).getFile()).text();
-	}, folderName)).toBe('draft survives reload');
-	await page.evaluate(async name => {
-		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
-	}, folderName);
-	await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
-	expect(new URL(page.url()).searchParams.get('folder')).toBe(folderUri);
-	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.txt' })).toHaveCount(1);
-	const rootUrl = new URL('/', page.url());
-	rootUrl.searchParams.set('folder', folderUri!);
-	const redirect = await page.request.get(rootUrl.href, { maxRedirects: 0 });
-	expect(redirect.status()).toBe(302);
-	expect(new URL(redirect.headers().location!, rootUrl).searchParams.get('folder')).toBe(folderUri);
-	await page.goto(rootUrl.href);
-	await expect(file).toBeVisible();
-	await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toHaveText('draft survives reload');
-	await workbench.quickaccess.runCommand('workbench.action.closeFolder');
-	await expect(workbench.element).toHaveAttribute('data-workbench-state', 'empty');
-	expect(new URL(page.url()).searchParams.has('folder')).toBe(false);
-	await page.reload();
-	await expect(workbench.element).toHaveAttribute('data-workbench-state', 'empty');
-	await expect(file).toHaveCount(0);
-	expect(driver.diagnostics.consoleErrors.filter(message => message.startsWith('Unable to create workbench contribution'))).toEqual([]);
-});
+		await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+		const file = page.locator('.ash-explorer').getByRole('treeitem', { name: 'main.txt', exact: true });
+		await expect(file).toBeVisible();
+		const folderUri = new URL(page.url()).searchParams.get('folder');
+		expect(folderUri).toContain('/@browser/');
+		await file.dblclick();
+		const editor = workbench.editors.groupAt(0).editor;
+		await editor.waitForEditorFocus();
+		await editor.input.press('ControlOrMeta+A');
+		await editor.waitForTypeInEditor('draft survives reload');
+		await expect
+			.poll(() =>
+				page.evaluate(async () => {
+					const database = await new Promise<IDBDatabase>((resolve, reject) => {
+						const request = indexedDB.open('ash-working-copy-backups', 1);
+						request.onsuccess = () => resolve(request.result);
+						request.onerror = () => reject(request.error);
+					});
+					try {
+						return await new Promise<boolean>((resolve, reject) => {
+							const request = database.transaction('backups').objectStore('backups').getAll();
+							request.onsuccess = () =>
+								resolve(request.result.some(record => record.content === 'draft survives reload'));
+							request.onerror = () => reject(request.error);
+						});
+					} finally {
+						database.close();
+					}
+				}),
+			)
+			.toBe(true);
+		await page.reload();
+		await expect(workbench.element).toBeVisible();
+		await expect(file).toBeVisible();
+		await expect(page.getByRole('tab', { name: 'Explorer, 1 unsaved file' })).toBeVisible();
+		await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toHaveText(
+			'draft survives reload',
+		);
+		expect(new URL(page.url()).searchParams.get('folder')).toBe(folderUri);
+		await editor.input.focus();
+		await editor.input.press('ControlOrMeta+S');
+		await expect
+			.poll(() =>
+				page.evaluate(async name => {
+					const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+					return (await (await folder.getFileHandle('main.txt')).getFile()).text();
+				}, folderName),
+			)
+			.toBe('draft survives reload');
+		await page.evaluate(async name => {
+			const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		}, folderName);
+		await workbench.quickaccess.runCommand('workbench.action.files.openFolderViaWorkspace');
+		expect(new URL(page.url()).searchParams.get('folder')).toBe(folderUri);
+		await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'main.txt' })).toHaveCount(1);
+		const rootUrl = new URL('/', page.url());
+		rootUrl.searchParams.set('folder', folderUri!);
+		const redirect = await page.request.get(rootUrl.href, { maxRedirects: 0 });
+		expect(redirect.status()).toBe(302);
+		expect(new URL(redirect.headers().location!, rootUrl).searchParams.get('folder')).toBe(folderUri);
+		await page.goto(rootUrl.href);
+		await expect(file).toBeVisible();
+		await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-line-text').first()).toHaveText(
+			'draft survives reload',
+		);
+		await workbench.quickaccess.runCommand('workbench.action.closeFolder');
+		await expect(workbench.element).toHaveAttribute('data-workbench-state', 'empty');
+		expect(new URL(page.url()).searchParams.has('folder')).toBe(false);
+		await page.reload();
+		await expect(workbench.element).toHaveAttribute('data-workbench-state', 'empty');
+		await expect(file).toHaveCount(0);
+		expect(
+			driver.diagnostics.consoleErrors.filter(message =>
+				message.startsWith('Unable to create workbench contribution'),
+			),
+		).toEqual([]);
+	},
+);
 
 test('Explorer selection stays beneath its scrollbar', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
 	const page = workbench.page;
@@ -192,7 +270,9 @@ test('Explorer selection stays beneath its scrollbar', { tag: ['@browser-ui'] },
 	const track = explorer.locator('.ash-list-scrollable > .ash-scrollbar-track-vertical');
 	await expect(track).toBeVisible();
 	const overlap = await row.evaluate(element => {
-		const track = element.closest('.ash-list-scrollable')?.querySelector<HTMLElement>(':scope > .ash-scrollbar-track-vertical');
+		const track = element
+			.closest('.ash-list-scrollable')
+			?.querySelector<HTMLElement>(':scope > .ash-scrollbar-track-vertical');
 		if (!track) return false;
 		const rowBounds = element.getBoundingClientRect();
 		const trackBounds = track.getBoundingClientRect();
@@ -203,257 +283,294 @@ test('Explorer selection stays beneath its scrollbar', { tag: ['@browser-ui'] },
 	expect(overlap).toBe(true);
 });
 
-test('browser opens an authorized local folder and saves its files', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	const folderName = await page.evaluate(async () => {
-		const root = await navigator.storage.getDirectory();
-		const name = `ash-browser-%中-${crypto.randomUUID()}`;
-		const folder = await root.getDirectoryHandle(name, { create: true });
-		await folder.getDirectoryHandle('src', { create: true });
-		const file = await folder.getFileHandle('hello %中.txt', { create: true });
-		const writable = await file.createWritable();
-		await writable.write('first value');
-		await writable.close();
-		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
-		return name;
-	});
-	await page.getByRole('button', { name: 'Application menu' }).click();
-	await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).click();
-	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Open Folder...' })).toHaveCount(1);
-	await page.keyboard.press('Escape');
-	await page.keyboard.press('Escape');
+test(
+	'browser opens an authorized local folder and saves its files',
+	{ tag: ['@browser-ui'] },
+	async ({ target, workbench }) => {
+		const page = workbench.page;
+		const folderName = await page.evaluate(async () => {
+			const root = await navigator.storage.getDirectory();
+			const name = `ash-browser-%中-${crypto.randomUUID()}`;
+			const folder = await root.getDirectoryHandle(name, { create: true });
+			await folder.getDirectoryHandle('src', { create: true });
+			const file = await folder.getFileHandle('hello %中.txt', { create: true });
+			const writable = await file.createWritable();
+			await writable.write('first value');
+			await writable.close();
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+			return name;
+		});
+		await page.getByRole('button', { name: 'Application menu' }).click();
+		await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).click();
+		await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Open Folder...' })).toHaveCount(1);
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
 
-	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
-	if (await showSidebar.isVisible()) await showSidebar.click();
-	await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
-	const explorer = page.locator('.ash-explorer');
-	const fileRow = explorer.getByRole('treeitem', { name: 'hello %中.txt', exact: true });
-	await expect(fileRow).toHaveCount(1);
-	if (await showSidebar.isVisible()) await showSidebar.click();
-	await expect(explorer).toBeVisible();
-	await expect(fileRow).toBeVisible();
-	await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toHaveCount(0);
-	const fileTree = explorer.getByRole('tree');
-	await fileTree.focus();
-	await page.keyboard.press('Alt+F1');
-	const accessibilityHelp = page.getByRole('dialog', { name: 'Accessibility Help' });
-	await expect(accessibilityHelp).toBeVisible();
-	await expect(accessibilityHelp.getByRole('textbox', { name: 'Accessibility Help' })).toHaveValue(/Use the arrow keys/);
-	await page.keyboard.press('Escape');
-	await expect(accessibilityHelp).toHaveCount(0);
-	await expect(fileTree).toBeFocused();
-	await page.keyboard.press('Alt+F2');
-	const accessibleView = page.getByRole('dialog', { name: 'Accessible View' });
-	await expect(accessibleView.getByRole('textbox', { name: 'Accessible View' })).toHaveValue(/hello %中\.txt/);
-	await page.keyboard.press('Escape');
-	await expect(fileTree).toBeFocused();
-	await page.keyboard.press('Control+f');
-	const explorerFind = page.getByRole('searchbox', { name: 'Find files in Explorer' });
-	await expect(explorerFind).toBeFocused();
-	await explorerFind.fill('hello');
-	await expect(fileRow).toHaveClass(/find-match/);
-	await explorerFind.press('Escape');
-	await expect(fileTree).toBeFocused();
-	await fileRow.click();
-	await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
-	await page.keyboard.press('ControlOrMeta+c');
-	await expect.poll(() => page.evaluate(async () => (await navigator.clipboard.read())[0]?.types.includes('web application/x-ash-resources'))).toBe(true);
-	await explorer.getByRole('treeitem', { name: 'src', exact: true }).click();
-	await page.keyboard.press('ControlOrMeta+v');
-	await expect.poll(() => page.evaluate(async name => {
-		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-		const source = await folder.getDirectoryHandle('src');
-		try {
-			return (await (await source.getFileHandle('hello %中.txt')).getFile()).text();
-		} catch (error) {
-			if (error instanceof DOMException && error.name === 'NotFoundError') return undefined;
-			throw error;
-		}
-	}, folderName)).toBe('first value');
-	await fileRow.click();
-	await page.keyboard.press('F1');
-	await workbench.quickaccess.search('>Copy Relative Path');
-	await expect(page.locator('.ash-quick-pick-row-label', { hasText: 'Copy Relative Path' })).toBeVisible();
-	await page.keyboard.press('Enter');
-	await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('hello %中.txt');
-	const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
-	await expect(input).toBeAttached();
-	await input.focus();
-	await input.press('ControlOrMeta+A');
-	await input.type('second value');
-	await expect(page.getByRole('tab', { name: 'Explorer, 1 unsaved file' })).toBeVisible();
-	await input.press('ControlOrMeta+S');
-	await expect(page.getByRole('tab', { name: 'Explorer', exact: true })).toBeVisible();
-	await expect.poll(() => page.evaluate(async name => {
-		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-		return (await (await folder.getFileHandle('hello %中.txt')).getFile()).text();
-	}, folderName)).toBe('second value');
-	await page.keyboard.press('ControlOrMeta+k');
-	await page.keyboard.press('e');
-	const openEditors = page.locator('[data-view-id="workbench.explorer.openEditorsView"]');
-	await expect(openEditors).toBeVisible();
-	const openEditorsTree = openEditors.getByRole('tree');
-	await expect(openEditorsTree).toBeFocused();
-	await expect(openEditorsTree.getByRole('treeitem', { name: /hello %中\.txt/ })).toBeVisible();
-	await page.keyboard.press('Alt+F1');
-	const openEditorsHelp = page.getByRole('dialog', { name: 'Accessibility Help' });
-	await expect(openEditorsHelp.getByRole('textbox', { name: 'Accessibility Help' })).toHaveValue(/Press Delete to close/);
-	await page.keyboard.press('Escape');
-	await expect(openEditorsTree).toBeFocused();
-	await page.keyboard.press('Alt+F2');
-	await expect(page.getByRole('dialog', { name: 'Accessible View' }).getByRole('textbox', { name: 'Accessible View' })).toHaveValue(/hello %中\.txt/);
-	await page.keyboard.press('Escape');
-	await expect(openEditorsTree).toBeFocused();
-	await fileRow.click({ button: 'right' });
-	const downloadFile = page.getByRole('menuitem', { name: 'Download File...' });
-	await expect(downloadFile).toBeVisible();
-	const [download] = await Promise.all([
-		page.waitForEvent('download'),
-		downloadFile.click(),
-	]);
-	expect(download.suggestedFilename()).toBe('hello %中.txt');
-	expect(await readFile(await download.path(), 'utf8')).toBe('second value');
-	await workbench.quickaccess.runCommand('explorer.newFile');
-	const newFileName = page.locator('.ash-quick-pick-input input[aria-label="New File Name"]');
-	await newFileName.fill('created.txt');
-	await newFileName.press('Enter');
-	await expect(explorer.locator('.ash-tree-row').filter({ hasText: 'created.txt' })).toHaveCount(1);
-	await expect.poll(() => page.evaluate(async name => {
-		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-		return (await (await folder.getFileHandle('created.txt')).getFile()).text();
-	}, folderName)).toBe('');
-	const sourceFolderRow = explorer.getByRole('treeitem', { name: 'src', exact: true });
-	await sourceFolderRow.click();
-	if (await sourceFolderRow.getAttribute('aria-expanded') === 'false') await sourceFolderRow.click();
-	await workbench.quickaccess.runCommand('explorer.newFile');
-	const nestedFileName = page.locator('.ash-quick-pick-input input[aria-label="New File Name"]');
-	await nestedFileName.fill('nested.txt');
-	await nestedFileName.press('Enter');
-	await expect(explorer.locator('.ash-tree-row').filter({ hasText: 'nested.txt' })).toHaveCount(1);
-	await expect.poll(() => page.evaluate(async name => {
-		const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
-		const source = await folder.getDirectoryHandle('src');
-		return (await (await source.getFileHandle('nested.txt')).getFile()).text();
-	}, folderName)).toBe('');
-	const originalEditor = openEditorsTree.getByRole('treeitem', { name: /hello %中\.txt/ });
-	await originalEditor.getByRole('button', { name: 'Close hello %中.txt' }).focus();
-	await page.keyboard.press('Enter');
-	await expect(originalEditor).toHaveCount(0);
-	const nestedEditor = openEditorsTree.getByRole('treeitem', { name: /nested\.txt/ });
-	await nestedEditor.click();
-	await openEditorsTree.focus();
-	await page.keyboard.press('Delete');
-	await expect(nestedEditor).toHaveCount(0);
-	await page.getByRole('button', { name: 'Application menu' }).click();
-	await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).click();
-	await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Open Folder...' })).toHaveCount(1);
-});
+		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+		if (await showSidebar.isVisible()) await showSidebar.click();
+		await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+		const explorer = page.locator('.ash-explorer');
+		const fileRow = explorer.getByRole('treeitem', { name: 'hello %中.txt', exact: true });
+		await expect(fileRow).toHaveCount(1);
+		if (await showSidebar.isVisible()) await showSidebar.click();
+		await expect(explorer).toBeVisible();
+		await expect(fileRow).toBeVisible();
+		await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toHaveCount(0);
+		const fileTree = explorer.getByRole('tree');
+		await fileTree.focus();
+		await page.keyboard.press('Alt+F1');
+		const accessibilityHelp = page.getByRole('dialog', { name: 'Accessibility Help' });
+		await expect(accessibilityHelp).toBeVisible();
+		await expect(accessibilityHelp.getByRole('textbox', { name: 'Accessibility Help' })).toHaveValue(
+			/Use the arrow keys/,
+		);
+		await page.keyboard.press('Escape');
+		await expect(accessibilityHelp).toHaveCount(0);
+		await expect(fileTree).toBeFocused();
+		await page.keyboard.press('Alt+F2');
+		const accessibleView = page.getByRole('dialog', { name: 'Accessible View' });
+		await expect(accessibleView.getByRole('textbox', { name: 'Accessible View' })).toHaveValue(/hello %中\.txt/);
+		await page.keyboard.press('Escape');
+		await expect(fileTree).toBeFocused();
+		await page.keyboard.press('Control+f');
+		const explorerFind = page.getByRole('searchbox', { name: 'Find files in Explorer' });
+		await expect(explorerFind).toBeFocused();
+		await explorerFind.fill('hello');
+		await expect(fileRow).toHaveClass(/find-match/);
+		await explorerFind.press('Escape');
+		await expect(fileTree).toBeFocused();
+		await fileRow.click();
+		await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+		await page.keyboard.press('ControlOrMeta+c');
+		await expect
+			.poll(() =>
+				page.evaluate(async () =>
+					(await navigator.clipboard.read())[0]?.types.includes('web application/x-ash-resources'),
+				),
+			)
+			.toBe(true);
+		await explorer.getByRole('treeitem', { name: 'src', exact: true }).click();
+		await page.keyboard.press('ControlOrMeta+v');
+		await expect
+			.poll(() =>
+				page.evaluate(async name => {
+					const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+					const source = await folder.getDirectoryHandle('src');
+					try {
+						return (await (await source.getFileHandle('hello %中.txt')).getFile()).text();
+					} catch (error) {
+						if (error instanceof DOMException && error.name === 'NotFoundError') return undefined;
+						throw error;
+					}
+				}, folderName),
+			)
+			.toBe('first value');
+		await fileRow.click();
+		await page.keyboard.press('F1');
+		await workbench.quickaccess.search('>Copy Relative Path');
+		await expect(page.locator('.ash-quick-pick-row-label', { hasText: 'Copy Relative Path' })).toBeVisible();
+		await page.keyboard.press('Enter');
+		await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe('hello %中.txt');
+		const input = workbench.editors.groupAt(0).content.locator('.stanza-editor-input');
+		await expect(input).toBeAttached();
+		await input.focus();
+		await input.press('ControlOrMeta+A');
+		await input.type('second value');
+		await expect(page.getByRole('tab', { name: 'Explorer, 1 unsaved file' })).toBeVisible();
+		await input.press('ControlOrMeta+S');
+		await expect(page.getByRole('tab', { name: 'Explorer', exact: true })).toBeVisible();
+		await expect
+			.poll(() =>
+				page.evaluate(async name => {
+					const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+					return (await (await folder.getFileHandle('hello %中.txt')).getFile()).text();
+				}, folderName),
+			)
+			.toBe('second value');
+		await page.keyboard.press('ControlOrMeta+k');
+		await page.keyboard.press('e');
+		const openEditors = page.locator('[data-view-id="workbench.explorer.openEditorsView"]');
+		await expect(openEditors).toBeVisible();
+		const openEditorsTree = openEditors.getByRole('tree');
+		await expect(openEditorsTree).toBeFocused();
+		await expect(openEditorsTree.getByRole('treeitem', { name: /hello %中\.txt/ })).toBeVisible();
+		await page.keyboard.press('Alt+F1');
+		const openEditorsHelp = page.getByRole('dialog', { name: 'Accessibility Help' });
+		await expect(openEditorsHelp.getByRole('textbox', { name: 'Accessibility Help' })).toHaveValue(
+			/Press Delete to close/,
+		);
+		await page.keyboard.press('Escape');
+		await expect(openEditorsTree).toBeFocused();
+		await page.keyboard.press('Alt+F2');
+		await expect(
+			page.getByRole('dialog', { name: 'Accessible View' }).getByRole('textbox', { name: 'Accessible View' }),
+		).toHaveValue(/hello %中\.txt/);
+		await page.keyboard.press('Escape');
+		await expect(openEditorsTree).toBeFocused();
+		await fileRow.click({ button: 'right' });
+		const downloadFile = page.getByRole('menuitem', { name: 'Download File...' });
+		await expect(downloadFile).toBeVisible();
+		const [download] = await Promise.all([page.waitForEvent('download'), downloadFile.click()]);
+		expect(download.suggestedFilename()).toBe('hello %中.txt');
+		expect(await readFile(await download.path(), 'utf8')).toBe('second value');
+		await workbench.quickaccess.runCommand('explorer.newFile');
+		const newFileName = page.locator('.ash-quick-pick-input input[aria-label="New File Name"]');
+		await newFileName.fill('created.txt');
+		await newFileName.press('Enter');
+		await expect(explorer.locator('.ash-tree-row').filter({ hasText: 'created.txt' })).toHaveCount(1);
+		await expect
+			.poll(() =>
+				page.evaluate(async name => {
+					const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+					return (await (await folder.getFileHandle('created.txt')).getFile()).text();
+				}, folderName),
+			)
+			.toBe('');
+		const sourceFolderRow = explorer.getByRole('treeitem', { name: 'src', exact: true });
+		await sourceFolderRow.click();
+		if ((await sourceFolderRow.getAttribute('aria-expanded')) === 'false') await sourceFolderRow.click();
+		await workbench.quickaccess.runCommand('explorer.newFile');
+		const nestedFileName = page.locator('.ash-quick-pick-input input[aria-label="New File Name"]');
+		await nestedFileName.fill('nested.txt');
+		await nestedFileName.press('Enter');
+		await expect(explorer.locator('.ash-tree-row').filter({ hasText: 'nested.txt' })).toHaveCount(1);
+		await expect
+			.poll(() =>
+				page.evaluate(async name => {
+					const folder = await (await navigator.storage.getDirectory()).getDirectoryHandle(name);
+					const source = await folder.getDirectoryHandle('src');
+					return (await (await source.getFileHandle('nested.txt')).getFile()).text();
+				}, folderName),
+			)
+			.toBe('');
+		const originalEditor = openEditorsTree.getByRole('treeitem', { name: /hello %中\.txt/ });
+		await originalEditor.getByRole('button', { name: 'Close hello %中.txt' }).focus();
+		await page.keyboard.press('Enter');
+		await expect(originalEditor).toHaveCount(0);
+		const nestedEditor = openEditorsTree.getByRole('treeitem', { name: /nested\.txt/ });
+		await nestedEditor.click();
+		await openEditorsTree.focus();
+		await page.keyboard.press('Delete');
+		await expect(nestedEditor).toHaveCount(0);
+		await page.getByRole('button', { name: 'Application menu' }).click();
+		await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).click();
+		await expect(page.getByRole('menu').last().getByRole('menuitem', { name: 'Open Folder...' })).toHaveCount(1);
+	},
+);
 
-test('browser Explorer expands and collapses a folder without replacing sibling rows', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	await page.evaluate(async () => {
-		const root = await navigator.storage.getDirectory();
-		const workspace = await root.getDirectoryHandle(`ash-tree-${crypto.randomUUID()}`, { create: true });
-		const folder = await workspace.getDirectoryHandle('expandable', { create: true });
-		await folder.getFileHandle('nested.txt', { create: true });
-		await workspace.getFileHandle('stable.txt', { create: true });
-		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
-	});
-	await page.getByRole('button', { name: 'Application menu' }).click();
-	await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).click();
-	await page.keyboard.press('Escape');
-	await page.keyboard.press('Escape');
-	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
-	if (await showSidebar.isVisible()) await showSidebar.click();
-	await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
-	const explorer = page.locator('.ash-explorer');
-	const sibling = explorer.locator('.ash-tree-row').filter({ hasText: 'stable.txt' });
-	await expect(sibling).toHaveCount(1);
-	const siblingRow = await sibling.elementHandle();
-	const folder = explorer.getByRole('treeitem', { name: 'expandable', exact: true });
-	const nested = explorer.locator('.ash-tree-row').filter({ hasText: 'nested.txt' });
-	await folder.click();
-	await expect(folder).toHaveAttribute('aria-expanded', 'true');
-	await expect(nested).toHaveCount(1);
-	await expect(folder).toHaveClass(/selected/);
-	await expect(folder).toHaveCSS('outline-style', 'none');
-	await page.keyboard.press('ArrowDown');
-	await expect(nested).toHaveClass(/focused/);
-	await expect(nested).toHaveCSS('outline-style', 'solid');
-	await folder.click();
-	await expect(folder).toHaveAttribute('aria-expanded', 'false');
-	await expect(nested).toHaveCount(0);
-	await folder.click();
-	await expect(folder).toHaveAttribute('aria-expanded', 'true');
-	await expect(nested).toHaveCount(1);
-	await folder.locator('.ash-tree-contents').click({ clickCount: 2 });
-	await expect(folder).toHaveAttribute('aria-expanded', 'true');
-	await expect(nested).toHaveCount(1);
-	await expect(explorer.getByRole('tree')).toHaveAttribute('aria-busy', 'false');
-	expect(await siblingRow?.evaluate(row => row.isConnected)).toBe(true);
-});
+test(
+	'browser Explorer expands and collapses a folder without replacing sibling rows',
+	{ tag: ['@browser-ui'] },
+	async ({ target, workbench }) => {
+		const page = workbench.page;
+		await page.evaluate(async () => {
+			const root = await navigator.storage.getDirectory();
+			const workspace = await root.getDirectoryHandle(`ash-tree-${crypto.randomUUID()}`, { create: true });
+			const folder = await workspace.getDirectoryHandle('expandable', { create: true });
+			await folder.getFileHandle('nested.txt', { create: true });
+			await workspace.getFileHandle('stable.txt', { create: true });
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => workspace });
+		});
+		await page.getByRole('button', { name: 'Application menu' }).click();
+		await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).click();
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
+		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+		if (await showSidebar.isVisible()) await showSidebar.click();
+		await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+		const explorer = page.locator('.ash-explorer');
+		const sibling = explorer.locator('.ash-tree-row').filter({ hasText: 'stable.txt' });
+		await expect(sibling).toHaveCount(1);
+		const siblingRow = await sibling.elementHandle();
+		const folder = explorer.getByRole('treeitem', { name: 'expandable', exact: true });
+		const nested = explorer.locator('.ash-tree-row').filter({ hasText: 'nested.txt' });
+		await folder.click();
+		await expect(folder).toHaveAttribute('aria-expanded', 'true');
+		await expect(nested).toHaveCount(1);
+		await expect(folder).toHaveClass(/selected/);
+		await expect(folder).toHaveCSS('outline-style', 'none');
+		await page.keyboard.press('ArrowDown');
+		await expect(nested).toHaveClass(/focused/);
+		await expect(nested).toHaveCSS('outline-style', 'solid');
+		await folder.click();
+		await expect(folder).toHaveAttribute('aria-expanded', 'false');
+		await expect(nested).toHaveCount(0);
+		await folder.click();
+		await expect(folder).toHaveAttribute('aria-expanded', 'true');
+		await expect(nested).toHaveCount(1);
+		await folder.locator('.ash-tree-contents').click({ clickCount: 2 });
+		await expect(folder).toHaveAttribute('aria-expanded', 'true');
+		await expect(nested).toHaveCount(1);
+		await expect(explorer.getByRole('tree')).toHaveAttribute('aria-busy', 'false');
+		expect(await siblingRow?.evaluate(row => row.isConnected)).toBe(true);
+	},
+);
 
-test('browser nests related files when Explorer file nesting is enabled', { tag: ['@browser-ui'] }, async ({ target, workbench }) => {
-	const page = workbench.page;
-	await page.evaluate(async () => {
-		const root = await navigator.storage.getDirectory();
-		const folder = await root.getDirectoryHandle(`ash-nesting-${crypto.randomUUID()}`, { create: true });
-		for (const name of ['app.ts', 'app.js', 'note.source', 'note.output']) {
-			const file = await folder.getFileHandle(name, { create: true });
-			const writer = await file.createWritable();
-			await writer.write(name);
-			await writer.close();
-		}
-		Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
-	});
-	await page.getByRole('button', { name: 'Application menu' }).click();
-	await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).click();
-	await page.keyboard.press('Escape');
-	await page.keyboard.press('Escape');
-	const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
-	if (await showSidebar.isVisible()) await showSidebar.click();
-	await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
-	const explorer = page.locator('.ash-explorer');
-	const parent = explorer.locator('.ash-tree-row').filter({ hasText: 'app.ts' });
-	const child = explorer.locator('.ash-tree-row').filter({ hasText: 'app.js' });
-	await expect(parent).toHaveCount(1);
-	if (await showSidebar.isVisible()) await showSidebar.click();
-	await expect(parent).toBeVisible();
-	await expect(child).toBeVisible();
+test(
+	'browser nests related files when Explorer file nesting is enabled',
+	{ tag: ['@browser-ui'] },
+	async ({ target, workbench }) => {
+		const page = workbench.page;
+		await page.evaluate(async () => {
+			const root = await navigator.storage.getDirectory();
+			const folder = await root.getDirectoryHandle(`ash-nesting-${crypto.randomUUID()}`, { create: true });
+			for (const name of ['app.ts', 'app.js', 'note.source', 'note.output']) {
+				const file = await folder.getFileHandle(name, { create: true });
+				const writer = await file.createWritable();
+				await writer.write(name);
+				await writer.close();
+			}
+			Object.defineProperty(window, 'showDirectoryPicker', { configurable: true, value: async () => folder });
+		});
+		await page.getByRole('button', { name: 'Application menu' }).click();
+		await page.getByRole('menu').first().getByRole('menuitem', { name: 'File' }).click();
+		await page.keyboard.press('Escape');
+		await page.keyboard.press('Escape');
+		const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
+		if (await showSidebar.isVisible()) await showSidebar.click();
+		await page.getByRole('button', { name: 'Open Folder', exact: true }).click();
+		const explorer = page.locator('.ash-explorer');
+		const parent = explorer.locator('.ash-tree-row').filter({ hasText: 'app.ts' });
+		const child = explorer.locator('.ash-tree-row').filter({ hasText: 'app.js' });
+		await expect(parent).toHaveCount(1);
+		if (await showSidebar.isVisible()) await showSidebar.click();
+		await expect(parent).toBeVisible();
+		await expect(child).toBeVisible();
 
-	await page.getByRole('button', { name: 'Manage' }).click();
-	await page.getByRole('menu').last().getByRole('menuitem', { name: 'Settings' }).click();
-	const settings = page.locator('.ash-settings-editor');
-	await expect(settings).toBeVisible();
-	await workbench.settingsEditor.selectEditorCategory('editor-files');
-	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('explorer.fileNesting.enabled');
-	const nestingToggle = settings.locator('[data-configuration-key="explorer.fileNesting.enabled"]');
-	await expect(nestingToggle).toBeVisible();
-	await nestingToggle.focus();
-	await page.keyboard.press('Space');
-	await expect(nestingToggle).toBeChecked();
-	await expect(parent).toHaveAttribute('aria-expanded', 'true');
-	await expect(child).toBeVisible();
-	await settings.getByRole('searchbox', { name: 'Search settings' }).fill('explorer.fileNesting.patterns');
-	const patterns = settings.locator('[data-configuration-key="explorer.fileNesting.patterns"]');
-	await expect(patterns).toBeVisible();
-	await patterns.getByRole('button', { name: 'Add pattern' }).click();
-	await patterns.locator('[data-pattern-part="key"]').last().fill('*.source');
-	await patterns.locator('[data-pattern-part="value"]').last().fill('${capture}.output');
-	await patterns.locator('[data-pattern-part="value"]').last().press('Tab');
-	const customParent = explorer.locator('.ash-tree-row').filter({ hasText: 'note.source' });
-	const customChild = explorer.locator('.ash-tree-row').filter({ hasText: 'note.output' });
-	await expect(customParent).toHaveAttribute('aria-expanded', 'true');
-	await expect(customChild).toBeVisible();
-	await page.locator('.ash-modal-editor-close').click();
-	await parent.locator('.ash-tree-twistie').click();
-	await expect(child).toHaveCount(0);
-	await parent.locator('.ash-tree-twistie').click();
-	await expect(child).toBeVisible();
-	await customParent.locator('.ash-tree-twistie').click();
-	await expect(customChild).toHaveCount(0);
-	await customParent.locator('.ash-tree-twistie').click();
-	await expect(customChild).toBeVisible();
-	await child.click();
-	await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-input')).toBeAttached();
-});
+		await page.getByRole('button', { name: 'Manage' }).click();
+		await page.getByRole('menu').last().getByRole('menuitem', { name: 'Settings' }).click();
+		const settings = page.locator('.ash-settings-editor');
+		await expect(settings).toBeVisible();
+		await workbench.settingsEditor.selectEditorCategory('editor-files');
+		await settings.getByRole('searchbox', { name: 'Search settings' }).fill('explorer.fileNesting.enabled');
+		const nestingToggle = settings.locator('[data-configuration-key="explorer.fileNesting.enabled"]');
+		await expect(nestingToggle).toBeVisible();
+		await nestingToggle.focus();
+		await page.keyboard.press('Space');
+		await expect(nestingToggle).toBeChecked();
+		await expect(parent).toHaveAttribute('aria-expanded', 'true');
+		await expect(child).toBeVisible();
+		await settings.getByRole('searchbox', { name: 'Search settings' }).fill('explorer.fileNesting.patterns');
+		const patterns = settings.locator('[data-configuration-key="explorer.fileNesting.patterns"]');
+		await expect(patterns).toBeVisible();
+		await patterns.getByRole('button', { name: 'Add pattern' }).click();
+		await patterns.locator('[data-pattern-part="key"]').last().fill('*.source');
+		await patterns.locator('[data-pattern-part="value"]').last().fill('${capture}.output');
+		await patterns.locator('[data-pattern-part="value"]').last().press('Tab');
+		const customParent = explorer.locator('.ash-tree-row').filter({ hasText: 'note.source' });
+		const customChild = explorer.locator('.ash-tree-row').filter({ hasText: 'note.output' });
+		await expect(customParent).toHaveAttribute('aria-expanded', 'true');
+		await expect(customChild).toBeVisible();
+		await page.locator('.ash-modal-editor-close').click();
+		await parent.locator('.ash-tree-twistie').click();
+		await expect(child).toHaveCount(0);
+		await parent.locator('.ash-tree-twistie').click();
+		await expect(child).toBeVisible();
+		await customParent.locator('.ash-tree-twistie').click();
+		await expect(customChild).toHaveCount(0);
+		await customParent.locator('.ash-tree-twistie').click();
+		await expect(customChild).toBeVisible();
+		await child.click();
+		await expect(workbench.editors.groupAt(0).content.locator('.stanza-editor-input')).toBeAttached();
+	},
+);

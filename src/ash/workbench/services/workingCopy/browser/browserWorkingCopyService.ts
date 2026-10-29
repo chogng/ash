@@ -1,8 +1,8 @@
-import { Emitter } from "../../../../base/common/event.js";
-import { DisposableMap, Disposable, DisposableStore, toDisposable } from "../../../../base/common/lifecycle.js";
-import { getOrSet } from "../../../../base/common/map.js";
-import { type URI } from "../../../../base/common/uri.js";
-import { type IWorkingCopy, type IWorkingCopyService } from "../common/workingCopyService.js";
+import { Emitter } from '../../../../base/common/event.js';
+import { DisposableMap, Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { getOrSet } from '../../../../base/common/map.js';
+import { type URI } from '../../../../base/common/uri.js';
+import { type IWorkingCopy, type IWorkingCopyService } from '../common/workingCopyService.js';
 import { IUriIdentityService } from '../../../../platform/uriIdentity/common/uriIdentity.js';
 
 /** Browser registry for editor-domain working copies. */
@@ -63,10 +63,26 @@ export class BrowserWorkingCopyService extends Disposable implements IWorkingCop
 }
 
 function validateWorkingCopy(workingCopy: IWorkingCopy): void {
-	if (!workingCopy || typeof workingCopy !== "object" || !workingCopy.resource || typeof workingCopy.resource.toString !== "function") {
-		throw new TypeError("Working copy registration requires a resource");
+	if (
+		!workingCopy ||
+		typeof workingCopy !== 'object' ||
+		!workingCopy.resource ||
+		typeof workingCopy.resource.toString !== 'function'
+	) {
+		throw new TypeError('Working copy registration requires a resource');
 	}
-	if (typeof workingCopy.isDirty !== "boolean" || typeof workingCopy.onDidChangeDirty !== "function" || typeof workingCopy.onDidChangeContent !== "function" || typeof workingCopy.backup !== "function" || typeof workingCopy.restoreBackup !== "function" || typeof workingCopy.save !== "function" || typeof workingCopy.saveAs !== "function" || typeof workingCopy.revert !== "function") {
-		throw new TypeError("Working copy registration requires content events, backup restoration, save, saveAs, and revert operations");
+	if (
+		typeof workingCopy.isDirty !== 'boolean' ||
+		typeof workingCopy.onDidChangeDirty !== 'function' ||
+		typeof workingCopy.onDidChangeContent !== 'function' ||
+		typeof workingCopy.backup !== 'function' ||
+		typeof workingCopy.restoreBackup !== 'function' ||
+		typeof workingCopy.save !== 'function' ||
+		typeof workingCopy.saveAs !== 'function' ||
+		typeof workingCopy.revert !== 'function'
+	) {
+		throw new TypeError(
+			'Working copy registration requires content events, backup restoration, save, saveAs, and revert operations',
+		);
 	}
 }

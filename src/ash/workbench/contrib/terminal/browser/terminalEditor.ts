@@ -27,16 +27,20 @@ export class TerminalEditor extends EditorPane {
 		@IStorageService storage: IStorageService,
 		@IEditorGroupsService private readonly editorGroups: IEditorGroupsService,
 		@IEditorService private readonly editors: IEditorService,
-	) { super(TerminalEditorInput.ID, theme, storage); }
+	) {
+		super(TerminalEditorInput.ID, theme, storage);
+	}
 
 	override create(parent: HTMLElement): void {
 		this.element = h(parent.ownerDocument, 'div');
 		this.element.className = 'ash-terminal-editor';
 		parent.append(this.element);
 		super.create(this.element);
-		this._register(addDisposableListener(this.element, 'focusin', () => {
-			if (this.instance) this.terminals.setActiveInstance(this.instance);
-		}));
+		this._register(
+			addDisposableListener(this.element, 'focusin', () => {
+				if (this.instance) this.terminals.setActiveInstance(this.instance);
+			}),
+		);
 	}
 
 	override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
@@ -47,7 +51,10 @@ export class TerminalEditor extends EditorPane {
 		signal.throwIfAborted();
 		const instance = this.editorTerminals.getInstanceFromResource(input.resource);
 		if (!instance) {
-			this.element.textContent = localize('terminal.editor.unavailable', 'This terminal is no longer available. Create a new terminal to start another shell.');
+			this.element.textContent = localize(
+				'terminal.editor.unavailable',
+				'This terminal is no longer available. Create a new terminal to start another shell.',
+			);
 			this.element.setAttribute('role', 'status');
 			return;
 		}
@@ -56,10 +63,22 @@ export class TerminalEditor extends EditorPane {
 		input.closeHandler = {
 			showConfirm: () => terminals.instances.includes(instance),
 			confirm: async closingEditors => {
-				if (this.editorGroups.groups.some(group => group.inputs.some(other =>
-					other instanceof TerminalEditorInput && other.resource.path === input.resource.path && !closingEditors.some(candidate => candidate.groupId === group.id && candidate.editor === other),
-				))) return ConfirmResult.DONT_SAVE;
-				return await terminals.confirmTerminalClose(instance) ? ConfirmResult.DONT_SAVE : ConfirmResult.CANCEL;
+				if (
+					this.editorGroups.groups.some(group =>
+						group.inputs.some(
+							other =>
+								other instanceof TerminalEditorInput &&
+								other.resource.path === input.resource.path &&
+								!closingEditors.some(
+									candidate => candidate.groupId === group.id && candidate.editor === other,
+								),
+						),
+					)
+				)
+					return ConfirmResult.DONT_SAVE;
+				return (await terminals.confirmTerminalClose(instance))
+					? ConfirmResult.DONT_SAVE
+					: ConfirmResult.CANCEL;
 			},
 		};
 		this.instance = instance;
@@ -73,7 +92,8 @@ export class TerminalEditor extends EditorPane {
 	override setVisible(visible: boolean): void {
 		super.setVisible(visible);
 		this.visible = visible;
-		if (visible && this.instance && !this.instance.xterm?.element.isConnected) this.instance.attachToElement(this.element);
+		if (visible && this.instance && !this.instance.xterm?.element.isConnected)
+			this.instance.attachToElement(this.element);
 		if (this.instance?.xterm?.element.parentElement === this.element) this.instance.xterm.setVisible(visible);
 	}
 
@@ -85,10 +105,19 @@ export class TerminalEditor extends EditorPane {
 			instance.detachFromElement();
 			// A retained visible tab takes over the original screen when its current
 			// host closes. There is still only one screen and one process.
-			const retained = this.editors.visibleEditorPanes.find((pane): pane is TerminalEditor =>
-				pane instanceof TerminalEditor && pane !== this && !pane.isDisposed && pane.visible && pane.instance === instance,
+			const retained = this.editors.visibleEditorPanes.find(
+				(pane): pane is TerminalEditor =>
+					pane instanceof TerminalEditor &&
+					pane !== this &&
+					!pane.isDisposed &&
+					pane.visible &&
+					pane.instance === instance,
 			);
-			if (retained && instance.target === TerminalLocation.Editor && this.terminals.instances.includes(instance)) {
+			if (
+				retained &&
+				instance.target === TerminalLocation.Editor &&
+				this.terminals.instances.includes(instance)
+			) {
 				instance.attachToElement(retained.element);
 				instance.xterm.setVisible(true);
 				instance.xterm.fit();
@@ -109,6 +138,11 @@ export class TerminalEditor extends EditorPane {
 		this.instance.xterm?.fit();
 		this.instance.xterm?.focus();
 	}
-	override getControl(): ITerminalInstance | undefined { return this.instance; }
-	protected override disposeCore(): void { this.clearInput(); super.disposeCore(); }
+	override getControl(): ITerminalInstance | undefined {
+		return this.instance;
+	}
+	protected override disposeCore(): void {
+		this.clearInput();
+		super.disposeCore();
+	}
 }

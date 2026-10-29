@@ -33,7 +33,10 @@ suite('SidebarPart boundary sashes', () => {
 		using configuration = new InMemoryConfigurationService();
 		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarAutoHide), false);
 		await configuration.updateValue(WorkbenchConfiguration.activityBarAutoHide, true);
-		await assert.rejects(configuration.updateValue(WorkbenchConfiguration.activityBarAutoHide, 'true'), /must be true or false/);
+		await assert.rejects(
+			configuration.updateValue(WorkbenchConfiguration.activityBarAutoHide, 'true'),
+			/must be true or false/,
+		);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarAutoHide), true);
 		await configuration.updateValue(WorkbenchConfiguration.activityBarAutoHide, undefined);
 		assert.equal(configuration.getValue(WorkbenchConfiguration.activityBarAutoHide), false);
@@ -46,14 +49,20 @@ suite('SidebarPart boundary sashes', () => {
 		services.registerInstance(IWorkbenchLayoutService, {
 			getSideBarPosition: () => position,
 		} as IWorkbenchLayoutService);
-		const sidebar = resources.add(services.createInstance(SidebarPart, container, {
-			viewDescriptorService: descriptors, openComposite: async () => null,
-		}));
+		const sidebar = resources.add(
+			services.createInstance(SidebarPart, container, {
+				viewDescriptorService: descriptors,
+				openComposite: async () => null,
+			}),
+		);
 		const left = resources.add(new Sash(container, 'vertical'));
 		const right = resources.add(new Sash(container, 'vertical'));
 		const replacement = resources.add(new Sash(container, 'vertical'));
 		const states: boolean[][] = [];
-		const record = () => states.push([left, right, replacement].map(sash => sash.element.classList.contains('ash-primary-sidebar-sash')));
+		const record = () =>
+			states.push(
+				[left, right, replacement].map(sash => sash.element.classList.contains('ash-primary-sidebar-sash')),
+			);
 		sidebar.setBoundarySashes({ left, right });
 		record();
 		position = Position.RIGHT;
@@ -79,11 +88,17 @@ suite('SidebarPart boundary sashes', () => {
 	test('Agent Sidebar does not claim the primary sidebar boundary', () => {
 		using resources = new DisposableStore();
 		const { container, services, descriptors } = createFixture(resources);
-		services.registerInstance(IWorkbenchLayoutService, { getSideBarPosition: () => Position.LEFT } as IWorkbenchLayoutService);
-		const sidebar = resources.add(services.createInstance(SidebarPart, container, {
-			id: 'agentSidebar', location: ViewContainerLocation.AgentSidebar,
-			viewDescriptorService: descriptors, openComposite: async () => null,
-		}));
+		services.registerInstance(IWorkbenchLayoutService, {
+			getSideBarPosition: () => Position.LEFT,
+		} as IWorkbenchLayoutService);
+		const sidebar = resources.add(
+			services.createInstance(SidebarPart, container, {
+				id: 'agentSidebar',
+				location: ViewContainerLocation.AgentSidebar,
+				viewDescriptorService: descriptors,
+				openComposite: async () => null,
+			}),
+		);
 		const sash = resources.add(new Sash(container, 'vertical'));
 		sidebar.setBoundarySashes({ right: sash });
 		assert.equal(sash.element.classList.contains('ash-primary-sidebar-sash'), false);
@@ -92,8 +107,13 @@ suite('SidebarPart boundary sashes', () => {
 	test('construction requires the host layout service', () => {
 		using resources = new DisposableStore();
 		const { container, services, descriptors } = createFixture(resources);
-		assert.throws(() => services.createInstance(SidebarPart, container, {
-			viewDescriptorService: descriptors, openComposite: async () => null,
-		}), /layoutService/);
+		assert.throws(
+			() =>
+				services.createInstance(SidebarPart, container, {
+					viewDescriptorService: descriptors,
+					openComposite: async () => null,
+				}),
+			/layoutService/,
+		);
 	});
 });

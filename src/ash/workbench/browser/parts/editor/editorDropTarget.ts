@@ -21,11 +21,13 @@ export class EditorDropTarget extends Disposable {
 		this._register(toDisposable(() => this.clearFeedback()));
 		// The editor surface handles its own drops, so a tab drop must be routed before it reaches a pane.
 		this._register(addDisposableListener(container, 'drop', event => this.onDrop(event), true));
-		this._register(new DragAndDropObserver(container, {
-			onDragOver: event => this.onDragOver(event),
-			onDragLeave: () => this.clearFeedback(),
-			onDragEnd: () => this.clearFeedback(),
-		}));
+		this._register(
+			new DragAndDropObserver(container, {
+				onDragOver: event => this.onDragOver(event),
+				onDragLeave: () => this.clearFeedback(),
+				onDragEnd: () => this.clearFeedback(),
+			}),
+		);
 	}
 
 	private onDragOver(event: DragEvent): void {
@@ -83,7 +85,8 @@ function dropSplitDirection(event: DragEvent, bounds: DOMRect): Direction | unde
 		{ direction: 'right' as const, distance: bounds.right - event.clientX, threshold: bounds.width * 0.25 },
 		{ direction: 'up' as const, distance: event.clientY - bounds.top, threshold: bounds.height * 0.25 },
 		{ direction: 'down' as const, distance: bounds.bottom - event.clientY, threshold: bounds.height * 0.25 },
-	].filter(candidate => candidate.distance >= 0 && candidate.distance <= candidate.threshold)
+	]
+		.filter(candidate => candidate.distance >= 0 && candidate.distance <= candidate.threshold)
 		.sort((left, right) => left.distance - right.distance);
 	return distances[0]?.direction;
 }

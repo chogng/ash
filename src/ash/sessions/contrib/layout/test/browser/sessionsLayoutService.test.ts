@@ -1,5 +1,9 @@
 import { IOutputService } from '../../../../../workbench/services/output/common/output.js';
-import { IViewDescriptorService, ViewContainerLocation, WorkbenchViewContainerId } from '../../../../../workbench/common/views.js';
+import {
+	IViewDescriptorService,
+	ViewContainerLocation,
+	WorkbenchViewContainerId,
+} from '../../../../../workbench/common/views.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { CustomViewService, ICustomViewService } from '../../../../services/customView/browser/customViewService.js';
@@ -49,7 +53,10 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		const entry = { ...chatEntry, newSessionCommand: 'test.entry.newChat' };
 		await fixture.service.openEntry(entry);
 		assert.equal(fixture.service.newSessionCommand, entry.newSessionCommand);
-		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+		using registration = fixture.customViews.registerCustomView({
+			id: 'automations',
+			ctor: new SyncDescriptor(TestCustomView),
+		});
 		fixture.customViews.showCustomView('automations');
 		assert.equal(fixture.service.newSessionCommand, undefined);
 		fixture.customViews.hideCustomView();
@@ -61,9 +68,18 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 	for (const saved of [undefined, 'sessions.show.removedFeature']) {
 		test(`restores the Desktop New entry when the saved entry is ${saved ?? 'absent'}`, async () => {
 			using fixture = new EntryFixture();
-			if (saved) { fixture.storage.store('sessions.layout.activeEntry', saved, StorageScope.WORKSPACE, StorageTarget.MACHINE); }
+			if (saved) {
+				fixture.storage.store(
+					'sessions.layout.activeEntry',
+					saved,
+					StorageScope.WORKSPACE,
+					StorageTarget.MACHINE,
+				);
+			}
 			const calls: (readonly unknown[])[] = [];
-			using entry = CommandsRegistry.register('sessions.open.new', (_accessor, ...args) => { calls.push(args); });
+			using entry = CommandsRegistry.register('sessions.open.new', (_accessor, ...args) => {
+				calls.push(args);
+			});
 			await fixture.service.restore();
 			assert.deepEqual(calls, [['restore']]);
 		});
@@ -72,7 +88,12 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 	for (const command of ['sessions.show.library', 'sessions.show.removedFeature']) {
 		test(`discards the unavailable saved entry ${command} and restores Chat`, async () => {
 			using fixture = new EntryFixture();
-			fixture.storage.store('sessions.layout.activeEntry', command, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			fixture.storage.store(
+				'sessions.layout.activeEntry',
+				command,
+				StorageScope.WORKSPACE,
+				StorageTarget.MACHINE,
+			);
 			const calls: (readonly unknown[])[] = [];
 			using chat = CommandsRegistry.register('sessions.open.chat', async (_accessor, ...args) => {
 				calls.push(args);
@@ -81,7 +102,10 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 			});
 			await fixture.service.restore();
 			assert.deepEqual(calls, [['restore']]);
-			assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), 'sessions.open.chat');
+			assert.equal(
+				fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE),
+				'sessions.open.chat',
+			);
 			assert.equal(fixture.contextKeys.getValue('sessions.activity.chatSelected'), true);
 			assert.deepEqual(fixture.errors, []);
 		});
@@ -92,7 +116,9 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		const command = 'test.sessions.restoreEntry';
 		fixture.storage.store('sessions.layout.activeEntry', command, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const calls: (readonly unknown[])[] = [];
-		using entry = CommandsRegistry.register(command, (_accessor, ...args) => { calls.push(args); });
+		using entry = CommandsRegistry.register(command, (_accessor, ...args) => {
+			calls.push(args);
+		});
 		await fixture.service.restore();
 		assert.deepEqual(calls, [['restore']]);
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
@@ -103,16 +129,28 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		const command = 'test.sessions.failingRestore';
 		fixture.storage.store('sessions.layout.activeEntry', command, StorageScope.WORKSPACE, StorageTarget.MACHINE);
 		const failure = new Error('Restore handler failed');
-		using entry = CommandsRegistry.register(command, () => { throw failure; });
+		using entry = CommandsRegistry.register(command, () => {
+			throw failure;
+		});
 		await assert.rejects(fixture.service.restore(), error => error === failure);
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), command);
 	});
 
 	test('reveals Output beside the current conversation without navigating to another entry', async () => {
 		using fixture = new EntryFixture();
-		await fixture.service.openEntry({ id: 'chat', activityContext: 'sessions.activity.chatSelected', content: 'conversation', focus: 'conversation', restoreCommand: 'sessions.open.chat' });
+		await fixture.service.openEntry({
+			id: 'chat',
+			activityContext: 'sessions.activity.chatSelected',
+			content: 'conversation',
+			focus: 'conversation',
+			restoreCommand: 'sessions.open.chat',
+		});
 		fixture.partChanges.length = 0;
-		fixture.viewVisibility.fire({ id: WorkbenchViewContainerId.Output, location: ViewContainerLocation.Panel, visible: true });
+		fixture.viewVisibility.fire({
+			id: WorkbenchViewContainerId.Output,
+			location: ViewContainerLocation.Panel,
+			visible: true,
+		});
 		assert.equal(fixture.visible.get('panel'), true);
 		assert.equal(fixture.service.isDocumentContent, false);
 		assert.deepEqual(fixture.partChanges, ['available:panel', 'show:panel']);
@@ -128,11 +166,14 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		await fixture.service.openEntry(chatEntry);
 		fixture.activeInput = { resource: URI.parse('untitled:/channel-notes/restored') };
 		fixture.revealActiveEditor.fire();
-		await fixture.service.runOperation(async () => { });
-		await fixture.service.runOperation(async () => { });
+		await fixture.service.runOperation(async () => {});
+		await fixture.service.runOperation(async () => {});
 		assert.equal(fixture.service.isDocumentContent, true);
 		assert.equal(fixture.visible.get('editor'), true);
-		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
+		assert.equal(
+			fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE),
+			documentEntry.restoreCommand,
+		);
 	});
 
 	test('disposal during conversation preparation stops queued entries and Part mutations', async () => {
@@ -145,7 +186,15 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		fixture.service.dispose();
 		await gate.complete();
 		await Promise.all([pending, queued]);
-		assert.deepEqual({ groups: fixture.groupChanges, parts: fixture.partChanges, entries: fixture.opened, errors: fixture.errors }, { groups: [], parts: [], entries: [], errors: [] });
+		assert.deepEqual(
+			{
+				groups: fixture.groupChanges,
+				parts: fixture.partChanges,
+				entries: fixture.opened,
+				errors: fixture.errors,
+			},
+			{ groups: [], parts: [], entries: [], errors: [] },
+		);
 		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), undefined);
 	});
 
@@ -172,16 +221,22 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		fixture.modalVisible = true;
 		fixture.activeEditorChanged.fire();
 		fixture.editorChanged.fire({ kind: 'modalEditorChanged', visible: true });
-		await fixture.service.runOperation(async () => { });
+		await fixture.service.runOperation(async () => {});
 		fixture.modalVisible = false;
 		fixture.activeEditorChanged.fire();
 		fixture.editorChanged.fire({ kind: 'modalEditorChanged', visible: false });
-		await fixture.service.runOperation(async () => { });
-		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), chatEntry.restoreCommand);
+		await fixture.service.runOperation(async () => {});
+		assert.equal(
+			fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE),
+			chatEntry.restoreCommand,
+		);
 		assert.equal(fixture.partChanges.length, before);
 		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId: 1 });
-		await fixture.service.runOperation(async () => { });
-		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
+		await fixture.service.runOperation(async () => {});
+		assert.equal(
+			fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE),
+			documentEntry.restoreCommand,
+		);
 	});
 
 	test('Code Details-only focuses its visible pane instead of hidden editor content', async () => {
@@ -194,7 +249,10 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 
 	test('background entry restoration preserves the Custom View, focus and activity selection', async () => {
 		using fixture = new EntryFixture();
-		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+		using registration = fixture.customViews.registerCustomView({
+			id: 'automations',
+			ctor: new SyncDescriptor(TestCustomView),
+		});
 		fixture.customViews.showCustomView('automations');
 		await fixture.service.openEntry(documentEntry, undefined, { source: 'restore' });
 		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
@@ -202,9 +260,12 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		assert.equal(fixture.contextKeys.getContext().getValue('sessions.activity.codeSelected'), false);
 		fixture.activeInput = { resource: URI.file('/background.ts') };
 		fixture.editorChanged.fire({ kind: 'activeGroupChanged', groupId: 1 });
-		await fixture.service.runOperation(async () => { });
+		await fixture.service.runOperation(async () => {});
 		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
-		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), documentEntry.restoreCommand);
+		assert.equal(
+			fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE),
+			documentEntry.restoreCommand,
+		);
 		await fixture.service.openEntry(chatEntry);
 		assert.equal(fixture.customViews.activeCustomView.get(), undefined);
 		assert.equal(fixture.focused, 'conversation');
@@ -215,10 +276,21 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		using fixture = new EntryFixture();
 		await fixture.service.openEntry(chatEntry);
 		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'chat');
-		await fixture.service.openEntry({ ...chatEntry, id: 'collaboration', workspaceMode: 'code', activityContext: 'sessions.activity.collaborationSelected' });
+		await fixture.service.openEntry({
+			...chatEntry,
+			id: 'collaboration',
+			workspaceMode: 'code',
+			activityContext: 'sessions.activity.collaborationSelected',
+		});
 		assert.equal(fixture.contextKeys.getValue('sessions.workspaceMode'), 'code');
-		using command = CommandsRegistry.register('sessions.open.code', async () => fixture.service.openEntry(documentEntry, undefined, { source: 'restore' }));
-		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView), entryCommand: 'sessions.open.code' });
+		using command = CommandsRegistry.register('sessions.open.code', async () =>
+			fixture.service.openEntry(documentEntry, undefined, { source: 'restore' }),
+		);
+		using registration = fixture.customViews.registerCustomView({
+			id: 'automations',
+			ctor: new SyncDescriptor(TestCustomView),
+			entryCommand: 'sessions.open.code',
+		});
 		fixture.customViews.showCustomView('automations');
 		await fixture.service.restore();
 		assert.equal(fixture.customViews.activeCustomView.get()?.id, 'automations');
@@ -232,7 +304,10 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 
 	test('a Custom View opened while navigation awaits keeps its focus after navigation completes', async () => {
 		using fixture = new EntryFixture();
-		using registration = fixture.customViews.registerCustomView({ id: 'automations', ctor: new SyncDescriptor(TestCustomView) });
+		using registration = fixture.customViews.registerCustomView({
+			id: 'automations',
+			ctor: new SyncDescriptor(TestCustomView),
+		});
 		const gate = new DeferredPromise<void>();
 		fixture.navigationGate = gate.p;
 		const restoring = fixture.service.openEntry(chatEntry, undefined, { source: 'restore' });
@@ -254,19 +329,36 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 	});
 
 	test('a product page without a navigation container keeps global navigation and its own selected entry', async () => {
-		using fixture = new EntryFixture({ website: { sidebar: false, details: false, panel: false, documents: false } });
-		await fixture.service.openEntry({ ...chatEntry, id: 'website', activityContext: 'sessions.activity.websiteSelected', restoreCommand: 'sessions.show.website', content: 'editor', sidebarContainerId: undefined, showEditorTabs: false, focus: 'editor' });
+		using fixture = new EntryFixture({
+			website: { sidebar: false, details: false, panel: false, documents: false },
+		});
+		await fixture.service.openEntry({
+			...chatEntry,
+			id: 'website',
+			activityContext: 'sessions.activity.websiteSelected',
+			restoreCommand: 'sessions.show.website',
+			content: 'editor',
+			sidebarContainerId: undefined,
+			showEditorTabs: false,
+			focus: 'editor',
+		});
 		assert.equal(fixture.visible.get('sidebar'), true);
 		assert.equal(fixture.pageTitleVisible, false);
 		assert.deepEqual(fixture.opened, [{ id: SESSIONS_NAVIGATION_CONTAINER_ID, focus: false }]);
 		assert.equal(fixture.focused, 'editor');
 		assert.equal(fixture.contextKeys.getValue('sessions.activity.websiteSelected'), true);
 		assert.equal(fixture.contextKeys.getValue(chatEntry.activityContext), undefined);
-		assert.equal(fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE), 'sessions.show.website');
+		assert.equal(
+			fixture.storage.get('sessions.layout.activeEntry', StorageScope.WORKSPACE),
+			'sessions.show.website',
+		);
 		await fixture.service.openEntry(chatEntry);
 		assert.equal(fixture.visible.get('sidebar'), true);
 		assert.equal(fixture.pageTitleVisible, true);
-		assert.deepEqual(fixture.opened, [{ id: SESSIONS_NAVIGATION_CONTAINER_ID, focus: false }, { id: chatEntry.sidebarContainerId, focus: false }]);
+		assert.deepEqual(fixture.opened, [
+			{ id: SESSIONS_NAVIGATION_CONTAINER_ID, focus: false },
+			{ id: chatEntry.sidebarContainerId, focus: false },
+		]);
 	});
 
 	test('sidebar visibility follows the window across pages and is removed from legacy entry preferences', async () => {
@@ -274,9 +366,19 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 			chat: { sidebar: false, details: false, panel: false, documents: false },
 			website: { sidebar: true, details: false, panel: false, documents: false },
 		});
-		const page = { ...chatEntry, id: 'website', content: 'editor', sidebarContainerId: undefined, focus: 'editor' } as const;
+		const page = {
+			...chatEntry,
+			id: 'website',
+			content: 'editor',
+			sidebarContainerId: undefined,
+			focus: 'editor',
+		} as const;
 		await fixture.service.openEntry(chatEntry);
-		assert.equal(fixture.visible.get('sidebar'), true, 'A legacy per-entry value cannot collapse global navigation');
+		assert.equal(
+			fixture.visible.get('sidebar'),
+			true,
+			'A legacy per-entry value cannot collapse global navigation',
+		);
 		fixture.visible.set('sidebar', false);
 		await fixture.service.openEntry(page);
 		assert.equal(fixture.visible.get('sidebar'), false);
@@ -295,7 +397,13 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		using fixture = new EntryFixture();
 		await fixture.service.openEntry(chatEntry);
 		for (const id of ['projects', 'creator.home', 'customize']) {
-			await fixture.service.openEntry({ id, content: 'editor', activityContext: `sessions.activity.${id}Selected`, restoreCommand: `sessions.show.${id}`, focus: 'editor' });
+			await fixture.service.openEntry({
+				id,
+				content: 'editor',
+				activityContext: `sessions.activity.${id}Selected`,
+				restoreCommand: `sessions.show.${id}`,
+				focus: 'editor',
+			});
 			assert.equal(fixture.opened.at(-1)?.id, chatEntry.sidebarContainerId);
 		}
 		assert.deepEqual(fixture.opened, [{ id: chatEntry.sidebarContainerId, focus: false }]);
@@ -305,8 +413,20 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 		test(`product pages use the registered sidebar default ${fromCode ? 'when leaving Code' : 'on cold restoration'}`, async () => {
 			using fixture = new EntryFixture();
 			fixture.defaultSidebarId = 'test.conversations';
-			if (fromCode) { await fixture.service.openEntry(documentEntry); }
-			await fixture.service.openEntry({ id: 'projects', content: 'editor', activityContext: 'sessions.activity.projectsSelected', restoreCommand: 'sessions.show.projects', focus: 'editor' }, undefined, { source: 'restore' });
+			if (fromCode) {
+				await fixture.service.openEntry(documentEntry);
+			}
+			await fixture.service.openEntry(
+				{
+					id: 'projects',
+					content: 'editor',
+					activityContext: 'sessions.activity.projectsSelected',
+					restoreCommand: 'sessions.show.projects',
+					focus: 'editor',
+				},
+				undefined,
+				{ source: 'restore' },
+			);
 			assert.equal(fixture.opened.at(-1)?.id, 'test.conversations');
 		});
 	}
@@ -323,18 +443,32 @@ suite('SessionsLayoutService lifecycle and focus', () => {
 	});
 });
 
-const chatEntry: ISessionsEntry = { id: 'chat', content: 'conversation', activityContext: 'sessions.activity.chatSelected', sidebarContainerId: 'navigation', restoreCommand: 'sessions.open.chat', focus: 'conversation' };
-class TestLifecycle extends AbstractLifecycleService { }
+const chatEntry: ISessionsEntry = {
+	id: 'chat',
+	content: 'conversation',
+	activityContext: 'sessions.activity.chatSelected',
+	sidebarContainerId: 'navigation',
+	restoreCommand: 'sessions.open.chat',
+	focus: 'conversation',
+};
+class TestLifecycle extends AbstractLifecycleService {}
 class TestCustomView extends AbstractCustomView {
 	readonly title = constObservable('Automations');
-	render(): void { }
-	layout(): void { }
+	render(): void {}
+	layout(): void {}
 }
 
 class EntryFixture extends Disposable {
 	private readonly dom = new JSDOM('', { url: 'https://entry-layout.test' });
 	private readonly services = this._register(new InstantiationService());
-	public readonly storage = this._register(new BrowserStorageService({ ownerWindow: browserEnvironment.window as unknown as Window, workspaceId: 'sessions', backend: this.dom.window.localStorage, flushInterval: 0 }));
+	public readonly storage = this._register(
+		new BrowserStorageService({
+			ownerWindow: browserEnvironment.window as unknown as Window,
+			workspaceId: 'sessions',
+			backend: this.dom.window.localStorage,
+			flushInterval: 0,
+		}),
+	);
 	public readonly lifecycle = this._register(new TestLifecycle(undefined, new NullLoggerService(), this.storage));
 	public readonly contextKeys = this._register(new ContextKeyService());
 	public readonly customViews = this._register(new CustomViewService(new NullLoggerService(), this.storage));
@@ -342,11 +476,17 @@ class EntryFixture extends Disposable {
 	public readonly editorChanged = this._register(new Emitter<EditorPartChangeEvent>());
 	public readonly activeEditorChanged = this._register(new Emitter<void>());
 	public readonly revealActiveEditor = this._register(new Emitter<void>());
-	public readonly visible = new Map<string, boolean>([['sessions', true], ['editor', false], ['auxiliarybar', false], ['sidebar', true], ['panel', false]]);
+	public readonly visible = new Map<string, boolean>([
+		['sessions', true],
+		['editor', false],
+		['auxiliarybar', false],
+		['sidebar', true],
+		['panel', false],
+	]);
 	public readonly partChanges: string[] = [];
 	public readonly groupChanges: string[] = [];
 	public pageTitleVisible = true;
-	public readonly opened: { id: string; focus: boolean | undefined; }[] = [];
+	public readonly opened: { id: string; focus: boolean | undefined }[] = [];
 	private sidebarId: string | undefined;
 	public defaultSidebarId = SESSIONS_NAVIGATION_CONTAINER_ID;
 	public readonly errors: string[] = [];
@@ -359,14 +499,29 @@ class EntryFixture extends Disposable {
 	public modalVisible = false;
 	public readonly service: SessionsLayoutService;
 	public readonly outputReveal = this._register(new Emitter<void>());
-	public readonly viewVisibility = this._register(new Emitter<{ id: string; location: ViewContainerLocation; visible: boolean; }>());
+	public readonly viewVisibility = this._register(
+		new Emitter<{ id: string; location: ViewContainerLocation; visible: boolean }>(),
+	);
 	constructor(savedVisibility?: unknown) {
 		super();
 		this._register(toDisposable(() => this.dom.window.close()));
-		if (savedVisibility) { this.storage.store('sessions.layout.entryVisibility', JSON.stringify(savedVisibility), StorageScope.PROFILE, StorageTarget.MACHINE); }
+		if (savedVisibility) {
+			this.storage.store(
+				'sessions.layout.entryVisibility',
+				JSON.stringify(savedVisibility),
+				StorageScope.PROFILE,
+				StorageTarget.MACHINE,
+			);
+		}
 		const fixture = this;
 		const documentGroup = { id: 'documents', inputs: [] };
-		const pageGroup = { id: 'pages', inputs: [], setTitleVisible: (visible: boolean) => { this.pageTitleVisible = visible; } };
+		const pageGroup = {
+			id: 'pages',
+			inputs: [],
+			setTitleVisible: (visible: boolean) => {
+				this.pageTitleVisible = visible;
+			},
+		};
 		this.services.registerInstance(IStorageService, this.storage);
 		this.services.registerInstance(IConfigurationService, this._register(new InMemoryConfigurationService()));
 		this.services.registerInstance(ICustomViewService, this.customViews);
@@ -374,57 +529,114 @@ class EntryFixture extends Disposable {
 		this.services.registerInstance(IContextKeyService, this.contextKeys);
 		this.services.registerInstance(IWorkspaceContextService, this.workspace);
 		this.services.registerInstance(IEditorPart, {
-			pageGroupId: pageGroup.id, groups: [documentGroup, pageGroup], activeGroup: documentGroup,
+			pageGroupId: pageGroup.id,
+			groups: [documentGroup, pageGroup],
+			activeGroup: documentGroup,
 			onDidChangeEditors: this.editorChanged.event,
 			onDidRevealActiveEditor: this.revealActiveEditor.event,
-			get isModalEditorVisible() { return fixture.modalVisible; },
+			get isModalEditorVisible() {
+				return fixture.modalVisible;
+			},
 			setGroupVisible: (id: string, visible: boolean) => this.groupChanges.push(id + ':' + visible),
 			activateGroup: (id: string) => this.groupChanges.push('activate:' + id),
-			focus: () => { this.focused = 'editor'; },
+			focus: () => {
+				this.focused = 'editor';
+			},
 		} as unknown as IEditorPart);
 		this.services.registerInstance(IEditorService, {
-			onDidActiveEditorChange: this.activeEditorChanged.event, onDidVisibleEditorsChange: Event.None,
-			get activeEditor() { return fixture.activeInput; }, visibleEditors: [],
-			focusActiveEditor: () => { this.focused = 'editor'; },
+			onDidActiveEditorChange: this.activeEditorChanged.event,
+			onDidVisibleEditorsChange: Event.None,
+			get activeEditor() {
+				return fixture.activeInput;
+			},
+			visibleEditors: [],
+			focusActiveEditor: () => {
+				this.focused = 'editor';
+			},
 		} as unknown as IEditorService);
-		this.services.registerInstance(ISessionsService, { onDidChange: Event.None, activeSelection: undefined, getSelection: () => ({ activeSelection: undefined, visibleSelections: [] }) } as unknown as ISessionsService);
-		this.services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, materializedSessions: observableValue('materialized', new Map()), state: 'loading' } as unknown as ISessionsManagementService);
+		this.services.registerInstance(ISessionsService, {
+			onDidChange: Event.None,
+			activeSelection: undefined,
+			getSelection: () => ({ activeSelection: undefined, visibleSelections: [] }),
+		} as unknown as ISessionsService);
+		this.services.registerInstance(ISessionsManagementService, {
+			onDidChange: Event.None,
+			materializedSessions: observableValue('materialized', new Map()),
+			state: 'loading',
+		} as unknown as ISessionsManagementService);
 		this.services.registerInstance(ISessionChangesService, {} as ISessionChangesService);
-		this.services.registerInstance(INotificationService, { error: (message: string) => { this.errors.push(message); } } as unknown as INotificationService);
+		this.services.registerInstance(INotificationService, {
+			error: (message: string) => {
+				this.errors.push(message);
+			},
+		} as unknown as INotificationService);
 		this.services.registerInstance(ICommandService, this._register(new CommandService(this.services)));
 		this.services.registerInstance(ISessionsConversationService, {
-			openInNewWindow: async () => { throw new Error("Unexpected popup"); },
+			openInNewWindow: async () => {
+				throw new Error('Unexpected popup');
+			},
 			setConversationKind: async () => {
-				if (!this.conversationStarted.isSettled) { await this.conversationStarted.complete(); }
+				if (!this.conversationStarted.isSettled) {
+					await this.conversationStarted.complete();
+				}
 				await this.conversationGate;
-			}
+			},
 		});
-		this.services.registerInstance(IOutputService, { onDidRequestShowChannel: this.outputReveal.event } as unknown as IOutputService);
+		this.services.registerInstance(IOutputService, {
+			onDidRequestShowChannel: this.outputReveal.event,
+		} as unknown as IOutputService);
 		this.services.registerInstance(IViewsService, {
 			onDidChangeViewContainerVisibility: this.viewVisibility.event,
-			getVisibleViewContainer: () => this.sidebarId ? { id: this.sidebarId, title: 'Conversations', location: ViewContainerLocation.Sidebar } : null,
+			getVisibleViewContainer: () =>
+				this.sidebarId
+					? { id: this.sidebarId, title: 'Conversations', location: ViewContainerLocation.Sidebar }
+					: null,
 			openViewContainer: async (id: string, focus?: boolean) => {
 				this.opened.push({ id, focus });
 				this.sidebarId = id;
-				if (!this.navigationStarted.isSettled) { await this.navigationStarted.complete(); }
+				if (!this.navigationStarted.isSettled) {
+					await this.navigationStarted.complete();
+				}
 				await this.navigationGate;
 				return null;
-			}
+			},
 		} as unknown as IViewsService);
 		this.services.registerInstance(IViewDescriptorService, {
-			getDefaultViewContainer: () => ({ id: this.defaultSidebarId, title: 'Conversations', location: ViewContainerLocation.Sidebar }),
+			getDefaultViewContainer: () => ({
+				id: this.defaultSidebarId,
+				title: 'Conversations',
+				location: ViewContainerLocation.Sidebar,
+			}),
 		} as unknown as IViewDescriptorService);
 		this.services.registerInstance(IPaneCompositePartService, {
-			onDidPaneCompositeOpen: Event.None, getActivePaneComposite: () => ({ focus: () => { this.focused = 'details'; } }),
+			onDidPaneCompositeOpen: Event.None,
+			getActivePaneComposite: () => ({
+				focus: () => {
+					this.focused = 'details';
+				},
+			}),
 		} as unknown as IPaneCompositePartService);
 		this.services.registerInstance(ILayoutService, {
-			onDidChangePartVisibility: Event.None, onDidLayoutMainContainer: Event.None,
+			onDidChangePartVisibility: Event.None,
+			onDidLayoutMainContainer: Event.None,
 			isPartVisible: (id: string) => this.visible.get(id) ?? false,
-			showPart: (id: string) => { this.visible.set(id, true); this.partChanges.push('show:' + id); },
-			hidePart: (id: string) => { this.visible.set(id, false); this.partChanges.push('hide:' + id); },
+			showPart: (id: string) => {
+				this.visible.set(id, true);
+				this.partChanges.push('show:' + id);
+			},
+			hidePart: (id: string) => {
+				this.visible.set(id, false);
+				this.partChanges.push('hide:' + id);
+			},
 			setPrimaryPart: (id: string) => this.partChanges.push('primary:' + id),
-			setPartAvailable: (id: string, available: boolean) => { this.visible.set(id, available); this.partChanges.push('available:' + id); },
-			updateParts: (update: () => void) => update(), focus: () => { this.focused = 'conversation'; },
+			setPartAvailable: (id: string, available: boolean) => {
+				this.visible.set(id, available);
+				this.partChanges.push('available:' + id);
+			},
+			updateParts: (update: () => void) => update(),
+			focus: () => {
+				this.focused = 'conversation';
+			},
 		} as unknown as ILayoutService);
 		this.service = this._register(this.services.createInstance(SessionsLayoutService));
 	}

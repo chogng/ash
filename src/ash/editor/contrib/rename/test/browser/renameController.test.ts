@@ -39,18 +39,31 @@ test('rename keeps the provider that prepared the symbol and reports one undoabl
 			assert.equal(request.resource, model.uri);
 			assert.equal(signal, preparation.signal);
 			assert.equal(request.newName, 'result');
-			return { entries: [{ kind: 'textDocument', resource: model.uri, edits: [{ range: model.getFullModelRange(), text: request.newName! }] }] };
+			return {
+				entries: [
+					{
+						kind: 'textDocument',
+						resource: model.uri,
+						edits: [{ range: model.getFullModelRange(), text: request.newName! }],
+					},
+				],
+			};
 		},
 	});
 	using unrelated = features.renameProvider.register('typescript', {
 		prepareRename: () => undefined,
-		provideRenameEdits: () => { throw new Error('Wrong rename provider'); },
+		provideRenameEdits: () => {
+			throw new Error('Wrong rename provider');
+		},
 	});
 	await fixture.open();
 	input.value = 'result';
 	fixture.press(input, 'Enter');
 	await flushPromises();
-	assert.deepEqual({ text: model.getValue(), commands, errors }, { text: 'result', commands: ['editor.action.rename'], errors: [] });
+	assert.deepEqual(
+		{ text: model.getValue(), commands, errors },
+		{ text: 'result', commands: ['editor.action.rename'], errors: [] },
+	);
 	model.undo();
 	assert.equal(model.getValue(), 'value');
 });
@@ -58,7 +71,15 @@ test('rename keeps the provider that prepared the symbol and reports one undoabl
 test('a provider without optional preparation renames the word at the cursor', async () => {
 	using fixture = createEditor();
 	using provider = fixture.features.renameProvider.register('typescript', {
-		provideRenameEdits: request => ({ entries: [{ kind: 'textDocument', resource: request.resource, edits: [{ range: fixture.model.getFullModelRange(), text: request.newName! }] }] }),
+		provideRenameEdits: request => ({
+			entries: [
+				{
+					kind: 'textDocument',
+					resource: request.resource,
+					edits: [{ range: fixture.model.getFullModelRange(), text: request.newName! }],
+				},
+			],
+		}),
 	});
 	await fixture.open();
 	assert.equal(fixture.input.value, 'value');
@@ -81,7 +102,9 @@ for (const failure of ['throw', 'invalid range'] as const) {
 				if (failure === 'throw') throw new Error('Preparation failed');
 				return { range: new Range(1, 1, 1, 20), placeholder: 'invalid' };
 			},
-			provideRenameEdits: () => { throw new Error('Invalid provider selected'); },
+			provideRenameEdits: () => {
+				throw new Error('Invalid provider selected');
+			},
 		});
 		await fixture.open();
 		assert.equal(fixture.input.value, 'value');
@@ -94,11 +117,16 @@ for (const mismatch of ['version', 'expectedText'] as const) {
 		using fixture = createEditor();
 		using provider = fixture.features.renameProvider.register('typescript', {
 			provideRenameEdits: request => ({
-				entries: [{
-					kind: 'textDocument', resource: request.resource,
-					...(mismatch === 'version' ? { version: request.snapshot.version + 1 } : { expectedText: 'outdated' }),
-					edits: [{ range: fixture.model.getFullModelRange(), text: 'wrong' }],
-				}]
+				entries: [
+					{
+						kind: 'textDocument',
+						resource: request.resource,
+						...(mismatch === 'version'
+							? { version: request.snapshot.version + 1 }
+							: { expectedText: 'outdated' }),
+						edits: [{ range: fixture.model.getFullModelRange(), text: 'wrong' }],
+					},
+				],
 			}),
 		});
 		await fixture.open();
@@ -114,7 +142,9 @@ for (const mismatch of ['version', 'expectedText'] as const) {
 for (const outcome of ['complete', 'error'] as const) {
 	test(`a dispatched rename can ${outcome} without closing a newer input session`, async () => {
 		let release!: () => void;
-		const pending = new Promise<void>(resolve => { release = resolve; });
+		const pending = new Promise<void>(resolve => {
+			release = resolve;
+		});
 		const edits: LanguageWorkspaceEdit[] = [];
 		using fixture = createEditor(async edit => {
 			edits.push(edit);
@@ -122,7 +152,15 @@ for (const outcome of ['complete', 'error'] as const) {
 			if (outcome === 'error') throw new Error('Workspace rename failed');
 		});
 		using provider = fixture.features.renameProvider.register('typescript', {
-			provideRenameEdits: request => ({ entries: [{ kind: 'textDocument', resource: request.resource, edits: [{ range: fixture.model.getFullModelRange(), text: request.newName! }] }] }),
+			provideRenameEdits: request => ({
+				entries: [
+					{
+						kind: 'textDocument',
+						resource: request.resource,
+						edits: [{ range: fixture.model.getFullModelRange(), text: request.newName! }],
+					},
+				],
+			}),
 		});
 		try {
 			await fixture.open();
@@ -138,7 +176,10 @@ for (const outcome of ['complete', 'error'] as const) {
 			await flushPromises();
 			assert.equal(fixture.input.value, 'new session');
 			assert.equal(fixture.input.closest<HTMLElement>('.stanza-editor-rename')!.hidden, false);
-			assert.deepEqual(fixture.errors.map(error => (error as Error).message), outcome === 'error' ? ['Workspace rename failed'] : []);
+			assert.deepEqual(
+				fixture.errors.map(error => (error as Error).message),
+				outcome === 'error' ? ['Workspace rename failed'] : [],
+			);
 		} finally {
 			release();
 		}
@@ -147,18 +188,37 @@ for (const outcome of ['complete', 'error'] as const) {
 
 test('rename forwards refactoring autosave and its edit reason through the host apply boundary', async () => {
 	let received: IBulkEditOptions | undefined;
-	using fixture = createEditor(async (_edit, options) => { received = options; });
+	using fixture = createEditor(async (_edit, options) => {
+		received = options;
+	});
 	using provider = fixture.features.renameProvider.register('typescript', {
-		provideRenameEdits: request => ({ entries: [{ kind: 'textDocument', resource: request.resource, edits: [{ range: fixture.model.getFullModelRange(), text: request.newName! }] }] }),
+		provideRenameEdits: request => ({
+			entries: [
+				{
+					kind: 'textDocument',
+					resource: request.resource,
+					edits: [{ range: fixture.model.getFullModelRange(), text: request.newName! }],
+				},
+			],
+		}),
 	});
 	await fixture.open();
 	fixture.input.value = 'renamed';
 	fixture.press(fixture.input, 'Enter');
 	await flushPromises();
-	assert.deepEqual({ autoSave: received?.respectAutoSaveConfig, label: received?.label, source: received?.reason?.metadata.source }, { autoSave: true, label: 'Rename to renamed', source: 'rename' });
+	assert.deepEqual(
+		{
+			autoSave: received?.respectAutoSaveConfig,
+			label: received?.label,
+			source: received?.reason?.metadata.source,
+		},
+		{ autoSave: true, label: 'Rename to renamed', source: 'rename' },
+	);
 });
 
-function createEditor(onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => Promise<void>) {
+function createEditor(
+	onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => Promise<void>,
+) {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const model = new TextModel('value', { languageId: 'typescript' });
@@ -168,8 +228,12 @@ function createEditor(onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, optio
 	commandLogs.set(model, commands);
 	const container = dom.window.document.querySelector<HTMLElement>('main')!;
 	const editor = createTestCodeEditor({
-		container, model, ariaLabel: 'test.ts',
-		languageFeaturesService: features, dimension: { width: 320, height: 100 }, onLanguageError: error => errors.push(error),
+		container,
+		model,
+		ariaLabel: 'test.ts',
+		languageFeaturesService: features,
+		dimension: { width: 320, height: 100 },
+		onLanguageError: error => errors.push(error),
 		...(onApplyWorkspaceEdit ? { onApplyWorkspaceEdit } : {}),
 	});
 	const editorInput = container.querySelector<HTMLElement>('.stanza-editor-input')!;
@@ -178,7 +242,13 @@ function createEditor(onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, optio
 		target.dispatchEvent(new dom.window.KeyboardEvent('keydown', { bubbles: true, cancelable: true, key }));
 	};
 	return {
-		model, features, editor, input, errors, commands, press,
+		model,
+		features,
+		editor,
+		input,
+		errors,
+		commands,
+		press,
 		open: async () => {
 			editor.focus();
 			press(editorInput, 'F2');

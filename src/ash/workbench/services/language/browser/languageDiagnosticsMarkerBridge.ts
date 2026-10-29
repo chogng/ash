@@ -1,12 +1,12 @@
-import { Disposable } from "../../../../base/common/lifecycle.js";
+import { Disposable } from '../../../../base/common/lifecycle.js';
 import {
 	MarkerSeverity,
 	type IMarkerService,
 	type IResourceMarker,
-} from "../../../../platform/markers/common/markers.js";
-import type { ILanguageDiagnosticsService } from "../common/languageDiagnosticsService.js";
+} from '../../../../platform/markers/common/markers.js';
+import type { ILanguageDiagnosticsService } from '../common/languageDiagnosticsService.js';
 
-const LanguageDiagnosticsOwner = "language";
+const LanguageDiagnosticsOwner = 'language';
 
 /** Projects editor diagnostics into the platform-wide resource marker store. */
 export class LanguageDiagnosticsMarkerBridge extends Disposable {
@@ -51,10 +51,15 @@ export class LanguageDiagnosticsMarkerBridge extends Disposable {
 
 function toMarkerSeverity(value: string): MarkerSeverity {
 	switch (value) {
-		case "error": return MarkerSeverity.Error;
-		case "warning": return MarkerSeverity.Warning;
-		case "information": return MarkerSeverity.Info;
-		case "hint": return MarkerSeverity.Hint;
-		default: throw new TypeError(`Unknown language diagnostic severity: ${value}`);
+		case 'error':
+			return MarkerSeverity.Error;
+		case 'warning':
+			return MarkerSeverity.Warning;
+		case 'information':
+			return MarkerSeverity.Info;
+		case 'hint':
+			return MarkerSeverity.Hint;
+		default:
+			throw new TypeError(`Unknown language diagnostic severity: ${value}`);
 	}
 }

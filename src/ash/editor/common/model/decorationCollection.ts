@@ -1,15 +1,13 @@
-import { Position } from "../core/position.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { Range } from "../core/range.js";
-import { TextModel } from "./textModel.js";
+import { Position } from '../core/position.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { Range } from '../core/range.js';
+import { TextModel } from './textModel.js';
 import { type IModelDecorationOptions, TrackedRangeStickiness } from '../model.js';
 
 declare const textDecorationIdBrand: unique symbol;
 
-export type TextDecorationId = number & {
-	readonly [textDecorationIdBrand]: "TextDecorationId";
-};
+export type TextDecorationId = number & { readonly [textDecorationIdBrand]: 'TextDecorationId' };
 
 export interface TextDecorationSpec<TMetadata> {
 	readonly range: Range;
@@ -25,8 +23,8 @@ export interface TextDecorationSnapshot<TMetadata> {
 }
 
 export enum TextDecorationChangeReason {
-	Content = "content",
-	Range = "range",
+	Content = 'content',
+	Range = 'range',
 }
 
 export interface TextDecorationChange<TMetadata> {
@@ -52,24 +50,27 @@ let nextTextDecorationId = 1;
  * collection.
  */
 export class TextDecorationCollection<TMetadata> extends Disposable {
-	private readonly changeEmitter =
-		this._register(new Emitter<TextDecorationChange<TMetadata>>());
-	private readonly entries =
-		new Map<TextDecorationId, DecorationEntry<TMetadata>>();
+	private readonly changeEmitter = this._register(new Emitter<TextDecorationChange<TMetadata>>());
+	private readonly entries = new Map<TextDecorationId, DecorationEntry<TMetadata>>();
 	private readonly ownerId = 0;
 
-	readonly onDidChange: Event<TextDecorationChange<TMetadata>> =
-		this.changeEmitter.event;
+	readonly onDidChange: Event<TextDecorationChange<TMetadata>> = this.changeEmitter.event;
 
 	constructor(private readonly model: TextModel) {
 		super();
 		this._register(model.onDidChangeContent(() => this.acceptModelChange()));
-		this._register(toDisposable(() => {
-			if (!this.model.isDisposed() && this.entries.size > 0) {
-				this.model.deltaDecorations([...this.entries.values()].map(entry => entry.modelDecorationId), [], this.ownerId);
-			}
-			this.entries.clear();
-		}));
+		this._register(
+			toDisposable(() => {
+				if (!this.model.isDisposed() && this.entries.size > 0) {
+					this.model.deltaDecorations(
+						[...this.entries.values()].map(entry => entry.modelDecorationId),
+						[],
+						this.ownerId,
+					);
+				}
+				this.entries.clear();
+			}),
+		);
 	}
 
 	get size(): number {
@@ -87,9 +88,7 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 		return this.createSnapshot();
 	}
 
-	get(
-		id: TextDecorationId,
-	): TextDecorationSnapshot<TMetadata> | undefined {
+	get(id: TextDecorationId): TextDecorationSnapshot<TMetadata> | undefined {
 		this.assertNotDisposed();
 		const entry = this.entries.get(id);
 		return entry ? snapshotEntry(entry, this.readRange(entry)) : undefined;
@@ -104,17 +103,18 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 		return entry.id;
 	}
 
-	update(
-		id: TextDecorationId,
-		spec: TextDecorationSpec<TMetadata>,
-	): void {
+	update(id: TextDecorationId, spec: TextDecorationSpec<TMetadata>): void {
 		this.assertNotDisposed();
 		const previous = this.entries.get(id);
 		if (!previous) {
 			throw new RangeError(`Unknown text decoration ${id}`);
 		}
 		this.validateSpec(spec);
-		const [modelDecorationId] = this.model.deltaDecorations([previous.modelDecorationId], [toModelDecoration(spec)], this.ownerId);
+		const [modelDecorationId] = this.model.deltaDecorations(
+			[previous.modelDecorationId],
+			[toModelDecoration(spec)],
+			this.ownerId,
+		);
 		const next: DecorationEntry<TMetadata> = {
 			id,
 			modelDecorationId,
@@ -135,14 +135,15 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 		return true;
 	}
 
-	replaceAll(
-		specs: readonly TextDecorationSpec<TMetadata>[],
-	): readonly TextDecorationId[] {
+	replaceAll(specs: readonly TextDecorationSpec<TMetadata>[]): readonly TextDecorationId[] {
 		return this.deltaDecorations([...this.entries.keys()], specs);
 	}
 
 	/** Atomically replaces one caller-owned decoration list while retaining reusable IDs. */
-	deltaDecorations(previousIds: readonly TextDecorationId[], specs: readonly TextDecorationSpec<TMetadata>[]): readonly TextDecorationId[] {
+	deltaDecorations(
+		previousIds: readonly TextDecorationId[],
+		specs: readonly TextDecorationSpec<TMetadata>[],
+	): readonly TextDecorationId[] {
 		this.assertNotDisposed();
 		for (const spec of specs) this.validateSpec(spec);
 		const previousEntries = previousIds.map(id => {
@@ -150,7 +151,8 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 			if (!entry) throw new RangeError(`Unknown text decoration ${id}`);
 			return entry;
 		});
-		if (new Set(previousIds).size !== previousIds.length) throw new RangeError("Text decoration delta contains duplicate IDs");
+		if (new Set(previousIds).size !== previousIds.length)
+			throw new RangeError('Text decoration delta contains duplicate IDs');
 		if (previousIds.length === 0 && specs.length === 0) return Object.freeze([]);
 
 		const modelDecorationIds = this.model.deltaDecorations(
@@ -158,11 +160,9 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 			specs.map(toModelDecoration),
 			this.ownerId,
 		);
-		const staged = specs.map((spec, index) => this.createEntryWithId(
-			previousEntries[index]?.id ?? nextDecorationId(),
-			modelDecorationIds[index],
-			spec,
-		));
+		const staged = specs.map((spec, index) =>
+			this.createEntryWithId(previousEntries[index]?.id ?? nextDecorationId(), modelDecorationIds[index], spec),
+		);
 
 		for (const entry of previousEntries) this.entries.delete(entry.id);
 		for (const entry of staged) this.entries.set(entry.id, entry);
@@ -174,20 +174,17 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 		this.replaceAll([]);
 	}
 
-	private createEntry(
-		spec: TextDecorationSpec<TMetadata>,
-	): DecorationEntry<TMetadata> {
+	private createEntry(spec: TextDecorationSpec<TMetadata>): DecorationEntry<TMetadata> {
 		const [modelDecorationId] = this.model.deltaDecorations([], [toModelDecoration(spec)], this.ownerId);
 		return this.createEntryWithId(nextDecorationId(), modelDecorationId, spec);
 	}
 
-	private createEntryWithId(id: TextDecorationId, modelDecorationId: string, spec: TextDecorationSpec<TMetadata>): DecorationEntry<TMetadata> {
-		return {
-			id,
-			modelDecorationId,
-			metadata: spec.metadata,
-			lastRange: spec.range,
-		};
+	private createEntryWithId(
+		id: TextDecorationId,
+		modelDecorationId: string,
+		spec: TextDecorationSpec<TMetadata>,
+	): DecorationEntry<TMetadata> {
+		return { id, modelDecorationId, metadata: spec.metadata, lastRange: spec.range };
 	}
 
 	private validateSpec(spec: TextDecorationSpec<TMetadata>): void {
@@ -209,9 +206,7 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 	}
 
 	private createSnapshot(): readonly TextDecorationSnapshot<TMetadata>[] {
-		return Object.freeze(
-			[...this.entries.values()].map(entry => snapshotEntry(entry, this.readRange(entry))),
-		);
+		return Object.freeze([...this.entries.values()].map(entry => snapshotEntry(entry, this.readRange(entry))));
 	}
 
 	private readRange(entry: DecorationEntry<TMetadata>): Range {
@@ -221,24 +216,14 @@ export class TextDecorationCollection<TMetadata> extends Disposable {
 	}
 
 	private emitChange(reason: TextDecorationChangeReason): void {
-		this.changeEmitter.fire(Object.freeze({
-			reason,
-			modelVersion: this.model.version,
-			decorations: this.createSnapshot(),
-		}));
+		this.changeEmitter.fire(
+			Object.freeze({ reason, modelVersion: this.model.version, decorations: this.createSnapshot() }),
+		);
 	}
-
 }
 
-function snapshotEntry<TMetadata>(
-	entry: DecorationEntry<TMetadata>,
-	range: Range,
-): TextDecorationSnapshot<TMetadata> {
-	return Object.freeze({
-		id: entry.id,
-		range,
-		metadata: entry.metadata,
-	});
+function snapshotEntry<TMetadata>(entry: DecorationEntry<TMetadata>, range: Range): TextDecorationSnapshot<TMetadata> {
+	return Object.freeze({ id: entry.id, range, metadata: entry.metadata });
 }
 
 function nextDecorationId(): TextDecorationId {
@@ -250,14 +235,13 @@ function nextDecorationId(): TextDecorationId {
 function toModelDecoration<TMetadata>(spec: TextDecorationSpec<TMetadata>) {
 	return {
 		range: spec.range,
-		options: {
-			...(spec.options ?? { description: 'TextDecorationCollection' }),
-			stickiness: spec.stickiness,
-		},
+		options: { ...(spec.options ?? { description: 'TextDecorationCollection' }), stickiness: spec.stickiness },
 	};
 }
 
 function rangesEqual(left: Range, right: Range): boolean {
-	return Position.compare(left.getStartPosition(), right.getStartPosition()) === 0 &&
-		Position.compare(left.getEndPosition(), right.getEndPosition()) === 0;
+	return (
+		Position.compare(left.getStartPosition(), right.getStartPosition()) === 0 &&
+		Position.compare(left.getEndPosition(), right.getEndPosition()) === 0
+	);
 }

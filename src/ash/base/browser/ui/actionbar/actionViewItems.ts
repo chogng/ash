@@ -1,17 +1,17 @@
-import { Separator, type IAction } from "../../../common/actions.js";
-import type { Icon } from "../../../common/icon.js";
-import { Disposable, toDisposable, type IDisposable } from "../../../common/lifecycle.js";
-import { assertDefined } from "../../../common/types.js";
-import { addDisposableListener, h } from "../../dom.js";
-import { setAriaAttribute } from "../aria/aria.js";
-import { Button, type IButtonOptions, type IButtonStyles } from "../button/button.js";
-import { AnchorPosition } from "../contextview/contextview.js";
-import { getHoverDelegate, type IManagedHover } from "../hover/hoverDelegate.js";
+import { Separator, type IAction } from '../../../common/actions.js';
+import type { Icon } from '../../../common/icon.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../common/lifecycle.js';
+import { assertDefined } from '../../../common/types.js';
+import { addDisposableListener, h } from '../../dom.js';
+import { setAriaAttribute } from '../aria/aria.js';
+import { Button, type IButtonOptions, type IButtonStyles } from '../button/button.js';
+import { AnchorPosition } from '../contextview/contextview.js';
+import { getHoverDelegate, type IManagedHover } from '../hover/hoverDelegate.js';
 import type { IDelayedHoverOptions } from '../hover/hover.js';
 import { HoverPosition } from '../hover/hoverWidget.js';
-import { appendIcon } from "../lxicons/lxicon.js";
+import { appendIcon } from '../lxicons/lxicon.js';
 
-const ActionHoverGroupId = "actions";
+const ActionHoverGroupId = 'actions';
 
 /** Presentation options shared by every ActionBar item representation. */
 export interface ActionViewItemOptions {
@@ -47,18 +47,20 @@ export abstract class ActionViewItem extends Disposable {
 	/** Controls whether this item is the ActionBar's page-level Tab stop. */
 	abstract setTabbable(tabbable: boolean): void;
 
-	focus(): void { }
+	focus(): void {}
 
 	/** Creates a Button using the shared delay group for adjacent actions. */
 	protected createButton(container: HTMLElement, options: IButtonOptions): Button {
-		const button = this._register(new Button(container, {
-			...this.actionViewItemOptions.buttonStyles,
-			presentation: this.actionViewItemOptions.buttonPresentation,
-			...options,
-			title: undefined,
-			hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,
-			hoverAnchorPosition: options.hoverAnchorPosition ?? this.actionViewItemOptions.hoverAnchorPosition,
-		}));
+		const button = this._register(
+			new Button(container, {
+				...this.actionViewItemOptions.buttonStyles,
+				presentation: this.actionViewItemOptions.buttonPresentation,
+				...options,
+				title: undefined,
+				hoverGroupId: options.hoverGroupId ?? ActionHoverGroupId,
+				hoverAnchorPosition: options.hoverAnchorPosition ?? this.actionViewItemOptions.hoverAnchorPosition,
+			}),
+		);
 		if (options.title) {
 			this.setupDelayedHover(button.domNode, options.title);
 		}
@@ -67,26 +69,32 @@ export abstract class ActionViewItem extends Disposable {
 
 	/** Installs an action tooltip for view items that render a custom target. */
 	protected setupDelayedHover(target: HTMLElement, content: string): IDisposable {
-		return this._register(getHoverDelegate().setupDelayedHover(target, () => ({
-			content,
-			...this.getHoverOptions(),
-		}), { groupId: ActionHoverGroupId }));
+		return this._register(
+			getHoverDelegate().setupDelayedHover(target, () => ({ content, ...this.getHoverOptions() }), {
+				groupId: ActionHoverGroupId,
+			}),
+		);
 	}
 
 	/** Mutable tooltips are retained for items whose labels change while visible. */
 	protected setupHover(target: HTMLElement, content: string): IManagedHover {
-		return this._register(getHoverDelegate().setupHover({
-			target,
-			content,
-			groupId: ActionHoverGroupId,
-			anchorPosition: this.actionViewItemOptions.hoverAnchorPosition,
-		}));
+		return this._register(
+			getHoverDelegate().setupHover({
+				target,
+				content,
+				groupId: ActionHoverGroupId,
+				anchorPosition: this.actionViewItemOptions.hoverAnchorPosition,
+			}),
+		);
 	}
 
 	protected getHoverOptions(): Pick<IDelayedHoverOptions, 'position'> {
 		return {
 			position: {
-				hoverPosition: this.actionViewItemOptions.hoverAnchorPosition === AnchorPosition.Below ? HoverPosition.BELOW : HoverPosition.ABOVE,
+				hoverPosition:
+					this.actionViewItemOptions.hoverAnchorPosition === AnchorPosition.Below
+						? HoverPosition.BELOW
+						: HoverPosition.ABOVE,
 			},
 		};
 	}
@@ -148,7 +156,10 @@ export interface LabelActionViewItemOptions extends ActionViewItemOptions {
 export class LabelActionViewItem extends ActionViewItem {
 	private button: HTMLButtonElement | undefined;
 
-	constructor(action: IAction, private readonly options: LabelActionViewItemOptions = {}) {
+	constructor(
+		action: IAction,
+		private readonly options: LabelActionViewItemOptions = {},
+	) {
 		super(action, options);
 	}
 
@@ -156,29 +167,29 @@ export class LabelActionViewItem extends ActionViewItem {
 		if (this.button) {
 			throw new Error(`Action view item is already rendered: ${this.action.id}`);
 		}
-		const button = h(container.ownerDocument, "button");
-		const label = h(container.ownerDocument, "span");
-		button.className = "ash-action-label";
-		button.type = "button";
+		const button = h(container.ownerDocument, 'button');
+		const label = h(container.ownerDocument, 'span');
+		button.className = 'ash-action-label';
+		button.type = 'button';
 		button.disabled = !this.action.enabled;
 		if (this.action.checked !== undefined) {
-			button.classList.toggle("checked", this.action.checked);
-			setAriaAttribute(button, "pressed", this.action.checked);
+			button.classList.toggle('checked', this.action.checked);
+			setAriaAttribute(button, 'pressed', this.action.checked);
 		}
 		if (this.options.ariaLabel) {
-			setAriaAttribute(button, "label", this.options.ariaLabel);
+			setAriaAttribute(button, 'label', this.options.ariaLabel);
 		}
 		const icon = this.options.icon ?? this.action.icon;
 		if (icon) {
-			const iconContainer = h(container.ownerDocument, "span");
-			iconContainer.className = "ash-action-label-icon";
+			const iconContainer = h(container.ownerDocument, 'span');
+			iconContainer.className = 'ash-action-label-icon';
 			appendIcon(icon, iconContainer);
 			button.append(iconContainer);
 		}
-		label.className = "ash-action-label-text";
+		label.className = 'ash-action-label-text';
 		label.textContent = this.options.label ?? this.action.label;
 		button.append(label);
-		this._register(addDisposableListener(button, "click", () => this.action.run()));
+		this._register(addDisposableListener(button, 'click', () => this.action.run()));
 		this.setupHover(button, this.options.tooltip ?? this.action.tooltip);
 		this._register(toDisposable(() => button.remove()));
 		this.button = button;
@@ -207,11 +218,11 @@ export class SeparatorActionViewItem extends ActionViewItem {
 			throw new Error(`Action view item is already rendered: ${this.action.id}`);
 		}
 		this.rendered = true;
-		container.classList.add("ash-action-view-item-separator");
-		container.setAttribute("role", "separator");
+		container.classList.add('ash-action-view-item-separator');
+		container.setAttribute('role', 'separator');
 	}
 
-	override setTabbable(_tabbable: boolean): void { }
+	override setTabbable(_tabbable: boolean): void {}
 }
 
 /** Creates the base representation used when a platform has no override. */

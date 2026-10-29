@@ -9,22 +9,31 @@ import { BrowserContextViewService } from '../../../../../platform/contextview/b
 import { CommandService } from '../../../commands/common/commandService.js';
 import { TestNotificationService } from '../../../notification/test/common/testNotificationService.js';
 import { ElectronContextMenuService } from '../../electron-browser/contextMenuService.js';
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
-import { Event } from "../../../../../base/common/event.js";
+import { Event } from '../../../../../base/common/event.js';
 import { DisposableTracker, installDisposableTracker } from '../../../../../base/common/lifecycle.js';
-import { AnchorAlignment, AnchorAxisAlignment, ContextViewHideReason, type ContextViewOptions } from "../../../../../base/browser/ui/contextview/contextview.js";
-import type { INativeContextMenuApi, INativeContextMenuRequest, INativeContextMenuResult } from "../../../../../base/parts/contextmenu/common/contextmenu.js";
-import { IMenuService } from "../../../../../platform/actions/common/actions.js";
-import { ContextKeyService, IContextKeyService } from "../../../../../platform/contextkey/browser/contextKeyService.js";
-import { InMemoryConfigurationService } from "../../../../../platform/configuration/common/inMemoryConfigurationService.js";
-import { ConfigurationRegistry } from "../../../../../platform/configuration/common/configurationRegistry.js";
-import { IContextViewService } from "../../../../../platform/contextview/browser/contextView.js";
-import { IKeybindingService } from "../../../../../platform/keybinding/common/keybinding.js";
-import { INotificationService } from "../../../../../platform/notification/common/notification.js";
+import {
+	AnchorAlignment,
+	AnchorAxisAlignment,
+	ContextViewHideReason,
+	type ContextViewOptions,
+} from '../../../../../base/browser/ui/contextview/contextview.js';
+import type {
+	INativeContextMenuApi,
+	INativeContextMenuRequest,
+	INativeContextMenuResult,
+} from '../../../../../base/parts/contextmenu/common/contextmenu.js';
+import { IMenuService } from '../../../../../platform/actions/common/actions.js';
+import { ContextKeyService, IContextKeyService } from '../../../../../platform/contextkey/browser/contextKeyService.js';
+import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
+import { ConfigurationRegistry } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { IContextViewService } from '../../../../../platform/contextview/browser/contextView.js';
+import { IKeybindingService } from '../../../../../platform/keybinding/common/keybinding.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { KeybindingRegistry } from '../../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { KeybindingResolver } from '../../../../../platform/keybinding/common/keybindingResolver.js';
 import { ContextKeyExpr } from '../../../../../platform/contextkey/common/contextkey.js';
@@ -42,22 +51,33 @@ test('system menus retain scoped shortcut hints, chord labels and delegate overr
 	const resolver = new KeybindingResolver({ registry });
 	const single = parseKeybinding('ctrl+c')!;
 	const chord = parseKeybinding('ctrl+k ctrl+c')!;
-	for (const [command, keybinding] of [['copy', single], ['copyPath', chord]] as const) {
-		lifetime.add(registry.registerKeybindingRule({ command, keybinding, when: ContextKeyExpr.has('explorerFocus') }));
+	for (const [command, keybinding] of [
+		['copy', single],
+		['copyPath', chord],
+	] as const) {
+		lifetime.add(
+			registry.registerKeybindingRule({ command, keybinding, when: ContextKeyExpr.has('explorerFocus') }),
+		);
 	}
 	const keybindings = {
-		inChordMode: false, onDidUpdateKeybindings: Event.None,
-		getKeybindings: () => [], enableKeybindingHoldMode: () => undefined,
+		inChordMode: false,
+		onDidUpdateKeybindings: Event.None,
+		getKeybindings: () => [],
+		enableKeybindingHoldMode: () => undefined,
 		registerSchemaContribution: () => Disposable.None,
-		resolveKeybinding, resolveUserBinding: () => undefined,
+		resolveKeybinding,
+		resolveUserBinding: () => undefined,
 		lookupKeybindings: command => resolver.lookupKeybindings(command, contexts),
 		lookupKeybinding: command => resolver.lookupKeybinding(command, contexts),
 	} satisfies IKeybindingService;
 	const requests: INativeContextMenuRequest[] = [];
 	const closed = promiseWithResolvers<void>();
 	const api: INativeContextMenuApi = {
-		async popup(request) { requests.push(request); return {}; },
-		async close() { },
+		async popup(request) {
+			requests.push(request);
+			return {};
+		},
+		async close() {},
 	};
 	const services = lifetime.add(new InstantiationService());
 	services.registerInstance(IMenuService, {} as IMenuService);
@@ -66,7 +86,13 @@ test('system menus retain scoped shortcut hints, chord labels and delegate overr
 	services.registerInstance(INotificationService, lifetime.add(new TestNotificationService()));
 	const { NativeContextMenuService } = await import('../../electron-browser/contextMenuService.js');
 	const service = lifetime.add(services.createInstance(NativeContextMenuService, api));
-	const actions: IAction[] = ['copy', 'copyPath'].map(id => ({ id, label: id, tooltip: '', enabled: true, run() { } }));
+	const actions: IAction[] = ['copy', 'copyPath'].map(id => ({
+		id,
+		label: id,
+		tooltip: '',
+		enabled: true,
+		run() {},
+	}));
 	service.showContextMenu({
 		getAnchor: () => ({ x: 10, y: 20, targetWindow: environment.window as unknown as Window }),
 		getActions: () => actions,
@@ -74,8 +100,19 @@ test('system menus retain scoped shortcut hints, chord labels and delegate overr
 	});
 	await closed.promise;
 	assert.deepEqual(requests[0]!.items, [
-		{ type: 'action', id: 'action-1', label: 'copy', enabled: true, accelerator: toElectronAccelerator(resolveKeybinding(single)) },
-		{ type: 'action', id: 'action-2', label: `copyPath [${getKeybindingLabel(resolveKeybinding(chord))}]`, enabled: true },
+		{
+			type: 'action',
+			id: 'action-1',
+			label: 'copy',
+			enabled: true,
+			accelerator: toElectronAccelerator(resolveKeybinding(single)),
+		},
+		{
+			type: 'action',
+			id: 'action-2',
+			label: `copyPath [${getKeybindingLabel(resolveKeybinding(chord))}]`,
+			enabled: true,
+		},
 	]);
 	const overridden = promiseWithResolvers<void>();
 	service.showContextMenu({
@@ -85,23 +122,26 @@ test('system menus retain scoped shortcut hints, chord labels and delegate overr
 		onHide: () => overridden.resolve(),
 	});
 	await overridden.promise;
-	assert.deepEqual(requests[1]!.items, actions.map((action, index) => ({ type: 'action', id: `action-${index + 1}`, label: action.label, enabled: true })));
+	assert.deepEqual(
+		requests[1]!.items,
+		actions.map((action, index) => ({
+			type: 'action',
+			id: `action-${index + 1}`,
+			label: action.label,
+			enabled: true,
+		})),
+	);
 });
 
-test("Electron context menus run the selected action with its delegate context", async () => {
-	const environment = new JSDOM("<!doctype html><body></body>");
-	Object.defineProperty(globalThis, "window", {
-		configurable: true,
-		value: environment.window,
-	});
-	const { NativeContextMenuService } = await import(
-		"../../electron-browser/contextMenuService.js"
-	);
+test('Electron context menus run the selected action with its delegate context', async () => {
+	const environment = new JSDOM('<!doctype html><body></body>');
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: environment.window });
+	const { NativeContextMenuService } = await import('../../electron-browser/contextMenuService.js');
 	const api: INativeContextMenuApi = {
 		async popup() {
-			return { selectedId: "action-1" };
+			return { selectedId: 'action-1' };
 		},
-		async close() { },
+		async close() {},
 	};
 	using contextKeyService = new ContextKeyService();
 	const keybindingService = {
@@ -110,10 +150,18 @@ test("Electron context menus run the selected action with its delegate context",
 		getKeybindings: () => [],
 		enableKeybindingHoldMode: () => undefined,
 		onDidUpdateKeybindings: Event.None,
-		resolveKeybinding() { throw new Error("Not used"); },
-		resolveUserBinding() { return undefined; },
-		lookupKeybindings() { return []; },
-		lookupKeybinding() { return undefined; },
+		resolveKeybinding() {
+			throw new Error('Not used');
+		},
+		resolveUserBinding() {
+			return undefined;
+		},
+		lookupKeybindings() {
+			return [];
+		},
+		lookupKeybinding() {
+			return undefined;
+		},
 	} satisfies IKeybindingService;
 	const notificationService = {
 		error(message: string) {
@@ -126,45 +174,46 @@ test("Electron context menus run the selected action with its delegate context",
 	services.registerInstance(IKeybindingService, keybindingService);
 	services.registerInstance(INotificationService, notificationService);
 	using service = services.createInstance(NativeContextMenuService, api);
-	const actionContext = { resource: "test.txt" };
+	const actionContext = { resource: 'test.txt' };
 	let receivedContext: unknown;
 	let didCancel: boolean | undefined;
 	service.showContextMenu({
-		getAnchor: () => ({
-			x: 10,
-			y: 20,
-			targetWindow: environment.window as unknown as Window,
-		}),
-		getActions: () => [{
-			id: "run",
-			label: "Run",
-			tooltip: "Run",
-			enabled: true,
-			run(context) {
-				receivedContext = context;
+		getAnchor: () => ({ x: 10, y: 20, targetWindow: environment.window as unknown as Window }),
+		getActions: () => [
+			{
+				id: 'run',
+				label: 'Run',
+				tooltip: 'Run',
+				enabled: true,
+				run(context) {
+					receivedContext = context;
+				},
 			},
-		}],
+		],
 		getActionsContext: () => actionContext,
-		onHide: (cancelled) => {
+		onHide: cancelled => {
 			didCancel = cancelled;
 		},
 	});
-	await new Promise<void>((resolve) => setTimeout(resolve, 0));
+	await new Promise<void>(resolve => setTimeout(resolve, 0));
 
 	assert.equal(receivedContext, actionContext);
 	assert.equal(didCancel, false);
 	environment.window.close();
-	Reflect.deleteProperty(globalThis, "window");
+	Reflect.deleteProperty(globalThis, 'window');
 });
 
-test("Electron context menus position element and point anchors in CSS pixels", async () => {
-	const environment = new JSDOM("<!doctype html><body><button></button></body>");
-	Object.defineProperty(globalThis, "window", { configurable: true, value: environment.window });
-	const { NativeContextMenuService } = await import("../../electron-browser/contextMenuService.js");
+test('Electron context menus position element and point anchors in CSS pixels', async () => {
+	const environment = new JSDOM('<!doctype html><body><button></button></body>');
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: environment.window });
+	const { NativeContextMenuService } = await import('../../electron-browser/contextMenuService.js');
 	const requests: INativeContextMenuRequest[] = [];
 	const api: INativeContextMenuApi = {
-		async popup(request) { requests.push(request); return {}; },
-		async close() { },
+		async popup(request) {
+			requests.push(request);
+			return {};
+		},
+		async close() {},
 	};
 	using contextKeyService = new ContextKeyService();
 	const keybindingService = {
@@ -173,20 +222,42 @@ test("Electron context menus position element and point anchors in CSS pixels", 
 		getKeybindings: () => [],
 		enableKeybindingHoldMode: () => undefined,
 		onDidUpdateKeybindings: Event.None,
-		resolveKeybinding() { throw new Error("Not used"); },
-		resolveUserBinding() { return undefined; },
-		lookupKeybindings() { return []; },
-		lookupKeybinding() { return undefined; },
+		resolveKeybinding() {
+			throw new Error('Not used');
+		},
+		resolveUserBinding() {
+			return undefined;
+		},
+		lookupKeybindings() {
+			return [];
+		},
+		lookupKeybinding() {
+			return undefined;
+		},
 	} satisfies IKeybindingService;
 	using services = new InstantiationService();
 	services.registerInstance(IMenuService, {} as IMenuService);
 	services.registerInstance(IContextKeyService, contextKeyService);
 	services.registerInstance(IKeybindingService, keybindingService);
-	services.registerInstance(INotificationService, { error: (error: unknown) => { throw error; } } as unknown as INotificationService);
+	services.registerInstance(INotificationService, {
+		error: (error: unknown) => {
+			throw error;
+		},
+	} as unknown as INotificationService);
 	using service = services.createInstance(NativeContextMenuService, api);
-	const button = environment.window.document.querySelector("button")!;
-	button.getBoundingClientRect = () => ({ left: 100.25, top: 50.5, right: 140.25, bottom: 70.5, width: 40, height: 20, x: 100.25, y: 50.5, toJSON: () => ({}) });
-	const action = { id: "open", label: "Open", tooltip: "Open", enabled: true, run() { } };
+	const button = environment.window.document.querySelector('button')!;
+	button.getBoundingClientRect = () => ({
+		left: 100.25,
+		top: 50.5,
+		right: 140.25,
+		bottom: 70.5,
+		width: 40,
+		height: 20,
+		x: 100.25,
+		y: 50.5,
+		toJSON: () => ({}),
+	});
+	const action = { id: 'open', label: 'Open', tooltip: 'Open', enabled: true, run() {} };
 	service.showContextMenu({
 		getAnchor: () => button,
 		getActions: () => [action],
@@ -195,7 +266,17 @@ test("Electron context menus position element and point anchors in CSS pixels", 
 		autoSelectFirstItem: true,
 	});
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
-	button.getBoundingClientRect = () => ({ left: -10, top: -5, right: 30, bottom: 20, width: 40, height: 25, x: -10, y: -5, toJSON: () => ({}) });
+	button.getBoundingClientRect = () => ({
+		left: -10,
+		top: -5,
+		right: 30,
+		bottom: 20,
+		width: 40,
+		height: 25,
+		x: -10,
+		y: -5,
+		toJSON: () => ({}),
+	});
 	service.showContextMenu({ getAnchor: () => button, getActions: () => [action] });
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
 	service.showContextMenu({
@@ -204,25 +285,31 @@ test("Electron context menus position element and point anchors in CSS pixels", 
 	});
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
 
-	assert.deepEqual(requests.map(({ x, y, elementAnchor, positioningItem }) => ({ x, y, elementAnchor, positioningItem })), [
-		{ x: 140.25, y: 50.5, elementAnchor: true, positioningItem: 0 },
-		{ x: 30, y: 20, elementAnchor: true, positioningItem: undefined },
-		{ x: 10.25, y: 20.5, elementAnchor: undefined, positioningItem: undefined },
-	]);
+	assert.deepEqual(
+		requests.map(({ x, y, elementAnchor, positioningItem }) => ({ x, y, elementAnchor, positioningItem })),
+		[
+			{ x: 140.25, y: 50.5, elementAnchor: true, positioningItem: 0 },
+			{ x: 30, y: 20, elementAnchor: true, positioningItem: undefined },
+			{ x: 10.25, y: 20.5, elementAnchor: undefined, positioningItem: undefined },
+		],
+	);
 	environment.window.close();
-	Reflect.deleteProperty(globalThis, "window");
+	Reflect.deleteProperty(globalThis, 'window');
 });
 
-test("macOS switches context menu implementation when the menu style changes", async () => {
-	if (process.platform !== "darwin") return;
-	const environment = new JSDOM("<!doctype html><body><button></button></body>");
-	Object.defineProperty(globalThis, "window", { configurable: true, value: environment.window });
-	Object.defineProperty(globalThis, "Node", { configurable: true, value: environment.window.Node });
-	const { ElectronContextMenuService } = await import("../../electron-browser/contextMenuService.js");
+test('macOS switches context menu implementation when the menu style changes', async () => {
+	if (process.platform !== 'darwin') return;
+	const environment = new JSDOM('<!doctype html><body><button></button></body>');
+	Object.defineProperty(globalThis, 'window', { configurable: true, value: environment.window });
+	Object.defineProperty(globalThis, 'Node', { configurable: true, value: environment.window.Node });
+	const { ElectronContextMenuService } = await import('../../electron-browser/contextMenuService.js');
 	let finishPopup!: (result: INativeContextMenuResult) => void;
 	const api: INativeContextMenuApi = {
-		popup: () => new Promise(resolve => { finishPopup = resolve; }),
-		async close() { },
+		popup: () =>
+			new Promise(resolve => {
+				finishPopup = resolve;
+			}),
+		async close() {},
 	};
 	let activeView: ContextViewOptions | undefined;
 	const contextView = {
@@ -238,12 +325,12 @@ test("macOS switches context menu implementation when the menu style changes", a
 			current?.onHide?.(ContextViewHideReason.Programmatic);
 			current?.content.remove();
 		},
-		layout() { },
+		layout() {},
 	} as IContextViewService;
 	using contextKeyService = new ContextKeyService();
 	const registry = new ConfigurationRegistry();
-	registry.registerConfiguration({ key: "window.menuStyle", defaultValue: "system", parse: value => value });
-	registry.registerConfiguration({ key: "window.titleBarStyle", defaultValue: "custom", parse: value => value });
+	registry.registerConfiguration({ key: 'window.menuStyle', defaultValue: 'system', parse: value => value });
+	registry.registerConfiguration({ key: 'window.titleBarStyle', defaultValue: 'custom', parse: value => value });
 	using configurationService = new InMemoryConfigurationService(registry);
 	const keybindingService = {
 		inChordMode: false,
@@ -251,10 +338,18 @@ test("macOS switches context menu implementation when the menu style changes", a
 		getKeybindings: () => [],
 		enableKeybindingHoldMode: () => undefined,
 		onDidUpdateKeybindings: Event.None,
-		resolveKeybinding() { throw new Error("Not used"); },
-		resolveUserBinding() { return undefined; },
-		lookupKeybindings() { return []; },
-		lookupKeybinding() { return undefined; },
+		resolveKeybinding() {
+			throw new Error('Not used');
+		},
+		resolveUserBinding() {
+			return undefined;
+		},
+		lookupKeybindings() {
+			return [];
+		},
+		lookupKeybinding() {
+			return undefined;
+		},
 	} satisfies IKeybindingService;
 	using services = new InstantiationService();
 	services.registerInstance(IConfigurationService, configurationService);
@@ -262,40 +357,46 @@ test("macOS switches context menu implementation when the menu style changes", a
 	services.registerInstance(IContextKeyService, contextKeyService);
 	services.registerInstance(IKeybindingService, keybindingService);
 	services.registerInstance(IContextViewService, contextView);
-	services.registerInstance(INotificationService, { error: (error: unknown) => { throw error; } } as unknown as INotificationService);
+	services.registerInstance(INotificationService, {
+		error: (error: unknown) => {
+			throw error;
+		},
+	} as unknown as INotificationService);
 	using service = services.createInstance(ElectronContextMenuService, api);
 	assert.equal(service.contextMenuStyle, isMacintosh ? 'system' : 'custom');
 	const events: string[] = [];
-	using shown = service.onDidShowContextMenu(() => events.push("show"));
-	using hidden = service.onDidHideContextMenu(() => events.push("hide"));
-	const action = { id: "open", label: "Open", tooltip: "Open", enabled: true, run() { } };
+	using shown = service.onDidShowContextMenu(() => events.push('show'));
+	using hidden = service.onDidHideContextMenu(() => events.push('hide'));
+	const action = { id: 'open', label: 'Open', tooltip: 'Open', enabled: true, run() {} };
 	service.showContextMenu({
 		getAnchor: () => ({ x: 10, y: 20, targetWindow: environment.window as unknown as Window }),
 		getActions: () => [action],
 	});
 	finishPopup({});
 	await new Promise<void>(resolve => setTimeout(resolve, 0));
-	await configurationService.updateValue("window.menuStyle", "custom");
+	await configurationService.updateValue('window.menuStyle', 'custom');
 	assert.equal(service.contextMenuStyle, 'custom');
 	service.showContextMenu({
-		getAnchor: () => environment.window.document.querySelector("button")!,
+		getAnchor: () => environment.window.document.querySelector('button')!,
 		getActions: () => [action],
 		anchorAlignment: AnchorAlignment.Left,
 		anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
 	});
-	assert.deepEqual(events, ["show", "hide", "show"]);
+	assert.deepEqual(events, ['show', 'hide', 'show']);
 	service.hideContextMenu();
-	assert.deepEqual(events, ["show", "hide", "show", "hide"]);
+	assert.deepEqual(events, ['show', 'hide', 'show', 'hide']);
 	environment.window.close();
-	Reflect.deleteProperty(globalThis, "window");
-	Reflect.deleteProperty(globalThis, "Node");
+	Reflect.deleteProperty(globalThis, 'window');
+	Reflect.deleteProperty(globalThis, 'Node');
 });
 
 test('Electron context menus reject missing window services without retaining resources', async () => {
 	const { ElectronContextMenuService } = await import('../../electron-browser/contextMenuService.js');
 	const api: INativeContextMenuApi = {
-		async popup() { return {}; },
-		async close() { },
+		async popup() {
+			return {};
+		},
+		async close() {},
 	};
 	using configuration = new InMemoryConfigurationService(new ConfigurationRegistry());
 	using contextKeys = new ContextKeyService();
@@ -315,13 +416,13 @@ class SystemMenuFixture extends Disposable {
 	readonly document: Document;
 	readonly menus: ElectronContextMenuService;
 	readonly notifications: TestNotificationService;
-	readonly popups: { request: INativeContextMenuRequest; finish(result: INativeContextMenuResult): void; }[] = [];
-	readonly hidden: { label: string; cancelled: boolean; }[] = [];
+	readonly popups: { request: INativeContextMenuRequest; finish(result: INativeContextMenuResult): void }[] = [];
+	readonly hidden: { label: string; cancelled: boolean }[] = [];
 	readonly events: string[] = [];
 	readonly closeAcknowledged = promiseWithResolvers<void>();
 	closeRequests = 0;
 
-	constructor(options: { delayClose?: boolean; close?: () => Promise<void>; } = {}) {
+	constructor(options: { delayClose?: boolean; close?: () => Promise<void> } = {}) {
 		super();
 		const browser = new JSDOM('<!doctype html><body><button id="origin">Origin</button></body>');
 		this._register(toDisposable(() => browser.window.close()));
@@ -342,11 +443,17 @@ class SystemMenuFixture extends Disposable {
 		services.registerInstance(ICommandService, commands);
 		services.registerInstance(IMenuService, services.createInstance(MenuService));
 		services.registerInstance(IKeybindingService, {
-			inChordMode: false, onDidUpdateKeybindings: Event.None,
+			inChordMode: false,
+			onDidUpdateKeybindings: Event.None,
 			getKeybindings: () => [],
-			enableKeybindingHoldMode: () => undefined, registerSchemaContribution: () => Disposable.None,
-			resolveKeybinding() { throw new Error('No binding in this fixture'); },
-			resolveUserBinding: () => undefined, lookupKeybindings: () => [], lookupKeybinding: () => undefined,
+			enableKeybindingHoldMode: () => undefined,
+			registerSchemaContribution: () => Disposable.None,
+			resolveKeybinding() {
+				throw new Error('No binding in this fixture');
+			},
+			resolveUserBinding: () => undefined,
+			lookupKeybindings: () => [],
+			lookupKeybinding: () => undefined,
 		});
 		const popupApi: INativeContextMenuApi = {
 			popup: request => {
@@ -356,8 +463,12 @@ class SystemMenuFixture extends Disposable {
 			},
 			close: () => {
 				this.closeRequests++;
-				if (options.close) { return options.close(); }
-				if (options.delayClose) { return this.closeAcknowledged.promise; }
+				if (options.close) {
+					return options.close();
+				}
+				if (options.delayClose) {
+					return this.closeAcknowledged.promise;
+				}
 				this.popups.at(-1)?.finish({});
 				return Promise.resolve();
 			},
@@ -367,12 +478,22 @@ class SystemMenuFixture extends Disposable {
 		this._register(this.menus.onDidHideContextMenu(() => this.events.push('hide')));
 	}
 
-	show(label: string, token?: CancellationToken, selected: IAction = menuAction(label), onHide?: () => void): Promise<boolean> {
+	show(
+		label: string,
+		token?: CancellationToken,
+		selected: IAction = menuAction(label),
+		onHide?: () => void,
+	): Promise<boolean> {
 		const ended = promiseWithResolvers<boolean>();
 		this.menus.showContextMenu({
 			getAnchor: () => ({ x: 10, y: 20, targetWindow: this.document.defaultView! }),
-			getActions: () => [selected], cancellationToken: token,
-			onHide: cancelled => { this.hidden.push({ label, cancelled }); ended.resolve(cancelled); onHide?.(); },
+			getActions: () => [selected],
+			cancellationToken: token,
+			onHide: cancelled => {
+				this.hidden.push({ label, cancelled });
+				ended.resolve(cancelled);
+				onHide?.();
+			},
 		});
 		return ended.promise;
 	}
@@ -381,14 +502,15 @@ class SystemMenuFixture extends Disposable {
 		this.menus.showContextMenu({
 			getAnchor: () => this.document.querySelector<HTMLButtonElement>('#origin')!,
 			getActions: () => [menuAction(label)],
-			anchorAlignment: AnchorAlignment.Left, anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+			anchorAlignment: AnchorAlignment.Left,
+			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
 			onHide: cancelled => this.hidden.push({ label, cancelled }),
 		});
 	}
 }
 
 function menuAction(label: string): IAction {
-	return { id: label, label, tooltip: '', enabled: true, run() { } };
+	return { id: label, label, tooltip: '', enabled: true, run() {} };
 }
 
 test('caller-styled menus render in the browser even when system menus are configured', () => {
@@ -398,7 +520,14 @@ test('caller-styled menus render in the browser even when system menus are confi
 	let runs = 0;
 	fixture.menus.showContextMenu({
 		getAnchor: () => anchor,
-		getActions: () => [{ ...menuAction('Settings'), run: () => { runs++; } }],
+		getActions: () => [
+			{
+				...menuAction('Settings'),
+				run: () => {
+					runs++;
+				},
+			},
+		],
 		getMenuClassName: () => 'custom-account-menu',
 	});
 	assert.equal(fixture.popups.length, 0);
@@ -416,7 +545,10 @@ test('already canceled system requests do not display or disturb the current pop
 	using fixture = new SystemMenuFixture();
 	const existing = fixture.show('Existing');
 	assert.equal(await fixture.show('Canceled', CancellationToken.Cancelled), true);
-	assert.deepEqual({ popups: fixture.popups.length, closes: fixture.closeRequests, hidden: fixture.hidden }, { popups: 1, closes: 0, hidden: [{ label: 'Canceled', cancelled: true }] });
+	assert.deepEqual(
+		{ popups: fixture.popups.length, closes: fixture.closeRequests, hidden: fixture.hidden },
+		{ popups: 1, closes: 0, hidden: [{ label: 'Canceled', cancelled: true }] },
+	);
 	fixture.popups[0].finish({});
 	await existing;
 });
@@ -425,7 +557,12 @@ test('canceling a system request waits for its popup callback and ignores the ca
 	using fixture = new SystemMenuFixture({ delayClose: true });
 	using source = new CancellationTokenSource();
 	let runs = 0;
-	const selected = { ...menuAction('Selected'), run: () => { runs++; } };
+	const selected = {
+		...menuAction('Selected'),
+		run: () => {
+			runs++;
+		},
+	};
 	const old = fixture.show('Old', source.token, selected);
 	source.cancel();
 	assert.equal(await fixture.show('Still closing'), true);
@@ -440,9 +577,18 @@ test('canceling a system request waits for its popup callback and ignores the ca
 	fixture.popups[0].finish({ selectedId: 'action-1' });
 	fixture.popups[1].finish({ selectedId: 'action-1' });
 	assert.equal(await next, false);
-	assert.deepEqual({ runs, hidden: fixture.hidden, events: fixture.events }, {
-		runs: 1, hidden: [{ label: 'Still closing', cancelled: true }, { label: 'Old', cancelled: true }, { label: 'Next', cancelled: false }], events: ['show', 'hide', 'show', 'hide'],
-	});
+	assert.deepEqual(
+		{ runs, hidden: fixture.hidden, events: fixture.events },
+		{
+			runs: 1,
+			hidden: [
+				{ label: 'Still closing', cancelled: true },
+				{ label: 'Old', cancelled: true },
+				{ label: 'Next', cancelled: false },
+			],
+			events: ['show', 'hide', 'show', 'hide'],
+		},
+	);
 });
 
 test('an IPC close acknowledgment cannot free a system slot before the popup callback', async () => {
@@ -454,11 +600,14 @@ test('an IPC close acknowledgment cannot free a system slot before the popup cal
 		fixture.closeAcknowledged.resolve();
 		await new Promise<void>(resolve => setImmediate(resolve));
 		fixture.show('Still closing');
-		assert.deepEqual({ popups: fixture.popups.length, hidden: [...fixture.hidden], events: [...fixture.events] }, {
-			popups: 1, hidden: [{ label: 'Still closing', cancelled: true }], events: ['show'],
-		});
+		assert.deepEqual(
+			{ popups: fixture.popups.length, hidden: [...fixture.hidden], events: [...fixture.events] },
+			{ popups: 1, hidden: [{ label: 'Still closing', cancelled: true }], events: ['show'] },
+		);
 	} finally {
-		for (const popup of fixture.popups) { popup.finish({}); }
+		for (const popup of fixture.popups) {
+			popup.finish({});
+		}
 		await old;
 	}
 });
@@ -467,7 +616,12 @@ test('canceling a system menu preserves its replacement before the popup result 
 	using fixture = new SystemMenuFixture({ delayClose: true });
 	using source = new CancellationTokenSource();
 	let runs = 0;
-	const old = fixture.show('Old', source.token, { ...menuAction('Old'), run: () => { runs++; } });
+	const old = fixture.show('Old', source.token, {
+		...menuAction('Old'),
+		run: () => {
+			runs++;
+		},
+	});
 	fixture.showBrowser('Replacement');
 	source.cancel();
 	fixture.closeAcknowledged.resolve();
@@ -476,9 +630,16 @@ test('canceling a system menu preserves its replacement before the popup result 
 	fixture.popups[0].finish({ selectedId: 'action-1' });
 	await old;
 	const view = fixture.document.querySelector<HTMLElement>('.ash-context-view')!;
-	assert.deepEqual({ visible: !view.hidden, label: fixture.document.querySelector('[role="menuitem"]')?.textContent, hidden: fixture.hidden, events: fixture.events, runs }, {
-		visible: true, label: 'Replacement', hidden: [{ label: 'Old', cancelled: true }], events: ['show'], runs: 0,
-	});
+	assert.deepEqual(
+		{
+			visible: !view.hidden,
+			label: fixture.document.querySelector('[role="menuitem"]')?.textContent,
+			hidden: fixture.hidden,
+			events: fixture.events,
+			runs,
+		},
+		{ visible: true, label: 'Replacement', hidden: [{ label: 'Old', cancelled: true }], events: ['show'], runs: 0 },
+	);
 	fixture.menus.hideContextMenu();
 	assert.equal(view.hidden, true);
 });
@@ -488,10 +649,18 @@ test('a system request canceled by the show event never executes a late selectio
 	using source = new CancellationTokenSource();
 	let runs = 0;
 	using shown = fixture.menus.onDidShowContextMenu(() => source.cancel());
-	const ended = fixture.show('Old', source.token, { ...menuAction('Old'), run: () => { runs++; } });
+	const ended = fixture.show('Old', source.token, {
+		...menuAction('Old'),
+		run: () => {
+			runs++;
+		},
+	});
 	await ended;
 	fixture.popups[0].finish({ selectedId: 'action-1' });
-	assert.deepEqual({ runs, closes: fixture.closeRequests, hidden: fixture.hidden }, { runs: 0, closes: 1, hidden: [{ label: 'Old', cancelled: true }] });
+	assert.deepEqual(
+		{ runs, closes: fixture.closeRequests, hidden: fixture.hidden },
+		{ runs: 0, closes: 1, hidden: [{ label: 'Old', cancelled: true }] },
+	);
 });
 
 test('a failed system close keeps the real slot occupied but allows a later close to retry', async () => {
@@ -499,10 +668,17 @@ test('a failed system close keeps the real slot occupied but allows a later clos
 	const logged = promiseWithResolvers<void>();
 	const errors: unknown[][] = [];
 	const previousError = console.error;
-	console.error = (...args: unknown[]) => { errors.push(args); logged.resolve(); };
-	using restore = toDisposable(() => { console.error = previousError; });
+	console.error = (...args: unknown[]) => {
+		errors.push(args);
+		logged.resolve();
+	};
+	using restore = toDisposable(() => {
+		console.error = previousError;
+	});
 	let attempts = 0;
-	using fixture = new SystemMenuFixture({ close: () => ++attempts === 1 ? Promise.reject(failure) : Promise.resolve() });
+	using fixture = new SystemMenuFixture({
+		close: () => (++attempts === 1 ? Promise.reject(failure) : Promise.resolve()),
+	});
 	using source = new CancellationTokenSource();
 	const old = fixture.show('Old', source.token);
 	source.cancel();
@@ -510,11 +686,17 @@ test('a failed system close keeps the real slot occupied but allows a later clos
 	assert.equal(await fixture.show('Still occupied'), true);
 	fixture.menus.hideContextMenu();
 	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual({ closes: fixture.closeRequests, popups: fixture.popups.length, hidden: fixture.hidden }, { closes: 2, popups: 1, hidden: [{ label: 'Still occupied', cancelled: true }] });
+	assert.deepEqual(
+		{ closes: fixture.closeRequests, popups: fixture.popups.length, hidden: fixture.hidden },
+		{ closes: 2, popups: 1, hidden: [{ label: 'Still occupied', cancelled: true }] },
+	);
 	fixture.popups[0].finish({});
 	await old;
 	const next = fixture.show('Next');
-	assert.deepEqual({ closes: fixture.closeRequests, popups: fixture.popups.length, errors: errors.map(args => args[1]) }, { closes: 2, popups: 2, errors: [failure] });
+	assert.deepEqual(
+		{ closes: fixture.closeRequests, popups: fixture.popups.length, errors: errors.map(args => args[1]) },
+		{ closes: 2, popups: 2, errors: [failure] },
+	);
 	fixture.popups[1].finish({});
 	await next;
 });
@@ -523,11 +705,16 @@ test('a system hide callback can open a successor without losing visibility or i
 	using fixture = new SystemMenuFixture();
 	using source = new CancellationTokenSource();
 	let next!: Promise<boolean>;
-	const old = fixture.show('Old', source.token, menuAction('Old'), () => { next = fixture.show('Reentrant'); });
+	const old = fixture.show('Old', source.token, menuAction('Old'), () => {
+		next = fixture.show('Reentrant');
+	});
 	fixture.popups[0].finish({});
 	await old;
 	source.cancel();
-	assert.deepEqual({ popups: fixture.popups.length, closes: fixture.closeRequests, events: fixture.events }, { popups: 2, closes: 0, events: ['show'] });
+	assert.deepEqual(
+		{ popups: fixture.popups.length, closes: fixture.closeRequests, events: fixture.events },
+		{ popups: 2, closes: 0, events: ['show'] },
+	);
 	fixture.popups[1].finish({});
 	await next;
 	assert.deepEqual(fixture.events, ['show', 'hide']);
@@ -538,12 +725,17 @@ test('a browser hide callback keeps its reentrant successor visible in the Elect
 	using source = new CancellationTokenSource();
 	fixture.menus.showContextMenu({
 		getAnchor: () => fixture.document.querySelector<HTMLButtonElement>('#origin')!,
-		getActions: () => [menuAction('Old')], cancellationToken: source.token,
-		anchorAlignment: AnchorAlignment.Left, anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+		getActions: () => [menuAction('Old')],
+		cancellationToken: source.token,
+		anchorAlignment: AnchorAlignment.Left,
+		anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
 		onHide: () => fixture.showBrowser('Reentrant'),
 	});
 	source.cancel();
-	assert.deepEqual({ label: fixture.document.querySelector('[role="menuitem"]')?.textContent, events: fixture.events }, { label: 'Reentrant', events: ['show'] });
+	assert.deepEqual(
+		{ label: fixture.document.querySelector('[role="menuitem"]')?.textContent, events: fixture.events },
+		{ label: 'Reentrant', events: ['show'] },
+	);
 	fixture.menus.hideContextMenu();
 	assert.deepEqual(fixture.events, ['show', 'hide']);
 });
@@ -556,7 +748,13 @@ for (const disposed of [false, true]) {
 		const started = promiseWithResolvers<void>();
 		const reported = promiseWithResolvers<void>();
 		using listener = fixture.notifications.model.onDidAdd(() => reported.resolve());
-		const selected = { ...menuAction('Selected'), run: () => { started.resolve(); return pending.promise; } };
+		const selected = {
+			...menuAction('Selected'),
+			run: () => {
+				started.resolve();
+				return pending.promise;
+			},
+		};
 		fixture.show('Old', source.token, selected);
 		fixture.popups[0].finish({ selectedId: 'action-1' });
 		await started.promise;
@@ -564,8 +762,11 @@ for (const disposed of [false, true]) {
 		if (disposed) fixture.menus.dispose();
 		pending.reject(new Error('Clipboard fixture failure'));
 		if (!disposed) await reported.promise;
-		else await pending.promise.catch(() => { });
-		assert.deepEqual(fixture.notifications.model.getNotifications().map(item => item.message), disposed ? [] : ['Clipboard fixture failure']);
+		else await pending.promise.catch(() => {});
+		assert.deepEqual(
+			fixture.notifications.model.getNotifications().map(item => item.message),
+			disposed ? [] : ['Clipboard fixture failure'],
+		);
 	});
 }
 
@@ -573,19 +774,32 @@ test('a structured system action failure is reported with its message', async ()
 	using fixture = new SystemMenuFixture();
 	const ended = fixture.show('Failure', undefined, {
 		...menuAction('Failure'),
-		run() { throw { message: 'Clipboard unavailable' }; },
+		run() {
+			throw { message: 'Clipboard unavailable' };
+		},
 	});
 	fixture.popups[0].finish({ selectedId: 'action-1' });
 	await ended;
-	assert.deepEqual(fixture.notifications.model.getNotifications().map(item => item.message), ['Clipboard unavailable']);
+	assert.deepEqual(
+		fixture.notifications.model.getNotifications().map(item => item.message),
+		['Clipboard unavailable'],
+	);
 });
 
 test('a synchronous system action failure is reported exactly once', async () => {
 	using fixture = new SystemMenuFixture();
-	const ended = fixture.show('Failure', undefined, { ...menuAction('Failure'), run() { throw new Error('Synchronous fixture failure'); } });
+	const ended = fixture.show('Failure', undefined, {
+		...menuAction('Failure'),
+		run() {
+			throw new Error('Synchronous fixture failure');
+		},
+	});
 	fixture.popups[0].finish({ selectedId: 'action-1' });
 	await ended;
-	assert.deepEqual(fixture.notifications.model.getNotifications().map(item => item.message), ['Synchronous fixture failure']);
+	assert.deepEqual(
+		fixture.notifications.model.getNotifications().map(item => item.message),
+		['Synchronous fixture failure'],
+	);
 });
 
 for (const ending of ['cancel', 'selected', 'dispose'] as const) {
@@ -594,10 +808,15 @@ for (const ending of ['cancel', 'selected', 'dispose'] as const) {
 		using source = new CancellationTokenSource();
 		let released = 0;
 		const token: CancellationToken = {
-			get isCancellationRequested() { return source.token.isCancellationRequested; },
+			get isCancellationRequested() {
+				return source.token.isCancellationRequested;
+			},
 			onCancellationRequested(listener) {
 				const subscription = source.token.onCancellationRequested(listener);
-				return toDisposable(() => { subscription.dispose(); released++; });
+				return toDisposable(() => {
+					subscription.dispose();
+					released++;
+				});
 			},
 		};
 		const ended = fixture.show('Old', token);
@@ -618,5 +837,12 @@ test('system cancellation does not close a different window menu or steal its fo
 	const focus = second.document.activeElement;
 	source.cancel();
 	await old;
-	assert.deepEqual({ label: second.document.querySelector('[role="menuitem"]')?.textContent, focus: second.document.activeElement, closes: second.closeRequests }, { label: 'Second', focus, closes: 0 });
+	assert.deepEqual(
+		{
+			label: second.document.querySelector('[role="menuitem"]')?.textContent,
+			focus: second.document.activeElement,
+			closes: second.closeRequests,
+		},
+		{ label: 'Second', focus, closes: 0 },
+	);
 });

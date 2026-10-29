@@ -21,50 +21,89 @@ export class ChatGPTVerificationRuntime extends Disposable implements IChatGPTVe
 		this.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
 		this.session.setPermissionCheckHandler(() => false);
 		this.session.webRequest.onBeforeSendHeaders((details, callback) => {
-			void authorize(new URL(details.url)).then(headers => {
-				if (this.disposed) { callback({ cancel: true }); return; }
-				const requestHeaders = { ...details.requestHeaders };
-				for (const [name, value] of headers) {
-					for (const key of Object.keys(requestHeaders)) { if (key.toLowerCase() === name.toLowerCase()) { delete requestHeaders[key]; } }
-					if (value) { requestHeaders[name] = value; }
-				}
-				callback({ requestHeaders });
-			}, () => callback({ cancel: true }));
+			void authorize(new URL(details.url)).then(
+				headers => {
+					if (this.disposed) {
+						callback({ cancel: true });
+						return;
+					}
+					const requestHeaders = { ...details.requestHeaders };
+					for (const [name, value] of headers) {
+						for (const key of Object.keys(requestHeaders)) {
+							if (key.toLowerCase() === name.toLowerCase()) {
+								delete requestHeaders[key];
+							}
+						}
+						if (value) {
+							requestHeaders[name] = value;
+						}
+					}
+					callback({ requestHeaders });
+				},
+				() => callback({ cancel: true }),
+			);
 		});
-		this._register(toDisposable(() => {
-			this.disposed = true;
-			this.sequencer.clearPending();
-			this.session.webRequest.onBeforeSendHeaders(null);
-			if (this.view && !this.view.webContents.isDestroyed()) { this.view.webContents.close(); }
-			void this.session.clearStorageData().catch(() => { });
-			void this.session.clearCache().catch(() => { });
-		}));
+		this._register(
+			toDisposable(() => {
+				this.disposed = true;
+				this.sequencer.clearPending();
+				this.session.webRequest.onBeforeSendHeaders(null);
+				if (this.view && !this.view.webContents.isDestroyed()) {
+					this.view.webContents.close();
+				}
+				void this.session.clearStorageData().catch(() => {});
+				void this.session.clearCache().catch(() => {});
+			}),
+		);
 	}
 
 	prepareHeaders(script: string, signal: AbortSignal): Promise<unknown> {
 		return this.sequencer.schedule(async () => {
 			signal.throwIfAborted();
-			if (this.disposed) { throw new Error('ChatGPT verification is closed'); }
+			if (this.disposed) {
+				throw new Error('ChatGPT verification is closed');
+			}
 			this.ready ??= this.initialize(script);
 			await this.ready;
 			signal.throwIfAborted();
-			const value: unknown = await this.view!.webContents.executeJavaScript('globalThis.__ashPrepareChatGPTHeaders()');
+			const value: unknown = await this.view!.webContents.executeJavaScript(
+				'globalThis.__ashPrepareChatGPTHeaders()',
+			);
 			signal.throwIfAborted();
 			return value;
 		});
 	}
 
 	private async initialize(script: string): Promise<void> {
-		this.view = new WebContentsView({ webPreferences: { session: this.session, sandbox: true, contextIsolation: true, nodeIntegration: false, backgroundThrottling: false } });
+		this.view = new WebContentsView({
+			webPreferences: {
+				session: this.session,
+				sandbox: true,
+				contextIsolation: true,
+				nodeIntegration: false,
+				backgroundThrottling: false,
+			},
+		});
 		this.view.setBounds({ x: 0, y: 0, width: 800, height: 600 });
 		const contents = this.view.webContents;
 		contents.setWindowOpenHandler(() => ({ action: 'deny' }));
-		const navigation = (event: Electron.Event, target: string): void => { if (target !== 'https://chatgpt.com/') { event.preventDefault(); } };
+		const navigation = (event: Electron.Event, target: string): void => {
+			if (target !== 'https://chatgpt.com/') {
+				event.preventDefault();
+			}
+		};
 		contents.on('will-navigate', navigation);
 		contents.on('will-redirect', navigation);
-		this._register(toDisposable(() => { contents.removeListener('will-navigate', navigation); contents.removeListener('will-redirect', navigation); }));
+		this._register(
+			toDisposable(() => {
+				contents.removeListener('will-navigate', navigation);
+				contents.removeListener('will-redirect', navigation);
+			}),
+		);
 		await contents.loadURL('https://chatgpt.com/');
-		if (this.disposed) { throw new Error('ChatGPT verification is closed'); }
+		if (this.disposed) {
+			throw new Error('ChatGPT verification is closed');
+		}
 		await contents.executeJavaScript(script);
 	}
 }

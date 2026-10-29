@@ -27,15 +27,53 @@ suite('Terminal accessibility owners', () => {
 				using provider = new TerminalAccessibilityHelpProvider({} as ITerminalInstance, true);
 				const content = provider.provideContent();
 				assert.ok(content.includes(folderHelp));
-				assert.ok(content.includes(locale === 'zh-CN' ? '任务终端也会在任务输出标题行显示状态标记' : 'Task terminals also show a status marker on the task output header'));
-				assert.ok(content.includes(locale === 'zh-CN' ? '建议列表保持终端输入焦点' : 'The suggestion list keeps terminal input focused'));
+				assert.ok(
+					content.includes(
+						locale === 'zh-CN'
+							? '任务终端也会在任务输出标题行显示状态标记'
+							: 'Task terminals also show a status marker on the task output header',
+					),
+				);
+				assert.ok(
+					content.includes(
+						locale === 'zh-CN'
+							? '建议列表保持终端输入焦点'
+							: 'The suggestion list keeps terminal input focused',
+					),
+				);
 				assert.ok(content.includes('<keybinding:workbench.action.terminal.openDetectedLink>'));
 				assert.ok(content.includes('<keybinding:workbench.action.terminal.selectAll>'));
 				assert.ok(content.includes('<keybinding:workbench.action.terminal.clearSelection>'));
 				assert.ok(content.includes(locale === 'zh-CN' ? '只读终端' : 'read-only terminals'));
 				for (const action of locale === 'zh-CN'
-					? ['切换活动终端', '增大字号', '发送信号', '粘贴为一行', '命令参考线', '列数和行数', '自动回复', '本地回显', '显示环境贡献', '录制终端会话', '询问 Chat', 'OSC 99']
-					: ['Switch Active Terminal', 'Increase Font Size', 'Send Signal', 'Paste as One Line', 'Show Command Guide', 'column and row counts', 'Auto Replies', 'Local Echo', 'Show Environment Contributions', 'Record Terminal Session', 'Ask Chat', 'OSC 99']) {
+					? [
+							'切换活动终端',
+							'增大字号',
+							'发送信号',
+							'粘贴为一行',
+							'命令参考线',
+							'列数和行数',
+							'自动回复',
+							'本地回显',
+							'显示环境贡献',
+							'录制终端会话',
+							'询问 Chat',
+							'OSC 99',
+						]
+					: [
+							'Switch Active Terminal',
+							'Increase Font Size',
+							'Send Signal',
+							'Paste as One Line',
+							'Show Command Guide',
+							'column and row counts',
+							'Auto Replies',
+							'Local Echo',
+							'Show Environment Contributions',
+							'Record Terminal Session',
+							'Ask Chat',
+							'OSC 99',
+						]) {
 					assert.ok(content.includes(action), `Missing ${locale} accessibility help for ${action}`);
 				}
 			} finally {
@@ -45,8 +83,28 @@ suite('Terminal accessibility owners', () => {
 	}
 
 	test('joins wrapped rows into one text line and replaces the snapshot after a clear', () => {
-		let rows = [{ value: 'wide ', wrapped: false }, { value: 'line', wrapped: true }, { value: 'next', wrapped: false }];
-		const raw = { buffer: { get active() { return { length: rows.length, baseY: 0, cursorY: rows.length - 1, getLine: (index: number) => rows[index] && { isWrapped: rows[index]!.wrapped, translateToString: (trim: boolean) => trim ? rows[index]!.value.trimEnd() : rows[index]!.value } }; } } } as unknown as Terminal;
+		let rows = [
+			{ value: 'wide ', wrapped: false },
+			{ value: 'line', wrapped: true },
+			{ value: 'next', wrapped: false },
+		];
+		const raw = {
+			buffer: {
+				get active() {
+					return {
+						length: rows.length,
+						baseY: 0,
+						cursorY: rows.length - 1,
+						getLine: (index: number) =>
+							rows[index] && {
+								isWrapped: rows[index]!.wrapped,
+								translateToString: (trim: boolean) =>
+									trim ? rows[index]!.value.trimEnd() : rows[index]!.value,
+							},
+					};
+				},
+			},
+		} as unknown as Terminal;
 		using tracker = new BufferContentTracker({ raw });
 		tracker.update();
 		assert.deepEqual(tracker.lines, ['wide line', 'next']);
@@ -61,10 +119,16 @@ suite('Terminal accessibility owners', () => {
 		using changed = new Emitter<void>();
 		let optimized = false;
 		const model = { value: 'echo 中文', cursorIndex: 5, onDidChangeInput: changed.event };
-		const detection = { type: TerminalCapability.CommandDetection, promptInputModel: model } as unknown as ICommandDetectionCapability;
+		const detection = {
+			type: TerminalCapability.CommandDetection,
+			promptInputModel: model,
+		} as unknown as ICommandDetectionCapability;
 		const textarea = document.createElement('textarea');
 		textarea.value = 'untouched';
-		using addon = new TextAreaSyncAddon(capabilities, { isScreenReaderOptimized: () => optimized, onDidChangeScreenReaderOptimized: optimization.event } as IAccessibilityService);
+		using addon = new TextAreaSyncAddon(capabilities, {
+			isScreenReaderOptimized: () => optimized,
+			onDidChangeScreenReaderOptimized: optimization.event,
+		} as IAccessibilityService);
 		addon.activate({ textarea } as Terminal);
 		capabilities.add(TerminalCapability.CommandDetection, detection);
 		assert.equal(textarea.value, 'untouched');

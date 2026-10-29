@@ -16,11 +16,13 @@ export class BrowserPathService implements IPathService {
 	constructor(
 		@IRendererHostService private readonly host: IRendererHost,
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
-	) { }
+	) {}
 
 	public get path(): Promise<IPath> {
 		const os = this.hostOperatingSystem;
-		return os === undefined ? Promise.reject(new Error('App Server path platform is unavailable')) : Promise.resolve(os === OperatingSystem.Windows ? win32 : posix);
+		return os === undefined
+			? Promise.reject(new Error('App Server path platform is unavailable'))
+			: Promise.resolve(os === OperatingSystem.Windows ? win32 : posix);
 	}
 
 	public get resolvedUserHome(): URI | undefined {
@@ -31,13 +33,18 @@ export class BrowserPathService implements IPathService {
 		return path === undefined ? undefined : this.toFileURI(path);
 	}
 
-	public userHome(options: { preferLocal: true; }): URI;
-	public userHome(options?: { preferLocal: boolean; }): Promise<URI>;
-	public userHome(options?: { preferLocal: boolean; }): URI | Promise<URI> {
+	public userHome(options: { preferLocal: true }): URI;
+	public userHome(options?: { preferLocal: boolean }): Promise<URI>;
+	public userHome(options?: { preferLocal: boolean }): URI | Promise<URI> {
 		if (options?.preferLocal || !this.host.hasAppServer) {
 			const workspace = this.workspace.getWorkspace();
 			// Web has no OS home: match VS Code's workspace-derived fallback for dialog callers.
-			const local = this.host.localUserHome ?? workspace.folders[0]?.uri ?? (workspace.configuration ? dirname(workspace.configuration) : URI.from({ scheme: Schemas.file, path: '/' }));
+			const local =
+				this.host.localUserHome ??
+				workspace.folders[0]?.uri ??
+				(workspace.configuration
+					? dirname(workspace.configuration)
+					: URI.from({ scheme: Schemas.file, path: '/' }));
 			return options?.preferLocal ? local : Promise.resolve(local);
 		}
 		const home = this.resolvedUserHome;
@@ -70,39 +77,57 @@ export class BrowserPathService implements IPathService {
 	}
 
 	private toHostPath(resource: URI, rules: IPath): string {
-		if (resource.scheme !== Schemas.file) throw new TypeError(localize('path.fileUriRequired', 'Resource is not a file URI'));
-		if (resource.query || resource.fragment || /%2f/i.test(resource.toEncodedComponents().path)) throw new TypeError(localize('path.hostPathRequired', 'Resource does not identify a host path'));
+		if (resource.scheme !== Schemas.file)
+			throw new TypeError(localize('path.fileUriRequired', 'Resource is not a file URI'));
+		if (resource.query || resource.fragment || /%2f/i.test(resource.toEncodedComponents().path))
+			throw new TypeError(localize('path.hostPathRequired', 'Resource does not identify a host path'));
 		if (rules === posix) {
-			if (resource.authority) throw new TypeError(localize('path.posixAuthorityUnsupported', 'POSIX file path must not contain an authority'));
+			if (resource.authority)
+				throw new TypeError(
+					localize('path.posixAuthorityUnsupported', 'POSIX file path must not contain an authority'),
+				);
 			return resource.path;
 		}
-		const path = resource.authority ? `//${resource.authority}${resource.path}` : resource.path.replace(/^\/(?=[a-z]:\/)/i, '');
-		if (!win32.isAbsolute(path)) throw new TypeError(localize('path.absoluteRequired', 'File path must be absolute'));
+		const path = resource.authority
+			? `//${resource.authority}${resource.path}`
+			: resource.path.replace(/^\/(?=[a-z]:\/)/i, '');
+		if (!win32.isAbsolute(path))
+			throw new TypeError(localize('path.absoluteRequired', 'File path must be absolute'));
 		return win32.normalize(path);
 	}
 
 	private toFileURI(path: string, os = this.hostOperatingSystem): URI {
 		// Older servers may omit OS facts. Only explicit drive/UNC syntax identifies Windows then.
-		const windowsPath = os === OperatingSystem.Windows || os === undefined && (/^[a-z]:[\\/]/i.test(path) || path.startsWith('\\\\'));
+		const windowsPath =
+			os === OperatingSystem.Windows ||
+			(os === undefined && (/^[a-z]:[\\/]/i.test(path) || path.startsWith('\\\\')));
 		const normalized = windowsPath ? this.windowsPath(path).replaceAll('\\', '/') : path;
 		if (!normalized.startsWith('/') && !(windowsPath && /^[a-z]:\//i.test(normalized))) {
 			throw new TypeError(localize('path.absoluteRequired', 'File path must be absolute'));
 		}
 		const share = /^\/\/([^/]+)(\/.*)?$/.exec(normalized);
-		return URI.from({ scheme: Schemas.file, authority: share?.[1] ?? '', path: share ? share[2] ?? '/' : normalized });
+		return URI.from({
+			scheme: Schemas.file,
+			authority: share?.[1] ?? '',
+			path: share ? (share[2] ?? '/') : normalized,
+		});
 	}
 
 	private windowsPath(path: string): string {
 		if (/^\\\\[?.]\\UNC\\/i.test(path)) return '\\\\' + path.slice(8);
 		if (/^\\\\[?.]\\[a-z]:[\\/]/i.test(path)) return path.slice(4);
-		if (/^\\\\[?.]\\/.test(path)) throw new TypeError(localize('path.windowsNamespaceUnsupported', 'Unsupported Windows path namespace'));
+		if (/^\\\\[?.]\\/.test(path))
+			throw new TypeError(localize('path.windowsNamespaceUnsupported', 'Unsupported Windows path namespace'));
 		return path;
 	}
 
 	public async getOperatingSystem(resource: URI): Promise<OperatingSystem | undefined> {
 		// Canonical Remote drive and UNC syntax identifies Windows independently of this connection.
-		if (resource.scheme === Schemas.ashRemote) return isWindowsRemotePath(getRemoteWorkspacePath(resource)) ? OperatingSystem.Windows : undefined;
-		return resource.scheme === Schemas.file && !resource.path.startsWith('/@browser/') ? this.hostOperatingSystem : undefined;
+		if (resource.scheme === Schemas.ashRemote)
+			return isWindowsRemotePath(getRemoteWorkspacePath(resource)) ? OperatingSystem.Windows : undefined;
+		return resource.scheme === Schemas.file && !resource.path.startsWith('/@browser/')
+			? this.hostOperatingSystem
+			: undefined;
 	}
 
 	private get hostOperatingSystem(): OperatingSystem | undefined {

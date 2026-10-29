@@ -25,14 +25,22 @@ export class TreeItemCheckbox extends Disposable {
 		this.checkbox = this._register(new Checkbox(container, defaultCheckboxStyles));
 		this.checkbox.element.classList.add(TreeItemCheckbox.checkboxClass);
 		this._register(addDisposableListener(this.checkbox.element, 'click', event => event.stopPropagation()));
-		this._register(addDisposableListener(this.checkbox.input, 'keydown', event => {
-			if (event.key === ' ' || event.key === 'Enter') { event.stopPropagation(); }
-		}));
-		this._register(this.checkbox.onDidChange(checked => {
-			if (!this.node?.checkbox) { return; }
-			this.node.checkbox.isChecked = checked;
-			checkboxStateHandler.setCheckboxState(this.node);
-		}));
+		this._register(
+			addDisposableListener(this.checkbox.input, 'keydown', event => {
+				if (event.key === ' ' || event.key === 'Enter') {
+					event.stopPropagation();
+				}
+			}),
+		);
+		this._register(
+			this.checkbox.onDidChange(checked => {
+				if (!this.node?.checkbox) {
+					return;
+				}
+				this.node.checkbox.isChecked = checked;
+				checkboxStateHandler.setCheckboxState(this.node);
+			}),
+		);
 	}
 
 	public render(node: ITreeItem): void {

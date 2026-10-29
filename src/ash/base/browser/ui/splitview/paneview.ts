@@ -1,15 +1,15 @@
-import { addDisposableListener, h } from "../../dom.js";
-import { isAncestorOfActiveElement, trackFocus } from "../../focus.js";
-import { appendIcon } from "../lxicons/lxicon.js";
-import { Emitter, type Event } from "../../../common/event.js";
-import { Disposable, toDisposable } from "../../../common/lifecycle.js";
-import { RunOnceScheduler } from "../../../common/async.js";
-import { isReducedMotion, UI_ANIMATION_DURATION } from "../animations/animations.js";
-import { Lxicon } from "../../../common/lxicons.js";
-import { SplitView, type ISplitViewView } from "./splitview.js";
-import { ScrollableElement } from "../scrollbar/scrollableElement.js";
-import "./paneview.css";
-import { localize } from "../../../../nls.js";
+import { addDisposableListener, h } from '../../dom.js';
+import { isAncestorOfActiveElement, trackFocus } from '../../focus.js';
+import { appendIcon } from '../lxicons/lxicon.js';
+import { Emitter, type Event } from '../../../common/event.js';
+import { Disposable, toDisposable } from '../../../common/lifecycle.js';
+import { RunOnceScheduler } from '../../../common/async.js';
+import { isReducedMotion, UI_ANIMATION_DURATION } from '../animations/animations.js';
+import { Lxicon } from '../../../common/lxicons.js';
+import { SplitView, type ISplitViewView } from './splitview.js';
+import { ScrollableElement } from '../scrollbar/scrollableElement.js';
+import './paneview.css';
+import { localize } from '../../../../nls.js';
 
 /** Construction inputs for a titled, collapsible pane. */
 export interface IPaneOptions {
@@ -24,7 +24,7 @@ export interface IPaneOptions {
 }
 
 /** Determines whether a pane exposes its title actions while collapsed. */
-export type PaneViewHeaderActionsVisibility = "always" | "whenExpanded";
+export type PaneViewHeaderActionsVisibility = 'always' | 'whenExpanded';
 
 /**
  * Domain-agnostic titled pane that owns its header geometry, collapse state,
@@ -51,10 +51,12 @@ export class Pane extends Disposable implements ISplitViewView {
 	private collapsed: boolean;
 	private isClosing = false;
 	private didLayout = false;
-	private readonly closeAnimation = this._register(new RunOnceScheduler(() => {
-		this.isClosing = false;
-		this.renderCollapsedState();
-	}, UI_ANIMATION_DURATION.normal));
+	private readonly closeAnimation = this._register(
+		new RunOnceScheduler(() => {
+			this.isClosing = false;
+			this.renderCollapsedState();
+		}, UI_ANIMATION_DURATION.normal),
+	);
 	private _minimumBodySize: number;
 	private _maximumBodySize: number;
 	private readonly change = this._register(new Emitter<number | undefined>());
@@ -70,66 +72,81 @@ export class Pane extends Disposable implements ISplitViewView {
 		this.configuredHeaderSize = options.headerSize ?? 28;
 		this._minimumBodySize = options.minimumBodySize ?? 120;
 		this._maximumBodySize = options.maximumBodySize ?? Number.POSITIVE_INFINITY;
-		if (!Number.isFinite(this.minimumBodySize) || this.minimumBodySize < 0 || this.maximumBodySize < this.minimumBodySize || Number.isNaN(this.maximumBodySize)) {
-			throw new RangeError("Invalid pane body size constraints");
+		if (
+			!Number.isFinite(this.minimumBodySize) ||
+			this.minimumBodySize < 0 ||
+			this.maximumBodySize < this.minimumBodySize ||
+			Number.isNaN(this.maximumBodySize)
+		) {
+			throw new RangeError('Invalid pane body size constraints');
 		}
 		const { id, title } = options;
 		const ownerDocument = container.ownerDocument;
-		const element = h(ownerDocument, "section");
+		const element = h(ownerDocument, 'section');
 		this.element = element;
 		this._register(toDisposable(() => element.remove()));
-		element.className = "ash-pane-view";
+		element.className = 'ash-pane-view';
 		element.style.setProperty('--ash-pane-header-height', `${this.configuredHeaderSize}px`);
 		element.dataset.paneViewId = id;
 		element.tabIndex = -1;
 		this.id = id;
-		this.headerActionsVisibility = options.headerActionsVisibility ?? "always";
+		this.headerActionsVisibility = options.headerActionsVisibility ?? 'always';
 
-		this.headerElement = h(ownerDocument, "div");
-		this.headerElement.className = "ash-pane-view-header";
-		this.headerButton = h(ownerDocument, "button");
-		this.headerButton.className = "ash-pane-view-header-button";
-		this.headerButton.type = "button";
-		const twistyContainer = h(ownerDocument, "span");
-		twistyContainer.className = "ash-pane-view-header-twisty-container";
-		twistyContainer.setAttribute("aria-hidden", "true");
+		this.headerElement = h(ownerDocument, 'div');
+		this.headerElement.className = 'ash-pane-view-header';
+		this.headerButton = h(ownerDocument, 'button');
+		this.headerButton.className = 'ash-pane-view-header-button';
+		this.headerButton.type = 'button';
+		const twistyContainer = h(ownerDocument, 'span');
+		twistyContainer.className = 'ash-pane-view-header-twisty-container';
+		twistyContainer.setAttribute('aria-hidden', 'true');
 		const collapsedIcon = appendIcon(Lxicon.chevronRight, twistyContainer);
-		collapsedIcon.classList.add("ash-pane-view-collapsed-icon");
+		collapsedIcon.classList.add('ash-pane-view-collapsed-icon');
 		const expandedIcon = appendIcon(Lxicon.chevronDown, twistyContainer);
-		expandedIcon.classList.add("ash-pane-view-expanded-icon");
-		this.titleElement = h(ownerDocument, "h3");
-		this.titleElement.className = "ash-pane-view-header-title";
+		expandedIcon.classList.add('ash-pane-view-expanded-icon');
+		this.titleElement = h(ownerDocument, 'h3');
+		this.titleElement.className = 'ash-pane-view-header-title';
 		this.titleElement.textContent = title;
 		this.headerButton.append(twistyContainer, this.titleElement);
-		this.headerActionsElement = h(ownerDocument, "div");
-		this.headerActionsElement.className = "ash-pane-view-header-actions";
+		this.headerActionsElement = h(ownerDocument, 'div');
+		this.headerActionsElement.className = 'ash-pane-view-header-actions';
 		this._register(toDisposable(() => this.headerActionsElement.remove()));
 		this.headerElement.append(this.headerButton, this.headerActionsElement);
 
-		this.contentElement = h(ownerDocument, "div");
-		this.contentElement.className = "ash-pane-view-content";
+		this.contentElement = h(ownerDocument, 'div');
+		this.contentElement.className = 'ash-pane-view-content';
 		this.contentElement.id = `ash-pane-view-content-${encodeURIComponent(id)}`;
-		this.headerButton.setAttribute("aria-controls", this.contentElement.id);
+		this.headerButton.setAttribute('aria-controls', this.contentElement.id);
 		element.append(this.headerElement, this.contentElement);
 		container.append(element);
 		this.collapsed = options.collapsed === true;
 		this.renderCollapsedState();
-		this._register(addDisposableListener(this.headerButton, "click", () => {
-			this.setCollapsed(!this.collapsed);
-		}));
-		this._register(addDisposableListener(this.headerButton, "keydown", event => {
-			if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-			event.preventDefault();
-			this.setCollapsed(event.key === "ArrowLeft");
-		}));
+		this._register(
+			addDisposableListener(this.headerButton, 'click', () => {
+				this.setCollapsed(!this.collapsed);
+			}),
+		);
+		this._register(
+			addDisposableListener(this.headerButton, 'keydown', event => {
+				if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+				event.preventDefault();
+				this.setCollapsed(event.key === 'ArrowLeft');
+			}),
+		);
 		this.onDidFocus = this.focusedEmitter.event;
 		this.onDidBlur = this.blurredEmitter.event;
 		// Actions retain their Pane owner when a Part hosts them outside the pane's DOM subtree.
 		const updateFocus = (): void => {
 			const focused = this.hasFocus();
-			if (focused === this.focused) { return; }
+			if (focused === this.focused) {
+				return;
+			}
 			this.focused = focused;
-			if (focused) { this.focusedEmitter.fire(); } else { this.blurredEmitter.fire(); }
+			if (focused) {
+				this.focusedEmitter.fire();
+			} else {
+				this.blurredEmitter.fire();
+			}
 		};
 		for (const root of [element, this.headerActionsElement]) {
 			const tracker = this._register(trackFocus(root));
@@ -144,22 +161,26 @@ export class Pane extends Disposable implements ISplitViewView {
 
 	setTitle(title: string): void {
 		this.titleElement.textContent = title;
-		if (this.headerElement.hidden) this.element.setAttribute("aria-label", title);
+		if (this.headerElement.hidden) this.element.setAttribute('aria-label', title);
 	}
 
 	get paneTitle(): string {
-		return this.titleElement.textContent ?? "";
+		return this.titleElement.textContent ?? '';
 	}
 
 	setHeaderVisible(visible: boolean): void {
 		if (visible === this.isHeaderVisible()) return;
 		// A title host can move these actions during the same visibility update; their focus follows the node.
-		if (!visible && this.headerElement.contains(this.element.ownerDocument.activeElement) && !this.headerActionsElement.contains(this.element.ownerDocument.activeElement)) {
+		if (
+			!visible &&
+			this.headerElement.contains(this.element.ownerDocument.activeElement) &&
+			!this.headerActionsElement.contains(this.element.ownerDocument.activeElement)
+		) {
 			this.focus();
 		}
 		this.headerElement.hidden = !visible;
-		if (visible) this.element.removeAttribute("aria-label");
-		else this.element.setAttribute("aria-label", this.paneTitle);
+		if (visible) this.element.removeAttribute('aria-label');
+		else this.element.setAttribute('aria-label', this.paneTitle);
 		if (visible) this.setHeaderActionsHost();
 		this.change.fire(undefined);
 	}
@@ -179,9 +200,11 @@ export class Pane extends Disposable implements ISplitViewView {
 
 	public set minimumBodySize(size: number) {
 		if (!Number.isFinite(size) || size < 0 || size > this.maximumBodySize) {
-			throw new RangeError("Invalid pane body size constraints");
+			throw new RangeError('Invalid pane body size constraints');
 		}
-		if (size === this._minimumBodySize) { return; }
+		if (size === this._minimumBodySize) {
+			return;
+		}
 		this._minimumBodySize = size;
 		this.change.fire(undefined);
 	}
@@ -192,9 +215,11 @@ export class Pane extends Disposable implements ISplitViewView {
 
 	public set maximumBodySize(size: number) {
 		if (Number.isNaN(size) || size < this.minimumBodySize) {
-			throw new RangeError("Invalid pane body size constraints");
+			throw new RangeError('Invalid pane body size constraints');
 		}
-		if (size === this._maximumBodySize) { return; }
+		if (size === this._maximumBodySize) {
+			return;
+		}
 		this._maximumBodySize = size;
 		this.change.fire(undefined);
 	}
@@ -218,7 +243,7 @@ export class Pane extends Disposable implements ISplitViewView {
 	}
 
 	/** Subclasses lay out content here; the container owns the outer geometry. */
-	protected layoutBody(_height: number, _width: number): void { }
+	protected layoutBody(_height: number, _width: number): void {}
 
 	setHeaderActionsHost(host?: HTMLElement): void {
 		const focused = this.element.ownerDocument.activeElement;
@@ -252,16 +277,16 @@ export class Pane extends Disposable implements ISplitViewView {
 
 	private renderCollapsedState(): void {
 		const expanded = !this.collapsed;
-		this.element.classList.toggle("collapsed", this.collapsed);
-		this.element.classList.toggle("closing", this.isClosing);
-		this.headerButton.classList.toggle("expanded", expanded);
-		this.headerButton.setAttribute("aria-expanded", String(expanded));
-		this.contentElement.classList.toggle("collapsed", this.collapsed && !this.isClosing);
+		this.element.classList.toggle('collapsed', this.collapsed);
+		this.element.classList.toggle('closing', this.isClosing);
+		this.headerButton.classList.toggle('expanded', expanded);
+		this.headerButton.setAttribute('aria-expanded', String(expanded));
+		this.contentElement.classList.toggle('collapsed', this.collapsed && !this.isClosing);
 		// Closing content remains painted, but must leave focus and the accessibility tree immediately.
 		this.contentElement.inert = this.collapsed;
-		this.contentElement.setAttribute("aria-hidden", String(this.collapsed));
+		this.contentElement.setAttribute('aria-hidden', String(this.collapsed));
 		this.contentElement.hidden = this.collapsed && !this.isClosing;
-		this.headerActionsElement.hidden = this.collapsed && this.headerActionsVisibility === "whenExpanded";
+		this.headerActionsElement.hidden = this.collapsed && this.headerActionsVisibility === 'whenExpanded';
 	}
 }
 
@@ -271,9 +296,11 @@ export class PaneView extends Disposable {
 	private readonly scrollable: ScrollableElement;
 	private readonly splitView: SplitView;
 	private readonly panes: Pane[] = [];
-	private readonly animationReset = this._register(new RunOnceScheduler(() => {
-		this.splitView.element.classList.remove("animated");
-	}, UI_ANIMATION_DURATION.normal));
+	private readonly animationReset = this._register(
+		new RunOnceScheduler(() => {
+			this.splitView.element.classList.remove('animated');
+		}, UI_ANIMATION_DURATION.normal),
+	);
 	private height = 0;
 	private width = 0;
 	private didLayout = false;
@@ -283,27 +310,40 @@ export class PaneView extends Disposable {
 	constructor(container: HTMLElement) {
 		super();
 		// Minimum pane sizes may exceed the host; keep that overflow in the shared themed viewport.
-		this.scrollable = this._register(new ScrollableElement(container, { direction: "vertical", tabIndex: -1 }));
+		this.scrollable = this._register(new ScrollableElement(container, { direction: 'vertical', tabIndex: -1 }));
 		this.element = this.scrollable.element;
-		this.element.classList.add("ash-pane-view-container");
-		this.splitView = this._register(new SplitView(this.scrollable.contentElement, "vertical", {
-			styles: { separatorBorder: "var(--ash-border)" },
-		}));
+		this.element.classList.add('ash-pane-view-container');
+		this.splitView = this._register(
+			new SplitView(this.scrollable.contentElement, 'vertical', {
+				styles: { separatorBorder: 'var(--ash-border)' },
+			}),
+		);
 		this.onDidSashChange = this.splitView.onDidChangeViewSizes;
 		this.onDidSashReset = this.splitView.onDidSashReset;
 		this._register(this.onDidSashReset(index => this.splitView.resetSash(index)));
-		this._register(addDisposableListener(this.element, "keydown", event => {
-			const index = this.panes.findIndex(pane => pane.element.querySelector(".ash-pane-view-header-button") === event.target);
-			if (index < 0 || !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
-			const headers = this.panes.filter(pane => pane.isHeaderVisible());
-			const current = headers.indexOf(this.panes[index]!);
-			const target = event.key === "Home" ? 0 : event.key === "End" ? headers.length - 1 : Math.max(0, Math.min(headers.length - 1, current + (event.key === "ArrowUp" ? -1 : 1)));
-			event.preventDefault();
-			headers[target]?.element.querySelector<HTMLButtonElement>(".ash-pane-view-header-button")?.focus();
-		}));
-		this._register(toDisposable(() => {
-			this.panes.length = 0;
-		}));
+		this._register(
+			addDisposableListener(this.element, 'keydown', event => {
+				const index = this.panes.findIndex(
+					pane => pane.element.querySelector('.ash-pane-view-header-button') === event.target,
+				);
+				if (index < 0 || !['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+				const headers = this.panes.filter(pane => pane.isHeaderVisible());
+				const current = headers.indexOf(this.panes[index]!);
+				const target =
+					event.key === 'Home'
+						? 0
+						: event.key === 'End'
+							? headers.length - 1
+							: Math.max(0, Math.min(headers.length - 1, current + (event.key === 'ArrowUp' ? -1 : 1)));
+				event.preventDefault();
+				headers[target]?.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button')?.focus();
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				this.panes.length = 0;
+			}),
+		);
 	}
 
 	addPane(pane: Pane, size: number, index = this.panes.length): void {
@@ -311,28 +351,37 @@ export class PaneView extends Disposable {
 		let wasCollapsed = pane.isCollapsed();
 		let expandedSize = size;
 		// Pane visibility belongs to its consumer, independently of SplitView geometry.
-		this.splitView.addView({
-			element: pane.element,
-			get minimumSize() { return pane.minimumSize; },
-			get maximumSize() { return pane.maximumSize; },
-			onDidChange: listener => pane.onDidChange(preferredSize => {
-				const collapsed = pane.isCollapsed();
-				const requestedSize = wasCollapsed && !collapsed ? expandedSize : preferredSize;
-				if (wasCollapsed !== collapsed && this.didLayout && !isReducedMotion(this.element)) {
-					this.splitView.element.classList.add("animated");
-					this.animationReset.schedule();
-				}
-				wasCollapsed = collapsed;
-				const contentHeightChanged = this.didLayout && this.updateContentHeight();
-				listener(requestedSize);
-				if (contentHeightChanged) this.scrollable.layout();
-				this.updateSashLabels();
-			}),
-			layout: (height, offset, width) => {
-				if (!pane.isCollapsed()) expandedSize = height;
-				pane.layout(height, offset, width);
+		this.splitView.addView(
+			{
+				element: pane.element,
+				get minimumSize() {
+					return pane.minimumSize;
+				},
+				get maximumSize() {
+					return pane.maximumSize;
+				},
+				onDidChange: listener =>
+					pane.onDidChange(preferredSize => {
+						const collapsed = pane.isCollapsed();
+						const requestedSize = wasCollapsed && !collapsed ? expandedSize : preferredSize;
+						if (wasCollapsed !== collapsed && this.didLayout && !isReducedMotion(this.element)) {
+							this.splitView.element.classList.add('animated');
+							this.animationReset.schedule();
+						}
+						wasCollapsed = collapsed;
+						const contentHeightChanged = this.didLayout && this.updateContentHeight();
+						listener(requestedSize);
+						if (contentHeightChanged) this.scrollable.layout();
+						this.updateSashLabels();
+					}),
+				layout: (height, offset, width) => {
+					if (!pane.isCollapsed()) expandedSize = height;
+					pane.layout(height, offset, width);
+				},
 			},
-		}, size, index);
+			size,
+			index,
+		);
 		this.panes.splice(index, 0, pane);
 		if (this.didLayout && this.updateContentHeight()) this.scrollable.layout();
 		this.updateSashLabels();
@@ -361,7 +410,7 @@ export class PaneView extends Disposable {
 
 	resizePane(pane: Pane, size: number): void {
 		this.animationReset.cancel();
-		this.splitView.element.classList.remove("animated");
+		this.splitView.element.classList.remove('animated');
 		const index = this.panes.indexOf(pane);
 		if (index >= 0) this.splitView.resizeView(index, size);
 	}
@@ -380,7 +429,7 @@ export class PaneView extends Disposable {
 		this.element.style.height = `${height}px`;
 		this.didLayout = true;
 		this.animationReset.cancel();
-		this.splitView.element.classList.remove("animated");
+		this.splitView.element.classList.remove('animated');
 		this.updateContentHeight();
 		// SplitView fits the viewport; its constraints already retain overflowing minimum sizes.
 		this.splitView.layout(height, width);
@@ -400,9 +449,20 @@ export class PaneView extends Disposable {
 		for (let index = 0; index < this.panes.length - 1; index += 1) {
 			const sash = this.splitView.getSash(index);
 			if (!sash) continue;
-			sash.element.setAttribute("aria-label", localize("paneView.resize", "Resize panes"));
-			sash.element.setAttribute("aria-description", localize("paneView.resizeHelp", "Use the arrow keys to resize panes. Double-click to reset their sizes."));
-			sash.element.setAttribute("aria-controls", [this.panes[index]!, this.panes[index + 1]!].map(pane => `ash-pane-view-content-${encodeURIComponent(pane.id)}`).join(" "));
+			sash.element.setAttribute('aria-label', localize('paneView.resize', 'Resize panes'));
+			sash.element.setAttribute(
+				'aria-description',
+				localize(
+					'paneView.resizeHelp',
+					'Use the arrow keys to resize panes. Double-click to reset their sizes.',
+				),
+			);
+			sash.element.setAttribute(
+				'aria-controls',
+				[this.panes[index]!, this.panes[index + 1]!]
+					.map(pane => `ash-pane-view-content-${encodeURIComponent(pane.id)}`)
+					.join(' '),
+			);
 		}
 	}
 }

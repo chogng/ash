@@ -23,7 +23,9 @@ export class ChatGPTEditorPane extends EditorPane {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IThemeService theme: IThemeService,
 		@IStorageService storage: IStorageService,
-	) { super('sessions.editor.chatgpt', theme, storage); }
+	) {
+		super('sessions.editor.chatgpt', theme, storage);
+	}
 	public override create(parent: HTMLElement): void {
 		const root = parent.ownerDocument.createElement('section');
 		root.setAttribute('aria-label', localize('sessions.chatgpt.title', 'ChatGPT'));
@@ -32,20 +34,39 @@ export class ChatGPTEditorPane extends EditorPane {
 		const contextKeys = this._register(this.contextKeys.createScoped(root));
 		contextKeys.createKey('chatGPTFocused', true);
 		// Nested input editors must inherit this page's accessibility context.
-		const instantiation = this._register(this.instantiation.createChild(new ServiceCollection([IContextKeyService, contextKeys])));
+		const instantiation = this._register(
+			this.instantiation.createChild(new ServiceCollection([IContextKeyService, contextKeys])),
+		);
 		this.widget = this._register(instantiation.createInstance(ChatGPTWidget, root));
-		const update = (): void => this.widget.setScrollingOptimization(this.configuration.getValue<boolean>(chatGPTScrollOptimization));
+		const update = (): void =>
+			this.widget.setScrollingOptimization(this.configuration.getValue<boolean>(chatGPTScrollOptimization));
 		update();
-		this._register(this.configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(chatGPTScrollOptimization)) { update(); } }));
-		this._register(addDisposableListener(root, 'focusin', event => {
-			if (!root.contains(event.relatedTarget as Node) && this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.ChatGPT)) {
-				status(localize('sessions.chatgpt.navigationHint', 'Press Alt+F1 for ChatGPT accessibility help.'));
-			}
-		}));
+		this._register(
+			this.configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(chatGPTScrollOptimization)) {
+					update();
+				}
+			}),
+		);
+		this._register(
+			addDisposableListener(root, 'focusin', event => {
+				if (
+					!root.contains(event.relatedTarget as Node) &&
+					this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.ChatGPT)
+				) {
+					status(localize('sessions.chatgpt.navigationHint', 'Press Alt+F1 for ChatGPT accessibility help.'));
+				}
+			}),
+		);
 	}
-	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> { }
-	public override clearInput(): void { }
-	public override layout(_dimension: IDimension): void { }
-	public override focus(): void { this.widget.focus(); }
-	public override setVisible(visible: boolean): void { super.setVisible(visible); this.widget?.setVisible(visible); }
+	public override async setInput(_input: IResourceEditorInput, _signal: AbortSignal): Promise<void> {}
+	public override clearInput(): void {}
+	public override layout(_dimension: IDimension): void {}
+	public override focus(): void {
+		this.widget.focus();
+	}
+	public override setVisible(visible: boolean): void {
+		super.setVisible(visible);
+		this.widget?.setVisible(visible);
+	}
 }

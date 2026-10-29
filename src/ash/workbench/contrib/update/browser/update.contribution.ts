@@ -11,7 +11,11 @@ import { registerEditorPane } from '../../../browser/editor.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
-import { Severity, INotificationService, type INotificationHandle } from '../../../../platform/notification/common/notification.js';
+import {
+	Severity,
+	INotificationService,
+	type INotificationHandle,
+} from '../../../../platform/notification/common/notification.js';
 import { IUpdateService, type UpdateCheckResult } from '../../../../platform/update/common/updateService.js';
 import { IBrowserWorkbenchEnvironmentService } from '../../../services/environment/browser/environmentService.js';
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
@@ -19,20 +23,41 @@ import { ReleaseNotesEditor, releaseNotesEditorId, releaseNotesResource } from '
 
 registerEditorPane({
 	id: releaseNotesEditorId,
-	get name() { return localize('releaseNotes.title', 'Release Notes'); },
-	canOpen: input => input.resource.toString() === releaseNotesResource ? EditorPaneMatch.Default : EditorPaneMatch.None,
+	get name() {
+		return localize('releaseNotes.title', 'Release Notes');
+	},
+	canOpen: input =>
+		input.resource.toString() === releaseNotesResource ? EditorPaneMatch.Default : EditorPaneMatch.None,
 	create: options => {
 		if (!options.instantiationService) throw new Error('Release notes require Workbench services');
 		return options.instantiationService.createInstance(new SyncDescriptor(ReleaseNotesEditor));
 	},
 });
 
-registerAction2(class ShowReleaseNotes extends Action2 {
-	constructor() { super({ id: 'workbench.action.showReleaseNotes', get title() { return localize2('releaseNotes.open', 'Show Release Notes'); }, f1: true, menu: { id: MenuId.MenubarHelpMenu, group: '2_reference', order: 2 } }); }
-	override async run(services: ServicesAccessor): Promise<void> {
-		await services.get(IEditorService).openEditor({ resource: URI.parse(releaseNotesResource), label: localize('releaseNotes.title', 'Release Notes'), readOnly: true, showBreadcrumbs: false });
-	}
-});
+registerAction2(
+	class ShowReleaseNotes extends Action2 {
+		constructor() {
+			super({
+				id: 'workbench.action.showReleaseNotes',
+				get title() {
+					return localize2('releaseNotes.open', 'Show Release Notes');
+				},
+				f1: true,
+				menu: { id: MenuId.MenubarHelpMenu, group: '2_reference', order: 2 },
+			});
+		}
+		override async run(services: ServicesAccessor): Promise<void> {
+			await services
+				.get(IEditorService)
+				.openEditor({
+					resource: URI.parse(releaseNotesResource),
+					label: localize('releaseNotes.title', 'Release Notes'),
+					readOnly: true,
+					showBreadcrumbs: false,
+				});
+		}
+	},
+);
 
 // Each window owns its update prompt through the producer handle.
 const webUpdateNotifications = new WeakMap<INotificationService, INotificationHandle>();
@@ -43,27 +68,37 @@ function clearWebUpdateNotifications(notifications: INotificationService): void 
 	handle?.close();
 }
 
-function showWebUpdate(notifications: INotificationService, update: IUpdateService, result: UpdateCheckResult): boolean {
+function showWebUpdate(
+	notifications: INotificationService,
+	update: IUpdateService,
+	result: UpdateCheckResult,
+): boolean {
 	clearWebUpdateNotifications(notifications);
 	if (result.status !== 'available') return false;
 	const handle = notifications.notify({
-		severity: Severity.Info, message: localize('update.webAvailable', 'Ash {0} is available. Reload to update.', result.version), actions: {
-			primary: [{
-				tooltip: '',
-				enabled: true,
-				id: 'update.reload',
-				label: localize('update.reload', 'Reload to Update'),
-				run: async () => {
-					try {
-						await update.installUpdate();
-					} catch (error) {
-						if (isCancellationError(error)) return;
-						console.error('Web update reload failed', error);
-						notifications.error(localize('update.webReloadFailed', 'Could not reload Ash to apply the update.'));
-					}
+		severity: Severity.Info,
+		message: localize('update.webAvailable', 'Ash {0} is available. Reload to update.', result.version),
+		actions: {
+			primary: [
+				{
+					tooltip: '',
+					enabled: true,
+					id: 'update.reload',
+					label: localize('update.reload', 'Reload to Update'),
+					run: async () => {
+						try {
+							await update.installUpdate();
+						} catch (error) {
+							if (isCancellationError(error)) return;
+							console.error('Web update reload failed', error);
+							notifications.error(
+								localize('update.webReloadFailed', 'Could not reload Ash to apply the update.'),
+							);
+						}
+					},
 				},
-			}]
-		}
+			],
+		},
 	});
 	webUpdateNotifications.set(notifications, handle);
 	handle.onDidClose(() => {
@@ -73,33 +108,39 @@ function showWebUpdate(notifications: INotificationService, update: IUpdateServi
 }
 
 if (isWeb) {
-	registerAction2(class CheckForWebUpdatesAction extends Action2 {
-		constructor() {
-			super({
-				id: 'update.checkForUpdate',
-				title: localize2('update.checkForUpdates', 'Check for Updates...'),
-				precondition: ContextKeyExpr.has('update.providerAvailable'),
-				f1: true,
-				menu: { id: MenuId.MenubarHelpMenu, group: '1_update', order: 1 },
-			});
-		}
-
-		override async run(services: ServicesAccessor): Promise<void> {
-			const update = services.get(IUpdateService);
-			const notifications = services.get(INotificationService);
-			const checking = notifications.notify({ severity: Severity.Info, message: localize('update.checking', 'Checking for updates...') });
-			try {
-				const result = await update.checkForUpdates();
-				if (!showWebUpdate(notifications, update, result)) notifications.info(localize('update.webCurrent', 'Ash is up to date.'));
-			} catch (error) {
-				if (isCancellationError(error)) return;
-				console.error('Web update check failed', error);
-				notifications.error(localize('update.checkFailed', 'Could not check for updates.'));
-			} finally {
-				checking.close();
+	registerAction2(
+		class CheckForWebUpdatesAction extends Action2 {
+			constructor() {
+				super({
+					id: 'update.checkForUpdate',
+					title: localize2('update.checkForUpdates', 'Check for Updates...'),
+					precondition: ContextKeyExpr.has('update.providerAvailable'),
+					f1: true,
+					menu: { id: MenuId.MenubarHelpMenu, group: '1_update', order: 1 },
+				});
 			}
-		}
-	});
+
+			override async run(services: ServicesAccessor): Promise<void> {
+				const update = services.get(IUpdateService);
+				const notifications = services.get(INotificationService);
+				const checking = notifications.notify({
+					severity: Severity.Info,
+					message: localize('update.checking', 'Checking for updates...'),
+				});
+				try {
+					const result = await update.checkForUpdates();
+					if (!showWebUpdate(notifications, update, result))
+						notifications.info(localize('update.webCurrent', 'Ash is up to date.'));
+				} catch (error) {
+					if (isCancellationError(error)) return;
+					console.error('Web update check failed', error);
+					notifications.error(localize('update.checkFailed', 'Could not check for updates.'));
+				} finally {
+					checking.close();
+				}
+			}
+		},
+	);
 	registerWorkbenchContribution('workbench.contrib.webUpdate', WorkbenchPhase.AfterRestored, services => {
 		const environment = services.get(IBrowserWorkbenchEnvironmentService);
 		const supported = services.get(IContextKeyService).createKey<boolean>('update.providerAvailable', false);
@@ -107,11 +148,14 @@ if (isWeb) {
 		const update = services.get(IUpdateService);
 		const notifications = services.get(INotificationService);
 		let disposed = false;
-		void update.checkAutomatically().then(result => {
-			if (!disposed && result) showWebUpdate(notifications, update, result);
-		}).catch(error => {
-			if (!disposed) console.error('Automatic Web update check failed', error);
-		});
+		void update
+			.checkAutomatically()
+			.then(result => {
+				if (!disposed && result) showWebUpdate(notifications, update, result);
+			})
+			.catch(error => {
+				if (!disposed) console.error('Automatic Web update check failed', error);
+			});
 		return toDisposable(() => {
 			disposed = true;
 			clearWebUpdateNotifications(notifications);

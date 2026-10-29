@@ -61,7 +61,10 @@ export interface ICanvasModelResolution {
 	readonly reused: boolean;
 }
 
-export interface ICanvasOpenRequest { readonly id: string; readonly succeeded: boolean; }
+export interface ICanvasOpenRequest {
+	readonly id: string;
+	readonly succeeded: boolean;
+}
 
 export interface ICanvasContext {
 	readonly owner: ICanvasOwner;
@@ -71,7 +74,10 @@ export interface ICanvasContext {
 	readonly closeCanvas?: (canvas: ICanvas) => Promise<void>;
 }
 
-export interface ICanvasWorkingSetOwner { readonly sessionResource: URI; readonly chatResource: URI | undefined; }
+export interface ICanvasWorkingSetOwner {
+	readonly sessionResource: URI;
+	readonly chatResource: URI | undefined;
+}
 export interface ICanvasWorkingSetState {
 	readonly owner: ICanvasWorkingSetOwner | undefined;
 	readonly restoring: boolean;
@@ -111,13 +117,25 @@ export interface ICanvasService {
 	resolveCanvasModel(reference: ICanvasReference, source: URI): Promise<ICanvasModelResolution>;
 }
 
-export function canvasOwnerKey(owner: ICanvasOwner): string { return JSON.stringify([owner.providerId, owner.session.toString(), owner.chat.toString()]); }
-export function isCanvasOwner(first: ICanvasOwner, second: ICanvasOwner): boolean { return canvasOwnerKey(first) === canvasOwnerKey(second); }
-export function getCanvasReferenceKey(reference: ICanvasReference): string { return JSON.stringify([canvasOwnerKey(reference), reference.canvas.toString()]); }
+export function canvasOwnerKey(owner: ICanvasOwner): string {
+	return JSON.stringify([owner.providerId, owner.session.toString(), owner.chat.toString()]);
+}
+export function isCanvasOwner(first: ICanvasOwner, second: ICanvasOwner): boolean {
+	return canvasOwnerKey(first) === canvasOwnerKey(second);
+}
+export function getCanvasReferenceKey(reference: ICanvasReference): string {
+	return JSON.stringify([canvasOwnerKey(reference), reference.canvas.toString()]);
+}
 
-export function isOpenableExtensionCanvasDefinition(canvas: ICanvasDefinition): boolean { return !canvas.requiresInput; }
+export function isOpenableExtensionCanvasDefinition(canvas: ICanvasDefinition): boolean {
+	return !canvas.requiresInput;
+}
 export function compareCanvasDefinitions(first: ICanvasDefinition, second: ICanvasDefinition): number {
-	return first.displayName.localeCompare(second.displayName) || first.extensionId.localeCompare(second.extensionId) || first.canvasId.localeCompare(second.canvasId);
+	return (
+		first.displayName.localeCompare(second.displayName) ||
+		first.extensionId.localeCompare(second.extensionId) ||
+		first.canvasId.localeCompare(second.canvasId)
+	);
 }
 
 export function getCanvasDefinitionInstanceId(canvas: ICanvasDefinition): string {
@@ -127,21 +145,38 @@ export function getCanvasDefinitionInstanceId(canvas: ICanvasDefinition): string
 }
 
 export function getCanvasInstanceLabels(canvases: readonly ICanvas[]): readonly string[] {
-	return disambiguate(canvases, canvas => canvas.title, (canvas, index) => canvas.instanceId ?? String(index + 1));
+	return disambiguate(
+		canvases,
+		canvas => canvas.title,
+		(canvas, index) => canvas.instanceId ?? String(index + 1),
+	);
 }
 
 export function getCanvasDefinitionLabels(canvases: readonly ICanvasDefinition[]): readonly string[] {
-	return disambiguate(canvases, canvas => canvas.displayName || canvas.canvasId, canvas => `${canvas.extensionName || canvas.extensionId}: ${canvas.canvasId}`);
+	return disambiguate(
+		canvases,
+		canvas => canvas.displayName || canvas.canvasId,
+		canvas => `${canvas.extensionName || canvas.extensionId}: ${canvas.canvasId}`,
+	);
 }
 
-function disambiguate<T>(values: readonly T[], title: (value: T) => string, detail: (value: T, index: number) => string): string[] {
+function disambiguate<T>(
+	values: readonly T[],
+	title: (value: T) => string,
+	detail: (value: T, index: number) => string,
+): string[] {
 	const titles = values.map(title);
 	const used = new Set<string>();
 	return values.map((value, index) => {
 		const name = titles[index]!;
-		let label = titles.filter(title => title === name).length > 1 ? localize('canvas.instanceTitle', '{0} ({1})', name, detail(value, index)) : name;
+		let label =
+			titles.filter(title => title === name).length > 1
+				? localize('canvas.instanceTitle', '{0} ({1})', name, detail(value, index))
+				: name;
 		let suffix = 1;
-		while (used.has(label)) { label = localize('canvas.instanceTitle', '{0} ({1})', name, `${detail(value, index)}, ${++suffix}`); }
+		while (used.has(label)) {
+			label = localize('canvas.instanceTitle', '{0} ({1})', name, `${detail(value, index)}, ${++suffix}`);
+		}
 		used.add(label);
 		return label;
 	});
@@ -162,24 +197,37 @@ export class CanvasInput extends EditorInput {
 	private readonly labelChanged = this._register(new Emitter<void>());
 	readonly onDidChangeLabel = this.labelChanged.event;
 
-	constructor(readonly reference: ICanvasReference, canvas: ICanvas, @IEditorGroupsService private readonly groups: IEditorGroupsService) {
+	constructor(
+		readonly reference: ICanvasReference,
+		canvas: ICanvas,
+		@IEditorGroupsService private readonly groups: IEditorGroupsService,
+	) {
 		super();
 		this.resource = URI.from({ scheme: 'session-canvas', path: reference.canvas.path });
 		this.canvas = observableValue(this, canvas);
 	}
 
-	getName(): string { return this.canvas.get().title; }
+	getName(): string {
+		return this.canvas.get().title;
+	}
 	getDescription(): string {
-		return localize('canvas.description', 'Closing this tab hides the Canvas. Use Open Canvas to reopen it beside its conversation.');
+		return localize(
+			'canvas.description',
+			'Closing this tab hides the Canvas. Use Open Canvas to reopen it beside its conversation.',
+		);
 	}
 
 	setCanvas(canvas: ICanvas): void {
 		const previous = this.canvas.get();
 		this.canvas.set(canvas, undefined);
-		if (previous.title !== canvas.title) { this.labelChanged.fire(); }
+		if (previous.title !== canvas.title) {
+			this.labelChanged.fire();
+		}
 	}
 
 	canMove(_sourceGroup: number, targetGroup: number): true | string {
-		return this.groups.getGroup(targetGroup) ? true : localize('canvas.mainWindowOnly', 'Keep the Canvas in its conversation window.');
+		return this.groups.getGroup(targetGroup)
+			? true
+			: localize('canvas.mainWindowOnly', 'Keep the Canvas in its conversation window.');
 	}
 }

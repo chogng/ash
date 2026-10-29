@@ -40,26 +40,43 @@ export function openContextMenu(
 ): void {
 	event.preventDefault();
 	event.stopPropagation();
-	const instances = contextInstances === undefined ? [] : Array.isArray(contextInstances) ? contextInstances : [contextInstances as ITerminalInstance];
+	const instances =
+		contextInstances === undefined
+			? []
+			: Array.isArray(contextInstances)
+				? contextInstances
+				: [contextInstances as ITerminalInstance];
 	const contexts = instances.map(instance => new InstanceContext(instance));
-	const actions = [...getFlatContextMenuActions(menu.getActions({ shouldForwardArgs: true }), undefined, targetWindow), ...extraActions];
+	const actions = [
+		...getFlatContextMenuActions(menu.getActions({ shouldForwardArgs: true }), undefined, targetWindow),
+		...extraActions,
+	];
 	const lifetime = new DisposableStore();
 	const runner = lifetime.add(new TerminalContextActionRunner());
 	let executing = false;
 	let hidden = false;
-	lifetime.add(runner.onWillRun(() => { executing = true; }));
-	lifetime.add(runner.onDidRun(() => {
-		executing = false;
-		// Let the host finish its notification and execution cleanup listeners first.
-		if (hidden) queueMicrotask(() => lifetime.dispose());
-	}));
+	lifetime.add(
+		runner.onWillRun(() => {
+			executing = true;
+		}),
+	);
+	lifetime.add(
+		runner.onDidRun(() => {
+			executing = false;
+			// Let the host finish its notification and execution cleanup listeners first.
+			if (hidden) queueMicrotask(() => lifetime.dispose());
+		}),
+	);
 	try {
 		contextMenuService.showContextMenu({
 			getAnchor: () => ({ x: event.clientX, y: event.clientY, targetWindow }),
 			getActions: () => actions,
 			getActionsContext: () => contexts,
 			actionRunner: runner,
-			onHide: () => { hidden = true; if (!executing) lifetime.dispose(); },
+			onHide: () => {
+				hidden = true;
+				if (!executing) lifetime.dispose();
+			},
 		});
 	} catch (error) {
 		lifetime.dispose();

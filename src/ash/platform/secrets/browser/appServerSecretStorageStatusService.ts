@@ -5,7 +5,9 @@ import { AppServerRemoteError } from '../../agentHost/common/appServerError.js';
 import type { UnavailableOperation } from '../../renderer/browser/disconnectedHost.js';
 import { SecretStorageError, type ISecretStorageStatusService, type SecretStorageState } from '../common/secrets.js';
 
-export function createAppServerSecretStorageStatusService(connection: AppServerProtocolClient): ISecretStorageStatusService {
+export function createAppServerSecretStorageStatusService(
+	connection: AppServerProtocolClient,
+): ISecretStorageStatusService {
 	return {
 		readState: () => storageState(appServerRequest(connection, 'secrets/status', {})),
 		authorizeAccess: () => storageState(appServerRequest(connection, 'secrets/authorize', {})),
@@ -18,7 +20,9 @@ async function storageState(operation: Promise<SecretStorageStatusResult>): Prom
 	return { status: result.status, ...(result.mode ? { mode: result.mode } : {}) };
 }
 
-export function createDisconnectedSecretStorageStatusService(unavailable: UnavailableOperation): ISecretStorageStatusService {
+export function createDisconnectedSecretStorageStatusService(
+	unavailable: UnavailableOperation,
+): ISecretStorageStatusService {
 	return {
 		readState: () => unavailable('secrets.status'),
 		authorizeAccess: () => unavailable('secrets.authorize'),
@@ -33,12 +37,18 @@ export async function withSecretStorageErrors<T>(operation: Promise<T>): Promise
 	} catch (error) {
 		if (error instanceof AppServerRemoteError) {
 			switch (error.data.kind) {
-				case 'SecretStorageUnavailable': throw new SecretStorageError('unavailable');
-				case 'SecretStorageAccessDenied': throw new SecretStorageError('accessDenied');
-				case 'SecretStorageKeyMissing': throw new SecretStorageError('keyMissing');
-				case 'SecretStorageCorrupted': throw new SecretStorageError('corrupted');
-				case 'SecretStorageMigrationFailed': throw new SecretStorageError('migrationFailed');
-				case 'SecretStorageOperationFailed': throw new SecretStorageError('failure');
+				case 'SecretStorageUnavailable':
+					throw new SecretStorageError('unavailable');
+				case 'SecretStorageAccessDenied':
+					throw new SecretStorageError('accessDenied');
+				case 'SecretStorageKeyMissing':
+					throw new SecretStorageError('keyMissing');
+				case 'SecretStorageCorrupted':
+					throw new SecretStorageError('corrupted');
+				case 'SecretStorageMigrationFailed':
+					throw new SecretStorageError('migrationFailed');
+				case 'SecretStorageOperationFailed':
+					throw new SecretStorageError('failure');
 			}
 		}
 		throw error;

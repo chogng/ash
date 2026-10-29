@@ -17,7 +17,10 @@ import { createBareFontInfoFromRawSettings } from '../../../common/config/fontIn
 import { MenuId } from '../../../../platform/actions/common/actions.js';
 import { createConfigurationServices, createTestConfiguration, TEST_FONT_INFO } from './testConfiguration.js';
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
-import { AccessibilitySupport, IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+import {
+	AccessibilitySupport,
+	IAccessibilityService,
+} from '../../../../platform/accessibility/common/accessibility.js';
 import { InstantiationService } from '../../../../platform/instantiation/common/instantiationService.js';
 import { installEditorTestGlobals } from '../editorTestGlobals.js';
 
@@ -38,23 +41,26 @@ test('applyFontInfo writes the complete normalized font contract to both DOM own
 	applyFontInfo(fastNode, TEST_FONT_INFO);
 
 	for (const target of [element, fastNode.domNode]) {
-		assert.deepEqual({
-			fontFamily: target.style.fontFamily,
-			fontWeight: target.style.fontWeight,
-			fontSize: target.style.fontSize,
-			fontFeatureSettings: target.style.fontFeatureSettings,
-			fontVariationSettings: target.style.fontVariationSettings,
-			lineHeight: target.style.lineHeight,
-			letterSpacing: target.style.letterSpacing,
-		}, {
-			fontFamily: expectedFontFamily.style.fontFamily,
-			fontWeight: TEST_FONT_INFO.fontWeight,
-			fontSize: `${TEST_FONT_INFO.fontSize}px`,
-			fontFeatureSettings: TEST_FONT_INFO.fontFeatureSettings,
-			fontVariationSettings: TEST_FONT_INFO.fontVariationSettings,
-			lineHeight: `${TEST_FONT_INFO.lineHeight}px`,
-			letterSpacing: `${TEST_FONT_INFO.letterSpacing}px`,
-		});
+		assert.deepEqual(
+			{
+				fontFamily: target.style.fontFamily,
+				fontWeight: target.style.fontWeight,
+				fontSize: target.style.fontSize,
+				fontFeatureSettings: target.style.fontFeatureSettings,
+				fontVariationSettings: target.style.fontVariationSettings,
+				lineHeight: target.style.lineHeight,
+				letterSpacing: target.style.letterSpacing,
+			},
+			{
+				fontFamily: expectedFontFamily.style.fontFamily,
+				fontWeight: TEST_FONT_INFO.fontWeight,
+				fontSize: `${TEST_FONT_INFO.fontSize}px`,
+				fontFeatureSettings: TEST_FONT_INFO.fontFeatureSettings,
+				fontVariationSettings: TEST_FONT_INFO.fontVariationSettings,
+				lineHeight: `${TEST_FONT_INFO.lineHeight}px`,
+				letterSpacing: `${TEST_FONT_INFO.letterSpacing}px`,
+			},
+		);
 	}
 	dom.window.close();
 });
@@ -62,16 +68,17 @@ test('applyFontInfo writes the complete normalized font contract to both DOM own
 test('FontMeasurements caches one window/font result and evicts unreliable readings on clear', () => {
 	const request = new CharWidthRequest('n', CharWidthRequestType.Bold);
 	request.fulfill(9);
-	assert.deepEqual({ chr: request.chr, type: request.type, width: request.width }, {
-		chr: 'n', type: CharWidthRequestType.Bold, width: 9,
-	});
+	assert.deepEqual(
+		{ chr: request.chr, type: request.type, width: request.width },
+		{ chr: 'n', type: CharWidthRequestType.Bold, width: 9 },
+	);
 
 	const dom = new JSDOM('<div></div>');
 	const targetWindow = dom.window as unknown as Window;
 	const font = createBareFontInfoFromRawSettings({ fontFamily: 'Test Mono', fontSize: 14, lineHeight: 20 }, 1, true);
 	FontMeasurements.clearAllFontInfos();
 	let changes = 0;
-	using listener = FontMeasurements.onDidChange(() => changes += 1);
+	using listener = FontMeasurements.onDidChange(() => (changes += 1));
 	try {
 		const first = FontMeasurements.readFontInfo(targetWindow, font);
 		const second = FontMeasurements.readFontInfo(targetWindow, font);
@@ -91,7 +98,7 @@ test('EditorConfiguration validates updates and reports the changed option', () 
 	const container = dom.window.document.querySelector<HTMLElement>('#editor')!;
 	using configuration = createTestConfiguration(container, { fontSize: 14 });
 	let changed = false;
-	configuration.onDidChange(event => changed = event.hasChanged(EditorOption.fontSize));
+	configuration.onDidChange(event => (changed = event.hasChanged(EditorOption.fontSize)));
 	configuration.updateOptions({ fontSize: 18 });
 	assert.equal(configuration.options.get(EditorOption.fontSize), 18);
 	assert.equal(changed, true);
@@ -102,7 +109,11 @@ test('EditorConfiguration requires the registered accessibility service at const
 	const dom = new JSDOM('<div></div>');
 	using services = new InstantiationService();
 	try {
-		assert.throws(() => services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {}, dom.window.document.body), /accessibilityService/);
+		assert.throws(
+			() =>
+				services.createInstance(EditorConfiguration, false, MenuId.EditorContext, {}, dom.window.document.body),
+			/accessibilityService/,
+		);
 	} finally {
 		dom.window.close();
 	}
@@ -113,7 +124,13 @@ test('EditorConfiguration follows host accessibility and gives explicit editor s
 	using resources = new DisposableStore();
 	const services = createConfigurationServices(resources, dom.window.document.body);
 	const accessibility = services.get(IAccessibilityService);
-	const configuration = services.createInstance(EditorConfiguration, false, MenuId.EditorContext, { wrappingIndent: 'indent' }, dom.window.document.body);
+	const configuration = services.createInstance(
+		EditorConfiguration,
+		false,
+		MenuId.EditorContext,
+		{ wrappingIndent: 'indent' },
+		dom.window.document.body,
+	);
 	const notifications: string[] = [];
 	using fast = configuration.onDidChangeFast(event => {
 		if (event.hasChanged(EditorOption.accessibilitySupport)) notifications.push('fast');
@@ -123,11 +140,14 @@ test('EditorConfiguration follows host accessibility and gives explicit editor s
 	});
 	try {
 		accessibility.setAccessibilitySupport(AccessibilitySupport.Enabled);
-		assert.deepEqual({
-			support: configuration.options.get(EditorOption.accessibilitySupport),
-			indent: configuration.options.get(EditorOption.wrappingIndent),
-			notifications,
-		}, { support: AccessibilitySupport.Enabled, indent: 0, notifications: ['fast', 'normal'] });
+		assert.deepEqual(
+			{
+				support: configuration.options.get(EditorOption.accessibilitySupport),
+				indent: configuration.options.get(EditorOption.wrappingIndent),
+				notifications,
+			},
+			{ support: AccessibilitySupport.Enabled, indent: 0, notifications: ['fast', 'normal'] },
+		);
 		configuration.updateOptions({ accessibilitySupport: 'off' });
 		assert.equal(configuration.options.get(EditorOption.accessibilitySupport), AccessibilitySupport.Disabled);
 		assert.equal(configuration.options.get(EditorOption.wrappingIndent), 2);
@@ -153,7 +173,7 @@ test('EditorConfiguration owns the rich screen-reader content option', () => {
 	using configuration = createTestConfiguration(container);
 	assert.equal(configuration.options.get(EditorOption.renderRichScreenReaderContent), false);
 	let changed = false;
-	configuration.onDidChange(event => changed = event.hasChanged(EditorOption.renderRichScreenReaderContent));
+	configuration.onDidChange(event => (changed = event.hasChanged(EditorOption.renderRichScreenReaderContent)));
 
 	configuration.updateOptions({ renderRichScreenReaderContent: true });
 
@@ -168,7 +188,7 @@ test('EditorConfiguration computes and updates the overview-ruler cursor visibil
 	using configuration = createTestConfiguration(container);
 	assert.equal(configuration.options.get(EditorOption.hideCursorInOverviewRuler), false);
 	let changed = false;
-	configuration.onDidChange(event => changed = event.hasChanged(EditorOption.hideCursorInOverviewRuler));
+	configuration.onDidChange(event => (changed = event.hasChanged(EditorOption.hideCursorInOverviewRuler)));
 
 	configuration.updateOptions({ hideCursorInOverviewRuler: true });
 
@@ -188,9 +208,15 @@ test('EditorConfiguration recomputes measured font options when the cache change
 	const container = dom.window.document.querySelector<HTMLElement>('#editor')!;
 	using resources = new DisposableStore();
 	const services = createConfigurationServices(resources, container);
-	using configuration = services.createInstance(MeasuredConfiguration, false, MenuId.EditorContext, { fontSize: 14 }, container);
+	using configuration = services.createInstance(
+		MeasuredConfiguration,
+		false,
+		MenuId.EditorContext,
+		{ fontSize: 14 },
+		container,
+	);
 	let changed = false;
-	configuration.onDidChange(event => changed ||= event.hasChanged(EditorOption.fontInfo));
+	configuration.onDidChange(event => (changed ||= event.hasChanged(EditorOption.fontInfo)));
 	width = 10;
 	FontMeasurements.clearAllFontInfos();
 	assert.equal(configuration.options.get(EditorOption.fontInfo).spaceWidth, 10);
@@ -209,7 +235,13 @@ test('EditorConfiguration resolves character-sized decoration columns with fract
 		const container = dom.window.document.querySelector<HTMLElement>('#editor')!;
 		using resources = new DisposableStore();
 		const services = createConfigurationServices(resources, container);
-		using configuration = services.createInstance(FractionalConfiguration, false, MenuId.EditorContext, { lineDecorationsWidth: '2ch', folding: false }, container);
+		using configuration = services.createInstance(
+			FractionalConfiguration,
+			false,
+			MenuId.EditorContext,
+			{ lineDecorationsWidth: '2ch', folding: false },
+			container,
+		);
 		assert.equal(configuration.options.get(EditorOption.lineDecorationsWidth), 15);
 		assert.equal(configuration.options.get(EditorOption.layoutInfo).decorationsWidth, 15);
 		configuration.updateOptions({ lineDecorationsWidth: '3.5ch' });
@@ -229,10 +261,16 @@ test('EditorConfiguration owns automatic container observation and stops it with
 			observers.push(this);
 		}
 
-		observe(target: Element): void { this.target = target; }
-		unobserve(): void { }
-		disconnect(): void { this.disconnected = true; }
-		takeRecords(): ResizeObserverEntry[] { return []; }
+		observe(target: Element): void {
+			this.target = target;
+		}
+		unobserve(): void {}
+		disconnect(): void {
+			this.disconnected = true;
+		}
+		takeRecords(): ResizeObserverEntry[] {
+			return [];
+		}
 
 		emit(width: number, height: number): void {
 			assert.ok(this.target);
@@ -247,10 +285,13 @@ test('EditorConfiguration owns automatic container observation and stops it with
 	try {
 		const observer = observers[0]!;
 		observer.emit(240, 120);
-		assert.deepEqual({
-			width: configuration.options.get(EditorOption.layoutInfo).width,
-			height: configuration.options.get(EditorOption.layoutInfo).height,
-		}, { width: 240, height: 120 });
+		assert.deepEqual(
+			{
+				width: configuration.options.get(EditorOption.layoutInfo).width,
+				height: configuration.options.get(EditorOption.layoutInfo).height,
+			},
+			{ width: 240, height: 120 },
+		);
 
 		configuration.updateOptions({ automaticLayout: false });
 		assert.equal(observer.disconnected, true);
@@ -259,7 +300,10 @@ test('EditorConfiguration owns automatic container observation and stops it with
 
 		configuration.updateOptions({ automaticLayout: true });
 		using restart = configuration.onDidChange(event => {
-			if (event.hasChanged(EditorOption.layoutInfo) && configuration.options.get(EditorOption.layoutInfo).width === 320) {
+			if (
+				event.hasChanged(EditorOption.layoutInfo) &&
+				configuration.options.get(EditorOption.layoutInfo).width === 320
+			) {
 				configuration.updateOptions({ automaticLayout: false });
 				configuration.updateOptions({ automaticLayout: true });
 			}
@@ -289,15 +333,10 @@ test('TabFocus updates computed editor configuration and reports every global as
 	try {
 		TabFocus.setTabFocusMode(true);
 		TabFocus.setTabFocusMode(true);
-		assert.deepEqual({
-			assignments,
-			tabFocusMode: configuration.options.get(EditorOption.tabFocusMode),
-			configurationChanges,
-		}, {
-			assignments: [true, true],
-			tabFocusMode: true,
-			configurationChanges: 1,
-		});
+		assert.deepEqual(
+			{ assignments, tabFocusMode: configuration.options.get(EditorOption.tabFocusMode), configurationChanges },
+			{ assignments: [true, true], tabFocusMode: true, configurationChanges: 1 },
+		);
 	} finally {
 		TabFocus.setTabFocusMode(false);
 		dom.window.close();
@@ -308,10 +347,7 @@ test('migrateOptions upgrades nested legacy settings through their current owner
 	const options = migrate({
 		wordBasedSuggestions: true,
 		hover: true,
-		suggest: {
-			filteredTypes: { method: false, function: true, variable: false },
-			showMethods: true,
-		},
+		suggest: { filteredTypes: { method: false, function: true, variable: false }, showMethods: true },
 		experimental: { stickyScroll: { enabled: true, maxLineCount: 7 } },
 		stickyScroll: { enabled: false },
 		editor: { experimentalEditContextEnabled: true },
@@ -324,11 +360,7 @@ test('migrateOptions upgrades nested legacy settings through their current owner
 	assert.deepEqual(options, {
 		wordBasedSuggestions: 'matchingDocuments',
 		hover: { enabled: 'on' },
-		suggest: {
-			filteredTypes: undefined,
-			showMethods: true,
-			showVariables: false,
-		},
+		suggest: { filteredTypes: undefined, showMethods: true, showVariables: false },
 		experimental: { stickyScroll: { enabled: undefined, maxLineCount: undefined } },
 		stickyScroll: { enabled: false, maxLineCount: 7 },
 		editor: { experimentalEditContextEnabled: undefined, editContext: true },
@@ -365,13 +397,13 @@ test('EditorConfiguration keeps migrated nested options private to each editor',
 		using first = createTestConfiguration(dom.window.document.body, { hover: false } as unknown as IEditorOptions);
 		first.updateOptions({ hover: { enabled: 'on', delay: 900 } });
 		using second = createTestConfiguration(dom.window.document.body, { hover: false } as unknown as IEditorOptions);
-		assert.deepEqual({
-			first: first.options.get(EditorOption.hover),
-			second: second.getRawOptions().hover,
-		}, {
-			first: { ...second.options.get(EditorOption.hover), enabled: 'on', delay: 900 },
-			second: { enabled: 'off' },
-		});
+		assert.deepEqual(
+			{ first: first.options.get(EditorOption.hover), second: second.getRawOptions().hover },
+			{
+				first: { ...second.options.get(EditorOption.hover), enabled: 'on', delay: 900 },
+				second: { enabled: 'off' },
+			},
+		);
 	} finally {
 		dom.window.close();
 	}
@@ -379,7 +411,9 @@ test('EditorConfiguration keeps migrated nested options private to each editor',
 
 test('migrateOptions preserves an explicit code shifting mode when the legacy key is also present', () => {
 	const options = migrate({ inlineSuggest: { edits: { codeShifting: false, allowCodeShifting: 'horizontal' } } });
-	assert.deepEqual(options, { inlineSuggest: { edits: { codeShifting: undefined, allowCodeShifting: 'horizontal' } } });
+	assert.deepEqual(options, {
+		inlineSuggest: { edits: { codeShifting: undefined, allowCodeShifting: 'horizontal' } },
+	});
 });
 
 function migrate<T extends Record<string, unknown>>(options: T): T {
@@ -388,17 +422,20 @@ function migrate<T extends Record<string, unknown>>(options: T): T {
 }
 
 function measuredFont(font: BareFontInfo, width: number): FontInfo {
-	return new FontInfo({
-		...font,
-		isMonospace: true,
-		typicalHalfwidthCharacterWidth: width,
-		typicalFullwidthCharacterWidth: width * 2,
-		canUseHalfwidthRightwardsArrow: true,
-		spaceWidth: width,
-		middotWidth: width,
-		wsmiddotWidth: width,
-		maxDigitWidth: width,
-	}, true);
+	return new FontInfo(
+		{
+			...font,
+			isMonospace: true,
+			typicalHalfwidthCharacterWidth: width,
+			typicalFullwidthCharacterWidth: width * 2,
+			canUseHalfwidthRightwardsArrow: true,
+			spaceWidth: width,
+			middotWidth: width,
+			wsmiddotWidth: width,
+			maxDigitWidth: width,
+		},
+		true,
+	);
 }
 
 const codeFeatures = registerTestCodeEditorFeatures();

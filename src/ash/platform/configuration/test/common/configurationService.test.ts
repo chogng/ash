@@ -10,7 +10,10 @@ import { URI } from '../../../../base/common/uri.js';
 import { IPCClient } from '../../../../base/parts/ipc/common/ipc.js';
 import { ConfigurationService } from '../../common/configurationService.js';
 import { ConfigurationTarget } from '../../common/configuration.js';
-import { DiskFileSystemProviderClient, LOCAL_FILE_SYSTEM_CHANNEL_NAME } from '../../../files/common/diskFileSystemProviderClient.js';
+import {
+	DiskFileSystemProviderClient,
+	LOCAL_FILE_SYSTEM_CHANNEL_NAME,
+} from '../../../files/common/diskFileSystemProviderClient.js';
 import { FileService } from '../../../files/common/fileService.js';
 import { IFileService, FileRevisionConflictError } from '../../../files/common/files.js';
 import { DiskFileSystemProviderChannel } from '../../../files/electron-main/diskFileSystemProviderServer.js';
@@ -22,8 +25,12 @@ import { IPolicyService, NullPolicyService } from '../../../policy/common/policy
 function connect(resources: DisposableStore, disk: DiskFileSystemProvider, root: URI, identity: string) {
 	const incoming = resources.add(new Emitter<VSBuffer>());
 	const outgoing = resources.add(new Emitter<VSBuffer>());
-	const server = resources.add(new IPCClient({ onMessage: incoming.event, send: value => outgoing.fire(value) }, identity));
-	const peer = resources.add(new IPCClient({ onMessage: outgoing.event, send: value => incoming.fire(value) }, identity));
+	const server = resources.add(
+		new IPCClient({ onMessage: incoming.event, send: value => outgoing.fire(value) }, identity),
+	);
+	const peer = resources.add(
+		new IPCClient({ onMessage: outgoing.event, send: value => incoming.fire(value) }, identity),
+	);
 	const channel = resources.add(new DiskFileSystemProviderChannel(disk, root, URI.file(tmpdir())));
 	server.registerChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME, channel);
 	const provider = resources.add(new DiskFileSystemProviderClient(peer.getChannel(LOCAL_FILE_SYSTEM_CHANNEL_NAME)));
@@ -55,12 +62,18 @@ test('configuration uses the ordinary file IPC for two hosts, opaque conflicts a
 		await second.configuration.updateValue('test.persistence', 'second');
 		await first.configuration.reloadConfiguration();
 		assert.equal(first.configuration.getValue('test.persistence'), 'second');
-		await assert.rejects(first.files.writeFile({ resource: first.resource, content: '{}', expectedRevision: stale.revision }), FileRevisionConflictError);
+		await assert.rejects(
+			first.files.writeFile({ resource: first.resource, content: '{}', expectedRevision: stale.revision }),
+			FileRevisionConflictError,
+		);
 		assert.equal(JSON.parse((await first.files.readFile(first.resource)).content)['test.persistence'], 'second');
 		const restarted = connect(resources, disk, root, 'window:3');
 		await restarted.configuration.initialize();
 		assert.equal(restarted.configuration.getValue('test.persistence'), 'second');
-		await assert.rejects(restarted.configuration.updateValue('test.persistence', 'invalid-target', ConfigurationTarget.WORKSPACE), /only user/);
+		await assert.rejects(
+			restarted.configuration.updateValue('test.persistence', 'invalid-target', ConfigurationTarget.WORKSPACE),
+			/only user/,
+		);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}

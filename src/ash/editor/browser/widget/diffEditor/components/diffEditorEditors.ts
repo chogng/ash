@@ -28,25 +28,29 @@ export class DiffEditorEditors extends Disposable {
 			fixedOverflowWidgets: true,
 			minimap: { enabled: false },
 			codeLens: this.codeLens,
-			lineNumbers: options.showLineNumbers === false ? 'off' : options.lineNumbers ?? 'on',
+			lineNumbers: options.showLineNumbers === false ? 'off' : (options.lineNumbers ?? 'on'),
 			wordWrap: options.wordWrap ?? 'off',
 			scrollBeyondLastLine: options.scrollBeyondLastLine ?? true,
 		};
-		this.original = this._register(instantiationService.createInstance(CodeEditorWidget, {
-			...shared,
-			container: originalContainer,
-			model: options.model.original,
-			ariaLabel: options.originalAriaLabel,
-			readOnly: true,
-		}));
-		this.modified = this._register(instantiationService.createInstance(CodeEditorWidget, {
-			...shared,
-			container: modifiedContainer,
-			model: options.model.modified,
-			ariaLabel: options.modifiedAriaLabel,
-			readOnly: options.readOnly ?? false,
-			glyphMargin: options.glyphMargin,
-		}));
+		this.original = this._register(
+			instantiationService.createInstance(CodeEditorWidget, {
+				...shared,
+				container: originalContainer,
+				model: options.model.original,
+				ariaLabel: options.originalAriaLabel,
+				readOnly: true,
+			}),
+		);
+		this.modified = this._register(
+			instantiationService.createInstance(CodeEditorWidget, {
+				...shared,
+				container: modifiedContainer,
+				model: options.model.modified,
+				ariaLabel: options.modifiedAriaLabel,
+				readOnly: options.readOnly ?? false,
+				glyphMargin: options.glyphMargin,
+			}),
+		);
 	}
 
 	public getContentHeight(): number {
@@ -55,7 +59,13 @@ export class DiffEditorEditors extends Disposable {
 
 	public updateOptions(options: IDiffEditorOptions): void {
 		this.codeLens = options.diffCodeLens ?? this.codeLens;
-		const shared = { ...options, folding: false, fixedOverflowWidgets: true, minimap: { ...options.minimap, enabled: false }, codeLens: this.codeLens };
+		const shared = {
+			...options,
+			folding: false,
+			fixedOverflowWidgets: true,
+			minimap: { ...options.minimap, enabled: false },
+			codeLens: this.codeLens,
+		};
 		this.original.updateOptions({ ...shared, readOnly: true });
 		this.modified.updateOptions(shared);
 	}

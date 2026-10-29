@@ -4,7 +4,11 @@ import { DisposableStore, toDisposable, type IDisposable } from './lifecycle.js'
 
 export interface CancellationToken {
 	readonly isCancellationRequested: boolean;
-	readonly onCancellationRequested: (listener: (event: void) => unknown, thisArgs?: unknown, disposables?: IDisposable[]) => IDisposable;
+	readonly onCancellationRequested: (
+		listener: (event: void) => unknown,
+		thisArgs?: unknown,
+		disposables?: IDisposable[],
+	) => IDisposable;
 }
 
 type CancellationEvent = CancellationToken['onCancellationRequested'];
@@ -21,7 +25,10 @@ export namespace CancellationToken {
 		if (value === None || value === Cancelled || value instanceof MutableToken) return true;
 		if (!value || typeof value !== 'object') return false;
 		const candidate = value as CancellationToken;
-		return typeof candidate.isCancellationRequested === 'boolean' && typeof candidate.onCancellationRequested === 'function';
+		return (
+			typeof candidate.isCancellationRequested === 'boolean' &&
+			typeof candidate.onCancellationRequested === 'function'
+		);
 	}
 
 	export const None = Object.freeze<CancellationToken>({
@@ -50,7 +57,7 @@ class MutableToken implements CancellationToken {
 				return shortcutEvent(listener, thisArgs, disposables);
 			}
 			const callback = (): unknown => listener.call(thisArgs, undefined);
-			const listeners = this.listeners ??= new Set<() => unknown>();
+			const listeners = (this.listeners ??= new Set<() => unknown>());
 			listeners.add(callback);
 			const disposable = toDisposable(() => listeners.delete(callback));
 			disposables?.push(disposable);
@@ -73,7 +80,11 @@ class MutableToken implements CancellationToken {
 					try {
 						onUnexpectedError(error);
 					} catch (reportingError) {
-						console.error('Unexpected error while reporting a cancellation listener error', error, reportingError);
+						console.error(
+							'Unexpected error while reporting a cancellation listener error',
+							error,
+							reportingError,
+						);
 					}
 				}
 			}
@@ -199,7 +210,9 @@ function subscribeCancellation(cancellation: AbortSignal | CancellationToken, li
 
 function isAbortSignal(cancellation: AbortSignal | CancellationToken): cancellation is AbortSignal {
 	const candidate = cancellation as AbortSignal;
-	return typeof candidate.aborted === 'boolean'
-		&& typeof candidate.addEventListener === 'function'
-		&& typeof candidate.removeEventListener === 'function';
+	return (
+		typeof candidate.aborted === 'boolean' &&
+		typeof candidate.addEventListener === 'function' &&
+		typeof candidate.removeEventListener === 'function'
+	);
 }

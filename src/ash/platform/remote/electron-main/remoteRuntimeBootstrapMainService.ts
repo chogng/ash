@@ -1,12 +1,12 @@
-import { throwIfCancelled } from "../../../base/common/cancellation.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
-import { URI } from "../../../base/common/uri.js";
+import { throwIfCancelled } from '../../../base/common/cancellation.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { URI } from '../../../base/common/uri.js';
 import type { SshRemoteAuthority } from '../common/remote.js';
-import type { RemoteRuntimeInstallProgress } from "../common/remoteRuntimeInstallProgress.js";
-import { RemoteRuntimeInstallProgressMainService } from "./remoteRuntimeInstallProgressMainService.js";
-import type { RemoteRuntimeInstallProgressOperation } from "./remoteRuntimeInstallProgressMainService.js";
-import { RemoteAppServerProcessLauncher } from "./remoteAppServerProcessLauncher.js";
-import type { RemoteRuntimeInstallRequestOptions } from "./remoteRuntimeInstaller.js";
+import type { RemoteRuntimeInstallProgress } from '../common/remoteRuntimeInstallProgress.js';
+import { RemoteRuntimeInstallProgressMainService } from './remoteRuntimeInstallProgressMainService.js';
+import type { RemoteRuntimeInstallProgressOperation } from './remoteRuntimeInstallProgressMainService.js';
+import { RemoteAppServerProcessLauncher } from './remoteAppServerProcessLauncher.js';
+import type { RemoteRuntimeInstallRequestOptions } from './remoteRuntimeInstaller.js';
 import type { AppServerDaemonLauncher } from '../../app-server-daemon/electron-main/appServerDaemonLauncher.js';
 
 /** Installs one trusted Remote runtime selected entirely by the local product host. */
@@ -23,7 +23,12 @@ export interface RemoteRuntimeConnectionProfile {
 /** Persists credential-free active and previous runtime identities for one SSH Workspace. */
 export interface IRemoteRuntimeConnectionProfiles {
 	get(host: string, workspace: string): Promise<RemoteRuntimeConnectionProfile | undefined>;
-	activate(host: string, workspace: string, runtime: string, sshExecutable: string): Promise<RemoteRuntimeConnectionProfile>;
+	activate(
+		host: string,
+		workspace: string,
+		runtime: string,
+		sshExecutable: string,
+	): Promise<RemoteRuntimeConnectionProfile>;
 	rollback(host: string, workspace: string, sshExecutable: string): Promise<RemoteRuntimeConnectionProfile>;
 }
 
@@ -59,9 +64,21 @@ export class RemoteRuntimeBootstrapMainService extends Disposable {
 			carrier: options.carrier,
 			provisionRuntime: host => this.provisionRuntime(host),
 			settleRuntimeProvision: () => this.settleRuntimeProvision(),
-			resolveRuntime: profiles === undefined ? undefined : async (host, workspace) => (await profiles.get(host, workspace))?.activeRuntime,
-			activateRuntime: profiles === undefined ? undefined : async (host, workspace, runtime) => { await profiles.activate(host, workspace, runtime, options.sshExecutable); },
-			rollbackRuntime: profiles === undefined ? undefined : async (host, workspace, runtimeSshExecutable) => (await profiles.rollback(host, workspace, runtimeSshExecutable)).activeRuntime,
+			resolveRuntime:
+				profiles === undefined
+					? undefined
+					: async (host, workspace) => (await profiles.get(host, workspace))?.activeRuntime,
+			activateRuntime:
+				profiles === undefined
+					? undefined
+					: async (host, workspace, runtime) => {
+							await profiles.activate(host, workspace, runtime, options.sshExecutable);
+						},
+			rollbackRuntime:
+				profiles === undefined
+					? undefined
+					: async (host, workspace, runtimeSshExecutable) =>
+							(await profiles.rollback(host, workspace, runtimeSshExecutable)).activeRuntime,
 		});
 	}
 
@@ -75,7 +92,7 @@ export class RemoteRuntimeBootstrapMainService extends Disposable {
 				operation.report(progress);
 			},
 		});
-		throwIfCancelled(operation.signal, "Remote runtime installation cancelled");
+		throwIfCancelled(operation.signal, 'Remote runtime installation cancelled');
 		return runtime;
 	}
 
@@ -87,27 +104,29 @@ export class RemoteRuntimeBootstrapMainService extends Disposable {
 }
 
 /** Produces bounded upload logs while preserving every structured UI update. */
-export function createRemoteRuntimeInstallProgressLogger(log: (message: string, progress?: RemoteRuntimeInstallProgress) => void = defaultLog): (progress: RemoteRuntimeInstallProgress) => void {
+export function createRemoteRuntimeInstallProgressLogger(
+	log: (message: string, progress?: RemoteRuntimeInstallProgress) => void = defaultLog,
+): (progress: RemoteRuntimeInstallProgress) => void {
 	let nextDownloadPercent = 0;
 	let nextUploadPercent = 0;
 	return progress => {
-		if (progress.phase === "downloadingCatalog") nextDownloadPercent = 0;
-		if (progress.phase === "downloadingArtifact") {
-			const percent = Math.floor(progress.transferredBytes * 100 / progress.totalBytes);
+		if (progress.phase === 'downloadingCatalog') nextDownloadPercent = 0;
+		if (progress.phase === 'downloadingArtifact') {
+			const percent = Math.floor((progress.transferredBytes * 100) / progress.totalBytes);
 			if (percent < nextDownloadPercent && progress.transferredBytes !== progress.totalBytes) return;
 			nextDownloadPercent = Math.min(100, percent + 10);
 			log(`Remote runtime installation: downloaded ${percent}%`);
 			return;
 		}
-		if (progress.phase === "validatingArtifact") nextUploadPercent = 0;
-		if (progress.phase === "uploading") {
-			const percent = Math.floor(progress.transferredBytes * 100 / progress.totalBytes);
+		if (progress.phase === 'validatingArtifact') nextUploadPercent = 0;
+		if (progress.phase === 'uploading') {
+			const percent = Math.floor((progress.transferredBytes * 100) / progress.totalBytes);
 			if (percent < nextUploadPercent && progress.transferredBytes !== progress.totalBytes) return;
 			nextUploadPercent = Math.min(100, percent + 10);
 			log(`Remote runtime installation: uploaded ${percent}%`);
 			return;
 		}
-		log("Remote runtime installation", progress);
+		log('Remote runtime installation', progress);
 	};
 }
 

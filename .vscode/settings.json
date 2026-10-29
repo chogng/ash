@@ -1,15 +1,12 @@
 {
 	"files.eol": "\n",
 	"[typescript][typescriptreact][javascript][javascriptreact]": {
-		"editor.defaultFormatter": "vscode.typescript-language-features",
+		"editor.defaultFormatter": "wdomitrz.simple-lsp-client",
 		"editor.insertSpaces": false,
 		"editor.tabSize": 4,
 		"editor.formatOnSave": true
 	},
 	"js/ts.preferences.quoteStyle": "single",
-	"js/ts.format.insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
-	"js/ts.format.insertSpaceAfterOpeningAndBeforeClosingEmptyBraces": true,
-	"js/ts.format.semicolons": "insert",
 	"[rust]": {
 		"editor.defaultFormatter": "rust-lang.rust-analyzer",
 		"editor.formatOnSave": true
@@ -34,7 +31,18 @@
 				"--stdin-filepath",
 				"${file}"
 			],
-			"filetypes": ["json", "jsonc", "yaml", "markdown", "css", "html"]
+			"filetypes": [
+				"typescript",
+				"typescriptreact",
+				"javascript",
+				"javascriptreact",
+				"json",
+				"jsonc",
+				"yaml",
+				"markdown",
+				"css",
+				"html"
+			]
 		}
 	},
 	"bazel.commandLine.queryExpression": "//...:*",

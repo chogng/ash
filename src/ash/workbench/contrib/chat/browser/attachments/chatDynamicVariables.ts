@@ -16,11 +16,18 @@ import type { ChatContextAttachment } from '../../../../services/chat/common/cha
 import type { IChatInputEditor } from '../widget/input/chatInputEditorRegistry.js';
 import { ChatAttachmentModel, type IChatAttachmentChangeEvent } from './chatAttachmentModel.js';
 
-type InlineContext = ChatContextAttachment & { readonly reference: { readonly start: number; readonly end: number; }; };
+type InlineContext = ChatContextAttachment & { readonly reference: { readonly start: number; readonly end: number } };
 
 function sameCapture(a: ChatContextAttachment, b: ChatContextAttachment): boolean {
-	return a.id === b.id && a.resolve === b.resolve && a.name === b.name && a.kind === b.kind
-		&& a.resource === b.resource && a.terminalSnapshot === b.terminalSnapshot && a.lifetime === b.lifetime;
+	return (
+		a.id === b.id &&
+		a.resolve === b.resolve &&
+		a.name === b.name &&
+		a.kind === b.kind &&
+		a.resource === b.resource &&
+		a.terminalSnapshot === b.terminalSnapshot &&
+		a.lifetime === b.lifetime
+	);
 }
 
 export const dynamicVariableDecorationType = 'chat-dynamic-variable';
@@ -32,22 +39,31 @@ export class ChatDynamicVariableModel extends Disposable {
 	private projected: readonly InlineContext[] = [];
 	private updatingAttachments = false;
 
-	private get references(): readonly InlineContext[] { return this.projected; }
+	private get references(): readonly InlineContext[] {
+		return this.projected;
+	}
 
 	private set references(value: readonly InlineContext[]) {
 		const ids = new Set(value.map(entry => entry.id));
 		const current = new Map(this.attachments.attachments.map(entry => [entry.id, entry]));
-		const deleted = this.projected.filter(entry => entry.lifetime !== 'source' && !ids.has(entry.id)).map(entry => entry.id);
-		const entries = value.filter(entry => entry.lifetime !== 'source').map(context => {
-			const { reference: _reference, ...entry } = context;
-			const previous = current.get(entry.id);
-			return previous && sameCapture(previous, entry) ? previous : entry;
-		});
+		const deleted = this.projected
+			.filter(entry => entry.lifetime !== 'source' && !ids.has(entry.id))
+			.map(entry => entry.id);
+		const entries = value
+			.filter(entry => entry.lifetime !== 'source')
+			.map(context => {
+				const { reference: _reference, ...entry } = context;
+				const previous = current.get(entry.id);
+				return previous && sameCapture(previous, entry) ? previous : entry;
+			});
 		this.projected = value;
 		if (!this.updatingAttachments) {
 			this.updatingAttachments = true;
-			try { this.attachments.updateContext(deleted, entries); }
-			finally { this.updatingAttachments = false; }
+			try {
+				this.attachments.updateContext(deleted, entries);
+			} finally {
+				this.updatingAttachments = false;
+			}
 		}
 		const canonical = new Map(this.attachments.attachments.map(entry => [entry.id, entry]));
 		this.projected = value.flatMap(context => {
@@ -55,7 +71,9 @@ export class ChatDynamicVariableModel extends Disposable {
 			if (!entry) return [];
 			// Labels describe this text version, including the intermediate edits made while
 			// projecting a model transaction. Live sources always retain their current content.
-			return [sameCapture(entry, context) ? context : { ...entry, name: context.name, reference: context.reference }];
+			return [
+				sameCapture(entry, context) ? context : { ...entry, name: context.name, reference: context.reference },
+			];
 		});
 	}
 	private text: string;
@@ -67,43 +85,65 @@ export class ChatDynamicVariableModel extends Disposable {
 	private readonly history = new Map<number, readonly InlineContext[]>();
 	private adjustingSelection = false;
 
-	constructor(private readonly input: IChatInputEditor, private readonly attachments: ChatAttachmentModel) {
+	constructor(
+		private readonly input: IChatInputEditor,
+		private readonly attachments: ChatAttachmentModel,
+	) {
 		super();
 		this.text = input.value;
 		this._register(attachments.onDidChange(event => this.updateAttachments(event)));
 		const model = input.getModel?.();
 		if (model) {
 			this.remember();
-			this._register(model.onDidChangeContent(event => {
-				const restored = event.reason === TextModelChangeReason.Undo || event.reason === TextModelChangeReason.Redo ? this.history.get(model.getAlternativeVersionId()) : undefined;
-				if (restored) {
-					this.references = restored;
-					this.text = input.value;
-					this.refresh();
-				} else {
-					this.update(event.changes);
-				}
-			}));
+			this._register(
+				model.onDidChangeContent(event => {
+					const restored =
+						event.reason === TextModelChangeReason.Undo || event.reason === TextModelChangeReason.Redo
+							? this.history.get(model.getAlternativeVersionId())
+							: undefined;
+					if (restored) {
+						this.references = restored;
+						this.text = input.value;
+						this.refresh();
+					} else {
+						this.update(event.changes);
+					}
+				}),
+			);
 		} else {
-			this._register(input.onDidChange(() => {
-				const next = input.value;
-				let start = 0;
-				while (start < this.text.length && start < next.length && this.text[start] === next[start]) start++;
-				let oldEnd = this.text.length;
-				let newEnd = next.length;
-				while (oldEnd > start && newEnd > start && this.text[oldEnd - 1] === next[newEnd - 1]) { oldEnd--; newEnd--; }
-				this.update([{ range: new Range(1, 1, 1, 1), rangeOffset: start, rangeLength: oldEnd - start, text: next.slice(start, newEnd) }]);
-			}));
+			this._register(
+				input.onDidChange(() => {
+					const next = input.value;
+					let start = 0;
+					while (start < this.text.length && start < next.length && this.text[start] === next[start]) start++;
+					let oldEnd = this.text.length;
+					let newEnd = next.length;
+					while (oldEnd > start && newEnd > start && this.text[oldEnd - 1] === next[newEnd - 1]) {
+						oldEnd--;
+						newEnd--;
+					}
+					this.update([
+						{
+							range: new Range(1, 1, 1, 1),
+							rangeOffset: start,
+							rangeLength: oldEnd - start,
+							text: next.slice(start, newEnd),
+						},
+					]);
+				}),
+			);
 		}
 		this._register(addDisposableListener(input.element, 'keydown', event => this.handleKey(event), true));
 		if (input.codeEditor) {
 			this._register(input.codeEditor.onDidChangeCursorSelection(event => this.constrainSelections(event)));
 		}
-		this._register(toDisposable(() => {
-			if (!model || !model.isDisposed()) input.renderContextReferences?.([], () => { });
-			this.history.clear();
-			this.projected = [];
-		}));
+		this._register(
+			toDisposable(() => {
+				if (!model || !model.isDisposed()) input.renderContextReferences?.([], () => {});
+				this.history.clear();
+				this.projected = [];
+			}),
+		);
 	}
 
 	get variables(): readonly ChatContextAttachment[] {
@@ -112,8 +152,13 @@ export class ChatDynamicVariableModel extends Disposable {
 
 	addReference(context: ChatContextAttachment, focus = true): ChatContextAttachment {
 		// Tool configuration is one persistent choice; applying a new selection replaces its visible reference.
-		const previous = context.reference ? undefined : context.kind === 'toolSelection' ? this.references.find(entry => entry.kind === 'toolSelection')
-			: context.kind === 'file' || context.kind === 'codeSelection' || context.kind === 'image' ? undefined : this.references.find(entry => entry.id === context.id);
+		const previous = context.reference
+			? undefined
+			: context.kind === 'toolSelection'
+				? this.references.find(entry => entry.kind === 'toolSelection')
+				: context.kind === 'file' || context.kind === 'codeSelection' || context.kind === 'image'
+					? undefined
+					: this.references.find(entry => entry.id === context.id);
 		if (previous) {
 			this.input.setSelection({ anchor: previous.reference.start, active: previous.reference.end });
 			this.references = this.references.filter(entry => entry !== previous);
@@ -134,8 +179,20 @@ export class ChatDynamicVariableModel extends Disposable {
 		// User references represent the selected snapshot. Persistence and sending
 		// share its acquisition, while failed acquisitions remain explicitly retryable.
 		let snapshot: ReturnType<ChatContextAttachment['resolve']> | undefined;
-		const resolve = context.lifetime === 'source' ? context.resolve : () => snapshot ??= context.resolve().catch(error => { snapshot = undefined; throw error; });
-		const entry = { ...context, resolve, id: this.references.some(entry => entry.id === context.id) ? `${context.id}:${createUuid()}` : context.id, reference };
+		const resolve =
+			context.lifetime === 'source'
+				? context.resolve
+				: () =>
+						(snapshot ??= context.resolve().catch(error => {
+							snapshot = undefined;
+							throw error;
+						}));
+		const entry = {
+			...context,
+			resolve,
+			id: this.references.some(entry => entry.id === context.id) ? `${context.id}:${createUuid()}` : context.id,
+			reference,
+		};
 		this.references = [...this.references, entry].sort((a, b) => a.reference.start - b.reference.start);
 		this.refresh();
 		if (focus) this.input.focus();
@@ -151,11 +208,11 @@ export class ChatDynamicVariableModel extends Disposable {
 		this.text = this.input.value;
 		this.references = contexts.filter((context): context is InlineContext => context.reference !== undefined);
 		for (const source of this.attachments.attachments) {
-			if (source.lifetime === 'source' && !this.references.some(reference => reference.id === source.id)) this.addReference(source, false);
+			if (source.lifetime === 'source' && !this.references.some(reference => reference.id === source.id))
+				this.addReference(source, false);
 		}
 		this.refresh();
 	}
-
 
 	private updateAttachments(event: IChatAttachmentChangeEvent): void {
 		if (this.updatingAttachments) return;
@@ -166,9 +223,14 @@ export class ChatDynamicVariableModel extends Disposable {
 			for (const id of event.deleted) this.removeReference(id);
 			for (const entry of [...event.added, ...event.updated]) {
 				const previous = this.references.find(reference => reference.id === entry.id);
-				if (!previous) { this.addReference(entry, false); continue; }
+				if (!previous) {
+					this.addReference(entry, false);
+					continue;
+				}
 				if (previous.name === entry.name) {
-					this.projected = this.projected.map(reference => reference.id === entry.id ? { ...entry, reference: reference.reference } : reference);
+					this.projected = this.projected.map(reference =>
+						reference.id === entry.id ? { ...entry, reference: reference.reference } : reference,
+					);
 					this.refresh();
 				} else {
 					// The source changed its label. Replace only its old text, keeping other bindings
@@ -176,7 +238,16 @@ export class ChatDynamicVariableModel extends Disposable {
 					this.projected = this.projected.filter(reference => reference.id !== entry.id);
 					this.input.setSelection({ anchor: previous.reference.start, active: previous.reference.end });
 					this.input.insertText(entry.name);
-					this.addReference({ ...entry, reference: { start: previous.reference.start, end: previous.reference.start + entry.name.length } }, false);
+					this.addReference(
+						{
+							...entry,
+							reference: {
+								start: previous.reference.start,
+								end: previous.reference.start + entry.name.length,
+							},
+						},
+						false,
+					);
 				}
 			}
 		} finally {
@@ -195,7 +266,11 @@ export class ChatDynamicVariableModel extends Disposable {
 			let { start, end } = context.reference;
 			for (const edit of [...edits].sort((a, b) => b.rangeOffset - a.rangeOffset)) {
 				const editEnd = edit.rangeOffset + edit.rangeLength;
-				if (edit.rangeOffset < end && editEnd > start || edit.rangeLength === 0 && edit.rangeOffset > start && edit.rangeOffset < end) return [];
+				if (
+					(edit.rangeOffset < end && editEnd > start) ||
+					(edit.rangeLength === 0 && edit.rangeOffset > start && edit.rangeOffset < end)
+				)
+					return [];
 				if (editEnd <= start) {
 					const delta = edit.text.length - edit.rangeLength;
 					start += delta;
@@ -206,7 +281,8 @@ export class ChatDynamicVariableModel extends Disposable {
 		});
 		this.text = this.input.value;
 		this.refresh();
-		for (const context of previous) if (!this.references.some(current => current.id === context.id)) this.removed.fire(context);
+		for (const context of previous)
+			if (!this.references.some(current => current.id === context.id)) this.removed.fire(context);
 	}
 
 	removeReference(id: string): void {
@@ -235,21 +311,37 @@ export class ChatDynamicVariableModel extends Disposable {
 		const model = this.input.getModel?.();
 		const viewModel = this.input.codeEditor?._getViewModel();
 		// Content events can arrive before reference offsets have followed the edit.
-		if (this.adjustingSelection || !model || !viewModel || this.references.length === 0 || this.text !== this.input.value) return;
+		if (
+			this.adjustingSelection ||
+			!model ||
+			!viewModel ||
+			this.references.length === 0 ||
+			this.text !== this.input.value
+		)
+			return;
 		let changed = false;
 		const states = viewModel.getCursorStates().map((state, index) => {
 			const selection = state.modelState.selection;
 			let anchor = model.getOffsetAt(selection.getSelectionStart());
 			let active = model.getOffsetAt(selection.getPosition());
 			const snap = (offset: number, edge: 'start' | 'end' | 'nearest'): number => {
-				const reference = this.references.find(context => offset > context.reference.start && offset < context.reference.end)?.reference;
+				const reference = this.references.find(
+					context => offset > context.reference.start && offset < context.reference.end,
+				)?.reference;
 				if (!reference) return offset;
-				return edge === 'start' || edge === 'nearest' && offset - reference.start < reference.end - offset ? reference.start : reference.end;
+				return edge === 'start' || (edge === 'nearest' && offset - reference.start < reference.end - offset)
+					? reference.start
+					: reference.end;
 			};
 			if (selection.isEmpty()) {
 				const previous = event?.oldSelections?.[index];
-				const moving = event?.source === 'keyboard' && event.modelVersionId === event.oldModelVersionId && previous;
-				const edge = moving ? active < model.getOffsetAt(previous.getPosition()) ? 'start' : 'end' : 'nearest';
+				const moving =
+					event?.source === 'keyboard' && event.modelVersionId === event.oldModelVersionId && previous;
+				const edge = moving
+					? active < model.getOffsetAt(previous.getPosition())
+						? 'start'
+						: 'end'
+					: 'nearest';
 				anchor = active = snap(active, edge);
 			} else {
 				const forward = anchor < active;
@@ -259,18 +351,33 @@ export class ChatDynamicVariableModel extends Disposable {
 			const toView = (offset: number, current: Position): Position => {
 				const isEnd = this.references.some(context => context.reference.end === offset);
 				const isStart = this.references.some(context => context.reference.start === offset);
-				if (!isEnd && !isStart && model.getOffsetAt(viewModel.coordinatesConverter.convertViewPositionToModelPosition(current)) === offset) return current;
-				const position = viewModel.coordinatesConverter.convertModelPositionToViewPosition(model.getPositionAt(offset), isEnd ? PositionAffinity.Right : PositionAffinity.Left);
+				if (
+					!isEnd &&
+					!isStart &&
+					model.getOffsetAt(viewModel.coordinatesConverter.convertViewPositionToModelPosition(current)) ===
+						offset
+				)
+					return current;
+				const position = viewModel.coordinatesConverter.convertModelPositionToViewPosition(
+					model.getPositionAt(offset),
+					isEnd ? PositionAffinity.Right : PositionAffinity.Left,
+				);
 				return viewModel.normalizePosition(position, PositionAffinity.None);
 			};
 			// Both model boundaries and injected icon/padding boundaries belong outside the reference.
 			const viewAnchor = toView(anchor, state.viewState.selection.getSelectionStart());
 			const viewActive = toView(active, state.viewState.position);
 			const viewSelection = Selection.fromPositions(viewAnchor, viewActive);
-			if (state.viewState.selection.equalsSelection(viewSelection)
-				&& model.getOffsetAt(selection.getSelectionStart()) === anchor && model.getOffsetAt(selection.getPosition()) === active) return state;
+			if (
+				state.viewState.selection.equalsSelection(viewSelection) &&
+				model.getOffsetAt(selection.getSelectionStart()) === anchor &&
+				model.getOffsetAt(selection.getPosition()) === active
+			)
+				return state;
 			changed = true;
-			return CursorState.fromViewState(new SingleCursorState(Range.fromPositions(viewAnchor), SelectionStartKind.Simple, 0, viewActive, 0));
+			return CursorState.fromViewState(
+				new SingleCursorState(Range.fromPositions(viewAnchor), SelectionStartKind.Simple, 0, viewActive, 0),
+			);
 		});
 		if (!changed) return;
 		this.adjustingSelection = true;
@@ -291,7 +398,15 @@ export class ChatDynamicVariableModel extends Disposable {
 	}
 
 	private handleKey(event: KeyboardEvent): void {
-		if (event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+		if (
+			event.defaultPrevented ||
+			event.isComposing ||
+			event.ctrlKey ||
+			event.metaKey ||
+			event.altKey ||
+			event.shiftKey
+		)
+			return;
 		// A focused attachment control owns its keys; the text caret can still be at another reference.
 		if (isHTMLElement(event.target) && event.target.closest('button')) return;
 		const selection = this.input.getSelection();
@@ -299,7 +414,9 @@ export class ChatDynamicVariableModel extends Disposable {
 		const offset = selection.active;
 		const reference = this.references.find(context => {
 			const { start, end } = context.reference;
-			return event.key === 'Backspace' || event.key === 'ArrowLeft' ? offset > start && offset <= end : offset >= start && offset < end;
+			return event.key === 'Backspace' || event.key === 'ArrowLeft'
+				? offset > start && offset <= end
+				: offset >= start && offset < end;
 		})?.reference;
 		if (!reference) return;
 		if (event.key === 'Backspace' || event.key === 'Delete') {

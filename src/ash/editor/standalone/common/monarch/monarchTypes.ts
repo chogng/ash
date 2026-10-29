@@ -1,5 +1,5 @@
 export interface IMonarchLanguage {
-	tokenizer: { [name: string]: IMonarchLanguageRule[]; };
+	tokenizer: { [name: string]: IMonarchLanguageRule[] };
 	ignoreCase?: boolean;
 	unicode?: boolean;
 	defaultToken?: string;
@@ -19,7 +19,8 @@ export interface IExpandedMonarchLanguageRule {
 	include?: string;
 }
 
-export type IMonarchLanguageRule = IShortMonarchLanguageRule1 | IShortMonarchLanguageRule2 | IExpandedMonarchLanguageRule;
+export type IMonarchLanguageRule =
+	IShortMonarchLanguageRule1 | IShortMonarchLanguageRule2 | IExpandedMonarchLanguageRule;
 export type IShortMonarchLanguageAction = string;
 
 export interface IExpandedMonarchLanguageAction {
@@ -34,7 +35,10 @@ export interface IExpandedMonarchLanguageAction {
 	log?: string;
 }
 
-export type IMonarchLanguageAction = IShortMonarchLanguageAction | IExpandedMonarchLanguageAction | (IShortMonarchLanguageAction | IExpandedMonarchLanguageAction)[];
+export type IMonarchLanguageAction =
+	| IShortMonarchLanguageAction
+	| IExpandedMonarchLanguageAction
+	| (IShortMonarchLanguageAction | IExpandedMonarchLanguageAction)[];
 
 export interface IMonarchLanguageBracket {
 	open: string;

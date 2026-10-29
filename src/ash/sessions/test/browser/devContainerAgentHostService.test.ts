@@ -13,15 +13,26 @@ test('Docker service uses the admitted backend capability and retires a cancelle
 	const result = new DeferredPromise<SessionRuntimeResult>();
 	let signal: AbortSignal | undefined;
 	const calls: unknown[] = [];
-	services.registerInstance(IAgentSessionService, { invokeRuntime(providerId, request, token) { calls.push({ providerId, request }); signal = token; return result.p; } } as IAgentSessionService);
+	services.registerInstance(IAgentSessionService, {
+		invokeRuntime(providerId, request, token) {
+			calls.push({ providerId, request });
+			signal = token;
+			return result.p;
+		},
+	} as IAgentSessionService);
 	const containers = services.createInstance(DevContainerAgentHostService);
 	using cancellation = new CancellationTokenSource();
 	const pending = containers.connect('C:\\project', cancellation.token);
 	cancellation.cancel();
 	assert.equal(signal?.aborted, true);
-	await result.complete({ type: 'target', target: { type: 'provider', providerId: 'ash.dev-containers', workspace: 'C:\\project', root: '/workspace' } });
+	await result.complete({
+		type: 'target',
+		target: { type: 'provider', providerId: 'ash.dev-containers', workspace: 'C:\\project', root: '/workspace' },
+	});
 	await assert.rejects(pending, isCancellationError);
-	assert.deepEqual(calls, [{ providerId: 'ash.dev-containers', request: { operation: 'prepare', workspace: 'C:\\project' } }]);
+	assert.deepEqual(calls, [
+		{ providerId: 'ash.dev-containers', request: { operation: 'prepare', workspace: 'C:\\project' } },
+	]);
 });
 
 test('an unavailable optional Provider has no local execution fallback', async () => {
@@ -33,13 +44,18 @@ test('an unavailable optional Provider has no local execution fallback', async (
 
 test('container controls obtain persisted sources even when the Session catalog is empty', async () => {
 	using services = new InstantiationService();
-	const target = { type: 'provider' as const, providerId: 'ash.dev-containers', workspace: 'C:\\project', root: '/workspace' };
+	const target = {
+		type: 'provider' as const,
+		providerId: 'ash.dev-containers',
+		workspace: 'C:\\project',
+		root: '/workspace',
+	};
 	const calls: unknown[] = [];
 	const backend: Pick<IAgentSessionService, 'invokeRuntime'> = {
 		async invokeRuntime(providerId, request): Promise<SessionRuntimeResult> {
 			calls.push({ providerId, request });
 			return { type: 'targets', targets: [target, { type: 'local', root: '/other' }] };
-		}
+		},
 	};
 	services.registerInstance(IAgentSessionService, backend as IAgentSessionService);
 	const containers = services.createInstance(DevContainerAgentHostService);

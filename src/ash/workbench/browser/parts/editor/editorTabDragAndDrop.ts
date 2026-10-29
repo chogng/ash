@@ -1,10 +1,10 @@
 import type { IResourceEditorInput } from '../../../common/editor.js';
-import { LocalSelectionTransfer } from "../../../../platform/dnd/browser/dnd.js";
-import type { EditorGroupView } from "./editorGroupView.js";
-import type { Direction } from "../../../../base/browser/ui/grid/grid.js";
+import { LocalSelectionTransfer } from '../../../../platform/dnd/browser/dnd.js';
+import type { EditorGroupView } from './editorGroupView.js';
+import type { Direction } from '../../../../base/browser/ui/grid/grid.js';
 
 /** The side of a tab at which an Editor drop will insert its source. */
-export type EditorTabDropPosition = "before" | "after";
+export type EditorTabDropPosition = 'before' | 'after';
 
 /**
  * Coordinates one local Editor tab drag across Editor groups.
@@ -15,7 +15,12 @@ export type EditorTabDropPosition = "before" | "after";
 export interface IEditorTabDragAndDrop {
 	start(source: EditorGroupView, input: IResourceEditorInput): void;
 	isDragging(): boolean;
-	drop(target: EditorGroupView, targetInput: IResourceEditorInput | undefined, position: EditorTabDropPosition, splitDirection?: Direction): void;
+	drop(
+		target: EditorGroupView,
+		targetInput: IResourceEditorInput | undefined,
+		position: EditorTabDropPosition,
+		splitDirection?: Direction,
+	): void;
 	end(): void;
 }
 
@@ -24,7 +29,7 @@ export class DraggedEditorIdentifier {
 	constructor(
 		readonly source: EditorGroupView,
 		readonly input: IResourceEditorInput,
-	) { }
+	) {}
 }
 
 /** The resolved target of an editor tab drag. */
@@ -46,20 +51,22 @@ export interface EditorTabDropEvent {
 export class EditorTabDragAndDropController implements IEditorTabDragAndDrop {
 	private readonly transfer = LocalSelectionTransfer.getInstance<DraggedEditorIdentifier>();
 
-	constructor(private readonly onDrop: (event: EditorTabDropEvent) => void) { }
+	constructor(private readonly onDrop: (event: EditorTabDropEvent) => void) {}
 
 	start(source: EditorGroupView, input: IResourceEditorInput): void {
-		this.transfer.setData(
-			[new DraggedEditorIdentifier(source, input)],
-			DraggedEditorIdentifier.prototype,
-		);
+		this.transfer.setData([new DraggedEditorIdentifier(source, input)], DraggedEditorIdentifier.prototype);
 	}
 
 	isDragging(): boolean {
 		return this.transfer.hasData(DraggedEditorIdentifier.prototype);
 	}
 
-	drop(target: EditorGroupView, targetInput: IResourceEditorInput | undefined, position: EditorTabDropPosition, splitDirection?: Direction): void {
+	drop(
+		target: EditorGroupView,
+		targetInput: IResourceEditorInput | undefined,
+		position: EditorTabDropPosition,
+		splitDirection?: Direction,
+	): void {
 		const dragged = this.transfer.getData(DraggedEditorIdentifier.prototype)?.[0];
 		this.end();
 		if (!dragged) return;

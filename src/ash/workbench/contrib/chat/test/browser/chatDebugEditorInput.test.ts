@@ -3,7 +3,11 @@ import { readFileSync } from 'node:fs';
 import { suite, test } from 'mocha';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { createAgentTraceResource, readAgentTraceLocation, type AgentTraceLocation } from '../../browser/chatDebug/chatDebugEditorInput.js';
+import {
+	createAgentTraceResource,
+	readAgentTraceLocation,
+	type AgentTraceLocation,
+} from '../../browser/chatDebug/chatDebugEditorInput.js';
 
 suite('Execution Trace location', () => {
 	test('preserves the Session-only command and import editor identity', () => {
@@ -20,21 +24,52 @@ suite('Execution Trace location', () => {
 		assert.notEqual(resource.toString(), createAgentTraceResource({ ...target, turnId: 'another' }).toString());
 	});
 
-	for (const target of [null, {}, '', { sessionId: 'session', turnId: 'turn' }, { sessionId: 'session', eventId: 'event' }, { sessionId: 'session', threadId: '' }, { sessionId: 'session', threadId: 1 }, { sessionId: 'session\n' }]) {
+	for (const target of [
+		null,
+		{},
+		'',
+		{ sessionId: 'session', turnId: 'turn' },
+		{ sessionId: 'session', eventId: 'event' },
+		{ sessionId: 'session', threadId: '' },
+		{ sessionId: 'session', threadId: 1 },
+		{ sessionId: 'session\n' },
+	]) {
 		test(`rejects invalid command location ${JSON.stringify(target)}`, () => {
-			assert.throws(() => createAgentTraceResource(target as unknown as AgentTraceLocation), /Invalid execution trace location/);
+			assert.throws(
+				() => createAgentTraceResource(target as unknown as AgentTraceLocation),
+				/Invalid execution trace location/,
+			);
 		});
 	}
 
-	for (const query of ['turnId=turn', 'eventId=event', 'threadId=one&threadId=two', 'unknown=field', 'threadId=%broken', 'threadId', 'threadId=']) {
+	for (const query of [
+		'turnId=turn',
+		'eventId=event',
+		'threadId=one&threadId=two',
+		'unknown=field',
+		'threadId=%broken',
+		'threadId',
+		'threadId=',
+	]) {
 		test(`rejects invalid saved location ${query}`, () => {
-			assert.throws(() => readAgentTraceLocation(URI.from({ scheme: 'ash-agent-trace', path: '/session', query })), /Invalid execution trace location/);
+			assert.throws(
+				() => readAgentTraceLocation(URI.from({ scheme: 'ash-agent-trace', path: '/session', query })),
+				/Invalid execution trace location/,
+			);
 		});
 	}
 	test('reports invalid locations in Chinese using the shipped catalog', () => {
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')));
-		try { assert.throws(() => createAgentTraceResource({ sessionId: 's', eventId: 'event' }), /定位 Turn 或事件时必须提供所属 Thread ID/); }
-		finally { resetNlsResolver(); }
+		setNlsMessages(
+			'zh-CN',
+			JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/chat.json', 'utf8')),
+		);
+		try {
+			assert.throws(
+				() => createAgentTraceResource({ sessionId: 's', eventId: 'event' }),
+				/定位 Turn 或事件时必须提供所属 Thread ID/,
+			);
+		} finally {
+			resetNlsResolver();
+		}
 	});
-
 });

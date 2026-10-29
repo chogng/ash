@@ -16,10 +16,14 @@ test('Minimap owns one canvas and removes its DOM node on disposal', () => {
 		host,
 		model,
 		semanticHighlightingEnabled: () => false,
-		readLayout: () => { throw new Error('not rendered'); },
-		readVisualProjection: () => { throw new Error('not rendered'); },
+		readLayout: () => {
+			throw new Error('not rendered');
+		},
+		readVisualProjection: () => {
+			throw new Error('not rendered');
+		},
 		readProjectionRevision: () => 0,
-		scrollTo: () => { },
+		scrollTo: () => {},
 	});
 	host.append(minimap.getDomNode().domNode);
 	assert.equal(host.querySelectorAll('canvas').length, 1);
@@ -32,7 +36,7 @@ test('Minimap owns one canvas and removes its DOM node on disposal', () => {
 });
 
 function testViewContext(): ViewContext {
-	return { addEventHandler() { }, removeEventHandler() { } } as unknown as ViewContext;
+	return { addEventHandler() {}, removeEventHandler() {} } as unknown as ViewContext;
 }
 
 const codeFeatures = registerTestCodeEditorFeatures();

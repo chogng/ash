@@ -20,7 +20,11 @@ try {
 	showPartsSplash(document, readBrowserPartsSplash(window));
 	{
 		using provider = await IndexedDBFileSystemProvider.create(window.indexedDB, Schemas.vscodeUserData);
-		await migrateLegacyBrowserSettings(window.indexedDB, provider, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }));
+		await migrateLegacyBrowserSettings(
+			window.indexedDB,
+			provider,
+			URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }),
+		);
 		using files = new FileService();
 		using registration = files.registerProvider(Schemas.vscodeUserData, provider);
 		await initializeBrowserLocalization(files, new BrowserLanguagePackStore());
@@ -32,23 +36,28 @@ try {
 	await import('../../../sessions/browser/workbenchChat.contribution.js');
 	await import('../../../sessions/browser/turnMultiDiffSource.contribution.js');
 	await import('../../../sessions/contrib/changes/browser/changesMultiDiffSourceResolver.js');
-	registerAction2(class OpenCodeSessionsAction extends Action2 {
-		constructor() {
-			super({
-				id: codeSessionsProfile.titlebarActionId,
-				title: localize2({ bundle: 'ash.workbench', key: 'command.OpenCodeSessionsAction' }, 'Open Code Sessions'),
-				tooltip: 'Open Code Sessions',
-				icon: ashTitlebarMark,
-				menu: { id: MenuId.TitleBarAdjacentCenter, group: 'navigation', order: 1 },
-				f1: true,
-			});
-		}
+	registerAction2(
+		class OpenCodeSessionsAction extends Action2 {
+			constructor() {
+				super({
+					id: codeSessionsProfile.titlebarActionId,
+					title: localize2(
+						{ bundle: 'ash.workbench', key: 'command.OpenCodeSessionsAction' },
+						'Open Code Sessions',
+					),
+					tooltip: 'Open Code Sessions',
+					icon: ashTitlebarMark,
+					menu: { id: MenuId.TitleBarAdjacentCenter, group: 'navigation', order: 1 },
+					f1: true,
+				});
+			}
 
-		public override run(accessor: ServicesAccessor): void {
-			const location = accessor.get(ILayoutService).activeContainer.ownerDocument.location;
-			location.assign(new URL('../sessions/sessions.html', location.href).href);
-		}
-	});
+			public override run(accessor: ServicesAccessor): void {
+				const location = accessor.get(ILayoutService).activeContainer.ownerDocument.location;
+				location.assign(new URL('../sessions/sessions.html', location.href).href);
+			}
+		},
+	);
 	const { startBrowserWorkbench } = await import('../../../workbench/browser/web.bootstrap.js');
 	await startBrowserWorkbench({ productName: AshWorkbenchName }, [createAppServerDebugAdapterCapability]);
 } catch (error) {

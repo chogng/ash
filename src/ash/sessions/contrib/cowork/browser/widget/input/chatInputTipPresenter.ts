@@ -13,7 +13,11 @@ export interface IChatInputTipPresenterOptions {
 export class ChatInputTipPresenter extends Disposable {
 	private readonly part = this._register(new MutableDisposable<ChatTipContentPart>());
 
-	constructor(private readonly options: IChatInputTipPresenterOptions, @IChatTipService private readonly tips: IChatTipService, @IInstantiationService private readonly instantiation: IInstantiationService) {
+	constructor(
+		private readonly options: IChatInputTipPresenterOptions,
+		@IChatTipService private readonly tips: IChatTipService,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+	) {
 		super();
 		this._register(tips.onDidDismissTip(() => this.update()));
 		this.update();
@@ -30,10 +34,15 @@ export class ChatInputTipPresenter extends Disposable {
 			return;
 		}
 		if (this.part.value) return;
-		const part = this.instantiation.createInstance(ChatTipContentPart, this.options.container.ownerDocument, tip, () => {
-			this.options.focusInput();
-			this.tips.dismissTip();
-		});
+		const part = this.instantiation.createInstance(
+			ChatTipContentPart,
+			this.options.container.ownerDocument,
+			tip,
+			() => {
+				this.options.focusInput();
+				this.tips.dismissTip();
+			},
+		);
 		this.part.value = part;
 		this.options.container.prepend(part.domNode);
 	}

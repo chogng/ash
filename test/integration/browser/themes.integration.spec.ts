@@ -2,14 +2,15 @@ import { expectIconFontLoaded } from '../../automation/iconFonts.js';
 import { test } from '../../fixtures/browser/rustSyntaxProcessFixture.js';
 import { expect } from '@playwright/test';
 
-
 test('decoration icons follow font product themes while retaining the label and icon', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/themes.html');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 	const label = page.locator('#decorated-label .ash-icon-label');
-	await page.evaluate(() => window.setLabelDecoration({ letter: { id: 'add', color: { id: 'error.foreground' } }, tooltip: 'Added' }));
+	await page.evaluate(() =>
+		window.setLabelDecoration({ letter: { id: 'add', color: { id: 'error.foreground' } }, tooltip: 'Added' }),
+	);
 	await expect(label).toHaveAttribute('aria-label', 'ignored.log, Added');
 	const icon = label.locator('.ash-icon-label-suffix-icon .ash-icon');
 	await expect(icon).toHaveCount(1);
@@ -37,8 +38,16 @@ test('decoration icons follow font product themes while retaining the label and 
 		return { loaded: (await document.fonts.load(query)).length, ready: document.fonts.check(query) };
 	});
 	expect(font).toEqual({ loaded: 1, ready: true });
-	expect(await retainedLabel!.evaluate(element => element === document.querySelector('#decorated-label .ash-icon-label'))).toBe(true);
-	expect(await retainedIcon!.evaluate(element => element === document.querySelector('#decorated-label .ash-icon-label-suffix-icon .ash-icon'))).toBe(true);
+	expect(
+		await retainedLabel!.evaluate(
+			element => element === document.querySelector('#decorated-label .ash-icon-label'),
+		),
+	).toBe(true);
+	expect(
+		await retainedIcon!.evaluate(
+			element => element === document.querySelector('#decorated-label .ash-icon-label-suffix-icon .ash-icon'),
+		),
+	).toBe(true);
 	await page.locator('#default-icons').click();
 	await expect(icon).toHaveAttribute('data-ash-icon-character', original!);
 	await page.evaluate(() => window.removeLabelDecorationProvider());
@@ -48,20 +57,21 @@ test('decoration icons follow font product themes while retaining the label and 
 	expect(errors).toEqual([]);
 });
 
-for (const backend of ['rust', 'offline']) test(`Tree-sitter applies current theme rules after edits and in a new document (${backend})`, async ({ page }) => {
-	const errors: string[] = [];
-	page.on('pageerror', error => errors.push(error.message));
-	await page.goto(`/themes.html?backend=${backend}`);
-	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-	expect(await page.evaluate(() => window.tokenizeWithSyntax())).toEqual([
-		{ type: 'keyword', modifiers: [] },
-		{ type: 'keyword', modifiers: [], presentation: { foreground: '#ff0000', fontStyle: ['italic'] } },
-		{ type: 'keyword', modifiers: [], presentation: { foreground: '#0000ff', fontStyle: ['bold'] } },
-		{ type: 'string', modifiers: [] },
-		{ type: 'string', modifiers: [] },
-	]);
-	expect(errors).toEqual([]);
-});
+for (const backend of ['rust', 'offline'])
+	test(`Tree-sitter applies current theme rules after edits and in a new document (${backend})`, async ({ page }) => {
+		const errors: string[] = [];
+		page.on('pageerror', error => errors.push(error.message));
+		await page.goto(`/themes.html?backend=${backend}`);
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		expect(await page.evaluate(() => window.tokenizeWithSyntax())).toEqual([
+			{ type: 'keyword', modifiers: [] },
+			{ type: 'keyword', modifiers: [], presentation: { foreground: '#ff0000', fontStyle: ['italic'] } },
+			{ type: 'keyword', modifiers: [], presentation: { foreground: '#0000ff', fontStyle: ['bold'] } },
+			{ type: 'string', modifiers: [] },
+			{ type: 'string', modifiers: [] },
+		]);
+		expect(errors).toEqual([]);
+	});
 
 test('extension file icons load a real font and update existing labels on theme changes', async ({ page }) => {
 	const errors: string[] = [];
@@ -81,12 +91,13 @@ test('extension file icons load a real font and update existing labels on theme 
 		element.textContent = 'File';
 		root.append(element);
 	});
-	const suggestionStyle = async () => suggestionIcon.evaluate(element => ({
-		labelSize: getComputedStyle(element).fontSize,
-		iconContent: getComputedStyle(element, '::before').content,
-		iconColor: getComputedStyle(element, '::before').color,
-		iconFont: getComputedStyle(element, '::before').fontFamily,
-	}));
+	const suggestionStyle = async () =>
+		suggestionIcon.evaluate(element => ({
+			labelSize: getComputedStyle(element).fontSize,
+			iconContent: getComputedStyle(element, '::before').content,
+			iconColor: getComputedStyle(element, '::before').color,
+			iconFont: getComputedStyle(element, '::before').fontFamily,
+		}));
 	const darkSuggestion = await suggestionStyle();
 	expect(darkSuggestion.labelSize).toBe('0px');
 	expect(darkSuggestion.iconContent).not.toBe('none');
@@ -126,8 +137,14 @@ test('product font themes replace mounted glyphs and restore built-in glyphs', a
 	await page.getByRole('button', { name: 'Font icons' }).click();
 	await expect(icon).toHaveAttribute('data-ash-icon-character', '\ue005');
 	await expect(semanticIcon).toHaveAttribute('data-ash-icon-character', '\ue005');
-	expect(await mounted!.evaluate(element => element === document.querySelector('#product-icon .ash-icon'))).toBe(true);
-	expect(await mountedSemantic!.evaluate(element => element === document.querySelector('#semantic-product-icon .ash-icon'))).toBe(true);
+	expect(await mounted!.evaluate(element => element === document.querySelector('#product-icon .ash-icon'))).toBe(
+		true,
+	);
+	expect(
+		await mountedSemantic!.evaluate(
+			element => element === document.querySelector('#semantic-product-icon .ash-icon'),
+		),
+	).toBe(true);
 	await page.getByRole('button', { name: 'Default icons' }).click();
 	await expect(icon).toHaveAttribute('data-ash-icon-character', originalCharacter!);
 	await expect(icon.locator('svg')).toHaveCount(0);
@@ -164,7 +181,9 @@ test('Font icon select box filters, navigates, selects, and follows product icon
 	await expect(picker).toHaveAttribute('data-selected-icon', 'check');
 	await options.nth(1).click();
 	await expect(picker).toHaveAttribute('data-selected-icon', 'chevron-right');
-	expect(await options.nth(1).evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
+	expect(await options.nth(1).evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe(
+		'rgba(0, 0, 0, 0)',
+	);
 	await page.getByRole('button', { name: 'Font icons' }).click();
 	await expect(options.first().locator('.ash-icon')).toHaveAttribute('data-ash-icon-character', '\ue005');
 	await page.getByRole('button', { name: 'Default icons' }).click();
@@ -175,13 +194,17 @@ test('Font icon select box filters, navigates, selects, and follows product icon
 	expect(errors).toEqual([]);
 });
 
-
 test('Tree-sitter tokenizes hypothetical lines in context without changing the document', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', error => errors.push(error.message));
 	await page.goto('/themes.html');
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-	expect(await page.evaluate(() => window.previewWithRustSyntax())).toEqual({ hasString: true, hasKeyword: true, unchanged: true, text: 'const text = `start\nend`;\nif (true) {}' });
+	expect(await page.evaluate(() => window.previewWithRustSyntax())).toEqual({
+		hasString: true,
+		hasKeyword: true,
+		unchanged: true,
+		text: 'const text = `start\nend`;\nif (true) {}',
+	});
 	expect(errors).toEqual([]);
 });
 
@@ -204,7 +227,9 @@ test('standard product icon fonts load into mounted icons and unload with their 
 		return { loaded: loaded.length, ready: document.fonts.check(query) };
 	});
 	expect(font).toEqual({ loaded: 1, ready: true });
-	expect(await mounted!.evaluate(element => element === document.querySelector('#product-icon .ash-icon'))).toBe(true);
+	expect(await mounted!.evaluate(element => element === document.querySelector('#product-icon .ash-icon'))).toBe(
+		true,
+	);
 	await page.evaluate(() => window.disposeThemeExtensions());
 	await expect(icon).toHaveAttribute('data-ash-icon-character', '\ue001');
 	await expect(page.locator('style[data-ash-icon-fonts]')).toBeEmpty();

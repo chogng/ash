@@ -9,7 +9,10 @@ import { Lxicon } from '../../../../base/common/lxicons.js';
 import { extUri, basename } from '../../../../base/common/resources.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
-import { AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	AccessibilityVerbositySettingId,
+	IAccessibleViewService,
+} from '../../../../platform/accessibility/browser/accessibleView.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IClipboardService } from '../../../../platform/clipboard/common/clipboardService.js';
@@ -44,7 +47,7 @@ export class TimelinePane extends ViewPane {
 	private readonly tree: WorkbenchObjectTree<TimelineRow>;
 	private readonly messageDomNode: HTMLDivElement;
 	private readonly rows = this._register(new DisposableStore());
-	private readonly itemHovers = new Map<string, { readonly hover: IManagedHover; readonly focus: () => void; }>();
+	private readonly itemHovers = new Map<string, { readonly hover: IManagedHover; readonly focus: () => void }>();
 	private readonly pending = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly timelines = new Map<string, Timeline>();
 	private readonly failedSources = new Set<string>();
@@ -82,62 +85,118 @@ export class TimelinePane extends ViewPane {
 		this.messageDomNode.tabIndex = 0;
 		this.contentElement.append(this.messageDomNode);
 		this._register(hover.setupDelayedHover(this.headerElement, () => ({ content: this.uri?.toString() ?? '' })));
-		this.tree = this._register(new WorkbenchObjectTree<TimelineRow>(this.contentElement, {
-			configurationService: configuration,
-			modelOptions: { identityProvider: { getId: row => row.id } },
-			// History is flat; reserving a collapse arrow would indent every entry.
-			twistieAdditionalCssClass: () => 'ash-tree-twistie-hidden',
-			keyboardNavigationLabelProvider: { getKeyboardNavigationLabel: row => row.item?.label ?? this.loadMoreLabel(row.source) },
-			onWillRender: () => { this.rows.clear(); this.itemHovers.clear(); },
-			renderElement: row => this.renderRow(row),
-		}));
+		this.tree = this._register(
+			new WorkbenchObjectTree<TimelineRow>(this.contentElement, {
+				configurationService: configuration,
+				modelOptions: { identityProvider: { getId: row => row.id } },
+				// History is flat; reserving a collapse arrow would indent every entry.
+				twistieAdditionalCssClass: () => 'ash-tree-twistie-hidden',
+				keyboardNavigationLabelProvider: {
+					getKeyboardNavigationLabel: row => row.item?.label ?? this.loadMoreLabel(row.source),
+				},
+				onWillRender: () => {
+					this.rows.clear();
+					this.itemHovers.clear();
+				},
+				renderElement: row => this.renderRow(row),
+			}),
+		);
 		this.tree.element.classList.add('ash-timeline-tree');
 		TimelineFocusedContext.bindTo(this._register(context.createScoped(this.contentElement))).set(true);
-		this.toolbar = this._register(new WorkbenchToolBar(this.headerActionsElement, menus, { ariaLabel: localize('timeline.actions', 'Timeline Actions') }));
-		this._register(addDisposableListener(this.tree.element, 'keydown', event => {
-			if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.key === 'ArrowDown') {
-				const focused = this.tree.focus;
-				const details = focused && this.itemHovers.get(focused.id);
-				if (!details) return;
-				event.preventDefault();
-				details.hover.show();
-				details.focus();
-			}
-		}, true));
-		this._register(this.tree.onDidOpen(({ element, browserEvent }) => {
-			if ('key' in browserEvent && browserEvent.key !== 'Enter' && browserEvent.key !== ' ') return;
-			if (!element.item) { void this.load(element.source, true); return; }
-			const command = element.item.command;
-			if (command) void this.commands.executeCommand(command.id, ...(command.arguments ?? [])).catch(error => this.log.error('timeline', 'Could not open timeline entry', error));
-		}));
-		this._register(this.onDidChangeBodyVisibility(visible => {
-			if (!visible) { return; }
-			if (!this.pinned && !extUri.isEqual(this.activeUri(), this.uri)) {
+		this.toolbar = this._register(
+			new WorkbenchToolBar(this.headerActionsElement, menus, {
+				ariaLabel: localize('timeline.actions', 'Timeline Actions'),
+			}),
+		);
+		this._register(
+			addDisposableListener(
+				this.tree.element,
+				'keydown',
+				event => {
+					if (
+						event.altKey &&
+						!event.ctrlKey &&
+						!event.metaKey &&
+						!event.shiftKey &&
+						event.key === 'ArrowDown'
+					) {
+						const focused = this.tree.focus;
+						const details = focused && this.itemHovers.get(focused.id);
+						if (!details) return;
+						event.preventDefault();
+						details.hover.show();
+						details.focus();
+					}
+				},
+				true,
+			),
+		);
+		this._register(
+			this.tree.onDidOpen(({ element, browserEvent }) => {
+				if ('key' in browserEvent && browserEvent.key !== 'Enter' && browserEvent.key !== ' ') return;
+				if (!element.item) {
+					void this.load(element.source, true);
+					return;
+				}
+				const command = element.item.command;
+				if (command)
+					void this.commands
+						.executeCommand(command.id, ...(command.arguments ?? []))
+						.catch(error => this.log.error('timeline', 'Could not open timeline entry', error));
+			}),
+		);
+		this._register(
+			this.onDidChangeBodyVisibility(visible => {
+				if (!visible) {
+					return;
+				}
+				if (!this.pinned && !extUri.isEqual(this.activeUri(), this.uri)) {
+					this.refresh();
+				} else {
+					this.loadMissingSources();
+				}
+			}),
+		);
+		this._register(
+			editors.onDidActiveEditorChange(() => {
+				if (this.pinned) return;
+				const uri = this.activeUri();
+				if (!extUri.isEqual(uri, this.uri)) this.refresh();
+			}),
+		);
+		this._register(
+			timeline.onDidChangeProviders(() => {
+				this.updateActions();
 				this.refresh();
-			} else {
-				this.loadMissingSources();
-			}
-		}));
-		this._register(editors.onDidActiveEditorChange(() => {
-			if (this.pinned) return;
-			const uri = this.activeUri();
-			if (!extUri.isEqual(uri, this.uri)) this.refresh();
-		}));
-		this._register(timeline.onDidChangeProviders(() => { this.updateActions(); this.refresh(); }));
-		this._register(timeline.onDidChangeTimeline(event => {
-			if (!event.uri || extUri.isEqual(event.uri, this.uri)) this.refresh();
-		}));
-		this._register(timeline.onDidChangeUri(uri => { this.uri = uri; this.pinned = true; this.updateActions(); this.refresh(); }));
-		this._register(configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(AccessibilityVerbositySettingId.Timeline)) this.updateAriaLabel();
-			if (event.affectsConfiguration('timeline.pageSize')) this.refresh();
-		}));
-		this._register(storage.onDidChangeValue(event => {
-			if (event.scope !== StorageScope.PROFILE || event.key !== 'timeline.excludeSources') return;
-			this.restoreSources();
-			this.updateActions();
-			this.refresh();
-		}));
+			}),
+		);
+		this._register(
+			timeline.onDidChangeTimeline(event => {
+				if (!event.uri || extUri.isEqual(event.uri, this.uri)) this.refresh();
+			}),
+		);
+		this._register(
+			timeline.onDidChangeUri(uri => {
+				this.uri = uri;
+				this.pinned = true;
+				this.updateActions();
+				this.refresh();
+			}),
+		);
+		this._register(
+			configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(AccessibilityVerbositySettingId.Timeline)) this.updateAriaLabel();
+				if (event.affectsConfiguration('timeline.pageSize')) this.refresh();
+			}),
+		);
+		this._register(
+			storage.onDidChangeValue(event => {
+				if (event.scope !== StorageScope.PROFILE || event.key !== 'timeline.excludeSources') return;
+				this.restoreSources();
+				this.updateActions();
+				this.refresh();
+			}),
+		);
 		this._register(toDisposable(() => this.timelines.clear()));
 		this.updateActions();
 		this.updateAriaLabel();
@@ -162,17 +221,27 @@ export class TimelinePane extends ViewPane {
 
 	public getAccessibleContent(): string {
 		const entries = this.items().map(({ item }) => [item!.label, item!.description].filter(Boolean).join(', '));
-		return [localize('timeline.title', 'Timeline'), this.uri ? basename(this.uri) : '', entries.length ? entries.join('\n') : this.messageDomNode.textContent].filter(Boolean).join('\n');
+		return [
+			localize('timeline.title', 'Timeline'),
+			this.uri ? basename(this.uri) : '',
+			entries.length ? entries.join('\n') : this.messageDomNode.textContent,
+		]
+			.filter(Boolean)
+			.join('\n');
 	}
 
 	private activeUri(): URI | undefined {
-		const uri = EditorResourceAccessor.getOriginalUri(this.editors.activeEditor, { supportSideBySide: SideBySideEditor.PRIMARY });
+		const uri = EditorResourceAccessor.getOriginalUri(this.editors.activeEditor, {
+			supportSideBySide: SideBySideEditor.PRIMARY,
+		});
 		// Product pages have internal URIs but do not represent files with a history.
 		return uri && this.files.hasProvider(uri) ? uri : undefined;
 	}
 
 	private loadMissingSources(): void {
-		if (!this.isBodyVisible() || !this.uri) { return; }
+		if (!this.isBodyVisible() || !this.uri) {
+			return;
+		}
 		for (const source of this.timeline.getSources()) {
 			if (!this.excludedSources.has(source.id) && !this.timelines.has(source.id)) {
 				void this.load(source.id, false);
@@ -197,13 +266,33 @@ export class TimelinePane extends ViewPane {
 		try {
 			const pageSize = this.configuration.getValue<number | null>('timeline.pageSize');
 			const rowHeight = 22;
-			const request = this.timeline.getTimeline(source, uri, { cursor: append ? previous?.paging?.cursor : undefined, limit: pageSize ?? Math.max(1, Math.ceil(this.contentElement.clientHeight / rowHeight)), cacheResults: true, resetCache: !append }, token);
+			const request = this.timeline.getTimeline(
+				source,
+				uri,
+				{
+					cursor: append ? previous?.paging?.cursor : undefined,
+					limit: pageSize ?? Math.max(1, Math.ceil(this.contentElement.clientHeight / rowHeight)),
+					cacheResults: true,
+					resetCache: !append,
+				},
+				token,
+			);
 			const result = await request?.result;
-			if (this.isDisposed || generation !== this.generation || this.pending.get(source) !== lifetime || token.token.isCancellationRequested) return;
+			if (
+				this.isDisposed ||
+				generation !== this.generation ||
+				this.pending.get(source) !== lifetime ||
+				token.token.isCancellationRequested
+			)
+				return;
 			if (result) {
-				const items = new Map((append ? previous?.items ?? [] : []).map(item => [item.handle, item]));
+				const items = new Map((append ? (previous?.items ?? []) : []).map(item => [item.handle, item]));
 				// A failed or stalled continuation must wait for an explicit retry, not loop while visible.
-				if (append && result.paging?.cursor === previous?.paging?.cursor && result.items.every(item => items.has(item.handle))) {
+				if (
+					append &&
+					result.paging?.cursor === previous?.paging?.cursor &&
+					result.items.every(item => items.has(item.handle))
+				) {
 					throw new Error('Timeline provider did not advance pagination');
 				}
 				for (const item of result.items) items.set(item.handle, item);
@@ -229,12 +318,22 @@ export class TimelinePane extends ViewPane {
 
 	private items(): TimelineRow[] {
 		// Preserve each provider's order when timestamps tie; Git records commit times in seconds.
-		return [...this.timelines.values()].flatMap(timeline => timeline.items.map(item => ({ id: `item:${item.source.length}:${item.source}${item.handle}`, source: item.source, item }))).sort((a, b) => b.item.timestamp - a.item.timestamp || a.source.localeCompare(b.source));
+		return [...this.timelines.values()]
+			.flatMap(timeline =>
+				timeline.items.map(item => ({
+					id: `item:${item.source.length}:${item.source}${item.handle}`,
+					source: item.source,
+					item,
+				})),
+			)
+			.sort((a, b) => b.item.timestamp - a.item.timestamp || a.source.localeCompare(b.source));
 	}
 
 	private render(): void {
 		const entries = this.items();
-		const more = [...this.timelines].filter(([, timeline]) => timeline.paging?.cursor !== undefined).map(([source]) => ({ id: `more:${source}`, source }));
+		const more = [...this.timelines]
+			.filter(([, timeline]) => timeline.paging?.cursor !== undefined)
+			.map(([source]) => ({ id: `more:${source}`, source }));
 		const focus = this.tree.focus?.id;
 		const selection = this.tree.selection.map(row => row.id);
 		this.tree.setChildren([...entries, ...more].map(element => ({ element })));
@@ -245,8 +344,10 @@ export class TimelinePane extends ViewPane {
 		this.messageDomNode.hidden = !this.tree.element.hidden;
 		this.updateTitleDescription(this.uri ? basename(this.uri) : undefined);
 		if (this.pending.size > 0) this.messageDomNode.textContent = localize('timeline.loading', 'Loading timeline…');
-		else if (!this.uri) this.messageDomNode.textContent = localize('timeline.noFile', 'Select a file to view its timeline.');
-		else if (this.failedSources.size > 0) this.messageDomNode.textContent = localize('timeline.failed', 'Could not load timeline entries.');
+		else if (!this.uri)
+			this.messageDomNode.textContent = localize('timeline.noFile', 'Select a file to view its timeline.');
+		else if (this.failedSources.size > 0)
+			this.messageDomNode.textContent = localize('timeline.failed', 'Could not load timeline entries.');
 		else this.messageDomNode.textContent = localize('timeline.empty', 'No timeline information was provided.');
 	}
 
@@ -260,18 +361,29 @@ export class TimelinePane extends ViewPane {
 		content.append(label);
 		const description = h(content.ownerDocument, 'span');
 		description.className = 'ash-timeline-description';
-		description.textContent = row.item?.description ?? this.timeline.getSources().find(source => source.id === row.source)?.label ?? '';
+		description.textContent =
+			row.item?.description ?? this.timeline.getSources().find(source => source.id === row.source)?.label ?? '';
 		content.append(description);
 		if (!row.item || !this.setupHistoryHover(content, row.id, row.item)) {
-			this.rows.add(this.hover.setupDelayedHover(content, { content: row.item?.tooltip ?? [label.textContent, description.textContent].join(' — ') }));
+			this.rows.add(
+				this.hover.setupDelayedHover(content, {
+					content: row.item?.tooltip ?? [label.textContent, description.textContent].join(' — '),
+				}),
+			);
 		}
 		if (!row.item && !this.pending.has(row.source) && !this.failedSources.has(row.source)) {
 			const generation = this.generation;
-			this.rows.add(observeIntersection(content, entry => {
-				if (generation === this.generation && content.isConnected && entry.isIntersecting) {
-					void this.load(row.source, true);
-				}
-			}, { root: this.tree.element }));
+			this.rows.add(
+				observeIntersection(
+					content,
+					entry => {
+						if (generation === this.generation && content.isConnected && entry.isIntersecting) {
+							void this.load(row.source, true);
+						}
+					},
+					{ root: this.tree.element },
+				),
+			);
 		}
 		return content;
 	}
@@ -284,17 +396,35 @@ export class TimelinePane extends ViewPane {
 		const historyItem = item.sourceControl.historyItem;
 		const scope = this.rows.add(this.context.createScoped(target));
 		const menuTarget: SCMHistoryItemViewModelTreeElement = {
-			type: 'historyItemViewModel', repository,
+			type: 'historyItemViewModel',
+			repository,
 			historyItemViewModel: { historyItem, kind: 'node', inputSwimlanes: [], outputSwimlanes: [] },
 		};
-		const details = setupHistoryItemHover({
-			resources: this.rows,
-			target,
-			render: (resources, layout) => toHistoryItemHoverContent({
-				resources, target, historyItem, references: historyItem.references ?? [], scope, layout,
-				openChanges: () => this.commands.executeCommand('workbench.scm.action.graph.viewChanges', menuTarget),
-			}, this.menus, this.clipboard, this.opener, this.accessibleView),
-		}, this.hover, this.contextView);
+		const details = setupHistoryItemHover(
+			{
+				resources: this.rows,
+				target,
+				render: (resources, layout) =>
+					toHistoryItemHoverContent(
+						{
+							resources,
+							target,
+							historyItem,
+							references: historyItem.references ?? [],
+							scope,
+							layout,
+							openChanges: () =>
+								this.commands.executeCommand('workbench.scm.action.graph.viewChanges', menuTarget),
+						},
+						this.menus,
+						this.clipboard,
+						this.opener,
+						this.accessibleView,
+					),
+			},
+			this.hover,
+			this.contextView,
+		);
 		this.itemHovers.set(rowId, details);
 		return true;
 	}
@@ -315,7 +445,11 @@ export class TimelinePane extends ViewPane {
 	private restoreSources(): void {
 		this.excludedSources.clear();
 		let value: unknown;
-		try { value = JSON.parse(this.storage.get('timeline.excludeSources', StorageScope.PROFILE, '[]')); } catch { return; }
+		try {
+			value = JSON.parse(this.storage.get('timeline.excludeSources', StorageScope.PROFILE, '[]'));
+		} catch {
+			return;
+		}
 		if (!Array.isArray(value) || !value.every(source => typeof source === 'string')) return;
 		for (const source of value) this.excludedSources.add(source);
 	}
@@ -323,16 +457,49 @@ export class TimelinePane extends ViewPane {
 	private updateActions(): void {
 		const refresh = localize('timeline.refresh', 'Refresh');
 		const pin = localize('timeline.pin', 'Pin Current File');
-		this.toolbar.setActions([{ id: 'timeline.refresh', label: refresh, tooltip: refresh, icon: Lxicon.refresh, enabled: true, run: () => this.refresh() }], [
-			{ id: 'timeline.pin', label: pin, tooltip: pin, enabled: true, checked: this.pinned, run: () => { this.pinned = !this.pinned; this.updateActions(); this.refresh(); } },
-			...this.timeline.getSources().map(source => ({
-				id: `timeline.source.${source.id}`, label: source.label, tooltip: source.label, enabled: true, checked: !this.excludedSources.has(source.id), run: () => {
-					const excluded = new Set(this.excludedSources);
-					if (excluded.has(source.id)) excluded.delete(source.id);
-					else excluded.add(source.id);
-					this.storage.store('timeline.excludeSources', JSON.stringify([...excluded]), StorageScope.PROFILE, StorageTarget.USER);
-				}
-			})),
-		]);
+		this.toolbar.setActions(
+			[
+				{
+					id: 'timeline.refresh',
+					label: refresh,
+					tooltip: refresh,
+					icon: Lxicon.refresh,
+					enabled: true,
+					run: () => this.refresh(),
+				},
+			],
+			[
+				{
+					id: 'timeline.pin',
+					label: pin,
+					tooltip: pin,
+					enabled: true,
+					checked: this.pinned,
+					run: () => {
+						this.pinned = !this.pinned;
+						this.updateActions();
+						this.refresh();
+					},
+				},
+				...this.timeline.getSources().map(source => ({
+					id: `timeline.source.${source.id}`,
+					label: source.label,
+					tooltip: source.label,
+					enabled: true,
+					checked: !this.excludedSources.has(source.id),
+					run: () => {
+						const excluded = new Set(this.excludedSources);
+						if (excluded.has(source.id)) excluded.delete(source.id);
+						else excluded.add(source.id);
+						this.storage.store(
+							'timeline.excludeSources',
+							JSON.stringify([...excluded]),
+							StorageScope.PROFILE,
+							StorageTarget.USER,
+						);
+					},
+				})),
+			],
+		);
 	}
 }

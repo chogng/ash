@@ -1,7 +1,20 @@
-import { Disposable, DisposableStore, isDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import {
+	Disposable,
+	DisposableStore,
+	isDisposable,
+	toDisposable,
+	type IDisposable,
+} from '../../../base/common/lifecycle.js';
 import { type Event } from '../../../base/common/event.js';
 import { SyncDescriptor, type Constructor } from './descriptors.js';
-import { IInstantiationService, _util, type ServiceIdentifier, type ServicesAccessor, type ServiceFactory, type SingletonRegistrationOptions } from './instantiation.js';
+import {
+	IInstantiationService,
+	_util,
+	type ServiceIdentifier,
+	type ServicesAccessor,
+	type ServiceFactory,
+	type SingletonRegistrationOptions,
+} from './instantiation.js';
 import { ServiceCollection } from './serviceCollection.js';
 import { InstantiationType } from './extensions.js';
 
@@ -45,10 +58,18 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 		this.services.set(id, value);
 	}
 
-	public registerSingleton<T>(id: ServiceIdentifier<T>, factory: ServiceFactory<T>, options: SingletonRegistrationOptions = {}): void {
+	public registerSingleton<T>(
+		id: ServiceIdentifier<T>,
+		factory: ServiceFactory<T>,
+		options: SingletonRegistrationOptions = {},
+	): void {
 		this.assertNotDisposed();
 		this.assertCanRegister(id);
-		this.factories.set(id, { factory, transient: false, delayed: options.instantiation === InstantiationType.Delayed });
+		this.factories.set(id, {
+			factory,
+			transient: false,
+			delayed: options.instantiation === InstantiationType.Delayed,
+		});
 	}
 
 	public registerTransient<T>(id: ServiceIdentifier<T>, factory: ServiceFactory<T>): void {
@@ -90,7 +111,12 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 		}
 		const registration = this.factories.get(id);
 		if (registration) {
-			return this.resolve(id, () => registration.factory(this), registration.transient, registration.delayed) as T;
+			return this.resolve(
+				id,
+				() => registration.factory(this),
+				registration.transient,
+				registration.delayed,
+			) as T;
 		}
 		return this.parent?.getOptional(id);
 	}
@@ -112,13 +138,21 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 		const dependencies = _util.getServiceDependencies(construction.ctor);
 		for (const [offset, { index, id }] of dependencies.entries()) {
 			if (index !== explicitArguments.length + offset) {
-				throw new TypeError(`Invalid constructor arguments for ${construction.ctor.name}: expected service ${id} at parameter ${index}`);
+				throw new TypeError(
+					`Invalid constructor arguments for ${construction.ctor.name}: expected service ${id} at parameter ${index}`,
+				);
 			}
 		}
-		return Reflect.construct(construction.ctor, [...explicitArguments, ...dependencies.map(({ id }) => this.get(id))]) as T;
+		return Reflect.construct(construction.ctor, [
+			...explicitArguments,
+			...dependencies.map(({ id }) => this.get(id)),
+		]) as T;
 	}
 
-	public invokeFunction<R, TArguments extends unknown[]>(fn: (accessor: ServicesAccessor, ...args: TArguments) => R, ...args: TArguments): R {
+	public invokeFunction<R, TArguments extends unknown[]>(
+		fn: (accessor: ServicesAccessor, ...args: TArguments) => R,
+		...args: TArguments
+	): R {
 		this.assertNotDisposed();
 		let active = true;
 		const accessor: ServicesAccessor = {
@@ -188,7 +222,12 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 		}
 	}
 
-	private resolve(id: ServiceIdentifier<unknown>, factory: () => unknown, transient: boolean, delayed: boolean): unknown {
+	private resolve(
+		id: ServiceIdentifier<unknown>,
+		factory: () => unknown,
+		transient: boolean,
+		delayed: boolean,
+	): unknown {
 		const cycleStart = this.resolving.indexOf(id);
 		if (cycleStart >= 0) {
 			throw new Error(`Cyclic service dependency: ${[...this.resolving.slice(cycleStart), id].join(' -> ')}`);
@@ -219,14 +258,21 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 		let instance: object | undefined;
 		let initializing = false;
 		const members = new Map<PropertyKey, unknown>();
-		const pending = new Set<{ readonly property: PropertyKey; readonly listener: (event: unknown) => unknown; readonly thisArgs: unknown; subscription?: IDisposable; }>();
-		this._register(toDisposable(() => {
-			for (const entry of pending) {
-				entry.subscription?.dispose();
-			}
-			pending.clear();
-			members.clear();
-		}));
+		const pending = new Set<{
+			readonly property: PropertyKey;
+			readonly listener: (event: unknown) => unknown;
+			readonly thisArgs: unknown;
+			subscription?: IDisposable;
+		}>();
+		this._register(
+			toDisposable(() => {
+				for (const entry of pending) {
+					entry.subscription?.dispose();
+				}
+				pending.clear();
+				members.clear();
+			}),
+		);
 		const initialize = (): object => {
 			this.assertNotDisposed();
 			if (initializing) {
@@ -246,47 +292,59 @@ export class InstantiationService extends Disposable implements IInstantiationSe
 			}
 			return instance;
 		};
-		const proxy = new Proxy({}, {
-			get: (_target, property) => {
-				this.assertNotDisposed();
-				if (members.has(property)) {
-					return members.get(property);
-				}
-				if (typeof property === 'string' && /^(onDid|onWill)/.test(property)) {
-					const event: Event<unknown> = (listener, thisArgs, disposables) => {
-						this.assertNotDisposed();
-						if (instance) {
-							return (Reflect.get(instance, property) as Event<unknown>)(listener, thisArgs, disposables);
-						}
-						const entry = { property, listener, thisArgs, subscription: undefined as IDisposable | undefined };
-						pending.add(entry);
-						const subscription = toDisposable(() => {
-							pending.delete(entry);
-							entry.subscription?.dispose();
-						});
-						if (Array.isArray(disposables)) {
-							disposables.push(subscription);
-						} else {
-							disposables?.add(subscription);
-						}
-						return subscription;
-					};
-					members.set(property, event);
-					return event;
-				}
-				const object = initialize();
-				const value = Reflect.get(object, property, object);
-				if (typeof value !== 'function') {
-					return value;
-				}
-				const method = value.bind(object);
-				members.set(property, method);
-				return method;
+		const proxy = new Proxy(
+			{},
+			{
+				get: (_target, property) => {
+					this.assertNotDisposed();
+					if (members.has(property)) {
+						return members.get(property);
+					}
+					if (typeof property === 'string' && /^(onDid|onWill)/.test(property)) {
+						const event: Event<unknown> = (listener, thisArgs, disposables) => {
+							this.assertNotDisposed();
+							if (instance) {
+								return (Reflect.get(instance, property) as Event<unknown>)(
+									listener,
+									thisArgs,
+									disposables,
+								);
+							}
+							const entry = {
+								property,
+								listener,
+								thisArgs,
+								subscription: undefined as IDisposable | undefined,
+							};
+							pending.add(entry);
+							const subscription = toDisposable(() => {
+								pending.delete(entry);
+								entry.subscription?.dispose();
+							});
+							if (Array.isArray(disposables)) {
+								disposables.push(subscription);
+							} else {
+								disposables?.add(subscription);
+							}
+							return subscription;
+						};
+						members.set(property, event);
+						return event;
+					}
+					const object = initialize();
+					const value = Reflect.get(object, property, object);
+					if (typeof value !== 'function') {
+						return value;
+					}
+					const method = value.bind(object);
+					members.set(property, method);
+					return method;
+				},
+				set: (_target, property, value) => Reflect.set(initialize(), property, value),
+				getPrototypeOf: () => Reflect.getPrototypeOf(initialize()),
+				has: (_target, property) => Reflect.has(initialize(), property),
 			},
-			set: (_target, property, value) => Reflect.set(initialize(), property, value),
-			getPrototypeOf: () => Reflect.getPrototypeOf(initialize()),
-			has: (_target, property) => Reflect.has(initialize(), property),
-		});
+		);
 		delayedServices.add(proxy);
 		return proxy;
 	}

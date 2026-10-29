@@ -1,6 +1,6 @@
-import type { Browser, ElectronApplication, Locator, Page } from "@playwright/test";
-import { Editors } from "./editors.js";
-import { QuickAccess } from "./quickaccess.js";
+import type { Browser, ElectronApplication, Locator, Page } from '@playwright/test';
+import { Editors } from './editors.js';
+import { QuickAccess } from './quickaccess.js';
 import { SettingsEditor } from './settings.js';
 import { Terminal } from './terminal.js';
 import { Dialogs } from './dialogs.js';
@@ -23,7 +23,7 @@ export class Workbench {
 	readonly git: Git;
 
 	constructor(readonly page: Page) {
-		this.element = page.locator(".ash-workbench");
+		this.element = page.locator('.ash-workbench');
 		this.editors = new Editors(page);
 		this.quickaccess = new QuickAccess(page);
 		this.settingsEditor = new SettingsEditor(page, this.quickaccess);
@@ -36,12 +36,16 @@ export class Workbench {
 
 	async waitForReady(): Promise<void> {
 		await waitForWindowLoad(this.page);
-		await this.element.waitFor({ state: "visible" });
-		if (!await this.page.locator(".ash-sessions-window").isVisible()) {
+		await this.element.waitFor({ state: 'visible' });
+		if (!(await this.page.locator('.ash-sessions-window').isVisible())) {
 			// Restored layouts can legitimately give the Panel or Auxiliary Bar
 			// the content area. Module restoration above still owns readiness.
 			if (await this.editors.element.isVisible()) await this.editors.waitForReady();
-			else await this.page.locator('.ash-workbench-panel:visible, .ash-workbench-auxiliarybar:visible').first().waitFor({ state: 'visible' });
+			else
+				await this.page
+					.locator('.ash-workbench-panel:visible, .ash-workbench-auxiliarybar:visible')
+					.first()
+					.waitFor({ state: 'visible' });
 		}
 		await this.waitForUiIdle();
 	}
@@ -56,9 +60,15 @@ export class Workbench {
 	}
 
 	/** System appearance belongs to Main on Electron and media queries on Browser. */
-	async setAppearance(application: Browser | ElectronApplication, colorScheme: 'light' | 'dark', page = this.page): Promise<void> {
+	async setAppearance(
+		application: Browser | ElectronApplication,
+		colorScheme: 'light' | 'dark',
+		page = this.page,
+	): Promise<void> {
 		if ('windows' in application) {
-			await application.evaluate(({ nativeTheme }, scheme) => { nativeTheme.themeSource = scheme; }, colorScheme);
+			await application.evaluate(({ nativeTheme }, scheme) => {
+				nativeTheme.themeSource = scheme;
+			}, colorScheme);
 		} else {
 			await page.emulateMedia({ colorScheme });
 		}
@@ -66,12 +76,17 @@ export class Workbench {
 
 	async openExplorer(): Promise<void> {
 		const sidebar = this.page.locator('[data-part="sidebar"]');
-		const explorer = this.page.locator('[data-part="activitybar"]').getByRole('tab', { name: 'Explorer', exact: true });
-		if (await explorer.getAttribute('aria-selected') !== 'true' || !await sidebar.isVisible()) {
+		const explorer = this.page
+			.locator('[data-part="activitybar"]')
+			.getByRole('tab', { name: 'Explorer', exact: true });
+		if ((await explorer.getAttribute('aria-selected')) !== 'true' || !(await sidebar.isVisible())) {
 			await explorer.click();
 		}
 		await sidebar.waitFor({ state: 'visible' });
-		await this.page.locator('[data-part="sidebar"] .ash-sidebar-title-label').getByText('Explorer', { exact: true }).waitFor({ state: 'visible' });
+		await this.page
+			.locator('[data-part="sidebar"] .ash-sidebar-title-label')
+			.getByText('Explorer', { exact: true })
+			.waitFor({ state: 'visible' });
 	}
 
 	async reopenAgentsWindow(application: Browser | ElectronApplication, page: Page): Promise<Page> {
@@ -96,7 +111,12 @@ export class Workbench {
 				page.locator('[data-action-id="ash.code.open-sessions"] button').click(),
 			]);
 		} else {
-			const existing = page.context().pages().find(candidate => new URL(candidate.url()).pathname.endsWith('/sessions/electron-browser/sessions.html'));
+			const existing = page
+				.context()
+				.pages()
+				.find(candidate =>
+					new URL(candidate.url()).pathname.endsWith('/sessions/electron-browser/sessions.html'),
+				);
 			[page] = await Promise.all([
 				existing ? Promise.resolve(existing) : page.context().waitForEvent('page'),
 				page.locator('[data-action-id="workbench.action.chat.openAgentsWindow.titleBar"] button').click(),
@@ -108,9 +128,12 @@ export class Workbench {
 	}
 
 	async waitForUiIdle(): Promise<void> {
-		await this.page.evaluate(() => new Promise<void>(resolve => {
-			requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-		}));
+		await this.page.evaluate(
+			() =>
+				new Promise<void>(resolve => {
+					requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+				}),
+		);
 	}
 }
 
@@ -120,6 +143,10 @@ async function waitForWindowLoad(page: Page): Promise<void> {
 	// Host module evaluation awaits the owning Workbench's restoration promise.
 	// Re-importing uses that same evaluation without creating another window.
 	await page.evaluate(async () => {
-		await Promise.all([...document.querySelectorAll<HTMLScriptElement>('script[type="module"][src]')].map(script => import(script.src)));
+		await Promise.all(
+			[...document.querySelectorAll<HTMLScriptElement>('script[type="module"][src]')].map(
+				script => import(script.src),
+			),
+		);
 	});
 }

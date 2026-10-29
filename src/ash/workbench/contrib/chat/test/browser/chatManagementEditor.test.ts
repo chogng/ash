@@ -5,7 +5,11 @@ import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { resetNlsResolver } from '../../../../../nls.js';
 import { browserEnvironment } from '../../../../../editor/test/browser/testEditorDom.js';
-import { AccessibleViewProviderId, AccessibleViewType, IAccessibleViewService } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	AccessibleViewProviderId,
+	AccessibleViewType,
+	IAccessibleViewService,
+} from '../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
@@ -43,21 +47,36 @@ function setup(resources: DisposableStore, read: () => Promise<readonly ModelCat
 	const writes = { fail: false };
 	services.registerInstance(INotificationService, notifications);
 	services.registerInstance(IAccessibleViewService, {
-		...toDisposable(() => { }), show: () => false, getOpenAriaHint: () => undefined,
-		disableHint: async () => { }, showAccessibleViewHelp: () => { },
+		...toDisposable(() => {}),
+		show: () => false,
+		getOpenAriaHint: () => undefined,
+		disableHint: async () => {},
+		showAccessibleViewHelp: () => {},
 	});
 	const models: Partial<ILanguageModelsService> = {
-		onDidChangeModels: changes.event, listModelCatalog: read, listModelProviders: async () => [],
+		onDidChangeModels: changes.event,
+		listModelCatalog: read,
+		listModelProviders: async () => [],
 		isModelVisible: model => enabled.has(model.model),
 		setModelVisible: async (model, value) => {
-			if (writes.fail) { throw new Error('Write failed'); }
-			if (value) { enabled.add(model.model); } else { enabled.delete(model.model); }
+			if (writes.fail) {
+				throw new Error('Write failed');
+			}
+			if (value) {
+				enabled.add(model.model);
+			} else {
+				enabled.delete(model.model);
+			}
 			changes.fire();
 		},
 	};
 	services.registerInstance(ILanguageModelsService, models as ILanguageModelsService);
 	const settings: unknown[] = [];
-	services.registerInstance(IPreferencesService, { openSettings: async options => { settings.push(options); } } as IPreferencesService);
+	services.registerInstance(IPreferencesService, {
+		openSettings: async options => {
+			settings.push(options);
+		},
+	} as IPreferencesService);
 	const root = document.createElement('main');
 	document.body.append(root);
 	resources.add(toDisposable(() => root.remove()));
@@ -70,7 +89,9 @@ test('Models management command opens the registered editor, reuses it, filters 
 	using resources = new DisposableStore();
 	const { services, root, settings } = setup(resources);
 	const registry = resources.add(new EditorPaneRegistry());
-	resources.add(registry.registerEditorPane(EditorPanes.getEditorPanes().find(pane => pane.id === ModelsManagementEditor.ID)!));
+	resources.add(
+		registry.registerEditorPane(EditorPanes.getEditorPanes().find(pane => pane.id === ModelsManagementEditor.ID)!),
+	);
 	const part = resources.add(services.createInstance(EditorPart, root, { registry }));
 	services.registerInstance(IEditorPart, part);
 	services.registerInstance(IEditorService, resources.add(new BrowserEditorService(part)));
@@ -82,11 +103,16 @@ test('Models management command opens the registered editor, reuses it, filters 
 	assert.ok(part.activePane instanceof ModelsManagementEditor);
 	const pane = part.activePane;
 	assert.equal(opened, pane);
-	assert.deepEqual([...root.querySelectorAll('.ash-models-settings-model-copy')].map(node => node.textContent), ['Older OpenAI']);
+	assert.deepEqual(
+		[...root.querySelectorAll('.ash-models-settings-model-copy')].map(node => node.textContent),
+		['Older OpenAI'],
+	);
 	await commands.executeCommand(MANAGE_CHAT_COMMAND_ID);
 	assert.equal(part.activePane, pane);
 	assert.equal(root.querySelectorAll('.ash-models-management-editor').length, 1);
-	await services.get(IEditorService).openEditor(resources.add(new ModelsManagementEditorInput()), { pinned: true }, 'sideGroup');
+	await services
+		.get(IEditorService)
+		.openEditor(resources.add(new ModelsManagementEditorInput()), { pinned: true }, 'sideGroup');
 	assert.equal(part.activePane, pane, 'A side-group request reveals the singleton pane');
 	await commands.executeCommand('chat.models.action.clearSearchResults');
 	const search = root.querySelector<HTMLInputElement>('input[type="search"]')!;
@@ -100,11 +126,13 @@ test('The shared catalog keeps local search independent of host search and resto
 	using resources = new DisposableStore();
 	const { services, root, enabled } = setup(resources);
 	let hostFilter = '';
-	const widget = resources.add(services.createInstance(ChatModelsWidget, document, {
-		compact: true,
-		matches: (entry: ModelCatalogEntry) => !hostFilter || entry.displayName.includes(hostFilter),
-		isFiltering: () => !!hostFilter,
-	}));
+	const widget = resources.add(
+		services.createInstance(ChatModelsWidget, document, {
+			compact: true,
+			matches: (entry: ModelCatalogEntry) => !hostFilter || entry.displayName.includes(hostFilter),
+			isFiltering: () => !!hostFilter,
+		}),
+	);
 	root.append(widget.element);
 	widget.render();
 	await nextTurn();
@@ -149,7 +177,10 @@ test('A failed model visibility write restores the switch and reports the error 
 	assert.equal(toggle.checked, false);
 	assert.equal(toggle.disabled, false);
 	assert.equal(document.activeElement, toggle);
-	assert.equal(root.querySelector('.ash-models-settings-status[role="alert"]')?.textContent, 'Could not save model visibility.');
+	assert.equal(
+		root.querySelector('.ash-models-settings-status[role="alert"]')?.textContent,
+		'Could not save model visibility.',
+	);
 	assert.equal(notifications.model.getNotifications().at(-1)?.message, 'Could not save model visibility.');
 });
 
@@ -168,13 +199,17 @@ test('Models management uses Chinese labels and accessibility content and restor
 		assert.ok(search);
 		pane.search('older');
 		pane.focus();
-		const implementation = AccessibleViewRegistry.getImplementations().find(candidate => candidate.name.startsWith('chat-models-') && candidate.type === AccessibleViewType.View);
+		const implementation = AccessibleViewRegistry.getImplementations().find(
+			candidate => candidate.name.startsWith('chat-models-') && candidate.type === AccessibleViewType.View,
+		);
 		const provider = services.invokeFunction(implementation!.getProvider.bind(implementation!))!;
 		assert.equal(provider.id, AccessibleViewProviderId.ChatModelConfiguration);
 		assert.equal(provider.provideContent(), 'openai\nOlder OpenAI, openai/older, 关闭');
 		provider.dispose();
 		assert.equal(document.activeElement, search);
-	} finally { resetNlsResolver(); }
+	} finally {
+		resetNlsResolver();
+	}
 });
 
 test('Models management restoration preserves its input identity, icon and singleton capability', () => {
@@ -187,7 +222,10 @@ test('Models management restoration preserves its input identity, icon and singl
 	assert.equal(input.matches(restored), true);
 	assert.equal(restored.getIcon().id, input.getIcon().id);
 	assert.ok(restored.capabilities & EditorInputCapabilities.Singleton);
-	assert.throws(() => EditorInputSerializers.deserialize({ typeId: snapshot.typeId, value: {} }), /Invalid serialized models management input/);
+	assert.throws(
+		() => EditorInputSerializers.deserialize({ typeId: snapshot.typeId, value: {} }),
+		/Invalid serialized models management input/,
+	);
 });
 
 test('A hidden or disposed catalog ignores pending results and no longer observes model changes', async () => {

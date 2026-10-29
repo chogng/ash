@@ -1,31 +1,61 @@
 import { Event } from '../../../../base/common/event.js';
 import { AbstractDisposable } from '../../../../base/common/lifecycle.js';
-import type { ILocalTranscriptionService, ILocalTranscriptionModelService } from '../../../../platform/localTranscription/common/localTranscription.js';
+import type {
+	ILocalTranscriptionService,
+	ILocalTranscriptionModelService,
+} from '../../../../platform/localTranscription/common/localTranscription.js';
 import { localize } from '../../../../nls.js';
 
 /** A browser host has no device-local Rust capture capability. */
-export class NullLocalTranscriptionService extends AbstractDisposable implements ILocalTranscriptionService, ILocalTranscriptionModelService {
-	public async pushAudio(): Promise<never> { throw unavailable(); }
+export class NullLocalTranscriptionService
+	extends AbstractDisposable
+	implements ILocalTranscriptionService, ILocalTranscriptionModelService
+{
+	public async pushAudio(): Promise<never> {
+		throw unavailable();
+	}
 	public readonly _serviceBrand = undefined;
 	public readonly isSupported = false;
 	public readonly onDidTranscribe = Event.None;
 	public readonly onDidChangeModelStatus = Event.None;
 	public readonly onDidChangeModels = Event.None;
-	public async getModelStatus(): Promise<never> { throw unavailable(); }
-	public async getCacheDirectory(): Promise<never> { throw unavailable(); }
-	public async getModel(): Promise<never> { throw unavailable(); }
-	public importPackage(): never { throw unavailable(); }
-	public async listModels(): Promise<never> { throw unavailable(); }
-	public async cancelModel(): Promise<never> { throw unavailable(); }
-	public async deleteModel(): Promise<never> { throw unavailable(); }
-	public prepareModel(): never { throw unavailable(); }
-	public importModel(): never { throw unavailable(); }
+	public async getModelStatus(): Promise<never> {
+		throw unavailable();
+	}
+	public async getCacheDirectory(): Promise<never> {
+		throw unavailable();
+	}
+	public async getModel(): Promise<never> {
+		throw unavailable();
+	}
+	public importPackage(): never {
+		throw unavailable();
+	}
+	public async listModels(): Promise<never> {
+		throw unavailable();
+	}
+	public async cancelModel(): Promise<never> {
+		throw unavailable();
+	}
+	public async deleteModel(): Promise<never> {
+		throw unavailable();
+	}
+	public prepareModel(): never {
+		throw unavailable();
+	}
+	public importModel(): never {
+		throw unavailable();
+	}
 	public async start(): Promise<never> {
 		throw new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable'));
 	}
-	public async stop(): Promise<string> { return ''; }
-	public async cancel(): Promise<void> { }
-	protected override disposeCore(): void { }
+	public async stop(): Promise<string> {
+		return '';
+	}
+	public async cancel(): Promise<void> {}
+	protected override disposeCore(): void {}
 }
 
-function unavailable(): Error { return new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable')); }
+function unavailable(): Error {
+	return new Error(localize('dictation.connectionUnavailable', 'Dictation connection is unavailable'));
+}

@@ -56,7 +56,10 @@ export class PdfJsRenderer implements IPdfRenderer {
 		const destroy = () => {
 			if (destroying) return;
 			destroying = true;
-			void loadingTask.destroy().catch(() => undefined).finally(() => URL.revokeObjectURL(workerUrl));
+			void loadingTask
+				.destroy()
+				.catch(() => undefined)
+				.finally(() => URL.revokeObjectURL(workerUrl));
 		};
 		const result = new PdfJsRenderResult(destroy, request.scale);
 		const cancellation = addDisposableListener(request.signal, 'abort', () => result.freeze(), { once: true });
@@ -93,7 +96,11 @@ class PdfPageView implements PdfRenderedPage {
 	private textLayer: TextLayer | undefined;
 	private canvas: HTMLCanvasElement;
 
-	constructor(private page: PDFPageProxy | undefined, container: HTMLElement, scale: number) {
+	constructor(
+		private page: PDFPageProxy | undefined,
+		container: HTMLElement,
+		scale: number,
+	) {
 		this.pageNumber = page!.pageNumber;
 		this.viewport = page!.getViewport({ scale });
 		this.element = h(container.ownerDocument, 'div');
@@ -109,11 +116,19 @@ class PdfPageView implements PdfRenderedPage {
 		this.setScale(scale);
 	}
 
-	get width(): number { return this.viewport.width; }
-	get height(): number { return this.viewport.height; }
+	get width(): number {
+		return this.viewport.width;
+	}
+	get height(): number {
+		return this.viewport.height;
+	}
 
 	async loadText(content: Awaited<ReturnType<PDFPageProxy['getTextContent']>>, signal: AbortSignal): Promise<void> {
-		const layer = this.textLayer = new TextLayer({ textContentSource: content, container: this.textContainer, viewport: this.viewport });
+		const layer = (this.textLayer = new TextLayer({
+			textContentSource: content,
+			container: this.textContainer,
+			viewport: this.viewport,
+		}));
 		const cancellation = addDisposableListener(signal, 'abort', () => layer.cancel(), { once: true });
 		try {
 			await layer.render();
@@ -149,14 +164,23 @@ class PdfPageView implements PdfRenderedPage {
 		canvas.className = 'ash-pdf-page-canvas';
 		canvas.setAttribute('aria-hidden', 'true');
 		// Large pages and high zoom must not exceed browser canvas limits. CSS retains the requested size.
-		const ratio = Math.min(this.element.ownerDocument.defaultView?.devicePixelRatio ?? 1, Math.sqrt(16_777_216 / (this.width * this.height)), 8192 / Math.max(this.width, this.height));
+		const ratio = Math.min(
+			this.element.ownerDocument.defaultView?.devicePixelRatio ?? 1,
+			Math.sqrt(16_777_216 / (this.width * this.height)),
+			8192 / Math.max(this.width, this.height),
+		);
 		canvas.width = Math.max(1, Math.floor(this.width * ratio));
 		canvas.height = Math.max(1, Math.floor(this.height * ratio));
 		canvas.style.width = `${this.width}px`;
 		canvas.style.height = `${this.height}px`;
 		const context = canvas.getContext('2d');
 		if (!context) throw new Error('PDF rendering requires a 2D canvas context');
-		const task = this.page.render({ canvas, canvasContext: context, viewport: this.viewport, transform: [ratio, 0, 0, ratio, 0, 0] });
+		const task = this.page.render({
+			canvas,
+			canvasContext: context,
+			viewport: this.viewport,
+			transform: [ratio, 0, 0, ratio, 0, 0],
+		});
 		const cancellation = addDisposableListener(signal, 'abort', () => task.cancel(), { once: true });
 		try {
 			await task.promise;
@@ -183,10 +207,17 @@ class PdfJsRenderResult implements IPdfRenderResult {
 	private readonly lifetime = new AbortController();
 	private disposed = false;
 
-	constructor(private readonly releaseDocument: () => void, public scale: number) { }
+	constructor(
+		private readonly releaseDocument: () => void,
+		public scale: number,
+	) {}
 
-	get pageCount(): number { return this.pages.length; }
-	get text(): string { return this.pages.map(page => page.text).join('\n\n'); }
+	get pageCount(): number {
+		return this.pages.length;
+	}
+	get text(): string {
+		return this.pages.map(page => page.text).join('\n\n');
+	}
 
 	async setScale(scale: number, signal: AbortSignal): Promise<void> {
 		signal = AbortSignal.any([signal, this.lifetime.signal]);
@@ -211,5 +242,7 @@ class PdfJsRenderResult implements IPdfRenderResult {
 		this.releaseDocument();
 	}
 
-	[Symbol.dispose](): void { this.dispose(); }
+	[Symbol.dispose](): void {
+		this.dispose();
+	}
 }

@@ -1,20 +1,33 @@
-import { OPEN_LANGUAGE_SERVERS_COMMAND_ID } from "../../../../platform/language/common/languageServerService.js";
-import { localize } from "../../../../nls.js";
-import { ProductSlashCommands, type SlashCommandDefinition } from "../../../services/chat/common/chatService.js";
-import { NEW_CHAT_COMMAND_ID, OPEN_CHAT_SETTINGS_COMMAND_ID, SHOW_CHAT_HISTORY_COMMAND_ID, OPEN_CHAT_PERMISSIONS_COMMAND_ID, OPEN_GUARDIAN_SETUP_COMMAND_ID } from "./chat.js";
+import { OPEN_LANGUAGE_SERVERS_COMMAND_ID } from '../../../../platform/language/common/languageServerService.js';
+import { localize } from '../../../../nls.js';
+import { ProductSlashCommands, type SlashCommandDefinition } from '../../../services/chat/common/chatService.js';
+import {
+	NEW_CHAT_COMMAND_ID,
+	OPEN_CHAT_SETTINGS_COMMAND_ID,
+	SHOW_CHAT_HISTORY_COMMAND_ID,
+	OPEN_CHAT_PERMISSIONS_COMMAND_ID,
+	OPEN_GUARDIAN_SETUP_COMMAND_ID,
+} from './chat.js';
 
-import { OPEN_EXTENSIONS_COMMAND_ID, OPEN_INSTALLED_EXTENSIONS_COMMAND_ID } from "../../../../platform/extensionManagement/common/extensionManagementService.js";
+import {
+	OPEN_EXTENSIONS_COMMAND_ID,
+	OPEN_INSTALLED_EXTENSIONS_COMMAND_ID,
+} from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 
 const SLASH_COMMAND_NAME = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 export type SlashCommandBinding =
-	| { readonly origin: "local"; readonly actionId: string; }
-	| { readonly origin: "server"; };
+	{ readonly origin: 'local'; readonly actionId: string } | { readonly origin: 'server' };
 
 export type SlashCommandInput =
-	| { readonly kind: "message"; readonly text: string; }
-	| { readonly kind: "unknown"; readonly name: string; }
-	| { readonly kind: "command"; readonly command: SlashCommandDefinition; readonly binding: SlashCommandBinding; readonly argumentsText: string; };
+	| { readonly kind: 'message'; readonly text: string }
+	| { readonly kind: 'unknown'; readonly name: string }
+	| {
+			readonly kind: 'command';
+			readonly command: SlashCommandDefinition;
+			readonly binding: SlashCommandBinding;
+			readonly argumentsText: string;
+	  };
 
 /** Registers one canonical definition with its Desktop-only execution binding. */
 export interface LocalSlashCommandRegistration {
@@ -53,7 +66,8 @@ export class SlashCommandCatalog {
 		const commands: SlashCommandDefinition[] = [];
 		const append = (command: SlashCommandDefinition, binding: SlashCommandBinding): void => {
 			const normalized = validateDefinition(command);
-			if (entriesByName.has(normalized.name)) throw new RangeError(`Duplicate Slash Command name: /${normalized.name}`);
+			if (entriesByName.has(normalized.name))
+				throw new RangeError(`Duplicate Slash Command name: /${normalized.name}`);
 			const entry = Object.freeze({ command: normalized, binding });
 			entriesByName.set(normalized.name, entry);
 			// Extensions discovery belongs in the sidebar; retain the old slash binding for compatibility.
@@ -62,10 +76,11 @@ export class SlashCommandCatalog {
 			}
 		};
 		for (const local of this.local) {
-			if (!local.actionId.trim()) throw new TypeError(`Local Slash Command /${local.definition.name} requires an action ID`);
-			append(local.definition, Object.freeze({ origin: "local", actionId: local.actionId }));
+			if (!local.actionId.trim())
+				throw new TypeError(`Local Slash Command /${local.definition.name} requires an action ID`);
+			append(local.definition, Object.freeze({ origin: 'local', actionId: local.actionId }));
 		}
-		for (const command of this.server) append(command, Object.freeze({ origin: "server" }));
+		for (const command of this.server) append(command, Object.freeze({ origin: 'server' }));
 		this.entriesByName = entriesByName;
 		this._commands = Object.freeze(commands);
 	}
@@ -83,7 +98,9 @@ export class SlashCommandCatalog {
 		const normalizedQuery = query.replace(/[A-Z]/g, character => character.toLowerCase());
 		return this.commands
 			.flatMap((command, index) => {
-				const score = commandMatchScore(command.name, normalizedQuery) ?? descriptionMatchScore(command.description, normalizedQuery);
+				const score =
+					commandMatchScore(command.name, normalizedQuery) ??
+					descriptionMatchScore(command.description, normalizedQuery);
 				return score ? [{ command, index, score }] : [];
 			})
 			.sort((left, right) => compareMatchScores(left.score, right.score) || left.index - right.index)
@@ -136,10 +153,12 @@ function descriptionMatchScore(description: string, query: string): MatchScore |
 	const normalized = description.replace(/[A-Z]/g, character => character.toLowerCase());
 	for (const match of normalized.matchAll(new RegExp(escapeRegExp(query), 'g'))) {
 		const start = match.index;
-		if (start === 0 || !/[\p{L}\p{N}]/u.test([...normalized.slice(0, start)].at(-1)!)) return [MatchKind.DescriptionWordPrefix, 0, [...normalized.slice(0, start)].length];
+		if (start === 0 || !/[\p{L}\p{N}]/u.test([...normalized.slice(0, start)].at(-1)!))
+			return [MatchKind.DescriptionWordPrefix, 0, [...normalized.slice(0, start)].length];
 	}
 	const substringStart = normalized.indexOf(query);
-	if (substringStart >= 0) return [MatchKind.DescriptionSubstring, 0, [...normalized.slice(0, substringStart)].length];
+	if (substringStart >= 0)
+		return [MatchKind.DescriptionSubstring, 0, [...normalized.slice(0, substringStart)].length];
 	const subsequence = commandMatchScore(normalized, query);
 	return subsequence?.[0] === MatchKind.Subsequence
 		? [MatchKind.DescriptionSubsequence, subsequence[1], subsequence[2]]
@@ -164,7 +183,7 @@ export function matchedCharacterIndices(text: string, query: string): readonly n
 			return needle.map((_, offset) => start + offset);
 		}
 	}
-	let best: { gap: number; start: number; indices: number[]; } | undefined;
+	let best: { gap: number; start: number; indices: number[] } | undefined;
 	for (let start = 0; start < characters.length; start++) {
 		if (characters[start] !== needle[0]) continue;
 		const indices = [start];
@@ -190,9 +209,9 @@ const productActions: Record<keyof typeof ProductSlashCommands, string> = {
 };
 
 export const DesktopSlashCommands: readonly LocalSlashCommandRegistration[] = Object.freeze([
-	localCommand("new", "Start a new chat", NEW_CHAT_COMMAND_ID),
-	localCommand("history", "Show chat history", SHOW_CHAT_HISTORY_COMMAND_ID),
-	localCommand("config", localize('chat.settings.openCommand', 'Open chat settings'), OPEN_CHAT_SETTINGS_COMMAND_ID),
+	localCommand('new', 'Start a new chat', NEW_CHAT_COMMAND_ID),
+	localCommand('history', 'Show chat history', SHOW_CHAT_HISTORY_COMMAND_ID),
+	localCommand('config', localize('chat.settings.openCommand', 'Open chat settings'), OPEN_CHAT_SETTINGS_COMMAND_ID),
 	...Object.entries(productActions).map(([id, actionId]) => {
 		const definition = ProductSlashCommands[id as keyof typeof ProductSlashCommands];
 		let description = definition.description;
@@ -206,27 +225,29 @@ export const DesktopSlashCommands: readonly LocalSlashCommandRegistration[] = Ob
 ]);
 
 export function parseSlashCommandInput(value: string, catalog: SlashCommandCatalog): SlashCommandInput {
-	if (!value.startsWith("/")) return { kind: "message", text: value };
+	if (!value.startsWith('/')) return { kind: 'message', text: value };
 	const body = value.slice(1);
 	const separator = body.search(/\s/);
 	const name = separator === -1 ? body : body.slice(0, separator);
 	const command = catalog.get(name);
 	const binding = catalog.binding(name);
-	if (!command || !binding) return { kind: "unknown", name };
-	const argumentsText = separator === -1 ? "" : body.slice(separator).trimStart();
-	if (argumentsText && command.argumentMode === "none") return { kind: "unknown", name };
-	return { kind: "command", command, binding, argumentsText };
+	if (!command || !binding) return { kind: 'unknown', name };
+	const argumentsText = separator === -1 ? '' : body.slice(separator).trimStart();
+	if (argumentsText && command.argumentMode === 'none') return { kind: 'unknown', name };
+	return { kind: 'command', command, binding, argumentsText };
 }
 
 function localCommand(name: string, description: string, actionId: string): LocalSlashCommandRegistration {
-	return Object.freeze({ definition: Object.freeze({ name, description, argumentMode: "none" }), actionId });
+	return Object.freeze({ definition: Object.freeze({ name, description, argumentMode: 'none' }), actionId });
 }
 
 function validateDefinition(definition: SlashCommandDefinition): SlashCommandDefinition {
-	if (!definition || typeof definition !== "object") throw new TypeError("Slash Command definition must be an object");
+	if (!definition || typeof definition !== 'object')
+		throw new TypeError('Slash Command definition must be an object');
 	validateName(definition.name);
 	if (!definition.description.trim()) throw new TypeError(`Slash Command /${definition.name} requires a description`);
-	if (definition.argumentMode !== "none" && definition.argumentMode !== "optional") throw new TypeError(`Slash Command /${definition.name} has an invalid argument mode`);
+	if (definition.argumentMode !== 'none' && definition.argumentMode !== 'optional')
+		throw new TypeError(`Slash Command /${definition.name} has an invalid argument mode`);
 	return Object.freeze({
 		name: definition.name,
 		description: definition.description,

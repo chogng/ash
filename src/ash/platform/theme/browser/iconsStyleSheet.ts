@@ -11,8 +11,12 @@ export class IconsStyleSheet extends Disposable {
 		document.head.append(style);
 		this._register(toDisposable(() => style.remove()));
 		const update = (): void => {
-			style.textContent = [...getIconRegistry().getFonts(), ...themeService.getProductIconTheme().fonts ?? []]
-				.map(font => `@font-face{font-family:"${font.id}";src:${font.src};font-style:${font.style ?? 'normal'};font-weight:${font.weight ?? 'normal'};font-display:block;}`).join('\n');
+			style.textContent = [...getIconRegistry().getFonts(), ...(themeService.getProductIconTheme().fonts ?? [])]
+				.map(
+					font =>
+						`@font-face{font-family:"${font.id}";src:${font.src};font-style:${font.style ?? 'normal'};font-weight:${font.weight ?? 'normal'};font-display:block;}`,
+				)
+				.join('\n');
 		};
 		this._register(themeService.onDidProductIconThemeChange(update));
 		this._register(getIconRegistry().onDidChange(update));

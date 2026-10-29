@@ -17,30 +17,66 @@ import { Event } from '../../../../../../base/common/event.js';
 import { TestConfigurationService } from '../../../../../services/configuration/test/common/testServices.js';
 import '../../../common/terminalConfiguration.js';
 
-const menus: IContextMenuService = { contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None, showContextMenu() { assert.fail('Unexpected command menu'); }, hideContextMenu() { } };
+const menus: IContextMenuService = {
+	contextMenuStyle: 'custom',
+	onDidShowContextMenu: Event.None,
+	onDidHideContextMenu: Event.None,
+	showContextMenu() {
+		assert.fail('Unexpected command menu');
+	},
+	hideContextMenu() {},
+};
 
 ensureNoDisposablesAreLeakedInTestSuite();
 
-function createScreen(lifetime: DisposableStore, viewportY: number, lines: readonly { readonly key: string; readonly line: number; readonly isDisposed?: boolean; }[], bufferType: 'normal' | 'alternate' = 'normal') {
+function createScreen(
+	lifetime: DisposableStore,
+	viewportY: number,
+	lines: readonly { readonly key: string; readonly line: number; readonly isDisposed?: boolean }[],
+	bufferType: 'normal' | 'alternate' = 'normal',
+) {
 	const scrolls: number[] = [];
 	const active = { type: bufferType, viewportY };
 	let markerIndex = 0;
 	const terminal = {
 		buffer: { active },
-		scrollToLine(line: number) { active.viewportY = line; scrolls.push(line); },
+		scrollToLine(line: number) {
+			active.viewportY = line;
+			scrolls.push(line);
+		},
 		registerMarker() {
 			const item = lines[markerIndex++]!;
-			return { id: markerIndex, line: item.line, isDisposed: item.isDisposed ?? false, onDispose: Event.None, dispose() { } } satisfies IMarker;
+			return {
+				id: markerIndex,
+				line: item.line,
+				isDisposed: item.isDisposed ?? false,
+				onDispose: Event.None,
+				dispose() {},
+			} satisfies IMarker;
 		},
-		registerDecoration() { return undefined; },
+		registerDecoration() {
+			return undefined;
+		},
 	} as unknown as Terminal;
 	const capabilities = lifetime.add(new TerminalCapabilityStore());
 	capabilities.add(TerminalCapability.BufferMarkDetection, lifetime.add(new BufferMarkCapability(terminal)));
-	const decorations = lifetime.add(new DecorationAddon(capabilities, lifetime.add(new TestConfigurationService()), lifetime.add(new TestThemeService(lightColorTheme)), lifetime.add(new BrowserClipboardService(undefined)), menus));
+	const decorations = lifetime.add(
+		new DecorationAddon(
+			capabilities,
+			lifetime.add(new TestConfigurationService()),
+			lifetime.add(new TestThemeService(lightColorTheme)),
+			lifetime.add(new BrowserClipboardService(undefined)),
+			menus,
+		),
+	);
 	decorations.activate(terminal);
 	for (const { key } of lines) {
 		const [process, commandId = key] = key.split(':');
-		decorations.registerCommandDecoration({ commandId, status: 'running', exitCode: undefined }, Number(process) || 0, terminal.registerMarker(0)!);
+		decorations.registerCommandDecoration(
+			{ commandId, status: 'running', exitCode: undefined },
+			Number(process) || 0,
+			terminal.registerMarker(0)!,
+		);
 	}
 	const navigation = lifetime.add(new MarkNavigationAddon(() => decorations.markers));
 	navigation.activate(terminal);

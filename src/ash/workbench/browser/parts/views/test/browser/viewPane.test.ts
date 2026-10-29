@@ -1,9 +1,9 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
 import { mock } from 'node:test';
 import { DeferredPromise } from '../../../../../../base/common/async.js';
-import type { IViewPaneOptions } from "../../../../../../workbench/browser/parts/views/viewPane.js";
+import type { IViewPaneOptions } from '../../../../../../workbench/browser/parts/views/viewPane.js';
 
 test('ViewPane progress follows delay, body visibility, completion and disposal', async () => {
 	const dom = new JSDOM('<!doctype html><body></body>');
@@ -12,7 +12,9 @@ test('ViewPane progress follows delay, body visibility, completion and disposal'
 	try {
 		const { ViewPane } = await import('../../viewPane.js');
 		class ProgressPane extends ViewPane {
-			constructor() { super(dom.window.document.body, { id: 'progress', title: 'Search' }); }
+			constructor() {
+				super(dom.window.document.body, { id: 'progress', title: 'Search' });
+			}
 		}
 		using pane = new ProgressPane();
 		pane.setVisible(true);
@@ -63,7 +65,9 @@ test('ViewPane keeps progress until all overlapping promises settle, including f
 	try {
 		const { ViewPane } = await import('../../viewPane.js');
 		class ProgressPane extends ViewPane {
-			constructor() { super(dom.window.document.body, { id: 'progress', title: 'Search' }); }
+			constructor() {
+				super(dom.window.document.body, { id: 'progress', title: 'Search' });
+			}
 		}
 		using pane = new ProgressPane();
 		pane.setVisible(true);
@@ -87,19 +91,19 @@ test('ViewPane keeps progress until all overlapping promises settle, including f
 	}
 });
 
-test("ViewPane title chevron tracks collapsed state", async () => {
-	const dom = new JSDOM("<!doctype html><body></body>");
+test('ViewPane title chevron tracks collapsed state', async () => {
+	const dom = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(dom);
 	try {
-		const { ViewPane } = await import("../../../../../../workbench/browser/parts/views/viewPane.js");
+		const { ViewPane } = await import('../../../../../../workbench/browser/parts/views/viewPane.js');
 		class TestViewPane extends ViewPane {
 			constructor(container: HTMLElement, options: IViewPaneOptions) {
 				super(container, options);
 			}
 		}
 		using pane = new TestViewPane(dom.window.document.body, {
-			id: "test.pane",
-			title: "Test Pane",
+			id: 'test.pane',
+			title: 'Test Pane',
 			collapsed: true,
 		});
 
@@ -110,22 +114,22 @@ test("ViewPane title chevron tracks collapsed state", async () => {
 		pane.setVisible(true);
 		assert.deepEqual(visibility, []);
 
-		const title = pane.element.querySelector(".ash-pane-view-header-title");
-		const button = pane.element.querySelector<HTMLButtonElement>(".ash-pane-view-header-button");
-		const content = pane.element.querySelector<HTMLElement>(".ash-pane-view-content");
-		assert.equal(title?.textContent, "Test Pane");
-		assert.equal(button?.getAttribute("aria-expanded"), "false");
-		assert.equal(button?.getAttribute("aria-controls"), content?.id);
-		assert.equal(button?.classList.contains("expanded"), false);
-		assert.equal(pane.element.classList.contains("collapsed"), true);
+		const title = pane.element.querySelector('.ash-pane-view-header-title');
+		const button = pane.element.querySelector<HTMLButtonElement>('.ash-pane-view-header-button');
+		const content = pane.element.querySelector<HTMLElement>('.ash-pane-view-content');
+		assert.equal(title?.textContent, 'Test Pane');
+		assert.equal(button?.getAttribute('aria-expanded'), 'false');
+		assert.equal(button?.getAttribute('aria-controls'), content?.id);
+		assert.equal(button?.classList.contains('expanded'), false);
+		assert.equal(pane.element.classList.contains('collapsed'), true);
 		assert.equal(content?.hidden, true);
-		assert.equal(button?.querySelectorAll(".ash-icon").length, 2);
+		assert.equal(button?.querySelectorAll('.ash-icon').length, 2);
 
 		button?.click();
 		assert.equal(pane.isCollapsed(), false);
-		assert.equal(button?.getAttribute("aria-expanded"), "true");
-		assert.equal(button?.classList.contains("expanded"), true);
-		assert.equal(pane.element.classList.contains("collapsed"), false);
+		assert.equal(button?.getAttribute('aria-expanded'), 'true');
+		assert.equal(button?.classList.contains('expanded'), true);
+		assert.equal(pane.element.classList.contains('collapsed'), false);
 		assert.equal(content?.hidden, false);
 
 		assert.equal(pane.isBodyVisible(), true);
@@ -139,9 +143,9 @@ test("ViewPane title chevron tracks collapsed state", async () => {
 		pane.setVisible(true);
 		assert.deepEqual(visibility, [true, false, true]);
 
-		pane.setTitle("Renamed Pane");
-		assert.equal(title?.textContent, "Renamed Pane");
-		assert.equal(button?.querySelectorAll(".ash-icon").length, 2);
+		pane.setTitle('Renamed Pane');
+		assert.equal(title?.textContent, 'Renamed Pane');
+		assert.equal(button?.querySelectorAll('.ash-icon').length, 2);
 	} finally {
 		for (const name of installedGlobals) Reflect.deleteProperty(globalThis, name);
 		dom.window.close();
@@ -160,10 +164,7 @@ function installDomGlobals(dom: JSDOM): readonly string[] {
 		navigator: dom.window.navigator,
 	};
 	for (const [name, value] of Object.entries(globals)) {
-		Object.defineProperty(globalThis, name, {
-			configurable: true,
-			value,
-		});
+		Object.defineProperty(globalThis, name, { configurable: true, value });
 	}
 	return Object.keys(globals);
 }
@@ -187,11 +188,13 @@ test('PaneView reallocates sibling space when a pane content minimum changes', a
 		assert.equal(view.getPaneSize(changes), 28);
 		changes.setCollapsed(false);
 		assert.ok(view.getPaneSize(changes) >= 228);
-		assert.throws(() => changes.minimumBodySize = Number.NaN, RangeError);
-		assert.throws(() => changes.minimumBodySize = 501, RangeError);
+		assert.throws(() => (changes.minimumBodySize = Number.NaN), RangeError);
+		assert.throws(() => (changes.minimumBodySize = 501), RangeError);
 		assert.equal(changes.minimumBodySize, 200);
 	} finally {
-		for (const name of installedGlobals) { Reflect.deleteProperty(globalThis, name); }
+		for (const name of installedGlobals) {
+			Reflect.deleteProperty(globalThis, name);
+		}
 		dom.window.close();
 	}
 });
@@ -200,35 +203,55 @@ test('View welcome content follows context, preserves focus, runs commands and r
 	const dom = new JSDOM('<!doctype html><body></body>');
 	const installedGlobals = installDomGlobals(dom);
 	try {
-		const { ViewPane, ViewWelcomeController } = await import('../../../../../../workbench/browser/parts/views/viewPane.js');
+		const { ViewPane, ViewWelcomeController } =
+			await import('../../../../../../workbench/browser/parts/views/viewPane.js');
 		const { WorkbenchViewRegistry } = await import('../../../../../../workbench/common/views.js');
-		const { ContextKeyService, IContextKeyService } = await import('../../../../../../platform/contextkey/browser/contextKeyService.js');
+		const { ContextKeyService, IContextKeyService } =
+			await import('../../../../../../platform/contextkey/browser/contextKeyService.js');
 		const { ContextKeyExpr } = await import('../../../../../../platform/contextkey/common/contextkey.js');
-		const { InstantiationService } = await import('../../../../../../platform/instantiation/common/instantiationService.js');
+		const { InstantiationService } =
+			await import('../../../../../../platform/instantiation/common/instantiationService.js');
 		const { registerCodeEditorServices } = await import('../../../../../../editor/test/browser/testCodeEditor.js');
-		const { CommandRegistry, ICommandService } = await import('../../../../../../platform/commands/common/commands.js');
-		const { CommandService } = await import('../../../../../../workbench/services/commands/common/commandService.js');
+		const { CommandRegistry, ICommandService } =
+			await import('../../../../../../platform/commands/common/commands.js');
+		const { CommandService } =
+			await import('../../../../../../workbench/services/commands/common/commandService.js');
 		class WelcomePane extends ViewPane {
 			public empty = true;
-			constructor(container: HTMLElement) { super(container, { id: 'welcome.test', title: 'Welcome' }); }
-			public override shouldShowWelcome(): boolean { return this.empty; }
-			public changeEmpty(empty: boolean): void { this.empty = empty; this.viewWelcomeState.fire(); }
-			public get body(): HTMLElement { return this.contentElement; }
+			constructor(container: HTMLElement) {
+				super(container, { id: 'welcome.test', title: 'Welcome' });
+			}
+			public override shouldShowWelcome(): boolean {
+				return this.empty;
+			}
+			public changeEmpty(empty: boolean): void {
+				this.empty = empty;
+				this.viewWelcomeState.fire();
+			}
+			public get body(): HTMLElement {
+				return this.contentElement;
+			}
 		}
 		using services = new InstantiationService();
 		using context = new ContextKeyService();
 		services.registerInstance(IContextKeyService, context);
 		const commands = new CommandRegistry();
 		const calls: unknown[][] = [];
-		using command = commands.register('welcome.start', (_accessor, ...args) => { calls.push([...args]); });
+		using command = commands.register('welcome.start', (_accessor, ...args) => {
+			calls.push([...args]);
+		});
 		using commandService = new CommandService(services, commands);
 		services.registerInstance(ICommandService, commandService);
 		registerCodeEditorServices(services);
 		const registry = new WorkbenchViewRegistry();
-		using fallback = registry.registerViewWelcomeContent('welcome.test', { content: 'No provider', when: 'default' });
+		using fallback = registry.registerViewWelcomeContent('welcome.test', {
+			content: 'No provider',
+			when: 'default',
+		});
 		using content = registry.registerViewWelcomeContent('welcome.test', {
 			content: 'Start source control\n[Start](command:welcome.start?%5B%22folder%22%5D)',
-			when: ContextKeyExpr.has('hasFolder'), precondition: ContextKeyExpr.has('ready'),
+			when: ContextKeyExpr.has('hasFolder'),
+			precondition: ContextKeyExpr.has('ready'),
 		});
 		using pane = new WelcomePane(dom.window.document.body);
 		pane.setVisible(true);

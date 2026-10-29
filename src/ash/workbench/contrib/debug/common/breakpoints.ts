@@ -12,7 +12,7 @@ class Breakpoints {
 	readonly language: string;
 
 	constructor(
-		contribution: { language: string; when?: string; },
+		contribution: { language: string; when?: string },
 		@IContextKeyService private readonly context: IContextKeyService,
 	) {
 		this.language = contribution.language;
@@ -32,9 +32,9 @@ export function canSetBreakpointsIn(
 ): boolean {
 	if (configuration.getValue<boolean>('debug.allowBreakpointsEverywhere') !== false) return true;
 	return extensions
-		.getExtensionPointContributions<readonly { language: string; when?: string; }[]>('breakpoints')
-		.some((entry) =>
-			entry.value.some((contribution) => {
+		.getExtensionPointContributions<readonly { language: string; when?: string }[]>('breakpoints')
+		.some(entry =>
+			entry.value.some(contribution => {
 				const policy = new Breakpoints(contribution, context);
 				return policy.language === language && policy.enabled;
 			}),

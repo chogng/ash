@@ -15,6 +15,8 @@ export class BrowserRemoteIndicatorContribution extends Disposable {
 	public update(model: IBrowserViewModel | undefined): void {
 		const authority = model?.info.remoteAuthority;
 		this.element.hidden = !authority;
-		this.element.textContent = authority ? localize({ bundle: 'ash.workbench', key: 'browser.remoteRoute' }, 'Remote connection') : '';
+		this.element.textContent = authority
+			? localize({ bundle: 'ash.workbench', key: 'browser.remoteRoute' }, 'Remote connection')
+			: '';
 	}
 }

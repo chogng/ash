@@ -6,12 +6,15 @@ import type { IInstructionService } from '../common/instructionService.js';
 export function createAppServerInstructionService(connection: AppServerProtocolClient): IInstructionService {
 	return {
 		isAvailable: true,
-		list: async sessionId => (await appServerRequest(connection, 'instructions/list', sessionId ? { sessionId } : {})).instructions.map(instruction => ({
-			path: instruction.path,
-			name: instruction.name,
-			description: instruction.description ?? undefined,
-			scope: instruction.scope,
-		})),
+		list: async sessionId =>
+			(await appServerRequest(connection, 'instructions/list', sessionId ? { sessionId } : {})).instructions.map(
+				instruction => ({
+					path: instruction.path,
+					name: instruction.name,
+					description: instruction.description ?? undefined,
+					scope: instruction.scope,
+				}),
+			),
 	};
 }
 

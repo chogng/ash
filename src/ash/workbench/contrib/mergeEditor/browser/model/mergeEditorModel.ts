@@ -73,21 +73,35 @@ export class MergeEditorModel extends Disposable {
 		this.base = this._register(new TextModel(base, { languageId }));
 		this.current = this._register(new TextModel(current, { languageId }));
 		this.incoming = this._register(new TextModel(incoming, { languageId }));
-		this._register(result.onDidChangeLanguage(() => {
-			const language = result.getLanguageId();
-			this.base.setLanguage(language);
-			this.current.setLanguage(language);
-			this.incoming.setLanguage(language);
-		}));
+		this._register(
+			result.onDidChangeLanguage(() => {
+				const language = result.getLanguageId();
+				this.base.setLanguage(language);
+				this.current.setLanguage(language);
+				this.incoming.setLanguage(language);
+			}),
+		);
 		this._register(toDisposable(() => this.resultRequest?.dispose(true)));
 	}
 
-	public get hunks(): readonly MergeEditorHunk[] { return this.hunksValue; }
-	public get unresolvedCount(): number { return this.hunksValue.filter(hunk => hunk.unresolved).length; }
-	public getHandledState(): readonly boolean[] { return this.hunksValue.map(hunk => hunk.handled); }
-	public get isReady(): boolean { return this.ready; }
-	public get error(): Error | undefined { return this.errorValue; }
-	public getChanges(side: Exclude<MergeEditorSide, 'base'>): readonly DetailedLineRangeMapping[] { return this.changesFor(side); }
+	public get hunks(): readonly MergeEditorHunk[] {
+		return this.hunksValue;
+	}
+	public get unresolvedCount(): number {
+		return this.hunksValue.filter(hunk => hunk.unresolved).length;
+	}
+	public getHandledState(): readonly boolean[] {
+		return this.hunksValue.map(hunk => hunk.handled);
+	}
+	public get isReady(): boolean {
+		return this.ready;
+	}
+	public get error(): Error | undefined {
+		return this.errorValue;
+	}
+	public getChanges(side: Exclude<MergeEditorSide, 'base'>): readonly DetailedLineRangeMapping[] {
+		return this.changesFor(side);
+	}
 
 	public async initialize(signal: AbortSignal): Promise<void> {
 		const request = new CancellationTokenSource();
@@ -106,17 +120,25 @@ export class MergeEditorModel extends Disposable {
 			this.currentChanges = completeChanges(current);
 			this.incomingChanges = completeChanges(incoming);
 			this.resultChanges = completeChanges(result);
-			this.sourceHunks = buildSourceHunks(this.base, this.current, this.incoming, this.currentChanges, this.incomingChanges);
-			this._register(this.result.onDidChangeContent(change => {
-				if (change.reason === TextModelChangeReason.Undo || change.reason === TextModelChangeReason.Redo) {
-					const previous = this.handledHistory.get(this.result.getAlternativeVersionId());
-					if (previous) this.handledStates = [...previous];
-					else this.hasManualResultChange = true;
-				} else if (!this.applyingChoice) {
-					this.hasManualResultChange = true;
-				}
-				void this.refreshResult();
-			}));
+			this.sourceHunks = buildSourceHunks(
+				this.base,
+				this.current,
+				this.incoming,
+				this.currentChanges,
+				this.incomingChanges,
+			);
+			this._register(
+				this.result.onDidChangeContent(change => {
+					if (change.reason === TextModelChangeReason.Undo || change.reason === TextModelChangeReason.Redo) {
+						const previous = this.handledHistory.get(this.result.getAlternativeVersionId());
+						if (previous) this.handledStates = [...previous];
+						else this.hasManualResultChange = true;
+					} else if (!this.applyingChoice) {
+						this.hasManualResultChange = true;
+					}
+					void this.refreshResult();
+				}),
+			);
 			if (this.result.getVersionId() !== resultVersion) await this.refreshResult();
 			else {
 				this.ready = true;
@@ -140,7 +162,13 @@ export class MergeEditorModel extends Disposable {
 		try {
 			const version = this.result.getVersionId();
 			const diff = await this.diffComputer.computeDiff(this.base, this.result, diffOptions, request.token);
-			if (this.isDisposed || this.resultRequest !== request || generation !== this.generation || this.result.getVersionId() !== version) return;
+			if (
+				this.isDisposed ||
+				this.resultRequest !== request ||
+				generation !== this.generation ||
+				this.result.getVersionId() !== version
+			)
+				return;
 			this.resultChanges = completeChanges(diff);
 			this.ready = true;
 			this.updateHunks();
@@ -161,19 +189,21 @@ export class MergeEditorModel extends Disposable {
 		const resultMapping = this.mappingFromBase('result');
 		const computed = this.sourceHunks.map((source, index) => {
 			const result = resultMapping.mapRange(source.base);
-			const hunk = {
-				...source,
-				index,
-				result,
-			};
+			const hunk = { ...source, index, result };
 			const resolution = this.classifyHunk(hunk);
 			return { ...hunk, resolution };
 		});
 		const resultTexts = computed.map(hunk => textInRange(this.result, hunk.result));
 		if (!this.handledStates || this.handledStates.length !== computed.length) {
-			this.handledStates = this.initialHandled?.length === computed.length
-				? [...this.initialHandled]
-				: computed.map(hunk => hunk.resolution !== 'unresolved' && hunk.resolution !== 'base' && hunk.resolution !== 'manual');
+			this.handledStates =
+				this.initialHandled?.length === computed.length
+					? [...this.initialHandled]
+					: computed.map(
+							hunk =>
+								hunk.resolution !== 'unresolved' &&
+								hunk.resolution !== 'base' &&
+								hunk.resolution !== 'manual',
+						);
 		} else if (this.hasManualResultChange) {
 			for (const [index, text] of resultTexts.entries()) {
 				if (this.resultTexts[index] !== text) this.handledStates[index] = true;
@@ -186,7 +216,8 @@ export class MergeEditorModel extends Disposable {
 			return { ...hunk, handled, unresolved: !handled || hunk.resolution === 'unresolved' };
 		});
 		this.handledHistory.set(this.result.getAlternativeVersionId(), [...this.handledStates]);
-		while (this.handledHistory.size > MAX_HANDLED_HISTORY) this.handledHistory.delete(this.handledHistory.keys().next().value!);
+		while (this.handledHistory.size > MAX_HANDLED_HISTORY)
+			this.handledHistory.delete(this.handledHistory.keys().next().value!);
 		this.changeEmitter.fire();
 	}
 
@@ -197,17 +228,21 @@ export class MergeEditorModel extends Disposable {
 	public acceptRemaining(choice: 'current' | 'incoming'): void {
 		const indices = this.hunksValue.filter(hunk => hunk.unresolved).map(hunk => hunk.index);
 		if (indices.length === 0) return;
-		this.acceptEdits(indices, indices.map(index => this.editForHunk(index, choice)));
+		this.acceptEdits(
+			indices,
+			indices.map(index => this.editForHunk(index, choice)),
+		);
 	}
 
 	public setHandled(index: number, handled: boolean): void {
-		if (!this.ready || !this.handledStates || !this.hunksValue[index]) throw new RangeError('Merge conflict is unavailable');
+		if (!this.ready || !this.handledStates || !this.hunksValue[index])
+			throw new RangeError('Merge conflict is unavailable');
 		if (this.handledStates[index] === handled) return;
 		this.handledStates[index] = handled;
 		this.updateHunks();
 	}
 
-	private acceptEdits(indices: readonly number[], edits: readonly { range: Range; text: string; }[]): void {
+	private acceptEdits(indices: readonly number[], edits: readonly { range: Range; text: string }[]): void {
 		if (!this.ready || !this.handledStates) throw new Error('Merge differences are still computing');
 		const beforeVersion = this.result.getVersionId();
 		this.applyingChoice = true;
@@ -220,7 +255,7 @@ export class MergeEditorModel extends Disposable {
 		if (this.result.getVersionId() === beforeVersion) this.updateHunks();
 	}
 
-	private classifyHunk(hunk: SourceHunk & { readonly result: LineRange; }): MergeEditorResolution {
+	private classifyHunk(hunk: SourceHunk & { readonly result: LineRange }): MergeEditorResolution {
 		const result = textInRange(this.result, hunk.result);
 		if (/^(?:<{7}|={7}|>{7})/m.test(result)) return 'unresolved';
 		for (const side of ['current', 'incoming', 'base'] as const) {
@@ -233,7 +268,7 @@ export class MergeEditorModel extends Disposable {
 		return 'manual';
 	}
 
-	public editForHunk(index: number, choice: MergeEditorChoice): { range: Range; text: string; } {
+	public editForHunk(index: number, choice: MergeEditorChoice): { range: Range; text: string } {
 		if (!this.ready) throw new Error('Merge differences are still computing');
 		const hunk = this.hunksValue[index];
 		if (!hunk) throw new RangeError('Merge conflict does not exist');
@@ -241,30 +276,56 @@ export class MergeEditorModel extends Disposable {
 		const incoming = textInRange(this.incoming, hunk.incoming);
 		let text: string;
 		switch (choice) {
-			case 'base': text = textInRange(this.base, hunk.base); break;
-			case 'current': text = current; break;
-			case 'incoming': text = incoming; break;
-			case 'both': text = this.smartCombine(hunk, current, incoming) ?? current + incoming; break;
-			case 'bothReversed': text = this.smartCombine(hunk, current, incoming) ?? incoming + current; break;
+			case 'base':
+				text = textInRange(this.base, hunk.base);
+				break;
+			case 'current':
+				text = current;
+				break;
+			case 'incoming':
+				text = incoming;
+				break;
+			case 'both':
+				text = this.smartCombine(hunk, current, incoming) ?? current + incoming;
+				break;
+			case 'bothReversed':
+				text = this.smartCombine(hunk, current, incoming) ?? incoming + current;
+				break;
 		}
 		return { range: rangeInModel(this.result, hunk.result), text };
 	}
 
 	public canSmartCombine(index: number): boolean {
 		const hunk = this.hunksValue[index];
-		return Boolean(hunk && this.smartCombine(hunk, textInRange(this.current, hunk.current), textInRange(this.incoming, hunk.incoming)) !== undefined);
+		return Boolean(
+			hunk &&
+			this.smartCombine(
+				hunk,
+				textInRange(this.current, hunk.current),
+				textInRange(this.incoming, hunk.incoming),
+			) !== undefined,
+		);
 	}
 
 	private smartCombine(hunk: SourceHunk, current: string, incoming: string): string | undefined {
 		const baseText = textInRange(this.base, hunk.base);
 		const currentEdits = characterEdits(this.base, this.current, hunk.base, this.currentChanges);
 		const incomingEdits = characterEdits(this.base, this.incoming, hunk.base, this.incomingChanges);
-		if (!currentEdits || !incomingEdits || applyCharacterEdits(baseText, currentEdits) !== current || applyCharacterEdits(baseText, incomingEdits) !== incoming) return undefined;
-		const combined = [...currentEdits, ...incomingEdits].sort((left, right) => left.start - right.start || left.end - right.end);
+		if (
+			!currentEdits ||
+			!incomingEdits ||
+			applyCharacterEdits(baseText, currentEdits) !== current ||
+			applyCharacterEdits(baseText, incomingEdits) !== incoming
+		)
+			return undefined;
+		const combined = [...currentEdits, ...incomingEdits].sort(
+			(left, right) => left.start - right.start || left.end - right.end,
+		);
 		for (let index = 1; index < combined.length; index++) {
 			const previous = combined[index - 1];
 			const next = combined[index];
-			if (previous.end > next.start || (previous.start === next.start && previous.end === next.end)) return undefined;
+			if (previous.end > next.start || (previous.start === next.start && previous.end === next.end))
+				return undefined;
 		}
 		return applyCharacterEdits(baseText, combined);
 	}
@@ -306,9 +367,12 @@ export class MergeEditorModel extends Disposable {
 
 	private changesFor(side: Exclude<MergeEditorSide, 'base'>): readonly DetailedLineRangeMapping[] {
 		switch (side) {
-			case 'current': return this.currentChanges;
-			case 'incoming': return this.incomingChanges;
-			case 'result': return this.resultChanges;
+			case 'current':
+				return this.currentChanges;
+			case 'incoming':
+				return this.incomingChanges;
+			case 'result':
+				return this.resultChanges;
 		}
 	}
 }
@@ -318,12 +382,30 @@ function completeChanges(diff: IDocumentDiff): readonly DetailedLineRangeMapping
 	return diff.changes;
 }
 
-function buildSourceHunks(base: TextModel, current: TextModel, incoming: TextModel, currentChanges: readonly DetailedLineRangeMapping[], incomingChanges: readonly DetailedLineRangeMapping[]): readonly SourceHunk[] {
-	const currentMapping = new DocumentLineRangeMap(currentChanges.map(change => new LineRangeMapping(change.original, change.modified)), base.getLineCount());
-	const incomingMapping = new DocumentLineRangeMap(incomingChanges.map(change => new LineRangeMapping(change.original, change.modified)), base.getLineCount());
-	const changes = [...currentChanges.map(change => ({ range: change.original, side: 'current' as const })), ...incomingChanges.map(change => ({ range: change.original, side: 'incoming' as const }))]
-		.sort((left, right) => left.range.startLineNumber - right.range.startLineNumber || left.range.endLineNumberExclusive - right.range.endLineNumberExclusive);
-	const groups: { base: LineRange; currentChanged: boolean; incomingChanged: boolean; }[] = [];
+function buildSourceHunks(
+	base: TextModel,
+	current: TextModel,
+	incoming: TextModel,
+	currentChanges: readonly DetailedLineRangeMapping[],
+	incomingChanges: readonly DetailedLineRangeMapping[],
+): readonly SourceHunk[] {
+	const currentMapping = new DocumentLineRangeMap(
+		currentChanges.map(change => new LineRangeMapping(change.original, change.modified)),
+		base.getLineCount(),
+	);
+	const incomingMapping = new DocumentLineRangeMap(
+		incomingChanges.map(change => new LineRangeMapping(change.original, change.modified)),
+		base.getLineCount(),
+	);
+	const changes = [
+		...currentChanges.map(change => ({ range: change.original, side: 'current' as const })),
+		...incomingChanges.map(change => ({ range: change.original, side: 'incoming' as const })),
+	].sort(
+		(left, right) =>
+			left.range.startLineNumber - right.range.startLineNumber ||
+			left.range.endLineNumberExclusive - right.range.endLineNumberExclusive,
+	);
+	const groups: { base: LineRange; currentChanged: boolean; incomingChanged: boolean }[] = [];
 	for (const change of changes) {
 		const last = groups.at(-1);
 		if (last && last.base.endLineNumberExclusive >= change.range.startLineNumber) {
@@ -331,18 +413,32 @@ function buildSourceHunks(base: TextModel, current: TextModel, incoming: TextMod
 			if (change.side === 'current') last.currentChanged = true;
 			else last.incomingChanged = true;
 		} else {
-			groups.push({ base: change.range, currentChanged: change.side === 'current', incomingChanged: change.side === 'incoming' });
+			groups.push({
+				base: change.range,
+				currentChanged: change.side === 'current',
+				incomingChanged: change.side === 'incoming',
+			});
 		}
 	}
-	return groups.filter(group => group.currentChanged && group.incomingChanged).map(group => ({
-		base: group.base,
-		current: currentMapping.mapRange(group.base),
-		incoming: incomingMapping.mapRange(group.base),
-	})).filter(hunk => textInRange(current, hunk.current) !== textInRange(incoming, hunk.incoming) || textInRange(base, hunk.base) === '');
+	return groups
+		.filter(group => group.currentChanged && group.incomingChanged)
+		.map(group => ({
+			base: group.base,
+			current: currentMapping.mapRange(group.base),
+			incoming: incomingMapping.mapRange(group.base),
+		}))
+		.filter(
+			hunk =>
+				textInRange(current, hunk.current) !== textInRange(incoming, hunk.incoming) ||
+				textInRange(base, hunk.base) === '',
+		);
 }
 
 function rangeInModel(model: TextModel, lines: LineRange): Range {
-	return Range.fromPositions(model.positionAt(lineOffset(model, lines.startLineNumber)), model.positionAt(lineOffset(model, lines.endLineNumberExclusive)));
+	return Range.fromPositions(
+		model.positionAt(lineOffset(model, lines.startLineNumber)),
+		model.positionAt(lineOffset(model, lines.endLineNumberExclusive)),
+	);
 }
 
 function textInRange(model: TextModel, lines: LineRange): string {
@@ -359,11 +455,20 @@ interface CharacterEdit {
 	readonly text: string;
 }
 
-function characterEdits(base: TextModel, side: TextModel, hunk: LineRange, changes: readonly DetailedLineRangeMapping[]): readonly CharacterEdit[] | undefined {
+function characterEdits(
+	base: TextModel,
+	side: TextModel,
+	hunk: LineRange,
+	changes: readonly DetailedLineRangeMapping[],
+): readonly CharacterEdit[] | undefined {
 	const baseOffset = lineOffset(base, hunk.startLineNumber);
 	const edits: CharacterEdit[] = [];
 	for (const change of changes) {
-		if (change.original.endLineNumberExclusive < hunk.startLineNumber || change.original.startLineNumber > hunk.endLineNumberExclusive) continue;
+		if (
+			change.original.endLineNumberExclusive < hunk.startLineNumber ||
+			change.original.startLineNumber > hunk.endLineNumberExclusive
+		)
+			continue;
 		if (!hunk.containsRange(change.original) || !change.innerChanges) return undefined;
 		for (const inner of change.innerChanges) {
 			// Display diffs can expand a character change to the whole word. Strip
@@ -371,9 +476,15 @@ function characterEdits(base: TextModel, side: TextModel, hunk: LineRange, chang
 			const original = base.getValueInRange(inner.originalRange);
 			const modified = side.getValueInRange(inner.modifiedRange);
 			let prefix = 0;
-			while (prefix < original.length && prefix < modified.length && original[prefix] === modified[prefix]) prefix++;
+			while (prefix < original.length && prefix < modified.length && original[prefix] === modified[prefix])
+				prefix++;
 			let suffix = 0;
-			while (suffix < original.length - prefix && suffix < modified.length - prefix && original[original.length - suffix - 1] === modified[modified.length - suffix - 1]) suffix++;
+			while (
+				suffix < original.length - prefix &&
+				suffix < modified.length - prefix &&
+				original[original.length - suffix - 1] === modified[modified.length - suffix - 1]
+			)
+				suffix++;
 			edits.push({
 				start: base.getOffsetAt(inner.originalRange.getStartPosition()) - baseOffset + prefix,
 				end: base.getOffsetAt(inner.originalRange.getEndPosition()) - baseOffset - suffix,
@@ -386,6 +497,7 @@ function characterEdits(base: TextModel, side: TextModel, hunk: LineRange, chang
 
 function applyCharacterEdits(base: string, edits: readonly CharacterEdit[]): string {
 	let result = base;
-	for (const edit of [...edits].sort((left, right) => right.start - left.start)) result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
+	for (const edit of [...edits].sort((left, right) => right.start - left.start))
+		result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
 	return result;
 }

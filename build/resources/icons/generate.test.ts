@@ -1,23 +1,35 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, mkdir, readFile, readdir, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import test from 'node:test';
 import { checkIcons, generateIcons, type IconOutputs } from './generate.ts';
 
-const addSvg = '<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path stroke="black" d="M2.5 8h11M8 2.5v11"/></svg>\n';
+const addSvg =
+	'<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path stroke="black" d="M2.5 8h11M8 2.5v11"/></svg>\n';
 
 function outputs(root: string): IconOutputs {
-	return { manifestFile: join(root, 'icons/manifest.json'), typescriptFile: join(root, 'generated/lxiconsLibrary.ts') };
+	return {
+		manifestFile: join(root, 'icons/manifest.json'),
+		typescriptFile: join(root, 'generated/lxiconsLibrary.ts'),
+	};
 }
 
 /** Models the resource toolchain publishing a font and its matching source fingerprints. */
-async function prepareFont(sourceDirectory: string, codepoints: Record<string, string>, color: Record<string, string> = {}): Promise<void> {
+async function prepareFont(
+	sourceDirectory: string,
+	codepoints: Record<string, string>,
+	color: Record<string, string> = {},
+): Promise<void> {
 	await generateIcons({ sourceDirectory, outputs: { manifestFile: join(sourceDirectory, 'manifest.json') } });
 	const sources: Record<string, string> = {};
 	for (const file of await readdir(sourceDirectory)) {
-		if (file.endsWith('.svg')) sources[file.slice(0, -4)] = createHash('sha256').update((await readFile(join(sourceDirectory, file), 'utf8')).trim()).digest('hex');
+		if (file.endsWith('.svg'))
+			sources[file.slice(0, -4)] = createHash('sha256')
+				.update((await readFile(join(sourceDirectory, file), 'utf8')).trim())
+				.digest('hex');
 	}
 	await mkdir(join(sourceDirectory, 'font'), { recursive: true });
 	await writeFile(join(sourceDirectory, 'font/manifest.json'), JSON.stringify({ codepoints, color, sources }));
@@ -36,9 +48,15 @@ test('the resource catalog tracks SVG changes and canonicalizes artwork without 
 	assert.equal((await checkIcons({ sourceDirectory, outputs: catalog })).count, 1);
 	await writeFile(join(sourceDirectory, 'close.svg'), addSvg.replace('black', 'red'));
 	await generateIcons({ sourceDirectory, outputs: catalog });
-	assert.deepEqual(JSON.parse(await readFile(catalog.manifestFile, 'utf8')).icons.map(({ id, rendering }: { id: string; rendering: string; }) => ({ id, rendering })), [
-		{ id: 'add', rendering: 'symbolic' }, { id: 'close', rendering: 'multicolor' },
-	]);
+	assert.deepEqual(
+		JSON.parse(await readFile(catalog.manifestFile, 'utf8')).icons.map(
+			({ id, rendering }: { id: string; rendering: string }) => ({ id, rendering }),
+		),
+		[
+			{ id: 'add', rendering: 'symbolic' },
+			{ id: 'close', rendering: 'multicolor' },
+		],
+	);
 	await unlink(join(sourceDirectory, 'close.svg'));
 	assert.equal((await generateIcons({ sourceDirectory, outputs: catalog })).count, 1);
 });
@@ -55,9 +73,16 @@ test('the runtime library registers stable codepoints for both monochrome and co
 	const generatedOutputs = outputs(root);
 	await generateIcons({ sourceDirectory, outputs: generatedOutputs });
 	const generated = await readFile(generatedOutputs.typescriptFile!, 'utf8');
-	assert.match(generated, /add: registerLxicon\("add", 0xe004\)/);
-	assert.match(generated, /export: registerLxicon\("export", 0xe010\)/);
-	assert.match(generated, /close: registerLxicon\("close", 0xe020\)/);
+	assert.match(generated, /add: registerLxicon\('add', 0xe004\)/);
+	assert.match(generated, /export: registerLxicon\('export', 0xe010\)/);
+	assert.match(generated, /close: registerLxicon\('close', 0xe020\)/);
+	await copyFile(resolve(import.meta.dirname, '../../../.prettierrc.toml'), resolve(root, '.prettierrc.toml'));
+	const formatting = spawnSync(
+		resolve(import.meta.dirname, '../../../node_modules/bun', process.platform === 'win32' ? 'bun.exe' : 'bun'),
+		['fmt', '--config', resolve(root, '.prettierrc.toml'), '--check', generatedOutputs.typescriptFile!],
+		{ cwd: root, encoding: 'utf8' },
+	);
+	assert.equal(formatting.status, 0, formatting.stdout + formatting.stderr);
 	assert.doesNotMatch(generated, /<svg|fallback|artwork|createProductIconLibrary|\.svg/);
 	assert.equal((await generateIcons({ sourceDirectory, outputs: generatedOutputs })).outputChanged, false);
 	await writeFile(generatedOutputs.typescriptFile!, 'stale');
@@ -84,6 +109,12 @@ test('runtime generation rejects missing or stale font inputs instead of emittin
 test('product icon generation rejects linked or active SVG content', async t => {
 	const root = await mkdtemp(join(tmpdir(), 'ash-product-icons-'));
 	t.after(() => rm(root, { recursive: true, force: true }));
-	await writeFile(join(root, 'linked.svg'), '<svg viewBox="0 0 16 16"><a href="https://example.test"><path d="M0 0h1v1z"/></a></svg>');
-	await assert.rejects(generateIcons({ sourceDirectory: root, outputs: { manifestFile: join(root, 'manifest.json') } }), /unsupported active or external content/);
+	await writeFile(
+		join(root, 'linked.svg'),
+		'<svg viewBox="0 0 16 16"><a href="https://example.test"><path d="M0 0h1v1z"/></a></svg>',
+	);
+	await assert.rejects(
+		generateIcons({ sourceDirectory: root, outputs: { manifestFile: join(root, 'manifest.json') } }),
+		/unsupported active or external content/,
+	);
 });

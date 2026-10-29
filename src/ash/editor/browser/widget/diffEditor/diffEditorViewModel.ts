@@ -15,33 +15,71 @@ export class DiffEditorViewModel extends Disposable {
 	private readonly originalAnchor;
 	private readonly modifiedAnchor;
 
-	constructor(public readonly model: DiffModel, originalEditor: CodeEditorWidget, modifiedEditor: CodeEditorWidget) {
+	constructor(
+		public readonly model: DiffModel,
+		originalEditor: CodeEditorWidget,
+		modifiedEditor: CodeEditorWidget,
+	) {
 		super();
 		this.originalAnchor = originalEditor.createDecorationsCollection();
 		this.modifiedAnchor = modifiedEditor.createDecorationsCollection();
-		this._register(toDisposable(() => { this.originalAnchor.clear(); this.modifiedAnchor.clear(); }));
-		this._register(this.movedTextToCompare.onDidChange(move => {
-			for (const [anchor, side] of [[this.originalAnchor, 'original'], [this.modifiedAnchor, 'modified']] as const) {
-				anchor.set(move ? [{
-					range: move.lineRangeMapping[side].toInclusiveRange()!,
-					options: { description: 'diff-move-comparison-anchor', stickiness: TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges },
-				}] : []);
-			}
-		}));
-		this._register(model.onDidChange(() => {
-			if (!model.diff || !this.movedTextToCompare.get()) {
-				return;
-			}
-			const range = this.getComparedRange();
-			this.movedTextToCompare.set(range ? model.diff.moves.find(move =>
-				move.lineRangeMapping.original.intersect(range.original)?.isEmpty === false
-				&& move.lineRangeMapping.modified.intersect(range.modified)?.isEmpty === false) : undefined);
-		}));
+		this._register(
+			toDisposable(() => {
+				this.originalAnchor.clear();
+				this.modifiedAnchor.clear();
+			}),
+		);
+		this._register(
+			this.movedTextToCompare.onDidChange(move => {
+				for (const [anchor, side] of [
+					[this.originalAnchor, 'original'],
+					[this.modifiedAnchor, 'modified'],
+				] as const) {
+					anchor.set(
+						move
+							? [
+									{
+										range: move.lineRangeMapping[side].toInclusiveRange()!,
+										options: {
+											description: 'diff-move-comparison-anchor',
+											stickiness: TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
+										},
+									},
+								]
+							: [],
+					);
+				}
+			}),
+		);
+		this._register(
+			model.onDidChange(() => {
+				if (!model.diff || !this.movedTextToCompare.get()) {
+					return;
+				}
+				const range = this.getComparedRange();
+				this.movedTextToCompare.set(
+					range
+						? model.diff.moves.find(
+								move =>
+									move.lineRangeMapping.original.intersect(range.original)?.isEmpty === false &&
+									move.lineRangeMapping.modified.intersect(range.modified)?.isEmpty === false,
+							)
+						: undefined,
+				);
+			}),
+		);
 		const result = observableFromEvent(this, model.onDidChange, () => model.diff);
 		this.diff = derived(reader => {
 			const diff = result.read(reader);
 			const move = this.movedTextToCompare.read(reader);
-			return diff && move ? toLineDiff({ changes: move.changes, moves: [move] }, model.original.lineCount, model.modified.lineCount, move.lineRangeMapping) : diff;
+			return diff && move
+				? toLineDiff(
+						{ changes: move.changes, moves: [move] },
+						model.original.lineCount,
+						model.modified.lineCount,
+						move.lineRangeMapping,
+					)
+				: diff;
 		});
 	}
 
@@ -51,6 +89,8 @@ export class DiffEditorViewModel extends Disposable {
 		}
 		const original = this.originalAnchor.getRange(0);
 		const modified = this.modifiedAnchor.getRange(0);
-		return original && modified ? new LineRangeMapping(LineRange.fromRangeInclusive(original), LineRange.fromRangeInclusive(modified)) : undefined;
+		return original && modified
+			? new LineRangeMapping(LineRange.fromRangeInclusive(original), LineRange.fromRangeInclusive(modified))
+			: undefined;
 	}
 }

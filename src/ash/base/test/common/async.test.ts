@@ -2,7 +2,20 @@ import assert from 'node:assert/strict';
 import { suite, test } from 'mocha';
 import { getEventListeners } from 'node:events';
 import { spawnSync } from 'node:child_process';
-import { createCancelablePromise, DeferredPromise, Delayer, disposableTimeout, first, promiseWithResolvers, raceCancellation, raceCancellationError, RunOnceScheduler, TaskQueue, TimeoutTimer, timeout } from '../../common/async.js';
+import {
+	createCancelablePromise,
+	DeferredPromise,
+	Delayer,
+	disposableTimeout,
+	first,
+	promiseWithResolvers,
+	raceCancellation,
+	raceCancellationError,
+	RunOnceScheduler,
+	TaskQueue,
+	TimeoutTimer,
+	timeout,
+} from '../../common/async.js';
 import { isCancellationError } from '../../common/errors.js';
 import { CancellationToken, CancellationTokenSource } from '../../common/cancellation.js';
 import { Emitter } from '../../common/event.js';
@@ -36,7 +49,10 @@ suite('Cancellation races', () => {
 		const cancellation = new AbortController();
 		assert.equal(await raceCancellationError(Promise.resolve(42), cancellation.signal), 42);
 		const failure = new Error('work failed');
-		await assert.rejects(raceCancellationError(Promise.reject(failure), cancellation.signal), error => error === failure);
+		await assert.rejects(
+			raceCancellationError(Promise.reject(failure), cancellation.signal),
+			error => error === failure,
+		);
 		assert.equal(getEventListeners(cancellation.signal, 'abort').length, 0);
 	});
 
@@ -87,7 +103,13 @@ suite('Cancellation races', () => {
 	test('a pre-cancelled race observes late rejection without an unhandled rejection', () => {
 		const asyncModule = new URL('../../common/async.js', import.meta.url).href;
 		const cancellationModule = new URL('../../common/cancellation.js', import.meta.url).href;
-		const result = spawnSync(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '--eval', `
+		const result = spawnSync(
+			process.execPath,
+			[
+				'--unhandled-rejections=strict',
+				'--input-type=module',
+				'--eval',
+				`
 			import assert from 'node:assert/strict';
 			import { raceCancellation, promiseWithResolvers } from ${JSON.stringify(asyncModule)};
 			import { CancellationToken } from ${JSON.stringify(cancellationModule)};
@@ -95,17 +117,23 @@ suite('Cancellation races', () => {
 			assert.equal(await raceCancellation(work.promise, CancellationToken.Cancelled, 'cancelled'), 'cancelled');
 			work.reject(new Error('late clipboard failure'));
 			await new Promise(resolve => setImmediate(resolve));
-		`], { encoding: 'utf8' });
+		`,
+			],
+			{ encoding: 'utf8' },
+		);
 		assert.equal(result.status, 0, result.stderr);
 	});
 
 	test('a pre-cancelled race keeps its default when work has already resolved', async () => {
-		assert.equal(await raceCancellation(Promise.resolve('clipboard text'), CancellationToken.Cancelled, 'cancelled'), 'cancelled');
+		assert.equal(
+			await raceCancellation(Promise.resolve('clipboard text'), CancellationToken.Cancelled, 'cancelled'),
+			'cancelled',
+		);
 	});
 
 	test('cancellation during listener registration releases the returned subscription', async () => {
 		using cancellation = new Emitter<void>();
-		const token: CancellationToken & { isCancellationRequested: boolean; } = {
+		const token: CancellationToken & { isCancellationRequested: boolean } = {
 			isCancellationRequested: false,
 			onCancellationRequested: listener => {
 				const subscription = cancellation.event(listener);
@@ -145,7 +173,10 @@ suite('Cancellation races', () => {
 				work.resolve('late result');
 				assert.equal(await pending, 'cancelled');
 			}
-			assert.deepEqual({ removals, hasListeners: cancellation.hasListeners() }, { removals: 1, hasListeners: false });
+			assert.deepEqual(
+				{ removals, hasListeners: cancellation.hasListeners() },
+				{ removals: 1, hasListeners: false },
+			);
 		});
 	}
 
@@ -154,7 +185,13 @@ suite('Cancellation races', () => {
 			const asyncModule = new URL('../../common/async.js', import.meta.url).href;
 			const eventModule = new URL('../../common/event.js', import.meta.url).href;
 			const errorsModule = new URL('../../common/errors.js', import.meta.url).href;
-			const result = spawnSync(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '--eval', `
+			const result = spawnSync(
+				process.execPath,
+				[
+					'--unhandled-rejections=strict',
+					'--input-type=module',
+					'--eval',
+					`
 				import assert from 'node:assert/strict';
 				import { raceCancellation, promiseWithResolvers } from ${JSON.stringify(asyncModule)};
 				import { Emitter } from ${JSON.stringify(eventModule)};
@@ -231,7 +268,10 @@ suite('Cancellation races', () => {
 					setUnexpectedErrorHandler(originalHandler);
 					console.error = originalConsoleError;
 				}
-			`], { encoding: 'utf8', timeout: 10_000 });
+			`,
+				],
+				{ encoding: 'utf8', timeout: 10_000 },
+			);
 			assert.equal(result.status, 0, result.stderr);
 		});
 	}
@@ -255,7 +295,10 @@ suite('Rejecting cancellation races', () => {
 		assert.equal(await raceCancellationError(Promise.resolve(42), controller.signal), 42);
 		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
 		const failure = new Error('work failed');
-		await assert.rejects(raceCancellationError(Promise.reject(failure), controller.signal), error => error === failure);
+		await assert.rejects(
+			raceCancellationError(Promise.reject(failure), controller.signal),
+			error => error === failure,
+		);
 		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
 	});
 
@@ -265,25 +308,62 @@ suite('Rejecting cancellation races', () => {
 		const work = promiseWithResolvers<string>();
 		const pending = raceCancellationError(work.promise, controller.signal, 'Catalog wait cancelled');
 		controller.abort(reason);
-		await assert.rejects(pending, error => isCancellationError(error) && error.message === 'Catalog wait cancelled' && error.reason === reason && error.cause === reason);
+		await assert.rejects(
+			pending,
+			error =>
+				isCancellationError(error) &&
+				error.message === 'Catalog wait cancelled' &&
+				error.reason === reason &&
+				error.cause === reason,
+		);
 		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
 		work.resolve('late result');
 	});
 
 	test('PromiseLike normalization supports synchronous fulfillment and preserves getter and invocation errors', async () => {
-		const immediate = { then: (resolve: (value: number) => void): void => resolve(7) } as unknown as PromiseLike<number>;
+		const immediate = {
+			then: (resolve: (value: number) => void): void => resolve(7),
+		} as unknown as PromiseLike<number>;
 		assert.equal(await raceCancellationError(immediate, CancellationToken.None), 7);
 		const getterError = new Error('then getter failed');
-		await assert.rejects(raceCancellationError<number>({ get then(): never { throw getterError; } }, CancellationToken.None), error => error === getterError);
+		await assert.rejects(
+			raceCancellationError<number>(
+				{
+					get then(): never {
+						throw getterError;
+					},
+				},
+				CancellationToken.None,
+			),
+			error => error === getterError,
+		);
 		const invocationError = new Error('then invocation failed');
-		await assert.rejects(raceCancellationError<number>({ then(): never { throw invocationError; } }, CancellationToken.None), error => error === invocationError);
+		await assert.rejects(
+			raceCancellationError<number>(
+				{
+					then(): never {
+						throw invocationError;
+					},
+				},
+				CancellationToken.None,
+			),
+			error => error === invocationError,
+		);
 	});
 
 	test('cancellation during PromiseLike assimilation keeps the native cancellation reason', async () => {
 		const controller = new AbortController();
 		const reason = new Error('thenable cancelled its wait');
-		const thenable = { then: (resolve: (value: number) => void): void => { controller.abort(reason); resolve(7); } } as unknown as PromiseLike<number>;
-		await assert.rejects(raceCancellationError(thenable, controller.signal), error => isCancellationError(error) && error.reason === reason && error.cause === reason);
+		const thenable = {
+			then: (resolve: (value: number) => void): void => {
+				controller.abort(reason);
+				resolve(7);
+			},
+		} as unknown as PromiseLike<number>;
+		await assert.rejects(
+			raceCancellationError(thenable, controller.signal),
+			error => isCancellationError(error) && error.reason === reason && error.cause === reason,
+		);
 		assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
 	});
 
@@ -292,7 +372,13 @@ suite('Rejecting cancellation races', () => {
 			const asyncModule = new URL('../../common/async.js', import.meta.url).href;
 			const cancellationModule = new URL('../../common/cancellation.js', import.meta.url).href;
 			const errorsModule = new URL('../../common/errors.js', import.meta.url).href;
-			const result = spawnSync(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '--eval', `
+			const result = spawnSync(
+				process.execPath,
+				[
+					'--unhandled-rejections=strict',
+					'--input-type=module',
+					'--eval',
+					`
 				import assert from 'node:assert/strict';
 				import { raceCancellationError, promiseWithResolvers } from ${JSON.stringify(asyncModule)};
 				import { CancellationToken } from ${JSON.stringify(cancellationModule)};
@@ -308,14 +394,23 @@ suite('Rejecting cancellation races', () => {
 				await assert.rejects(raceCancellationError(Promise.resolve('already complete'), cancellation), matches);
 				work.reject(new Error('late work failure'));
 				await new Promise(resolve => setImmediate(resolve));
-			`], { encoding: 'utf8', timeout: 10_000 });
+			`,
+				],
+				{ encoding: 'utf8', timeout: 10_000 },
+			);
 			assert.equal(result.status, 0, result.stderr);
 		});
 	}
 
 	test('failed subscription registration preserves its error while observing late work rejection', () => {
 		const asyncModule = new URL('../../common/async.js', import.meta.url).href;
-		const result = spawnSync(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '--eval', `
+		const result = spawnSync(
+			process.execPath,
+			[
+				'--unhandled-rejections=strict',
+				'--input-type=module',
+				'--eval',
+				`
 			import assert from 'node:assert/strict';
 			import { raceCancellationError, promiseWithResolvers } from ${JSON.stringify(asyncModule)};
 			const registrationError = new Error('listener registration failed');
@@ -324,16 +419,35 @@ suite('Rejecting cancellation races', () => {
 			await assert.rejects(raceCancellationError(work.promise, token), error => error === registrationError);
 			work.reject(new Error('late work failure'));
 			await new Promise(resolve => setImmediate(resolve));
-		`], { encoding: 'utf8', timeout: 10_000 });
+		`,
+			],
+			{ encoding: 'utf8', timeout: 10_000 },
+		);
 		assert.equal(result.status, 0, result.stderr);
 	});
 
-	for (const scenario of ['resolve_throw', 'reject_throw', 'cancel_throw', 'resolve_reenter', 'reject_reenter', 'cancel_reenter', 'registration_callback', 'registration_silent', 'reporter_throw'] as const) {
+	for (const scenario of [
+		'resolve_throw',
+		'reject_throw',
+		'cancel_throw',
+		'resolve_reenter',
+		'reject_reenter',
+		'cancel_reenter',
+		'registration_callback',
+		'registration_silent',
+		'reporter_throw',
+	] as const) {
 		test(`a rejecting race preserves its winner and reports cleanup for ${scenario}`, () => {
 			const asyncModule = new URL('../../common/async.js', import.meta.url).href;
 			const eventModule = new URL('../../common/event.js', import.meta.url).href;
 			const errorsModule = new URL('../../common/errors.js', import.meta.url).href;
-			const result = spawnSync(process.execPath, ['--unhandled-rejections=strict', '--input-type=module', '--eval', `
+			const result = spawnSync(
+				process.execPath,
+				[
+					'--unhandled-rejections=strict',
+					'--input-type=module',
+					'--eval',
+					`
 				import assert from 'node:assert/strict';
 				import { raceCancellationError, promiseWithResolvers } from ${JSON.stringify(asyncModule)};
 				import { Emitter } from ${JSON.stringify(eventModule)};
@@ -414,7 +528,10 @@ suite('Rejecting cancellation races', () => {
 					setUnexpectedErrorHandler(originalHandler);
 					console.error = originalConsoleError;
 				}
-			`], { encoding: 'utf8', timeout: 10_000 });
+			`,
+				],
+				{ encoding: 'utf8', timeout: 10_000 },
+			);
 			assert.equal(result.status, 0, result.stderr);
 		});
 	}
@@ -451,7 +568,7 @@ test('TimeoutTimer replaces work and rejects scheduling after disposal', () => {
 
 test('RunOnceScheduler debounces, flushes, and cancels owned work', () => {
 	let runs = 0;
-	const scheduler = new RunOnceScheduler(() => runs += 1, 10_000);
+	const scheduler = new RunOnceScheduler(() => (runs += 1), 10_000);
 	scheduler.schedule();
 	scheduler.schedule();
 	assert.equal(scheduler.isScheduled(), true);
@@ -465,12 +582,16 @@ test('RunOnceScheduler debounces, flushes, and cancels owned work', () => {
 });
 
 test('createCancelablePromise rejects cancellation and disposes a late disposable result', async () => {
-	const deferred = new DeferredPromise<{ dispose(): void; }>();
+	const deferred = new DeferredPromise<{ dispose(): void }>();
 	let disposed = false;
 	const pending = createCancelablePromise(() => deferred.p);
 	pending.cancel();
 	await assert.rejects(pending, isCancellationError);
-	await deferred.complete({ dispose: () => { disposed = true; } });
+	await deferred.complete({
+		dispose: () => {
+			disposed = true;
+		},
+	});
 	await Promise.resolve();
 	assert.equal(disposed, true);
 });
@@ -527,15 +648,29 @@ test('TaskQueue clears pending work with cancellation or undefined', async () =>
 
 test('disposableTimeout is cancellable and first stops sequential evaluation', async () => {
 	let called = false;
-	const registration = disposableTimeout(() => { called = true; }, 0);
+	const registration = disposableTimeout(() => {
+		called = true;
+	}, 0);
 	registration.dispose();
 	await timeout(1);
 	assert.equal(called, false);
 	const calls: number[] = [];
-	assert.equal(await first([
-		async () => { calls.push(1); return 0; },
-		async () => { calls.push(2); return 2; },
-		async () => { calls.push(3); return 3; },
-	]), 2);
+	assert.equal(
+		await first([
+			async () => {
+				calls.push(1);
+				return 0;
+			},
+			async () => {
+				calls.push(2);
+				return 2;
+			},
+			async () => {
+				calls.push(3);
+				return 3;
+			},
+		]),
+		2,
+	);
 	assert.deepEqual(calls, [1, 2]);
 });

@@ -22,7 +22,10 @@ export class ExtensionIdentifier {
 		return typeof id === 'string' ? id.toLowerCase() : id._lower;
 	}
 
-	public static equals(a: ExtensionIdentifier | string | null | undefined, b: ExtensionIdentifier | string | null | undefined): boolean {
+	public static equals(
+		a: ExtensionIdentifier | string | null | undefined,
+		b: ExtensionIdentifier | string | null | undefined,
+	): boolean {
 		if (a == null || b == null) {
 			return a == null && b == null;
 		}

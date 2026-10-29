@@ -24,13 +24,15 @@ export abstract class FilterViewPaneContainer extends PaneComposite {
 		@IContextKeyService contextKeys: IContextKeyService,
 	) {
 		super(container, filterOptions, storage, theme, menus, configuration, instantiation, contextKeys);
-		this._register(onDidChangeFilterValue(values => {
-			const accepted = new Set(values);
-			filterOptions.model.setFilter(view => {
-				const category = this.getFilterOn(view);
-				return category === undefined || accepted.has(category);
-			});
-		}));
+		this._register(
+			onDidChangeFilterValue(values => {
+				const accepted = new Set(values);
+				filterOptions.model.setFilter(view => {
+					const category = this.getFilterOn(view);
+					return category === undefined || accepted.has(category);
+				});
+			}),
+		);
 		this._register(toDisposable(() => filterOptions.model.setFilter(undefined)));
 	}
 
@@ -40,7 +42,9 @@ export abstract class FilterViewPaneContainer extends PaneComposite {
 	public override openView(id: string, focus?: boolean): ViewPane | undefined {
 		if (!this.filterOptions.model.activeViewDescriptors.some(view => view.id === id)) {
 			const descriptor = this.filterOptions.model.allViewDescriptors.find(view => view.id === id);
-			if (descriptor) { this.setFilter(descriptor); }
+			if (descriptor) {
+				this.setFilter(descriptor);
+			}
 		}
 		return super.openView(id, focus);
 	}

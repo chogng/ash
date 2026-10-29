@@ -1,6 +1,11 @@
 import { Disposable } from '../../../../../base/common/lifecycle.js';
 import { localize } from '../../../../../nls.js';
-import { AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, type IAccessibleViewContentProvider } from '../../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	AccessibleViewProviderId,
+	AccessibleViewType,
+	AccessibilityVerbositySettingId,
+	type IAccessibleViewContentProvider,
+} from '../../../../../platform/accessibility/browser/accessibleView.js';
 import type { ITerminalInstance } from '../../../terminal/browser/terminal.js';
 
 export class TerminalAccessibilityHelpProvider extends Disposable implements IAccessibleViewContentProvider {
@@ -8,56 +13,203 @@ export class TerminalAccessibilityHelpProvider extends Disposable implements IAc
 	public readonly options = { type: AccessibleViewType.Help };
 	public readonly verbositySettingKey = AccessibilityVerbositySettingId.Terminal;
 
-	constructor(private readonly instance: ITerminalInstance, private readonly suggestEnabled: boolean) { super(); }
+	constructor(
+		private readonly instance: ITerminalInstance,
+		private readonly suggestEnabled: boolean,
+	) {
+		super();
+	}
 
 	public provideContent(): string {
 		return [
-			localize('terminal.accessibility.workspaceFolders', 'In a multi-root workspace, new terminals use the active file folder or ask you to select a folder. Escape cancels selection. Split terminals keep their parent folder. Workspace folder changes preserve terminals belonging to retained folders.'),
-			localize('terminal.accessibility.overview', 'The terminal sends typed input to its running process. <keybinding:editor.action.accessibleView> opens the retained screen and scrollback as read-only text.'),
-			localize('terminal.accessibility.find', '<keybinding:workbench.action.terminal.focusFind> opens Find. Enter and Shift+Enter navigate its matches. Escape returns focus to the terminal.'),
-			localize('terminal.accessibility.screenNavigation', 'Terminal: Scroll Up and Scroll Down move through retained output by line or page. Scroll to Top and Scroll to Bottom reach either end. These commands preserve shell input and work with exited or read-only terminals. Scroll shortcuts apply only to the normal buffer; full-screen terminal applications retain their own keys. <keybinding:workbench.action.terminal.selectAll> selects the screen and scrollback. <keybinding:workbench.action.terminal.clearSelection> clears a selection; Escape keeps its Find behavior while Find is open. On Linux and Windows, Ctrl+A remains available to the shell.'),
-			localize('terminal.accessibility.quickAccess', 'Terminal: Switch Active Terminal opens a searchable list of the window’s terminals. Type to filter, use arrow keys and Enter to focus the selected terminal in its existing panel or editor. Row buttons rename or close that terminal using the usual confirmation. Escape cancels and restores focus.'),
-			localize('terminal.accessibility.zoom', 'Terminal: Increase Font Size, Decrease Font Size and Reset Font Size change the shared terminal font setting. Enable Mouse Wheel Zoom to adjust it with Ctrl and the mouse wheel, or Cmd on macOS. Ordinary scrolling is unchanged when the setting is disabled.'),
-			localize('terminal.accessibility.dimensions', 'The terminal can briefly show its column and row counts when resized. The Resize Dimensions Overlay setting controls this visual hint. Resizing retains the terminal process, output and pending input.'),
-			localize('terminal.accessibility.commandGuide', 'Hovering over a detected command or its output shows a guide beside that command’s retained range. The Show Command Guide setting controls this visual hint. Scroll to Previous Command and Scroll to Next Command provide keyboard navigation; the accessible view includes the command and its output.'),
-			localize('terminal.accessibility.links', '<keybinding:workbench.action.terminal.openDetectedLink> opens a searchable list of file paths, folders, web links and links contributed by extensions. Enter opens the selected link. Relative file paths use the command’s working directory; missing paths and words search this terminal’s workspace. A single match opens at the reported line and column; multiple matches open a second list for selection. Folders inside this terminal’s workspace root are selected in Explorer. Local folders outside the root open through the window host when a new window is supported. Escape returns focus to the terminal. Links in output can also be clicked.'),
-			localize('terminal.accessibility.commandNavigation', 'Terminal: Scroll to Previous Command and Terminal: Scroll to Next Command move between shell commands. Terminal: Run Recent Command opens saved commands; selecting one runs it in the current terminal.'),
-			localize('terminal.accessibility.stickyScroll', 'Sticky Scroll keeps the current command above its output. An ellipsis indicates hidden command lines; hover over the header to read the full command. Tab to the header and press Enter or Space to scroll back to its prompt. Escape returns focus to terminal input. Terminal: Toggle Sticky Scroll turns this header on or off. The accessible view includes the original command and its output.'),
-			...(this.suggestEnabled ? [localize('terminal.accessibility.automaticSuggest', 'Quick Suggestions controls suggestions while typing; Suggest On Trigger Characters controls extension triggers. The suggestion list keeps terminal input focused. Use Up and Down Arrow to choose, Enter to insert without running, Escape to dismiss, or Tab for shell completion.')] : []),
-			localize('terminal.accessibility.suggest', '<keybinding:workbench.action.terminal.triggerSuggest> opens suggestions from command history, supported paths and extensions. Extensions can also open suggestions with their trigger characters and replace a range within the prompt. Arrow keys select an item; Enter inserts it without running the command. Escape cancels. Prompt changes, switching terminals and reconnects cancel the selection. Tab retains the shell’s completion behavior.'),
-			localize('terminal.accessibility.commandMarkers', 'Shell integration marks each command prompt. An outlined circle means input is pending or the command is running; a filled circle means success, and an error icon means failure. Hover over a marker for its status and exit code. The overview ruler also shows command status, with failed commands in its right lane. Ordinary output lines have no command marker.'),
-			localize('terminal.accessibility.commandActions', 'Command markers with detected command text are buttons. Tab to a marker and press Enter, Space or Shift+F10 to open its menu. Copy Command, Copy Output and Copy Command and Output use that command’s retained range; output copying is unavailable when its endpoints are missing. Select Command selects the command text from its input start to execution. Rerun Command explicitly runs it again in the original active terminal and asks for confirmation when its text is untrusted. Escape closes the menu.'),
-			localize('terminal.accessibility.taskMarkers', 'Task terminals also show a status marker on the task output header. It reports whether the task is running, succeeded or failed. Use Rerun Last Task to run the task again.'),
-			localize('terminal.accessibility.clipboard', '<keybinding:workbench.action.terminal.copySelection> copies selected terminal text. <keybinding:workbench.action.terminal.paste> pastes clipboard text into the active running terminal. Without a selection, Ctrl+C is sent to the process.'),
-			localize('terminal.accessibility.clipboardMouse', 'Copy on Selection can automatically copy selected terminal text. Right Click Behavior can copy and clear a selection or paste clipboard text; hold Shift while right-clicking to open the context menu. Copy and Paste in the terminal instance menu act on that terminal. The Copy Selection and Paste commands provide the same actions from the keyboard.'),
-			localize('terminal.accessibility.quickFix', '<keybinding:workbench.action.terminal.showQuickFixes> opens built-in Git fixes and matching extension fixes for the latest completed command. An empty shell prompt is required. Built-in fixes insert a command for review. Extension actions may insert or execute a command, open a link, or invoke an extension command as described in the picker. Enter accepts the selected action; Escape cancels. Terminal switches, prompt changes and reconnects cancel the picker.'),
-			localize('terminal.accessibility.pasteConfirmation', 'Clipboard commands and browser paste share the multi-line paste warning setting. In the confirmation dialog, Paste accepts the text and Escape cancels without sending input. Auto removes a single command’s trailing newline outside bracketed paste mode; Always confirms newlines even in bracketed paste mode. Changing terminals or disconnecting while confirmation is open cancels that paste.'),
-			localize('terminal.accessibility.pasteChoices', 'The multi-line paste dialog also offers Paste as One Line, which removes line separators while preserving spaces and tabs. Do Not Ask Again is saved only when accepting a paste. Escape cancels without sending text or changing the preference.'),
-			localize('terminal.accessibility.runSelectedText', 'From the code editor, Terminal: Run Selected Text in Active Terminal runs the selected text, or the current line when nothing is selected. It creates a terminal when needed and keeps focus in the code editor.'),
-			localize('terminal.accessibility.runActiveFile', 'Terminal: Run Active File in Active Terminal runs the saved file path in a confirmed Bash, Zsh or PowerShell terminal on the same host. It keeps editor focus. Unsaved changes are not written by this command. Unknown shells, virtual resources and files from another host are rejected.'),
-			localize('terminal.accessibility.dropPath', 'Drop a file, folder or editor tab onto the terminal to insert its quoted host path without pressing Enter. Files without an accessible host path are rejected. Run Active File provides a keyboard command for executing the current editor file.'),
-			localize('terminal.accessibility.recentDirectory', 'Terminal: Go to Recent Directory opens verified directories from this workspace and execution host. Use arrow keys and Enter to change directory, or Escape to cancel. Changing terminals, reconnecting or replacing the shell cancels the selection. Clear Previous Session History also clears saved directories.'),
-			localize('terminal.accessibility.interrupt', 'Terminal: Send Signal lets you choose SIGINT, SIGTERM, SIGKILL or SIGHUP for the active terminal’s foreground command. Arrow keys choose a signal and Enter sends it through the execution host. Escape cancels; switching terminals or disconnecting cancels the selection. Keybindings may supply a signal argument. Unsupported execution hosts report an error.'),
-			localize('terminal.accessibility.sendSequence', 'Terminal: Send Sequence sends text or control characters to the active running terminal without adding Enter. The input accepts \\n, \\r and \\xNN escapes. Keybindings can supply a text argument; configuration variables are resolved before sending. Environment variables use the current verified shell environment when available, otherwise the execution host environment.'),
-			localize('terminal.accessibility.metadata', 'Terminal: Rename opens a name input; Enter applies the name, Escape cancels, and an empty name restores the shell name. Terminal: Change Icon opens a searchable icon list. Both actions also appear in the terminal instance menu and preserve the running process.'),
-			localize('terminal.accessibility.windowTransfer', 'Terminal: Move Terminal into New Window moves the current terminal to a new desktop window while retaining its running process and output. If the transfer fails, the original terminal resumes in this window.'),
-			localize('terminal.accessibility.editor', 'Terminal: Move Terminal into Editor Area moves the current terminal into an editor tab while retaining its process and output. Move Terminal into Panel returns it to the panel. Closing the final editor tab for a terminal closes its process; closing another view keeps it running.'),
-			localize('terminal.accessibility.groups', 'Terminal: Split Terminal creates another shell in the current group. Panes are side by side when the Panel is at the top or bottom, and stacked when it is on the left or right. Moving the Panel keeps pane order, relative sizes, process, output and pending input. Focus Next Pane and Focus Previous Pane move focus between the split terminals. The instance list keeps split terminals together and announces each pane’s position in its group. Resize separators use Left and Right arrow keys for side-by-side panes, and Up and Down for stacked panes. Unsplit Terminal moves the current pane to its own group while keeping its process and output.'),
-			localize('terminal.accessibility.groupMove', 'Drag a terminal row before or after another row to join its group or reorder its panes. Drop on the left or right half of side-by-side panes, or the top or bottom half of stacked panes, to insert on that side. Terminal: Join or Reorder Terminals opens a keyboard picker for the same positions; Escape cancels. Unsplit Terminal separates a pane. Moving retains its process, output and pending input.'),
-			localize('terminal.accessibility.editorSplit', 'Split Terminal also works in the editor area. It creates a new shell in an adjacent editor group using the original terminal’s profile and working directory. The original terminal keeps its process, screen and pending input.'),
-			localize('terminal.accessibility.tabsMenu', 'In the terminal instance list, arrow keys move focus and Enter activates a terminal. Shift+F10 opens the focused terminal menu. Its focus, clear, relaunch and kill actions apply to that terminal even if the active terminal changes. Escape closes the menu and restores focus.'),
-			localize('terminal.accessibility.titleToolbar', 'The terminal title opens its instance menu. Alt+click splits it; middle-click closes it. The New Terminal dropdown offers profiles, a new terminal window, split actions, terminal settings, Select Default Profile, Run Task and Configure Tasks. Task commands use quick pickers; their output stays in Terminal. Use arrow keys to navigate the toolbar and menus; Escape closes a menu and restores focus.'),
-			localize('terminal.accessibility.instanceHover', 'Hover over a terminal title or instance row to inspect its process ID, command line and shell integration. <keybinding:workbench.action.terminal.focusHover> focuses the information card from terminal input or the instance list. With the title or row focused, Alt+Down Arrow also enters the card. Tab navigates its actions. Errors and environment changes remain visible with details hidden; an environment change can offer Relaunch Terminal for that instance. Show Details includes the full executable path, shell type, working directory, received integration sequences, detected prompt type and current prompt input. The details preference is remembered. Escape closes the card and returns focus to its title or row.'),
-			localize('terminal.accessibility.profiles', 'New Terminal with Profile opens a searchable list of discovered, configured and extension profiles, including installed WSL distributions on Windows. Use arrow keys and Enter to choose; Escape cancels. The New Terminal dropdown groups AI command-line profiles separately. Agent Host opens the configured agent shell on this workspace’s execution host. Select Default Profile applies to future terminals. Relaunch preserves the original shell and explicit overrides, resolves current launch settings and extension environment, and honors the usual close confirmation. Extension profiles activate their provider when selected.'),
-			localize('terminal.accessibility.taskGroups', 'Tasks with the same presentation.group open in split panes. Focus Next Pane and Focus Previous Pane navigate them. Manage Automatic Tasks enables or disables folder-open tasks in trusted workspaces; automatic tasks are disabled by default.'),
-			localize('terminal.accessibility.reuse', 'A completed task waits for a character key or Enter to close its terminal. Workbench shortcuts remain available. presentation.showReuseMessage controls the reuse notice. A new task terminal displays a close notice.'),
-			localize('terminal.accessibility.close', 'Escape closes accessibility help or the accessible view and returns focus to the terminal.'),
-			localize('terminal.accessibility.autoReplies', 'Auto Replies sends configured responses when exact text appears in raw process output. Rules run on the execution host, including while the terminal is hidden; each rule is limited to one reply per second. Remove a rule or set it to null to stop that response.'),
-			localize('terminal.accessibility.notifications', 'Terminal processes can send OSC 99 notifications to the notification center. Tab to notification actions and press Enter to activate or dismiss them. Disable Terminal Notifications prevents future notifications and their replies; closing the terminal removes its pending notifications.'),
-			localize('terminal.accessibility.typeAhead', 'Local Echo can visually predict printable input in a detected shell prompt. Predictions are hidden from the accessible view until confirmed by process output, never change the shell buffer, and clear on editing controls or mismatched output. Enter ends prediction until the next detected prompt. The setting defaults to off.'),
-			localize('terminal.accessibility.environment', 'Terminal: Show Environment Contributions opens a read-only document comparing the extension contributions applied at launch with those for future terminals. Relaunch Terminal applies current launch settings after the usual close confirmation. Reattaching a running terminal preserves its existing process environment.'),
-			localize('terminal.accessibility.developer', 'Developer: Write Data to Terminal writes display data without sending shell input. Developer: Record Terminal Session records input, output, commands and resizes; select the recording status item to stop and copy the recording. Recordings can contain sensitive terminal data.'),
-			localize('terminal.accessibility.chat', 'Terminal: Ask Chat captures the current output, asks for your question, and appends both to the existing Chat draft. Escape cancels. It does not submit the draft or execute a terminal command. Start Ash Code from the New Terminal dropdown or run ash code in a shell. Dictation controls appear only while that terminal reports an Ash Code input session. Start dictation and Stop dictation use Ash Code’s recording and preserve its draft; stopping does not send the message.'),
+			localize(
+				'terminal.accessibility.workspaceFolders',
+				'In a multi-root workspace, new terminals use the active file folder or ask you to select a folder. Escape cancels selection. Split terminals keep their parent folder. Workspace folder changes preserve terminals belonging to retained folders.',
+			),
+			localize(
+				'terminal.accessibility.overview',
+				'The terminal sends typed input to its running process. <keybinding:editor.action.accessibleView> opens the retained screen and scrollback as read-only text.',
+			),
+			localize(
+				'terminal.accessibility.find',
+				'<keybinding:workbench.action.terminal.focusFind> opens Find. Enter and Shift+Enter navigate its matches. Escape returns focus to the terminal.',
+			),
+			localize(
+				'terminal.accessibility.screenNavigation',
+				'Terminal: Scroll Up and Scroll Down move through retained output by line or page. Scroll to Top and Scroll to Bottom reach either end. These commands preserve shell input and work with exited or read-only terminals. Scroll shortcuts apply only to the normal buffer; full-screen terminal applications retain their own keys. <keybinding:workbench.action.terminal.selectAll> selects the screen and scrollback. <keybinding:workbench.action.terminal.clearSelection> clears a selection; Escape keeps its Find behavior while Find is open. On Linux and Windows, Ctrl+A remains available to the shell.',
+			),
+			localize(
+				'terminal.accessibility.quickAccess',
+				'Terminal: Switch Active Terminal opens a searchable list of the window’s terminals. Type to filter, use arrow keys and Enter to focus the selected terminal in its existing panel or editor. Row buttons rename or close that terminal using the usual confirmation. Escape cancels and restores focus.',
+			),
+			localize(
+				'terminal.accessibility.zoom',
+				'Terminal: Increase Font Size, Decrease Font Size and Reset Font Size change the shared terminal font setting. Enable Mouse Wheel Zoom to adjust it with Ctrl and the mouse wheel, or Cmd on macOS. Ordinary scrolling is unchanged when the setting is disabled.',
+			),
+			localize(
+				'terminal.accessibility.dimensions',
+				'The terminal can briefly show its column and row counts when resized. The Resize Dimensions Overlay setting controls this visual hint. Resizing retains the terminal process, output and pending input.',
+			),
+			localize(
+				'terminal.accessibility.commandGuide',
+				'Hovering over a detected command or its output shows a guide beside that command’s retained range. The Show Command Guide setting controls this visual hint. Scroll to Previous Command and Scroll to Next Command provide keyboard navigation; the accessible view includes the command and its output.',
+			),
+			localize(
+				'terminal.accessibility.links',
+				'<keybinding:workbench.action.terminal.openDetectedLink> opens a searchable list of file paths, folders, web links and links contributed by extensions. Enter opens the selected link. Relative file paths use the command’s working directory; missing paths and words search this terminal’s workspace. A single match opens at the reported line and column; multiple matches open a second list for selection. Folders inside this terminal’s workspace root are selected in Explorer. Local folders outside the root open through the window host when a new window is supported. Escape returns focus to the terminal. Links in output can also be clicked.',
+			),
+			localize(
+				'terminal.accessibility.commandNavigation',
+				'Terminal: Scroll to Previous Command and Terminal: Scroll to Next Command move between shell commands. Terminal: Run Recent Command opens saved commands; selecting one runs it in the current terminal.',
+			),
+			localize(
+				'terminal.accessibility.stickyScroll',
+				'Sticky Scroll keeps the current command above its output. An ellipsis indicates hidden command lines; hover over the header to read the full command. Tab to the header and press Enter or Space to scroll back to its prompt. Escape returns focus to terminal input. Terminal: Toggle Sticky Scroll turns this header on or off. The accessible view includes the original command and its output.',
+			),
+			...(this.suggestEnabled
+				? [
+						localize(
+							'terminal.accessibility.automaticSuggest',
+							'Quick Suggestions controls suggestions while typing; Suggest On Trigger Characters controls extension triggers. The suggestion list keeps terminal input focused. Use Up and Down Arrow to choose, Enter to insert without running, Escape to dismiss, or Tab for shell completion.',
+						),
+					]
+				: []),
+			localize(
+				'terminal.accessibility.suggest',
+				'<keybinding:workbench.action.terminal.triggerSuggest> opens suggestions from command history, supported paths and extensions. Extensions can also open suggestions with their trigger characters and replace a range within the prompt. Arrow keys select an item; Enter inserts it without running the command. Escape cancels. Prompt changes, switching terminals and reconnects cancel the selection. Tab retains the shell’s completion behavior.',
+			),
+			localize(
+				'terminal.accessibility.commandMarkers',
+				'Shell integration marks each command prompt. An outlined circle means input is pending or the command is running; a filled circle means success, and an error icon means failure. Hover over a marker for its status and exit code. The overview ruler also shows command status, with failed commands in its right lane. Ordinary output lines have no command marker.',
+			),
+			localize(
+				'terminal.accessibility.commandActions',
+				'Command markers with detected command text are buttons. Tab to a marker and press Enter, Space or Shift+F10 to open its menu. Copy Command, Copy Output and Copy Command and Output use that command’s retained range; output copying is unavailable when its endpoints are missing. Select Command selects the command text from its input start to execution. Rerun Command explicitly runs it again in the original active terminal and asks for confirmation when its text is untrusted. Escape closes the menu.',
+			),
+			localize(
+				'terminal.accessibility.taskMarkers',
+				'Task terminals also show a status marker on the task output header. It reports whether the task is running, succeeded or failed. Use Rerun Last Task to run the task again.',
+			),
+			localize(
+				'terminal.accessibility.clipboard',
+				'<keybinding:workbench.action.terminal.copySelection> copies selected terminal text. <keybinding:workbench.action.terminal.paste> pastes clipboard text into the active running terminal. Without a selection, Ctrl+C is sent to the process.',
+			),
+			localize(
+				'terminal.accessibility.clipboardMouse',
+				'Copy on Selection can automatically copy selected terminal text. Right Click Behavior can copy and clear a selection or paste clipboard text; hold Shift while right-clicking to open the context menu. Copy and Paste in the terminal instance menu act on that terminal. The Copy Selection and Paste commands provide the same actions from the keyboard.',
+			),
+			localize(
+				'terminal.accessibility.quickFix',
+				'<keybinding:workbench.action.terminal.showQuickFixes> opens built-in Git fixes and matching extension fixes for the latest completed command. An empty shell prompt is required. Built-in fixes insert a command for review. Extension actions may insert or execute a command, open a link, or invoke an extension command as described in the picker. Enter accepts the selected action; Escape cancels. Terminal switches, prompt changes and reconnects cancel the picker.',
+			),
+			localize(
+				'terminal.accessibility.pasteConfirmation',
+				'Clipboard commands and browser paste share the multi-line paste warning setting. In the confirmation dialog, Paste accepts the text and Escape cancels without sending input. Auto removes a single command’s trailing newline outside bracketed paste mode; Always confirms newlines even in bracketed paste mode. Changing terminals or disconnecting while confirmation is open cancels that paste.',
+			),
+			localize(
+				'terminal.accessibility.pasteChoices',
+				'The multi-line paste dialog also offers Paste as One Line, which removes line separators while preserving spaces and tabs. Do Not Ask Again is saved only when accepting a paste. Escape cancels without sending text or changing the preference.',
+			),
+			localize(
+				'terminal.accessibility.runSelectedText',
+				'From the code editor, Terminal: Run Selected Text in Active Terminal runs the selected text, or the current line when nothing is selected. It creates a terminal when needed and keeps focus in the code editor.',
+			),
+			localize(
+				'terminal.accessibility.runActiveFile',
+				'Terminal: Run Active File in Active Terminal runs the saved file path in a confirmed Bash, Zsh or PowerShell terminal on the same host. It keeps editor focus. Unsaved changes are not written by this command. Unknown shells, virtual resources and files from another host are rejected.',
+			),
+			localize(
+				'terminal.accessibility.dropPath',
+				'Drop a file, folder or editor tab onto the terminal to insert its quoted host path without pressing Enter. Files without an accessible host path are rejected. Run Active File provides a keyboard command for executing the current editor file.',
+			),
+			localize(
+				'terminal.accessibility.recentDirectory',
+				'Terminal: Go to Recent Directory opens verified directories from this workspace and execution host. Use arrow keys and Enter to change directory, or Escape to cancel. Changing terminals, reconnecting or replacing the shell cancels the selection. Clear Previous Session History also clears saved directories.',
+			),
+			localize(
+				'terminal.accessibility.interrupt',
+				'Terminal: Send Signal lets you choose SIGINT, SIGTERM, SIGKILL or SIGHUP for the active terminal’s foreground command. Arrow keys choose a signal and Enter sends it through the execution host. Escape cancels; switching terminals or disconnecting cancels the selection. Keybindings may supply a signal argument. Unsupported execution hosts report an error.',
+			),
+			localize(
+				'terminal.accessibility.sendSequence',
+				'Terminal: Send Sequence sends text or control characters to the active running terminal without adding Enter. The input accepts \\n, \\r and \\xNN escapes. Keybindings can supply a text argument; configuration variables are resolved before sending. Environment variables use the current verified shell environment when available, otherwise the execution host environment.',
+			),
+			localize(
+				'terminal.accessibility.metadata',
+				'Terminal: Rename opens a name input; Enter applies the name, Escape cancels, and an empty name restores the shell name. Terminal: Change Icon opens a searchable icon list. Both actions also appear in the terminal instance menu and preserve the running process.',
+			),
+			localize(
+				'terminal.accessibility.windowTransfer',
+				'Terminal: Move Terminal into New Window moves the current terminal to a new desktop window while retaining its running process and output. If the transfer fails, the original terminal resumes in this window.',
+			),
+			localize(
+				'terminal.accessibility.editor',
+				'Terminal: Move Terminal into Editor Area moves the current terminal into an editor tab while retaining its process and output. Move Terminal into Panel returns it to the panel. Closing the final editor tab for a terminal closes its process; closing another view keeps it running.',
+			),
+			localize(
+				'terminal.accessibility.groups',
+				'Terminal: Split Terminal creates another shell in the current group. Panes are side by side when the Panel is at the top or bottom, and stacked when it is on the left or right. Moving the Panel keeps pane order, relative sizes, process, output and pending input. Focus Next Pane and Focus Previous Pane move focus between the split terminals. The instance list keeps split terminals together and announces each pane’s position in its group. Resize separators use Left and Right arrow keys for side-by-side panes, and Up and Down for stacked panes. Unsplit Terminal moves the current pane to its own group while keeping its process and output.',
+			),
+			localize(
+				'terminal.accessibility.groupMove',
+				'Drag a terminal row before or after another row to join its group or reorder its panes. Drop on the left or right half of side-by-side panes, or the top or bottom half of stacked panes, to insert on that side. Terminal: Join or Reorder Terminals opens a keyboard picker for the same positions; Escape cancels. Unsplit Terminal separates a pane. Moving retains its process, output and pending input.',
+			),
+			localize(
+				'terminal.accessibility.editorSplit',
+				'Split Terminal also works in the editor area. It creates a new shell in an adjacent editor group using the original terminal’s profile and working directory. The original terminal keeps its process, screen and pending input.',
+			),
+			localize(
+				'terminal.accessibility.tabsMenu',
+				'In the terminal instance list, arrow keys move focus and Enter activates a terminal. Shift+F10 opens the focused terminal menu. Its focus, clear, relaunch and kill actions apply to that terminal even if the active terminal changes. Escape closes the menu and restores focus.',
+			),
+			localize(
+				'terminal.accessibility.titleToolbar',
+				'The terminal title opens its instance menu. Alt+click splits it; middle-click closes it. The New Terminal dropdown offers profiles, a new terminal window, split actions, terminal settings, Select Default Profile, Run Task and Configure Tasks. Task commands use quick pickers; their output stays in Terminal. Use arrow keys to navigate the toolbar and menus; Escape closes a menu and restores focus.',
+			),
+			localize(
+				'terminal.accessibility.instanceHover',
+				'Hover over a terminal title or instance row to inspect its process ID, command line and shell integration. <keybinding:workbench.action.terminal.focusHover> focuses the information card from terminal input or the instance list. With the title or row focused, Alt+Down Arrow also enters the card. Tab navigates its actions. Errors and environment changes remain visible with details hidden; an environment change can offer Relaunch Terminal for that instance. Show Details includes the full executable path, shell type, working directory, received integration sequences, detected prompt type and current prompt input. The details preference is remembered. Escape closes the card and returns focus to its title or row.',
+			),
+			localize(
+				'terminal.accessibility.profiles',
+				'New Terminal with Profile opens a searchable list of discovered, configured and extension profiles, including installed WSL distributions on Windows. Use arrow keys and Enter to choose; Escape cancels. The New Terminal dropdown groups AI command-line profiles separately. Agent Host opens the configured agent shell on this workspace’s execution host. Select Default Profile applies to future terminals. Relaunch preserves the original shell and explicit overrides, resolves current launch settings and extension environment, and honors the usual close confirmation. Extension profiles activate their provider when selected.',
+			),
+			localize(
+				'terminal.accessibility.taskGroups',
+				'Tasks with the same presentation.group open in split panes. Focus Next Pane and Focus Previous Pane navigate them. Manage Automatic Tasks enables or disables folder-open tasks in trusted workspaces; automatic tasks are disabled by default.',
+			),
+			localize(
+				'terminal.accessibility.reuse',
+				'A completed task waits for a character key or Enter to close its terminal. Workbench shortcuts remain available. presentation.showReuseMessage controls the reuse notice. A new task terminal displays a close notice.',
+			),
+			localize(
+				'terminal.accessibility.close',
+				'Escape closes accessibility help or the accessible view and returns focus to the terminal.',
+			),
+			localize(
+				'terminal.accessibility.autoReplies',
+				'Auto Replies sends configured responses when exact text appears in raw process output. Rules run on the execution host, including while the terminal is hidden; each rule is limited to one reply per second. Remove a rule or set it to null to stop that response.',
+			),
+			localize(
+				'terminal.accessibility.notifications',
+				'Terminal processes can send OSC 99 notifications to the notification center. Tab to notification actions and press Enter to activate or dismiss them. Disable Terminal Notifications prevents future notifications and their replies; closing the terminal removes its pending notifications.',
+			),
+			localize(
+				'terminal.accessibility.typeAhead',
+				'Local Echo can visually predict printable input in a detected shell prompt. Predictions are hidden from the accessible view until confirmed by process output, never change the shell buffer, and clear on editing controls or mismatched output. Enter ends prediction until the next detected prompt. The setting defaults to off.',
+			),
+			localize(
+				'terminal.accessibility.environment',
+				'Terminal: Show Environment Contributions opens a read-only document comparing the extension contributions applied at launch with those for future terminals. Relaunch Terminal applies current launch settings after the usual close confirmation. Reattaching a running terminal preserves its existing process environment.',
+			),
+			localize(
+				'terminal.accessibility.developer',
+				'Developer: Write Data to Terminal writes display data without sending shell input. Developer: Record Terminal Session records input, output, commands and resizes; select the recording status item to stop and copy the recording. Recordings can contain sensitive terminal data.',
+			),
+			localize(
+				'terminal.accessibility.chat',
+				'Terminal: Ask Chat captures the current output, asks for your question, and appends both to the existing Chat draft. Escape cancels. It does not submit the draft or execute a terminal command. Start Ash Code from the New Terminal dropdown or run ash code in a shell. Dictation controls appear only while that terminal reports an Ash Code input session. Start dictation and Stop dictation use Ash Code’s recording and preserve its draft; stopping does not send the message.',
+			),
 		].join('\n\n');
 	}
 

@@ -11,9 +11,14 @@ export class DetachedTerminal extends Disposable {
 	constructor(container: HTMLElement, @IInstantiationService instantiation: IInstantiationService) {
 		super();
 		const host: ITerminalScreenHost = {
-			processId: -1, state: 'exited', isReadOnly: true,
-			onDidChangeCommandStatus: Event.None, onDidChangeState: Event.None,
-			resize: () => { /* Geometry belongs to this screen; there is no PTY to resize. */ },
+			processId: -1,
+			state: 'exited',
+			isReadOnly: true,
+			onDidChangeCommandStatus: Event.None,
+			onDidChangeState: Event.None,
+			resize: () => {
+				/* Geometry belongs to this screen; there is no PTY to resize. */
+			},
 		};
 		this.xterm = this._register(instantiation.createInstance(XtermTerminal, container, host));
 	}
@@ -25,7 +30,10 @@ export class DetachedTerminal extends Disposable {
 		const input = this.xterm.raw.textarea;
 		if (input) {
 			input.readOnly = true;
-			input.setAttribute('aria-label', localize('terminal.chat.previewInput', 'Saved terminal output (read only)'));
+			input.setAttribute(
+				'aria-label',
+				localize('terminal.chat.previewInput', 'Saved terminal output (read only)'),
+			);
 		}
 	}
 }

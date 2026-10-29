@@ -8,7 +8,6 @@ import { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { colorThemeSchema, colorThemeSchemaId } from './colorThemeSchema.js';
 import { localize } from '../../../../nls.js';
 
-
 export interface ColorThemeDocument {
 	readonly $schema?: string;
 	readonly include?: string;
@@ -16,19 +15,26 @@ export interface ColorThemeDocument {
 	readonly type?: 'dark' | 'light' | 'hcDark' | 'hcLight';
 	readonly colors?: Readonly<Record<string, string>>;
 	readonly semanticHighlighting?: boolean;
-	readonly semanticTokenColors?: Readonly<Record<string, string | {
-		readonly foreground?: string;
-		readonly fontStyle?: string;
-		readonly bold?: boolean;
-		readonly italic?: boolean;
-		readonly underline?: boolean;
-		readonly strikethrough?: boolean;
-	}>>;
+	readonly semanticTokenColors?: Readonly<
+		Record<
+			string,
+			| string
+			| {
+					readonly foreground?: string;
+					readonly fontStyle?: string;
+					readonly bold?: boolean;
+					readonly italic?: boolean;
+					readonly underline?: boolean;
+					readonly strikethrough?: boolean;
+			  }
+		>
+	>;
 }
 
 export function parseColorThemeDocument(value: unknown): ColorThemeDocument {
 	const source = JSON.stringify(value);
-	if (!source || source.length > 1_048_576) throw new Error(localize('theme.documentTooLarge', 'Theme exceeds the 1 MiB document limit'));
+	if (!source || source.length > 1_048_576)
+		throw new Error(localize('theme.documentTooLarge', 'Theme exceeds the 1 MiB document limit'));
 	const issues = validateJsonSchema(parseJsonDocument(source), colorThemeSchema);
 	if (issues.length) throw new Error(`Invalid color theme: ${issues.map(issue => issue.message).join('; ')}`);
 	return value as ColorThemeDocument;
@@ -37,28 +43,40 @@ export function parseColorThemeDocument(value: unknown): ColorThemeDocument {
 /** Resolves package-relative includes before a document becomes a selectable theme. */
 export function resolveColorThemeDocument(path: string, read: (path: string) => unknown): ColorThemeDocument {
 	const visit = (resource: string, ancestors: readonly string[]): ColorThemeDocument => {
-		if (ancestors.includes(resource)) throw new Error(`Color theme include cycle: ${[...ancestors, resource].join(' -> ')}`);
+		if (ancestors.includes(resource))
+			throw new Error(`Color theme include cycle: ${[...ancestors, resource].join(' -> ')}`);
 		if (ancestors.length >= 16) throw new Error('Color theme include depth exceeds 16');
 		const document = parseColorThemeDocument(read(resource));
-		const inherited = document.include ? visit(resolveColorThemeInclude(resource, document.include), [...ancestors, resource]) : undefined;
+		const inherited = document.include
+			? visit(resolveColorThemeInclude(resource, document.include), [...ancestors, resource])
+			: undefined;
 		return mergeColorThemeDocuments(inherited, document);
 	};
 	return visit(resolveColorThemeInclude('', path), []);
 }
 
 /** Loads the same document format through a resource owner that performs asynchronous reads. */
-export async function loadColorThemeDocument(path: string, read: (path: string) => Promise<unknown>): Promise<ColorThemeDocument> {
+export async function loadColorThemeDocument(
+	path: string,
+	read: (path: string) => Promise<unknown>,
+): Promise<ColorThemeDocument> {
 	const visit = async (resource: string, ancestors: readonly string[]): Promise<ColorThemeDocument> => {
-		if (ancestors.includes(resource)) throw new Error(`Color theme include cycle: ${[...ancestors, resource].join(' -> ')}`);
+		if (ancestors.includes(resource))
+			throw new Error(`Color theme include cycle: ${[...ancestors, resource].join(' -> ')}`);
 		if (ancestors.length >= 16) throw new Error('Color theme include depth exceeds 16');
 		const document = parseColorThemeDocument(await read(resource));
-		const inherited = document.include ? await visit(resolveColorThemeInclude(resource, document.include), [...ancestors, resource]) : undefined;
+		const inherited = document.include
+			? await visit(resolveColorThemeInclude(resource, document.include), [...ancestors, resource])
+			: undefined;
 		return mergeColorThemeDocuments(inherited, document);
 	};
 	return visit(resolveColorThemeInclude('', path), []);
 }
 
-function mergeColorThemeDocuments(inherited: ColorThemeDocument | undefined, document: ColorThemeDocument): ColorThemeDocument {
+function mergeColorThemeDocuments(
+	inherited: ColorThemeDocument | undefined,
+	document: ColorThemeDocument,
+): ColorThemeDocument {
 	const { include: _include, ...own } = document;
 	if (!inherited) return own;
 	return {
@@ -66,13 +84,22 @@ function mergeColorThemeDocuments(inherited: ColorThemeDocument | undefined, doc
 		...own,
 		colors: { ...inherited.colors, ...own.colors },
 		semanticTokenColors: { ...inherited.semanticTokenColors, ...own.semanticTokenColors },
-		semanticHighlighting: inherited.semanticHighlighting === true || own.semanticHighlighting === true
-			? true : own.semanticHighlighting ?? inherited.semanticHighlighting,
+		semanticHighlighting:
+			inherited.semanticHighlighting === true || own.semanticHighlighting === true
+				? true
+				: (own.semanticHighlighting ?? inherited.semanticHighlighting),
 	};
 }
 
 function resolveColorThemeInclude(from: string, include: string): string {
-	if (!/\.json$/iu.test(include) || include.startsWith('/') || include.includes('\\') || include.includes(':') || include.includes('?') || include.includes('#')) {
+	if (
+		!/\.json$/iu.test(include) ||
+		include.startsWith('/') ||
+		include.includes('\\') ||
+		include.includes(':') ||
+		include.includes('?') ||
+		include.includes('#')
+	) {
 		throw new TypeError(`Invalid color theme include: ${include}`);
 	}
 	const segments = from ? from.split('/').slice(0, -1) : [];
@@ -99,7 +126,11 @@ export function parseUserColorTheme(source: string, id?: string): IColorTheme {
 	return createDocumentColorTheme(document, id ?? userThemeId(label), label, colorThemeType(document.type));
 }
 
-export async function loadUserColorTheme(path: string, read: (path: string) => Promise<string>, id?: string): Promise<IColorTheme> {
+export async function loadUserColorTheme(
+	path: string,
+	read: (path: string) => Promise<string>,
+	id?: string,
+): Promise<IColorTheme> {
 	const document = await loadColorThemeDocument(path, async resource => {
 		const source = await read(resource);
 		return parseJsonc(source, `Color theme '${resource}'`);
@@ -109,41 +140,71 @@ export async function loadUserColorTheme(path: string, read: (path: string) => P
 }
 
 export function userThemeId(name: string): string {
-	const slug = name.toLowerCase().replace(/[^a-z0-9]+/gu, '-').replace(/^-+|-+$/gu, '');
-	return slug || `user-${Array.from(name).map(character => character.codePointAt(0)!.toString(16)).join('-')}`;
+	const slug = name
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/gu, '-')
+		.replace(/^-+|-+$/gu, '');
+	return (
+		slug ||
+		`user-${Array.from(name)
+			.map(character => character.codePointAt(0)!.toString(16))
+			.join('-')}`
+	);
 }
 
 export function colorThemeType(type: ColorThemeDocument['type']): ColorScheme {
 	switch (type) {
-		case 'light': return ColorScheme.Light;
-		case 'hcDark': return ColorScheme.HighContrastDark;
-		case 'hcLight': return ColorScheme.HighContrastLight;
-		default: return ColorScheme.Dark;
+		case 'light':
+			return ColorScheme.Light;
+		case 'hcDark':
+			return ColorScheme.HighContrastDark;
+		case 'hcLight':
+			return ColorScheme.HighContrastLight;
+		default:
+			return ColorScheme.Dark;
 	}
 }
 
-export function createDocumentColorTheme(document: ColorThemeDocument, id: string, label: string, colorScheme: ColorScheme): IColorTheme {
+export function createDocumentColorTheme(
+	document: ColorThemeDocument,
+	id: string,
+	label: string,
+	colorScheme: ColorScheme,
+): IColorTheme {
 	return createColorTheme({
-		id, label, colorScheme, colorOverrides: document.colors, allowUnregisteredColorOverrides: true,
+		id,
+		label,
+		colorScheme,
+		colorOverrides: document.colors,
+		allowUnregisteredColorOverrides: true,
 		semanticHighlighting: document.semanticHighlighting,
 		semanticTokenRules: parseSemanticTokenRules(document.semanticTokenColors),
 	});
 }
 
-export function parseSemanticTokenRules(colors: ColorThemeDocument['semanticTokenColors']): readonly ISemanticTokenThemeRule[] {
+export function parseSemanticTokenRules(
+	colors: ColorThemeDocument['semanticTokenColors'],
+): readonly ISemanticTokenThemeRule[] {
 	if (!colors) return Object.freeze([]);
 	if (Object.keys(colors).length > 1024) throw new Error('Theme exceeds 1024 semantic token rules');
-	return Object.freeze(Object.entries(colors).map(([selector, value]) => {
-		const match = /^(\*|[A-Za-z][A-Za-z0-9_]*)(\.[A-Za-z][A-Za-z0-9_]*)*(?::[A-Za-z][A-Za-z0-9_-]*)?$/u.exec(selector);
-		if (!match) throw new Error(`Invalid semantic token selector: ${selector}`);
-		const [typeAndModifiers, language] = selector.split(':');
-		const [type, ...modifiers] = typeAndModifiers!.split('.');
-		const style = typeof value === 'string' ? { foreground: value } : value;
-		return Object.freeze({
-			selector, type: type!, modifiers: Object.freeze(modifiers), ...(language ? { language } : {}),
-			...style
-		});
-	}));
+	return Object.freeze(
+		Object.entries(colors).map(([selector, value]) => {
+			const match = /^(\*|[A-Za-z][A-Za-z0-9_]*)(\.[A-Za-z][A-Za-z0-9_]*)*(?::[A-Za-z][A-Za-z0-9_-]*)?$/u.exec(
+				selector,
+			);
+			if (!match) throw new Error(`Invalid semantic token selector: ${selector}`);
+			const [typeAndModifiers, language] = selector.split(':');
+			const [type, ...modifiers] = typeAndModifiers!.split('.');
+			const style = typeof value === 'string' ? { foreground: value } : value;
+			return Object.freeze({
+				selector,
+				type: type!,
+				modifiers: Object.freeze(modifiers),
+				...(language ? { language } : {}),
+				...style,
+			});
+		}),
+	);
 }
 
 /** Keep registry defaults implicit so copies still follow their design tokens. Explicit overrides export as resolved hex colors. */
@@ -164,7 +225,23 @@ export function serializeUserColorThemeDraft(theme: IColorTheme, label: string):
 		type: theme.colorScheme,
 		colors,
 		...(theme.semanticHighlighting === undefined ? {} : { semanticHighlighting: theme.semanticHighlighting }),
-		...(theme.semanticTokenRules?.length ? { semanticTokenColors: Object.fromEntries(theme.semanticTokenRules.map(rule => [rule.selector, { foreground: rule.foreground, fontStyle: rule.fontStyle, bold: rule.bold, italic: rule.italic, underline: rule.underline, strikethrough: rule.strikethrough }])) } : {}),
+		...(theme.semanticTokenRules?.length
+			? {
+					semanticTokenColors: Object.fromEntries(
+						theme.semanticTokenRules.map(rule => [
+							rule.selector,
+							{
+								foreground: rule.foreground,
+								fontStyle: rule.fontStyle,
+								bold: rule.bold,
+								italic: rule.italic,
+								underline: rule.underline,
+								strikethrough: rule.strikethrough,
+							},
+						]),
+					),
+				}
+			: {}),
 	};
 	parseColorThemeDocument(document);
 	return `${JSON.stringify(document, null, 2)}\n`;

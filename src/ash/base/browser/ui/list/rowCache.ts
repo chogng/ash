@@ -20,13 +20,15 @@ export class RowCache<T> extends Disposable {
 		private readonly document: Document = getActiveDocument(),
 	) {
 		super();
-		this._register(toDisposable(() => {
-			this.available.clear();
-			this.pendingRemoval.clear();
-		}));
+		this._register(
+			toDisposable(() => {
+				this.available.clear();
+				this.pendingRemoval.clear();
+			}),
+		);
 	}
 
-	alloc(templateId: string): { row: IRow; isReusingConnectedDomNode: boolean; } {
+	alloc(templateId: string): { row: IRow; isReusingConnectedDomNode: boolean } {
 		let row = this.available.get(templateId)?.pop();
 		if (row) {
 			this.pendingRemoval.delete(row);
@@ -37,10 +39,12 @@ export class RowCache<T> extends Disposable {
 			row = { domNode, templateId, templateData: renderer.renderTemplate(domNode) };
 			const template = row;
 			const resources = new DisposableStore();
-			resources.add(toDisposable(() => {
-				template.domNode.remove();
-				renderer.disposeTemplate(template.templateData);
-			}));
+			resources.add(
+				toDisposable(() => {
+					template.domNode.remove();
+					renderer.disposeTemplate(template.templateData);
+				}),
+			);
 			this.templates.set(template, resources);
 		}
 		return { row, isReusingConnectedDomNode: row.domNode.isConnected };

@@ -1,4 +1,12 @@
-import { AstNode, AstNodeKind, BracketAstNode, InvalidBracketAstNode, ListAstNode, PairAstNode, TextAstNode } from './ast.js';
+import {
+	AstNode,
+	AstNodeKind,
+	BracketAstNode,
+	InvalidBracketAstNode,
+	ListAstNode,
+	PairAstNode,
+	TextAstNode,
+} from './ast.js';
 import { BeforeEditPositionMapper, TextEditInfo } from './beforeEditPositionMapper.js';
 import { SmallImmutableSet } from './smallImmutableSet.js';
 import { lengthIsZero, lengthLessThan } from './length.js';
@@ -8,15 +16,20 @@ import { OpeningBracketId, Tokenizer, TokenKind } from './tokenizer.js';
 
 /**
  * Non incrementally built ASTs are immutable.
-*/
-export function parseDocument(tokenizer: Tokenizer, edits: TextEditInfo[], oldNode: AstNode | undefined, createImmutableLists: boolean): AstNode {
+ */
+export function parseDocument(
+	tokenizer: Tokenizer,
+	edits: TextEditInfo[],
+	oldNode: AstNode | undefined,
+	createImmutableLists: boolean,
+): AstNode {
 	const parser = new Parser(tokenizer, edits, oldNode, createImmutableLists);
 	return parser.parseDocument();
 }
 
 /**
  * Non incrementally built ASTs are immutable.
-*/
+ */
 class Parser {
 	private readonly oldNodeReader?: NodeReader;
 	private readonly positionMapper: BeforeEditPositionMapper;
@@ -25,14 +38,14 @@ class Parser {
 
 	/**
 	 * Reports how many nodes were constructed in the last parse operation.
-	*/
+	 */
 	get nodesConstructed() {
 		return this._itemsConstructed;
 	}
 
 	/**
 	 * Reports how many nodes were reused in the last parse operation.
-	*/
+	 */
 	get nodesReused() {
 		return this._itemsFromCache;
 	}
@@ -63,10 +76,7 @@ class Parser {
 		return result;
 	}
 
-	private parseList(
-		openedBracketIds: SmallImmutableSet<OpeningBracketId>,
-		level: number,
-	): AstNode | null {
+	private parseList(openedBracketIds: SmallImmutableSet<OpeningBracketId>, level: number): AstNode | null {
 		const items: AstNode[] = [];
 
 		while (true) {
@@ -76,8 +86,7 @@ class Parser {
 				const token = this.tokenizer.peek();
 				if (
 					!token ||
-					(token.kind === TokenKind.ClosingBracket &&
-						token.bracketIds.intersects(openedBracketIds))
+					(token.kind === TokenKind.ClosingBracket && token.bracketIds.intersects(openedBracketIds))
 				) {
 					break;
 				}
@@ -93,7 +102,9 @@ class Parser {
 		}
 
 		// When there is no oldNodeReader, all items are created from scratch and must have the same height.
-		const result = this.oldNodeReader ? concat23Trees(items) : concat23TreesOfSameHeight(items, this.createImmutableLists);
+		const result = this.oldNodeReader
+			? concat23Trees(items)
+			: concat23TreesOfSameHeight(items, this.createImmutableLists);
 		return result;
 	}
 
@@ -101,17 +112,20 @@ class Parser {
 		if (this.oldNodeReader) {
 			const maxCacheableLength = this.positionMapper.getDistanceToNextChange(this.tokenizer.offset);
 			if (maxCacheableLength === null || !lengthIsZero(maxCacheableLength)) {
-				const cachedNode = this.oldNodeReader.readLongestNodeAt(this.positionMapper.getOffsetBeforeChange(this.tokenizer.offset), curNode => {
-					// The edit could extend the ending token, thus we cannot reuse nodes that touch the edit.
-					// If there is no edit anymore, we can reuse the node in any case.
-					if (maxCacheableLength !== null && !lengthLessThan(curNode.length, maxCacheableLength)) {
-						// Either the node contains edited text or touches edited text.
-						// In the latter case, brackets might have been extended (`end` -> `ending`), so even touching nodes cannot be reused.
-						return false;
-					}
-					const canBeReused = curNode.canBeReused(openedBracketIds);
-					return canBeReused;
-				});
+				const cachedNode = this.oldNodeReader.readLongestNodeAt(
+					this.positionMapper.getOffsetBeforeChange(this.tokenizer.offset),
+					curNode => {
+						// The edit could extend the ending token, thus we cannot reuse nodes that touch the edit.
+						// If there is no edit anymore, we can reuse the node in any case.
+						if (maxCacheableLength !== null && !lengthLessThan(curNode.length, maxCacheableLength)) {
+							// Either the node contains edited text or touches edited text.
+							// In the latter case, brackets might have been extended (`end` -> `ending`), so even touching nodes cannot be reused.
+							return false;
+						}
+						const canBeReused = curNode.canBeReused(openedBracketIds);
+						return canBeReused;
+					},
+				);
 
 				if (cachedNode) {
 					this._itemsFromCache++;
@@ -123,10 +137,7 @@ class Parser {
 		return undefined;
 	}
 
-	private parseChild(
-		openedBracketIds: SmallImmutableSet<number>,
-		level: number,
-	): AstNode {
+	private parseChild(openedBracketIds: SmallImmutableSet<number>, level: number): AstNode {
 		this._itemsConstructed++;
 
 		const token = this.tokenizer.read()!;
@@ -157,14 +168,10 @@ class Parser {
 					return PairAstNode.create(
 						token.astNode as BracketAstNode,
 						child,
-						nextToken.astNode as BracketAstNode
+						nextToken.astNode as BracketAstNode,
 					);
 				} else {
-					return PairAstNode.create(
-						token.astNode as BracketAstNode,
-						child,
-						null
-					);
+					return PairAstNode.create(token.astNode as BracketAstNode, child, null);
 				}
 			}
 			default:

@@ -14,17 +14,20 @@ function describeError(error: unknown, verbose: boolean, seen: Set<object>): str
 	if (typeof error !== 'object' || error === null || seen.has(error)) return unknownErrorMessage();
 	seen.add(error);
 
-	const value = error as { readonly message?: unknown; readonly stack?: unknown; readonly detail?: unknown; };
+	const value = error as { readonly message?: unknown; readonly stack?: unknown; readonly detail?: unknown };
 	if (typeof value.detail === 'object' && value.detail !== null) {
-		const detail = value.detail as { readonly error?: unknown; readonly exception?: unknown; };
+		const detail = value.detail as { readonly error?: unknown; readonly exception?: unknown };
 		const nested = detail.error ?? detail.exception;
 		if (nested !== undefined && nested !== null) return describeError(nested, verbose, seen);
 	}
 
-	const message = typeof value.message === 'string' && value.message.length > 0 ? value.message : unknownErrorMessage();
+	const message =
+		typeof value.message === 'string' && value.message.length > 0 ? value.message : unknownErrorMessage();
 	const stack = Array.isArray(value.stack)
 		? value.stack.filter((line): line is string => typeof line === 'string').join('\n')
-		: typeof value.stack === 'string' ? value.stack : undefined;
+		: typeof value.stack === 'string'
+			? value.stack
+			: undefined;
 	return verbose && stack ? `${message}\n\n${stack}` : message;
 }
 

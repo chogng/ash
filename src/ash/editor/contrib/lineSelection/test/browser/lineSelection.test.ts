@@ -48,28 +48,47 @@ test('Line selection normalizes reverse multi-selections while retaining the pri
 });
 
 function createView(dom: JSDOM, model: TextModel): InstanceType<typeof TestView> {
-	return new TestView({ container: dom.window.document.querySelector('main')!, model, lineHeight: 20, textMeasurer: new FixedTextMeasurer() });
+	return new TestView({
+		container: dom.window.document.querySelector('main')!,
+		model,
+		lineHeight: 20,
+		textMeasurer: new FixedTextMeasurer(),
+	});
 }
 
 function setSelections(view: InstanceType<typeof TestView>, selections: readonly Selection[]): void {
-	view.testViewModel.setCursorStates('test', CursorChangeReason.Explicit, CursorState.fromModelSelections(selections));
+	view.testViewModel.setCursorStates(
+		'test',
+		CursorChangeReason.Explicit,
+		CursorState.fromModelSelections(selections),
+	);
 }
 
 function expand(view: InstanceType<typeof TestView>): void {
-	view.testViewModel.setCursorStates('test', CursorChangeReason.Explicit, CursorMoveCommands.expandLineSelection(view.testViewModel, view.testViewModel.getCursorStates()));
+	view.testViewModel.setCursorStates(
+		'test',
+		CursorChangeReason.Explicit,
+		CursorMoveCommands.expandLineSelection(view.testViewModel, view.testViewModel.getCursorStates()),
+	);
 }
 
 function modelSelections(view: InstanceType<typeof TestView>): Selection[] {
 	return view.testViewModel.getCursorStates().map(state => state.modelState.selection);
 }
 
-function selectionAt(view: InstanceType<typeof TestView>): Selection { return modelSelections(view)[0]!; }
+function selectionAt(view: InstanceType<typeof TestView>): Selection {
+	return modelSelections(view)[0]!;
+}
 
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;
 	readonly contentLeftPadding = 12;
-	refresh(): boolean { return false; }
-	measureLineWidth(text: string): number { return text.length * 10; }
+	refresh(): boolean {
+		return false;
+	}
+	measureLineWidth(text: string): number {
+		return text.length * 10;
+	}
 }
 
 const codeFeatures = registerTestCodeEditorFeatures();

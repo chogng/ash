@@ -3,11 +3,17 @@ import { createDecorator } from '../../../platform/instantiation/common/instanti
 import type { LanguageFeatureRegistry } from '../languageFeatureRegistry.js';
 import type { ITextModel } from '../model.js';
 
-export const ILanguageFeatureDebounceService = createDecorator<ILanguageFeatureDebounceService>('ILanguageFeatureDebounceService');
+export const ILanguageFeatureDebounceService = createDecorator<ILanguageFeatureDebounceService>(
+	'ILanguageFeatureDebounceService',
+);
 
 export interface ILanguageFeatureDebounceService {
 	readonly _serviceBrand: undefined;
-	for(feature: LanguageFeatureRegistry<object>, debugName: string, config?: { min?: number; max?: number; salt?: string; }): IFeatureDebounceInformation;
+	for(
+		feature: LanguageFeatureRegistry<object>,
+		debugName: string,
+		config?: { min?: number; max?: number; salt?: string },
+	): IFeatureDebounceInformation;
 }
 
 export interface IFeatureDebounceInformation {
@@ -18,9 +24,16 @@ export interface IFeatureDebounceInformation {
 
 export class LanguageFeatureDebounceService implements ILanguageFeatureDebounceService {
 	readonly _serviceBrand = undefined;
-	private readonly features = new WeakMap<LanguageFeatureRegistry<object>, Map<string, IFeatureDebounceInformation>>();
+	private readonly features = new WeakMap<
+		LanguageFeatureRegistry<object>,
+		Map<string, IFeatureDebounceInformation>
+	>();
 
-	for(feature: LanguageFeatureRegistry<object>, debugName: string, config?: { min?: number; max?: number; salt?: string; }): IFeatureDebounceInformation {
+	for(
+		feature: LanguageFeatureRegistry<object>,
+		debugName: string,
+		config?: { min?: number; max?: number; salt?: string },
+	): IFeatureDebounceInformation {
 		const min = config?.min ?? 50;
 		const max = config?.max ?? Math.max(min, 500);
 		if (!Number.isFinite(min) || !Number.isFinite(max) || min < 0 || max < min) {
@@ -50,7 +63,11 @@ interface ModelTiming {
 class FeatureDebounceInformation implements IFeatureDebounceInformation {
 	private readonly timings = new WeakMap<ITextModel, ModelTiming>();
 
-	constructor(private readonly feature: LanguageFeatureRegistry<object>, private readonly min: number, private readonly max: number) { }
+	constructor(
+		private readonly feature: LanguageFeatureRegistry<object>,
+		private readonly min: number,
+		private readonly max: number,
+	) {}
 
 	get(model: ITextModel): number {
 		return this.timing(model)?.delay ?? this.default();
@@ -81,10 +98,12 @@ class FeatureDebounceInformation implements IFeatureDebounceInformation {
 		const languageId = model.getLanguageId();
 		const providers = this.feature.ordered(model);
 		let timing = this.timings.get(model);
-		if (!timing
-			|| timing.languageId !== languageId
-			|| timing.providers.length !== providers.length
-			|| timing.providers.some((provider, index) => provider.deref() !== providers[index])) {
+		if (
+			!timing ||
+			timing.languageId !== languageId ||
+			timing.providers.length !== providers.length ||
+			timing.providers.some((provider, index) => provider.deref() !== providers[index])
+		) {
 			timing = { languageId, providers: providers.map(provider => new WeakRef(provider)), delay: undefined };
 			this.timings.set(model, timing);
 		}

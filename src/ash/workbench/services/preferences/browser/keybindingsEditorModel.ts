@@ -3,9 +3,18 @@ import { getKeybindingLabel, KeybindingLabelStyle } from '../../../../base/commo
 import { serializeKeybinding } from '../../../../base/common/keybindingParser.js';
 import { commandActionLabel } from '../../../../platform/action/common/action.js';
 import { isMenuItem, MenuId, MenusRegistry } from '../../../../platform/actions/common/actions.js';
-import { CommandsRegistry, type CommandId, type CommandRegistry } from '../../../../platform/commands/common/commands.js';
+import {
+	CommandsRegistry,
+	type CommandId,
+	type CommandRegistry,
+} from '../../../../platform/commands/common/commands.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
-import { KeybindingRuleKind, KeybindingsRegistry, KeybindingSource, type KeybindingRegistry } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
+import {
+	KeybindingRuleKind,
+	KeybindingsRegistry,
+	KeybindingSource,
+	type KeybindingRegistry,
+} from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { EditorModel } from '../../../common/editor/editorModel.js';
 import type { IUserFriendlyKeybinding } from '../../../../platform/keybinding/common/keybinding.js';
 import { ResolvedKeybindingItem } from '../../../../platform/keybinding/common/resolvedKeybindingItem.js';
@@ -25,7 +34,7 @@ export interface KeyboardShortcutItem {
 	readonly sourceLabel: string;
 }
 
-type RankedShortcut = KeyboardShortcutItem & { readonly precedence: readonly [number, number, number]; };
+type RankedShortcut = KeyboardShortcutItem & { readonly precedence: readonly [number, number, number] };
 
 /** Owns searchable rows and service listeners; the editor input owns its lifetime. */
 export class KeybindingsEditorModel extends EditorModel {
@@ -36,9 +45,7 @@ export class KeybindingsEditorModel extends EditorModel {
 
 	public readonly onDidChange = this._onDidChange.event;
 
-	constructor(
-		@IKeybindingService private readonly keybindings: IKeybindingService,
-	) {
+	constructor(@IKeybindingService private readonly keybindings: IKeybindingService) {
 		super();
 		this.refresh();
 		this._register(this.keybindingRegistry.onDidChangeKeybindings(() => this.refresh()));
@@ -56,27 +63,45 @@ export class KeybindingsEditorModel extends EditorModel {
 		const quoted = /"([^"]*)"/.exec(query);
 		const exact = quoted ? this.keybindings.resolveUserBinding(quoted[1]!) : undefined;
 		const exactLabel = exact ? getKeybindingLabel(exact, KeybindingLabelStyle.Aria).toLocaleLowerCase() : undefined;
-		const terms = query.replace(/@source:\s*(system|default|user|extension|unassigned)\b/ig, '').replace(/"[^"]*"/g, '').split(/\s+/).filter(Boolean);
+		const terms = query
+			.replace(/@source:\s*(system|default|user|extension|unassigned)\b/gi, '')
+			.replace(/"[^"]*"/g, '')
+			.split(/\s+/)
+			.filter(Boolean);
 		const items = this.allItems.filter(item => {
-			if (source && (source === 'system' || source === 'default'
-				? item.source !== 'builtin' && item.source !== 'workbench'
-				: item.source !== source)) return false;
+			if (
+				source &&
+				(source === 'system' || source === 'default'
+					? item.source !== 'builtin' && item.source !== 'workbench'
+					: item.source !== source)
+			)
+				return false;
 			if (quoted) {
 				const resolved = item.keybindingItem.resolvedKeybinding;
-				if (!resolved || !exactLabel || getKeybindingLabel(resolved, KeybindingLabelStyle.Aria).toLocaleLowerCase() !== exactLabel) return false;
+				if (
+					!resolved ||
+					!exactLabel ||
+					getKeybindingLabel(resolved, KeybindingLabelStyle.Aria).toLocaleLowerCase() !== exactLabel
+				)
+					return false;
 			}
-			const searchable = `${item.commandLabel} ${item.command ?? ''} ${item.key} ${item.keyLabel} ${item.when} ${item.sourceLabel}`.toLocaleLowerCase();
-			return terms.every(term => term.startsWith('@command:')
-				? item.command?.toLocaleLowerCase() === term.slice('@command:'.length)
-				: searchable.includes(term));
+			const searchable =
+				`${item.commandLabel} ${item.command ?? ''} ${item.key} ${item.keyLabel} ${item.when} ${item.sourceLabel}`.toLocaleLowerCase();
+			return terms.every(term =>
+				term.startsWith('@command:')
+					? item.command?.toLocaleLowerCase() === term.slice('@command:'.length)
+					: searchable.includes(term),
+			);
 		});
-		return sortByPrecedence ? items.sort((left, right) => {
-			for (let index = 0; index < left.precedence.length; index++) {
-				const difference = right.precedence[index]! - left.precedence[index]!;
-				if (difference) return difference;
-			}
-			return compareItems(left, right);
-		}) : items;
+		return sortByPrecedence
+			? items.sort((left, right) => {
+					for (let index = 0; index < left.precedence.length; index++) {
+						const difference = right.precedence[index]! - left.precedence[index]!;
+						if (difference) return difference;
+					}
+					return compareItems(left, right);
+				})
+			: items;
 	}
 
 	private refresh(): void {
@@ -90,7 +115,15 @@ export class KeybindingsEditorModel extends EditorModel {
 			items.push({
 				precedence: [rule.source ?? KeybindingSource.Workbench, rule.priority ?? 0, rule.order],
 				id: `registered:${rule.order}`,
-				keybindingItem: new ResolvedKeybindingItem(this.keybindings.resolveKeybinding(rule.keybinding), command, rule.kind === KeybindingRuleKind.Command ? rule.args?.[0] : undefined, rule.when, true, null, true),
+				keybindingItem: new ResolvedKeybindingItem(
+					this.keybindings.resolveKeybinding(rule.keybinding),
+					command,
+					rule.kind === KeybindingRuleKind.Command ? rule.args?.[0] : undefined,
+					rule.when,
+					true,
+					null,
+					true,
+				),
 				command,
 				commandLabel: command ? commandLabel(command) : localize('keybindings.blocked', 'Blocked shortcut'),
 				key: serializeKeybinding(rule.keybinding),
@@ -108,18 +141,32 @@ export class KeybindingsEditorModel extends EditorModel {
 			if (keybindingItem.isDefault && keybindingItem.extensionId) {
 				const command = keybindingItem.command;
 				if (command) assignedCommands.add(command);
-				const key = keybindingItem.resolvedKeybinding ? getKeybindingLabel(keybindingItem.resolvedKeybinding, KeybindingLabelStyle.UserSettings) : '';
-				const fingerprint = JSON.stringify([keybindingItem.extensionId, command, key, keybindingItem.when?.serialize(), keybindingItem.commandArgs]);
+				const key = keybindingItem.resolvedKeybinding
+					? getKeybindingLabel(keybindingItem.resolvedKeybinding, KeybindingLabelStyle.UserSettings)
+					: '';
+				const fingerprint = JSON.stringify([
+					keybindingItem.extensionId,
+					command,
+					key,
+					keybindingItem.when?.serialize(),
+					keybindingItem.commandArgs,
+				]);
 				const occurrence = extensionOccurrences.get(fingerprint) ?? 0;
 				extensionOccurrences.set(fingerprint, occurrence + 1);
 				items.push({
-					precedence: [keybindingItem.isBuiltinExtension ? KeybindingSource.Builtin : KeybindingSource.Workbench, 0, index],
+					precedence: [
+						keybindingItem.isBuiltinExtension ? KeybindingSource.Builtin : KeybindingSource.Workbench,
+						0,
+						index,
+					],
 					id: `extension:${stableHash(fingerprint)}:${occurrence}`,
 					keybindingItem,
 					command,
 					commandLabel: command ? commandLabel(command) : localize('keybindings.blocked', 'Blocked shortcut'),
 					key,
-					keyLabel: keybindingItem.resolvedKeybinding ? getKeybindingLabel(keybindingItem.resolvedKeybinding) : '',
+					keyLabel: keybindingItem.resolvedKeybinding
+						? getKeybindingLabel(keybindingItem.resolvedKeybinding)
+						: '',
 					when: keybindingItem.when?.serialize() ?? '',
 					source: 'extension',
 					sourceLabel: keybindingItem.extensionId,
@@ -137,7 +184,9 @@ export class KeybindingsEditorModel extends EditorModel {
 				id: userItemId(entry, occurrence),
 				keybindingItem,
 				command: entry.command,
-				commandLabel: entry.command ? commandLabel(entry.command) : localize('keybindings.blocked', 'Blocked shortcut'),
+				commandLabel: entry.command
+					? commandLabel(entry.command)
+					: localize('keybindings.blocked', 'Blocked shortcut'),
 				key: entry.key,
 				keyLabel: resolved ? getKeybindingLabel(resolved) : entry.key,
 				when: entry.when ?? '',
@@ -173,12 +222,19 @@ function commandLabel(command: CommandId): string {
 		return commandActionLabel(item.command.title);
 	}
 	const segment = command.split('.').at(-1) ?? command;
-	const words = segment.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[-_]+/g, ' ').trim();
+	const words = segment
+		.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+		.replace(/[-_]+/g, ' ')
+		.trim();
 	return words ? words[0].toLocaleUpperCase() + words.slice(1) : command;
 }
 
 function compareItems(left: KeyboardShortcutItem, right: KeyboardShortcutItem): number {
-	return left.commandLabel.localeCompare(right.commandLabel) || left.keyLabel.localeCompare(right.keyLabel) || left.id.localeCompare(right.id);
+	return (
+		left.commandLabel.localeCompare(right.commandLabel) ||
+		left.keyLabel.localeCompare(right.keyLabel) ||
+		left.id.localeCompare(right.id)
+	);
 }
 
 function userItemId(entry: IUserFriendlyKeybinding, occurrence: number): string {

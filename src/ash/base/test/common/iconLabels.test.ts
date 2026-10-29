@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { escapeIcons, getIconAriaLabel, matchesFuzzyIconAware, parseLabelWithIcons, stripIcons } from '../../common/iconLabels.js';
+import {
+	escapeIcons,
+	getIconAriaLabel,
+	matchesFuzzyIconAware,
+	parseLabelWithIcons,
+	stripIcons,
+} from '../../common/iconLabels.js';
 
 test('icon labels escape, strip, and describe literal icon syntax', () => {
 	assert.equal(escapeIcons('$(add) File'), '\\$(add) File');
@@ -20,8 +26,14 @@ test('icon-aware parsing maps fuzzy matches to source offsets', () => {
 
 test('icon-aware matches retain UTF-16 offsets and the existing optional argument', () => {
 	const parsed = parseLabelWithIcons('$(add) 🌲 File');
-	assert.deepEqual(matchesFuzzyIconAware('🌲f', parsed), [{ start: 7, end: 9 }, { start: 10, end: 11 }]);
-	assert.deepEqual(matchesFuzzyIconAware('🌲f', parsed, true), [{ start: 7, end: 9 }, { start: 10, end: 11 }]);
+	assert.deepEqual(matchesFuzzyIconAware('🌲f', parsed), [
+		{ start: 7, end: 9 },
+		{ start: 10, end: 11 },
+	]);
+	assert.deepEqual(matchesFuzzyIconAware('🌲f', parsed, true), [
+		{ start: 7, end: 9 },
+		{ start: 10, end: 11 },
+	]);
 });
 
 test('icon-aware matches map lowercase expansions back to the original label', () => {

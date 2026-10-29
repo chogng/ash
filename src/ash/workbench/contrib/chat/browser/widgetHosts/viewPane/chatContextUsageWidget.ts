@@ -2,12 +2,21 @@ import { defaultButtonStyles } from '../../../../../../platform/theme/browser/de
 import './media/chatContextUsageWidget.css';
 import { addDisposableListener, h, isNode, svg } from '../../../../../../base/browser/dom.js';
 import { Button } from '../../../../../../base/browser/ui/button/button.js';
-import { AnchorAlignment, AnchorPosition, ContextViewFocusRestore } from '../../../../../../base/browser/ui/contextview/contextview.js';
+import {
+	AnchorAlignment,
+	AnchorPosition,
+	ContextViewFocusRestore,
+} from '../../../../../../base/browser/ui/contextview/contextview.js';
 import { getHoverDelegate, type IManagedHover } from '../../../../../../base/browser/ui/hover/hoverDelegate.js';
 import { Disposable, DisposableStore, MutableDisposable } from '../../../../../../base/common/lifecycle.js';
 import { createUuid } from '../../../../../../base/common/uuid.js';
 import { localize } from '../../../../../../nls.js';
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	AccessibleContentProvider,
+	AccessibleViewProviderId,
+	AccessibleViewType,
+	AccessibilityVerbositySettingId,
+} from '../../../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IContextViewService } from '../../../../../../platform/contextview/browser/contextView.js';
 import { getContextInputBudget, type ChatContextUsage } from '../../../../../services/chat/common/chatService.js';
@@ -24,21 +33,28 @@ export class ChatContextUsageWidget extends Disposable {
 	private readonly detailsListeners = this._register(new DisposableStore());
 	private usage: ChatContextUsage | undefined;
 
-	constructor(document: Document, @IContextViewService private readonly contextViews: IContextViewService) {
+	constructor(
+		document: Document,
+		@IContextViewService private readonly contextViews: IContextViewService,
+	) {
 		super();
-		this.button = this._register(new Button(h(document, 'div'), {
-			...defaultButtonStyles,
-			label: '',
-			iconOnly: true,
-			ariaLabel: localize('chat.input.contextUsage', 'Context usage'),
-			enabled: false,
-			onClick: () => this.details.value ? this.hideDetails() : this.showDetails(),
-		}));
+		this.button = this._register(
+			new Button(h(document, 'div'), {
+				...defaultButtonStyles,
+				label: '',
+				iconOnly: true,
+				ariaLabel: localize('chat.input.contextUsage', 'Context usage'),
+				enabled: false,
+				onClick: () => (this.details.value ? this.hideDetails() : this.showDetails()),
+			}),
+		);
 		this.domNode = this.button.domNode;
 		this.domNode.classList.add('ash-chat-context-usage-button');
 		this.domNode.setAttribute('aria-haspopup', 'dialog');
 		this.domNode.setAttribute('aria-expanded', 'false');
-		const ring = svg(document, 'svg', { attributes: { viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false' } });
+		const ring = svg(document, 'svg', {
+			attributes: { viewBox: '0 0 16 16', 'aria-hidden': 'true', focusable: 'false' },
+		});
 		ring.classList.add('ash-chat-context-usage-ring');
 		const track = svg(document, 'circle', { attributes: { cx: '8', cy: '8', r: '6', pathLength: '100' } });
 		track.classList.add('ash-chat-context-usage-track');
@@ -48,21 +64,36 @@ export class ChatContextUsageWidget extends Disposable {
 		this.domNode.append(ring);
 		this.hoverContent = h(document, 'div');
 		this.hoverContent.className = 'ash-chat-context-usage-hover';
-		this.hover = this._register(getHoverDelegate().setupHover({ target: this.domNode, content: this.hoverContent, groupId: 'actions' }));
+		this.hover = this._register(
+			getHoverDelegate().setupHover({ target: this.domNode, content: this.hoverContent, groupId: 'actions' }),
+		);
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
-			this._register(AccessibleViewRegistry.register({
-				type, priority: 95, name: `chatContextUsage-${type}-${createUuid()}`,
-				getProvider: () => {
-					const details = this.details.value?.domNode;
-					const focused = document.activeElement;
-					if (!focused || !details?.contains(focused)) return undefined;
-					const detailsText = details.innerText;
-					return new AccessibleContentProvider(AccessibleViewProviderId.SessionsChat, { type }, () => type === AccessibleViewType.View
-						? detailsText
-						: localize('chat.input.contextDetailsHelp', 'Context usage details show the estimated token count and a breakdown by category. Percentages use the input budget for automatic compaction; model context capacity is shown separately. The unsent draft is excluded. Unknown capacity shows token counts without percentages. Press Escape or activate Close to return to the context ring. Tab leaves the details.'),
-						() => details.isConnected ? details.focus() : this.button.focus(), AccessibilityVerbositySettingId.Chat);
-				},
-			}));
+			this._register(
+				AccessibleViewRegistry.register({
+					type,
+					priority: 95,
+					name: `chatContextUsage-${type}-${createUuid()}`,
+					getProvider: () => {
+						const details = this.details.value?.domNode;
+						const focused = document.activeElement;
+						if (!focused || !details?.contains(focused)) return undefined;
+						const detailsText = details.innerText;
+						return new AccessibleContentProvider(
+							AccessibleViewProviderId.SessionsChat,
+							{ type },
+							() =>
+								type === AccessibleViewType.View
+									? detailsText
+									: localize(
+											'chat.input.contextDetailsHelp',
+											'Context usage details show the estimated token count and a breakdown by category. Percentages use the input budget for automatic compaction; model context capacity is shown separately. The unsent draft is excluded. Unknown capacity shows token counts without percentages. Press Escape or activate Close to return to the context ring. Tab leaves the details.',
+										),
+							() => (details.isConnected ? details.focus() : this.button.focus()),
+							AccessibilityVerbositySettingId.Chat,
+						);
+					},
+				}),
+			);
 		}
 		this.update(undefined);
 	}
@@ -72,7 +103,8 @@ export class ChatContextUsageWidget extends Disposable {
 		if (this.isDisposed) return;
 		this.usage = usage;
 		const capacity = usage && getContextInputBudget(usage);
-		const percentage = usage && capacity !== undefined && capacity > 0 ? usage.estimatedTokens / capacity * 100 : undefined;
+		const percentage =
+			usage && capacity !== undefined && capacity > 0 ? (usage.estimatedTokens / capacity) * 100 : undefined;
 		const filled = percentage !== undefined ? Math.min(100, Math.max(0, percentage)) : 0;
 		this.value.classList.toggle('empty', filled === 0);
 		this.value.setAttribute('stroke-dasharray', `${filled} ${100 - filled}`);
@@ -94,18 +126,27 @@ export class ChatContextUsageWidget extends Disposable {
 		const details = new ChatContextUsageDetails(this.domNode.ownerDocument, () => this.hideDetails());
 		details.update(this.usage);
 		this.details.value = details;
-		this.detailsListeners.add(addDisposableListener(details.domNode, 'focusout', event => {
-			if (!isNode(event.relatedTarget) || (!details.domNode.contains(event.relatedTarget) && event.relatedTarget !== this.domNode)) this.hideDetails();
-		}));
+		this.detailsListeners.add(
+			addDisposableListener(details.domNode, 'focusout', event => {
+				if (
+					!isNode(event.relatedTarget) ||
+					(!details.domNode.contains(event.relatedTarget) && event.relatedTarget !== this.domNode)
+				)
+					this.hideDetails();
+			}),
+		);
 		this.hover.hide();
 		this.hover.update(undefined);
 		this.button.focus();
 		this.domNode.setAttribute('aria-controls', details.domNode.id);
 		this.domNode.setAttribute('aria-expanded', 'true');
 		const shown = this.contextViews.show({
-			anchor: this.domNode, content: details.domNode,
-			anchorPosition: AnchorPosition.Above, anchorAlignment: AnchorAlignment.Right,
-			presentation: 'default', focusRestore: ContextViewFocusRestore.Previous,
+			anchor: this.domNode,
+			content: details.domNode,
+			anchorPosition: AnchorPosition.Above,
+			anchorAlignment: AnchorAlignment.Right,
+			presentation: 'default',
+			focusRestore: ContextViewFocusRestore.Previous,
 			onHide: () => {
 				this.detailsListeners.clear();
 				this.details.clear();
@@ -137,8 +178,18 @@ export class ChatContextUsageWidget extends Disposable {
 		if (!usage) return localize('chat.input.contextUsageUnavailable', 'Context usage is not available yet');
 		const budget = getContextInputBudget(usage);
 		return budget !== undefined
-			? localize('chat.input.contextRingLabel', 'Context budget: {0}%, estimated input {1} of {2} tokens', Math.round(usage.estimatedTokens / budget * 100), usage.estimatedTokens.toLocaleString(), budget.toLocaleString())
-			: localize('chat.input.contextRingUnknownLabel', 'Context usage: {0} tokens, capacity unavailable', usage.estimatedTokens.toLocaleString());
+			? localize(
+					'chat.input.contextRingLabel',
+					'Context budget: {0}%, estimated input {1} of {2} tokens',
+					Math.round((usage.estimatedTokens / budget) * 100),
+					usage.estimatedTokens.toLocaleString(),
+					budget.toLocaleString(),
+				)
+			: localize(
+					'chat.input.contextRingUnknownLabel',
+					'Context usage: {0} tokens, capacity unavailable',
+					usage.estimatedTokens.toLocaleString(),
+				);
 	}
 
 	private get tooltip(): string {
@@ -146,7 +197,17 @@ export class ChatContextUsageWidget extends Disposable {
 		if (!usage) return this.label;
 		const budget = getContextInputBudget(usage);
 		return budget !== undefined
-			? localize('chat.input.contextRingHover', 'Context budget: {0}%\nEstimated input tokens: {1} / {2}', Math.round(usage.estimatedTokens / budget * 100), usage.estimatedTokens.toLocaleString(), budget.toLocaleString())
-			: localize('chat.input.contextRingUnknownHover', 'Estimated context: {0} tokens\nContext capacity unavailable.', usage.estimatedTokens.toLocaleString());
+			? localize(
+					'chat.input.contextRingHover',
+					'Context budget: {0}%\nEstimated input tokens: {1} / {2}',
+					Math.round((usage.estimatedTokens / budget) * 100),
+					usage.estimatedTokens.toLocaleString(),
+					budget.toLocaleString(),
+				)
+			: localize(
+					'chat.input.contextRingUnknownHover',
+					'Estimated context: {0} tokens\nContext capacity unavailable.',
+					usage.estimatedTokens.toLocaleString(),
+				);
 	}
 }

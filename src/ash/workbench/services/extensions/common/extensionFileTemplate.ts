@@ -1,5 +1,5 @@
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../../base/common/lifecycle.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
 
 export interface ExtensionFileTemplateDefinition {
 	readonly id: string;
@@ -30,9 +30,11 @@ export class ExtensionFileTemplateRegistry extends Disposable implements Extensi
 
 	constructor() {
 		super();
-		this._register(toDisposable(() => {
-			this.catalog = Object.freeze({ revision: this.catalog.revision, templates: Object.freeze([]) });
-		}));
+		this._register(
+			toDisposable(() => {
+				this.catalog = Object.freeze({ revision: this.catalog.revision, templates: Object.freeze([]) });
+			}),
+		);
 	}
 
 	get currentCatalog(): ExtensionFileTemplateCatalog {
@@ -42,7 +44,7 @@ export class ExtensionFileTemplateRegistry extends Disposable implements Extensi
 
 	replace(templates: readonly ExtensionFileTemplateDefinition[]): void {
 		this.assertNotDisposed();
-		if (!Array.isArray(templates)) throw new TypeError("Extension file-template replacement must be an array");
+		if (!Array.isArray(templates)) throw new TypeError('Extension file-template replacement must be an array');
 		const normalized = templates.map(normalizeTemplate);
 		const ids = new Set<string>();
 		for (const template of normalized) {
@@ -52,23 +54,27 @@ export class ExtensionFileTemplateRegistry extends Disposable implements Extensi
 		this.catalog = Object.freeze({ revision: this.catalog.revision + 1, templates: Object.freeze(normalized) });
 		this.changeEmitter.fire(this.catalog);
 	}
-
 }
 
 function normalizeTemplate(template: ExtensionFileTemplateDefinition): ExtensionFileTemplateDefinition {
-	if (typeof template !== "object" || template === null) throw new TypeError("Extension file template must be an object");
-	if (typeof template.body !== "string" || template.body.length > 1024 * 1024) throw new TypeError("Extension file-template body must be bounded text");
+	if (typeof template !== 'object' || template === null)
+		throw new TypeError('Extension file template must be an object');
+	if (typeof template.body !== 'string' || template.body.length > 1024 * 1024)
+		throw new TypeError('Extension file-template body must be bounded text');
 	return Object.freeze({
-		id: boundedText(template.id, "Extension file-template ID", 512),
-		extensionId: boundedText(template.extensionId, "Extension file-template extension ID", 256),
-		label: boundedText(template.label, "Extension file-template label", 256),
-		languageId: boundedText(template.languageId, "Extension file-template language ID", 128),
+		id: boundedText(template.id, 'Extension file-template ID', 512),
+		extensionId: boundedText(template.extensionId, 'Extension file-template extension ID', 256),
+		label: boundedText(template.label, 'Extension file-template label', 256),
+		languageId: boundedText(template.languageId, 'Extension file-template language ID', 128),
 		body: template.body,
-		...(template.description === undefined ? {} : { description: boundedText(template.description, "Extension file-template description", 512) }),
+		...(template.description === undefined
+			? {}
+			: { description: boundedText(template.description, 'Extension file-template description', 512) }),
 	});
 }
 
 function boundedText(value: unknown, owner: string, maximum: number): string {
-	if (typeof value !== "string" || value.length === 0 || value.length > maximum || /[\r\n]/u.test(value)) throw new TypeError(`${owner} is invalid`);
+	if (typeof value !== 'string' || value.length === 0 || value.length > maximum || /[\r\n]/u.test(value))
+		throw new TypeError(`${owner} is invalid`);
 	return value;
 }

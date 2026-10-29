@@ -13,11 +13,18 @@ ExtensionsRegistry.registerExtensionPoint<ExtensionManifest['contributes']['term
 		if (!Array.isArray(profiles) || profiles.length > 128) throw invalid();
 		const ids = new Set<string>();
 		return Object.freeze({
-			profiles: Object.freeze(profiles.map(profile => {
-				if (!isValidTerminalProfileContribution(profile) || ids.has(profile.id)) throw invalid();
-				ids.add(profile.id);
-				return Object.freeze({ id: profile.id, title: profile.title, icon: profile.icon, color: profile.color });
-			}))
+			profiles: Object.freeze(
+				profiles.map(profile => {
+					if (!isValidTerminalProfileContribution(profile) || ids.has(profile.id)) throw invalid();
+					ids.add(profile.id);
+					return Object.freeze({
+						id: profile.id,
+						title: profile.title,
+						icon: profile.icon,
+						color: profile.color,
+					});
+				}),
+			),
 		});
 	},
 });

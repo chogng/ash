@@ -2,7 +2,10 @@ import type { Event } from '../../../../base/common/event.js';
 import { modelRefIdentity, type ModelCatalogEntry } from '../../../services/chat/common/modelCatalog.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 import { isRecord } from '../../../../base/common/types.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import {
+	Extensions as ConfigurationExtensions,
+	type IConfigurationRegistry,
+} from '../../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { localize } from '../../../../nls.js';
 import type { ModelRef } from '../../../services/chat/common/chatService.js';
@@ -35,7 +38,11 @@ export const ModelCatalogConfiguration = Object.freeze({
 			value: data => {
 				const model = data.managedSettings?.model;
 				const legacy = data.managedSettings?.['permissions.model'];
-				return (typeof model === 'string' ? model.trim() : '') || (typeof legacy === 'string' ? legacy.trim() : '') || undefined;
+				return (
+					(typeof model === 'string' ? model.trim() : '') ||
+					(typeof legacy === 'string' ? legacy.trim() : '') ||
+					undefined
+				);
 			},
 		},
 		defaultValue: '',
@@ -45,7 +52,10 @@ export const ModelCatalogConfiguration = Object.freeze({
 		},
 		setting: {
 			title: localize('chat.defaultModel.title', 'Default chat model'),
-			description: localize('chat.defaultModel.description', 'The model for new chats. Use auto for automatic selection, or enter a provider/model ID. You can still change the model within a chat.'),
+			description: localize(
+				'chat.defaultModel.description',
+				'The model for new chats. Use auto for automatic selection, or enter a provider/model ID. You can still change the model within a chat.',
+			),
 			valueType: 'text',
 			placeholder: localize('chat.defaultModel.placeholder', 'auto or provider/model'),
 		},
@@ -54,9 +64,12 @@ export const ModelCatalogConfiguration = Object.freeze({
 		key: 'models.hidden',
 		defaultValue: Object.freeze([]),
 		parse: parseHiddenModels,
-		serialize: models => models.map(model => model.visible
-			? { provider: model.provider, model: model.model, visible: true }
-			: { provider: model.provider, model: model.model }),
+		serialize: models =>
+			models.map(model =>
+				model.visible
+					? { provider: model.provider, model: model.model, visible: true }
+					: { provider: model.provider, model: model.model },
+			),
 	}),
 });
 
@@ -66,14 +79,18 @@ export function isModelVisibleByDefault(model: ModelRef): boolean {
 
 function parseHiddenModels(value: unknown): readonly ModelVisibilityPreference[] {
 	if (!Array.isArray(value)) throw new TypeError('Hidden models must be an array');
-	if (value.length > MaximumHiddenModels) throw new RangeError(`Hidden models must contain at most ${MaximumHiddenModels} entries`);
+	if (value.length > MaximumHiddenModels)
+		throw new RangeError(`Hidden models must contain at most ${MaximumHiddenModels} entries`);
 	const models = new Map<string, ModelVisibilityPreference>();
 	for (const candidate of value) {
 		if (!isRecord(candidate)) throw new TypeError('Hidden model entries must be objects');
 		const provider = modelIdentifier(candidate.provider, 'provider');
 		const model = modelIdentifier(candidate.model, 'model');
-		if (candidate.visible !== undefined && typeof candidate.visible !== 'boolean') throw new TypeError('Model visibility must be a boolean');
-		const reference = Object.freeze(candidate.visible === true ? { provider, model, visible: true } : { provider, model });
+		if (candidate.visible !== undefined && typeof candidate.visible !== 'boolean')
+			throw new TypeError('Model visibility must be a boolean');
+		const reference = Object.freeze(
+			candidate.visible === true ? { provider, model, visible: true } : { provider, model },
+		);
 		models.set(modelRefIdentity(reference), reference);
 	}
 	return Object.freeze([...models.values()].sort(compareModelRefs));
@@ -98,4 +115,6 @@ export interface ILanguageModelsConfigurationService {
 	isModelVisible(model: ModelRef): boolean;
 	setModelVisible(model: ModelRef, visible: boolean): Promise<void>;
 }
-export const ILanguageModelsConfigurationService = createServiceIdentifier<ILanguageModelsConfigurationService>('languageModelsConfigurationService');
+export const ILanguageModelsConfigurationService = createServiceIdentifier<ILanguageModelsConfigurationService>(
+	'languageModelsConfigurationService',
+);

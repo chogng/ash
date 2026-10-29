@@ -6,7 +6,10 @@ import type { ITextModel } from '../../../common/model.js';
 export class MoveCaretCommand implements ICommand {
 	private nextSelection: Selection;
 
-	constructor(private readonly selection: Selection, private readonly isMovingLeft: boolean) {
+	constructor(
+		private readonly selection: Selection,
+		private readonly isMovingLeft: boolean,
+	) {
 		this.nextSelection = selection;
 	}
 
@@ -23,7 +26,10 @@ export class MoveCaretCommand implements ICommand {
 			: new Range(startLineNumber, startColumn, endLineNumber, endColumn + 1);
 		const selectedText = model.getValueInRange(this.selection);
 		const neighborText = model.getValueInRange(neighbor);
-		builder.addEditOperation(affected, this.isMovingLeft ? selectedText + neighborText : neighborText + selectedText);
+		builder.addEditOperation(
+			affected,
+			this.isMovingLeft ? selectedText + neighborText : neighborText + selectedText,
+		);
 
 		const offset = this.isMovingLeft ? -1 : 1;
 		this.nextSelection = new Selection(

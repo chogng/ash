@@ -21,14 +21,18 @@ export class CustomViewGridPart extends Part implements ICustomViewGridPartServi
 	private active: AbstractCustomView | undefined;
 	private descriptor: ICustomViewDescriptor | undefined;
 	private dimension: IDimension = { width: 0, height: 0 };
-	override get minimumWidth(): number { return 300; }
+	override get minimumWidth(): number {
+		return 300;
+	}
 
-	constructor(container: HTMLElement,
+	constructor(
+		container: HTMLElement,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IMenuService private readonly menus: IMenuService,
 		@IContextKeyService private readonly contexts: IContextKeyService,
 		@INotificationService private readonly notifications: INotificationService,
-		@IThemeService theme: IThemeService, @IStorageService storage: IStorageService,
+		@IThemeService theme: IThemeService,
+		@IStorageService storage: IStorageService,
 	) {
 		super(container, 'customview', theme, storage);
 		this.domNode.classList.add('ash-custom-view-grid');
@@ -46,7 +50,9 @@ export class CustomViewGridPart extends Part implements ICustomViewGridPartServi
 		this.rendered.value = lifetime;
 		const view = lifetime.add(this.instantiation.createInstance(descriptor.ctor));
 		this.active = view;
-		const scrolling = lifetime.add(new ScrollableElement(this.contentDomNode, { direction: 'vertical', tabIndex: -1 }));
+		const scrolling = lifetime.add(
+			new ScrollableElement(this.contentDomNode, { direction: 'vertical', tabIndex: -1 }),
+		);
 		scrolling.element.classList.add('ash-custom-view-scroll');
 		const page = h(this.domNode.ownerDocument, 'div', { className: 'ash-custom-view-page' });
 		page.dataset.customViewId = descriptor.id;
@@ -58,30 +64,37 @@ export class CustomViewGridPart extends Part implements ICustomViewGridPartServi
 		header.append(title, description, actions);
 		page.append(header);
 		scrolling.contentElement.append(page);
-		lifetime.add(autorun(reader => {
-			title.textContent = view.title.read(reader);
-			description.textContent = view.description.read(reader) ?? '';
-			description.hidden = !description.textContent;
-		}));
+		lifetime.add(
+			autorun(reader => {
+				title.textContent = view.title.read(reader);
+				description.textContent = view.description.read(reader) ?? '';
+				description.hidden = !description.textContent;
+			}),
+		);
 		if (descriptor.actions) {
 			const menu = lifetime.add(this.menus.createMenu(descriptor.actions.menuId, this.contexts));
 			const buttons = lifetime.add(new MutableDisposable<DisposableStore>());
 			const update = (): void => {
 				buttons.value = new DisposableStore();
 				actions.replaceChildren();
-				for (const [, group] of menu.getActions()) for (const action of group) {
-					const button = buttons.value.add(new Button(actions, {
-						...defaultButtonStyles,
-						label: action.label,
-						icon: action.icon,
-						presentation: action.id === descriptor.actions?.primaryActionId ? 'primary' : 'quiet',
-						enabled: action.enabled,
-						onClick: () => {
-							void Promise.resolve(action.run()).catch(error => this.notifications.error(String(error)));
-						},
-					}));
-					button.domNode.dataset.actionId = action.id;
-				}
+				for (const [, group] of menu.getActions())
+					for (const action of group) {
+						const button = buttons.value.add(
+							new Button(actions, {
+								...defaultButtonStyles,
+								label: action.label,
+								icon: action.icon,
+								presentation: action.id === descriptor.actions?.primaryActionId ? 'primary' : 'quiet',
+								enabled: action.enabled,
+								onClick: () => {
+									void Promise.resolve(action.run()).catch(error =>
+										this.notifications.error(String(error)),
+									);
+								},
+							}),
+						);
+						button.domNode.dataset.actionId = action.id;
+					}
 			};
 			lifetime.add(menu.onDidChange(update));
 			update();
@@ -92,7 +105,9 @@ export class CustomViewGridPart extends Part implements ICustomViewGridPartServi
 		view.layout(this.dimension.width, this.dimension.height);
 	}
 
-	focusActiveView(): void { this.active?.focus(); }
+	focusActiveView(): void {
+		this.active?.focus();
+	}
 
 	override layout(dimension: IDimension): void {
 		this.dimension = dimension;

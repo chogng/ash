@@ -15,17 +15,41 @@ import '../../browser/terminal.chat.contribution.js';
 function fixture(owner: DisposableStore) {
 	const services = owner.add(new InstantiationService());
 	const changed = owner.add(new Emitter<ITerminalInstance | undefined>());
-	const instance = { id: 'one', title: 'Shell', cwd: '/workspace', onDidChangeState: Event.None } as unknown as ITerminalInstance;
-	services.registerInstance(ITerminalService, { activeInstance: instance, instances: [instance], onDidChangeActiveInstance: changed.event, onDidDisposeInstance: Event.None } as unknown as ITerminalService);
+	const instance = {
+		id: 'one',
+		title: 'Shell',
+		cwd: '/workspace',
+		onDidChangeState: Event.None,
+	} as unknown as ITerminalInstance;
+	services.registerInstance(ITerminalService, {
+		activeInstance: instance,
+		instances: [instance],
+		onDidChangeActiveInstance: changed.event,
+		onDidDisposeInstance: Event.None,
+	} as unknown as ITerminalService);
 	const attachments: ChatContextAttachment[] = [];
 	const drafts: string[] = [];
 	let revision = 0;
 	let displayed = 'captured output';
 	services.registerInstance(IViewsService, {
 		getViewWithId: () => ({ getTerminalOutput: async () => displayed }),
-		openView: async () => { displayed = 'later output'; revision++; return { appendToDraft: (text: string) => { drafts.push(text); }, addContext: (value: ChatContextAttachment) => attachments.push(value), acceptInput: () => assert.fail('Must not submit') }; },
+		openView: async () => {
+			displayed = 'later output';
+			revision++;
+			return {
+				appendToDraft: (text: string) => {
+					drafts.push(text);
+				},
+				addContext: (value: ChatContextAttachment) => attachments.push(value),
+				acceptInput: () => assert.fail('Must not submit'),
+			};
+		},
 	} as unknown as IViewsService);
-	services.registerInstance(IChatSessionNavigationService, { get revision() { return revision; } } as IChatSessionNavigationService);
+	services.registerInstance(IChatSessionNavigationService, {
+		get revision() {
+			return revision;
+		},
+	} as IChatSessionNavigationService);
 	const commands = owner.add(new CommandService(services));
 	return { services, changed, commands, drafts, attachments, navigate: () => revision++ };
 }
@@ -34,7 +58,9 @@ suite('Terminal Ask Chat', () => {
 	test('accepts the owner’s first conversation initialization and appends a question with the original parsed output without submitting', async () => {
 		using owner = new DisposableStore();
 		const f = fixture(owner);
-		f.services.registerInstance(IQuickInputService, { input: async () => ' explain this ' } as unknown as IQuickInputService);
+		f.services.registerInstance(IQuickInputService, {
+			input: async () => ' explain this ',
+		} as unknown as IQuickInputService);
 		await f.commands.executeCommand('workbench.action.terminal.chat.start');
 		assert.deepEqual(f.drafts, ['explain this']);
 		assert.equal(f.attachments[0]?.terminalSnapshot?.text, 'captured output');
@@ -45,7 +71,12 @@ suite('Terminal Ask Chat', () => {
 			const f = fixture(owner);
 			const question = new DeferredPromise<string | undefined>();
 			const shown = new DeferredPromise<void>();
-			f.services.registerInstance(IQuickInputService, { input: () => { void shown.complete(); return question.p; } } as unknown as IQuickInputService);
+			f.services.registerInstance(IQuickInputService, {
+				input: () => {
+					void shown.complete();
+					return question.p;
+				},
+			} as unknown as IQuickInputService);
 			const pending = f.commands.executeCommand('workbench.action.terminal.chat.start');
 			await shown.p;
 			if (retirement === 'terminal') f.changed.fire(undefined);

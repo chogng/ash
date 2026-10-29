@@ -1,6 +1,9 @@
 import { Event, EventMultiplexer } from '../../../../base/common/event.js';
 import { DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
-import type { ITerminalCapabilityImplMap, TerminalCapability } from '../../../../platform/terminal/common/capabilities/capabilities.js';
+import type {
+	ITerminalCapabilityImplMap,
+	TerminalCapability,
+} from '../../../../platform/terminal/common/capabilities/capabilities.js';
 import type { ITerminalInstance } from './terminal.js';
 
 /** One observable source per live instance/capability; no command or instance state is copied. */
@@ -10,9 +13,9 @@ export function createInstanceCapabilityEventMultiplexer<T extends TerminalCapab
 	onRemoveInstance: Event<ITerminalInstance>,
 	capabilityId: T,
 	getEvent: (capability: ITerminalCapabilityImplMap[T]) => Event<K>,
-): IDisposable & { readonly event: Event<{ readonly instance: ITerminalInstance; readonly data: K; }>; } {
+): IDisposable & { readonly event: Event<{ readonly instance: ITerminalInstance; readonly data: K }> } {
 	const lifetime = new DisposableStore();
-	const multiplexer = lifetime.add(new EventMultiplexer<{ instance: ITerminalInstance; data: K; }>());
+	const multiplexer = lifetime.add(new EventMultiplexer<{ instance: ITerminalInstance; data: K }>());
 	const instances = lifetime.add(new DisposableMap<ITerminalInstance, DisposableStore>());
 	const add = (instance: ITerminalInstance): void => {
 		if (instances.has(instance) || !instance.capabilities) return;

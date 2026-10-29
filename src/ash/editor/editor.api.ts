@@ -1,6 +1,6 @@
 /** Stable Stanza API for standalone editors and programmatic document consumers. */
 import { createEditorBaseApi } from './common/services/editorBaseApi.js';
-import { createStandaloneEditorApi } from "./standalone/browser/standaloneEditor.js";
+import { createStandaloneEditorApi } from './standalone/browser/standaloneEditor.js';
 import { createStandaloneLanguagesApi } from './standalone/browser/standaloneLanguages.js';
 
 const baseApi = createEditorBaseApi();
@@ -8,80 +8,276 @@ export const editor = createStandaloneEditorApi();
 export const languages = createStandaloneLanguagesApi();
 
 export const URI = baseApi.URI;
-export type { CancellationToken } from "../base/common/cancellation.js";
-export type { IDisposable } from "../base/common/lifecycle.js";
-export { EditorLineWrapping, WrappingIndent } from "./common/config/editorOptions.js";
+export type { CancellationToken } from '../base/common/cancellation.js';
+export type { IDisposable } from '../base/common/lifecycle.js';
+export { EditorLineWrapping, WrappingIndent } from './common/config/editorOptions.js';
 export type { IEditorMinimapOptions } from './common/config/editorOptions.js';
-export { EditorTextDirection } from "./browser/view.js";
+export { EditorTextDirection } from './browser/view.js';
 export { ContentWidgetPositionPreference, OverlayWidgetPositionPreference } from './browser/editorBrowser.js';
-export type { IContentWidget, IContentWidgetPosition, IContentWidgetRenderedCoordinate, IOverlayWidget, IOverlayWidgetPosition, IOverlayWidgetPositionCoordinates } from './browser/editorBrowser.js';
+export type {
+	IContentWidget,
+	IContentWidgetPosition,
+	IContentWidgetRenderedCoordinate,
+	IOverlayWidget,
+	IOverlayWidgetPosition,
+	IOverlayWidgetPositionCoordinates,
+} from './browser/editorBrowser.js';
 export type { IViewZone, IViewZoneChangeAccessor } from './browser/editorBrowser.js';
 export { PositionAffinity } from './common/model.js';
-export { ColorScheme } from "../platform/theme/common/theme.js";
-export type { IActionDescriptor, IStandaloneCodeEditor, IStandaloneEditorConstructionOptions } from './standalone/browser/standaloneCodeEditor.js';
-export type { IStandaloneEditorApi } from "./standalone/browser/standaloneEditor.js";
-export type { MonacoWebWorker, StandaloneWorkerContext, StandaloneWorkerMirrorModel } from './standalone/browser/standaloneWebWorker.js';
+export { ColorScheme } from '../platform/theme/common/theme.js';
+export type {
+	IActionDescriptor,
+	IStandaloneCodeEditor,
+	IStandaloneEditorConstructionOptions,
+} from './standalone/browser/standaloneCodeEditor.js';
+export type { IStandaloneEditorApi } from './standalone/browser/standaloneEditor.js';
+export type {
+	MonacoWebWorker,
+	StandaloneWorkerContext,
+	StandaloneWorkerMirrorModel,
+} from './standalone/browser/standaloneWebWorker.js';
 export type { StandaloneWorkerOptions } from './standalone/browser/standaloneWebWorker.js';
 export type { ICommandDescriptor, IKeybindingRule } from './standalone/browser/standaloneEditor.js';
 export { KeyCode, KeyMod } from '../base/common/keyCodes.js';
 export { MarkerSeverity, MarkerTag } from '../platform/markers/common/markers.js';
-export type { IMarker, IMarkerData, IMarkerReadOptions, IRelatedInformation } from '../platform/markers/common/markers.js';
+export type {
+	IMarker,
+	IMarkerData,
+	IMarkerReadOptions,
+	IRelatedInformation,
+} from '../platform/markers/common/markers.js';
 export type { IColorizerOptions, IColorizerElementOptions } from './standalone/browser/colorizer.js';
-export type { IStandaloneLanguagesApi, IToken, ILineTokens, IEncodedLineTokens, TokensProvider, EncodedTokensProvider, TokensProviderFactory } from './standalone/browser/standaloneLanguages.js';
+export type {
+	IStandaloneLanguagesApi,
+	IToken,
+	ILineTokens,
+	IEncodedLineTokens,
+	TokensProvider,
+	EncodedTokensProvider,
+	TokensProviderFactory,
+} from './standalone/browser/standaloneLanguages.js';
 export type { IState } from './common/languages.js';
-export type { IMonarchLanguage, IMonarchLanguageRule, IMonarchLanguageAction, IMonarchLanguageBracket, IExpandedMonarchLanguageAction, IExpandedMonarchLanguageRule, IShortMonarchLanguageAction, IShortMonarchLanguageRule1, IShortMonarchLanguageRule2 } from './standalone/common/monarch/monarchTypes.js';
+export type {
+	IMonarchLanguage,
+	IMonarchLanguageRule,
+	IMonarchLanguageAction,
+	IMonarchLanguageBracket,
+	IExpandedMonarchLanguageAction,
+	IExpandedMonarchLanguageRule,
+	IShortMonarchLanguageAction,
+	IShortMonarchLanguageRule1,
+	IShortMonarchLanguageRule2,
+} from './standalone/common/monarch/monarchTypes.js';
 export type { ITokenThemeRule } from './common/languages/supports/tokenization.js';
-export type { LanguageDescription, LanguageDescriptionChangeEvent, LanguageDescriptionContribution, LanguageDescriptionRegistration, LanguageRegistrationOptions } from './common/services/languagesRegistry.js';
+export type {
+	LanguageDescription,
+	LanguageDescriptionChangeEvent,
+	LanguageDescriptionContribution,
+	LanguageDescriptionRegistration,
+	LanguageRegistrationOptions,
+} from './common/services/languagesRegistry.js';
 export type { TextResourceLanguageInput } from '../platform/language/common/textResourceLanguage.js';
 export type { LanguageProviderBatch, LanguageProviderBatchRegistration } from './common/services/languageFeatures.js';
-export type { CharacterPair, IAutoClosingPair, IAutoClosingPairConditional, LanguageConfiguration } from './common/languages/languageConfiguration.js';
+export type {
+	CharacterPair,
+	IAutoClosingPair,
+	IAutoClosingPairConditional,
+	LanguageConfiguration,
+} from './common/languages/languageConfiguration.js';
 export { RGBA8 } from './common/core/misc/rgba.js';
-export type { CodeLens, CodeLensList, CodeLensProvider, Command, DocumentColorProvider, IColor, IColorInformation, IColorPresentation, LinkedEditingRangeProvider, LinkedEditingRanges, TextEdit } from './common/languages.js';
+export type {
+	CodeLens,
+	CodeLensList,
+	CodeLensProvider,
+	Command,
+	DocumentColorProvider,
+	IColor,
+	IColorInformation,
+	IColorPresentation,
+	LinkedEditingRangeProvider,
+	LinkedEditingRanges,
+	TextEdit,
+} from './common/languages.js';
 export type { TextSnapshot } from './common/core/textChange.js';
 export { LanguageCompletionInsertTextFormat, LanguageCompletionItemKind } from './common/languages.js';
-export { type LanguageCompletionCommand, type LanguageCompletionItem, type LanguageCompletionItemDetails, type LanguageCompletionResult, type LanguageCompletionTextEdit } from './common/languages.js';
+export {
+	type LanguageCompletionCommand,
+	type LanguageCompletionItem,
+	type LanguageCompletionItemDetails,
+	type LanguageCompletionResult,
+	type LanguageCompletionTextEdit,
+} from './common/languages.js';
 export { LanguageCompletionTriggerKind } from './common/languages.js';
-export { type LanguageCompletionContext, type LanguageCompletionIncompleteRefreshContext, type LanguageCompletionInvokeContext, type LanguageCompletionProvider, type LanguageCompletionProviderCommandRequest, type LanguageCompletionProviderItem, type LanguageCompletionProviderRequest, type LanguageCompletionProviderResolveRequest, type LanguageCompletionProviderResult, type LanguageCompletionRequest, type LanguageCompletionTriggerCharacterContext } from './common/languages.js';
+export {
+	type LanguageCompletionContext,
+	type LanguageCompletionIncompleteRefreshContext,
+	type LanguageCompletionInvokeContext,
+	type LanguageCompletionProvider,
+	type LanguageCompletionProviderCommandRequest,
+	type LanguageCompletionProviderItem,
+	type LanguageCompletionProviderRequest,
+	type LanguageCompletionProviderResolveRequest,
+	type LanguageCompletionProviderResult,
+	type LanguageCompletionRequest,
+	type LanguageCompletionTriggerCharacterContext,
+} from './common/languages.js';
 export { DocumentHighlightKind } from './common/languages.js';
-export type { DocumentHighlight, DocumentHighlightProvider, MultiDocumentHighlightProvider } from './common/languages.js';
+export type {
+	DocumentHighlight,
+	DocumentHighlightProvider,
+	MultiDocumentHighlightProvider,
+} from './common/languages.js';
 export type { LanguageFeatureRequest } from './common/languages.js';
 export { LanguageDiagnosticSeverity } from './common/languages.js';
-export { type LanguageDiagnostic, type LanguageDiagnosticCode, type LanguageDiagnosticResult } from './common/languages.js';
+export {
+	type LanguageDiagnostic,
+	type LanguageDiagnosticCode,
+	type LanguageDiagnosticResult,
+} from './common/languages.js';
 export { type LanguageToken, type LanguageTokenResult } from './common/tokens/languageTokens.js';
 export { type LanguageTokenResultDelta, type LanguageTokenResultSplice } from './common/services/semanticTokensDto.js';
 export type { LanguageWorkerDocumentSynchronization } from './common/services/textModelSync/textModelSync.protocol.js';
-export type { LanguageCreateFileEdit, LanguageDeleteFileEdit, LanguageDeleteMode, LanguageExistingTargetBehavior, LanguageMissingTargetBehavior, LanguageRenameFileEdit, LanguageTextDocumentEdit, LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from './common/languages.js';
+export type {
+	LanguageCreateFileEdit,
+	LanguageDeleteFileEdit,
+	LanguageDeleteMode,
+	LanguageExistingTargetBehavior,
+	LanguageMissingTargetBehavior,
+	LanguageRenameFileEdit,
+	LanguageTextDocumentEdit,
+	LanguageWorkspaceEdit,
+	LanguageWorkspaceEditEntry,
+} from './common/languages.js';
 export { type SyntaxProvider, type SyntaxProviderRequest, type SyntaxRequest } from './common/languages.js';
-export type { LanguageWorkspaceSymbol, LanguageWorkspaceSymbolKind, LanguageWorkspaceSymbolProvider } from './common/languages.js';
-export type { LanguageCallHierarchyEntry, LanguageCallHierarchyProvider, LanguageHierarchyFollowupRequest, LanguageHierarchyItem, LanguageHierarchyRequest, LanguageTypeHierarchyProvider } from './common/languages.js';
-export type { LanguageCodeAction, LanguageCodeActionList, LanguageCodeActionProvider, LanguageCodeActionRequest } from './common/languages.js';
-export type { LanguageColorPresentationRequest, LanguageColorProvider, LanguageColorRequest } from './common/languages.js';
-export type { LanguageDocumentSymbol, LanguageDocumentSymbolProvider, LanguageDocumentSymbolRequest, LanguageSymbolKind } from './common/languages.js';
-export type { LanguageFoldingRange, LanguageFoldingRangeKind, LanguageFoldingRangeProvider, LanguageFoldingRangeRequest } from './common/languages.js';
-export type { DocumentFormattingEditProvider, DocumentRangeFormattingEditProvider, FormattingOptions, LanguageFormattingOptions, OnTypeFormattingEditProvider } from './common/languages.js';
-export type { LanguageDeclarationProvider, LanguageDefinitionProvider, LanguageImplementationProvider, LanguageLocationRequest, LanguageReferenceProvider, LanguageReferenceRequest, LanguageTypeDefinitionProvider } from './common/languages.js';
+export type {
+	LanguageWorkspaceSymbol,
+	LanguageWorkspaceSymbolKind,
+	LanguageWorkspaceSymbolProvider,
+} from './common/languages.js';
+export type {
+	LanguageCallHierarchyEntry,
+	LanguageCallHierarchyProvider,
+	LanguageHierarchyFollowupRequest,
+	LanguageHierarchyItem,
+	LanguageHierarchyRequest,
+	LanguageTypeHierarchyProvider,
+} from './common/languages.js';
+export type {
+	LanguageCodeAction,
+	LanguageCodeActionList,
+	LanguageCodeActionProvider,
+	LanguageCodeActionRequest,
+} from './common/languages.js';
+export type {
+	LanguageColorPresentationRequest,
+	LanguageColorProvider,
+	LanguageColorRequest,
+} from './common/languages.js';
+export type {
+	LanguageDocumentSymbol,
+	LanguageDocumentSymbolProvider,
+	LanguageDocumentSymbolRequest,
+	LanguageSymbolKind,
+} from './common/languages.js';
+export type {
+	LanguageFoldingRange,
+	LanguageFoldingRangeKind,
+	LanguageFoldingRangeProvider,
+	LanguageFoldingRangeRequest,
+} from './common/languages.js';
+export type {
+	DocumentFormattingEditProvider,
+	DocumentRangeFormattingEditProvider,
+	FormattingOptions,
+	LanguageFormattingOptions,
+	OnTypeFormattingEditProvider,
+} from './common/languages.js';
+export type {
+	LanguageDeclarationProvider,
+	LanguageDefinitionProvider,
+	LanguageImplementationProvider,
+	LanguageLocationRequest,
+	LanguageReferenceProvider,
+	LanguageReferenceRequest,
+	LanguageTypeDefinitionProvider,
+} from './common/languages.js';
 export type { LanguageLocation } from './common/languages.js';
-export type { LanguageHover, LanguageHoverContent, LanguageHoverProvider, LanguageHoverRequest } from './common/languages.js';
-export type { LanguageInlayHint, LanguageInlayHintKind, LanguageInlayHintLabel, LanguageInlayHintsProvider, LanguageInlayHintsRequest } from './common/languages.js';
-export type { LanguageInlineCompletionItem, LanguageInlineCompletionsProvider, LanguageInlineCompletionsRequest } from './common/languages.js';
+export type {
+	LanguageHover,
+	LanguageHoverContent,
+	LanguageHoverProvider,
+	LanguageHoverRequest,
+} from './common/languages.js';
+export type {
+	LanguageInlayHint,
+	LanguageInlayHintKind,
+	LanguageInlayHintLabel,
+	LanguageInlayHintsProvider,
+	LanguageInlayHintsRequest,
+} from './common/languages.js';
+export type {
+	LanguageInlineCompletionItem,
+	LanguageInlineCompletionsProvider,
+	LanguageInlineCompletionsRequest,
+} from './common/languages.js';
 export type { LanguageLink, LanguageLinkProvider, LanguageLinkRequest } from './common/languages.js';
-export type { LanguageParameterHints, LanguageParameterHintsContext, LanguageParameterHintsProvider, LanguageParameterHintsRequest, LanguageParameterInformation, LanguageSignatureInformation } from './common/languages.js';
+export type {
+	LanguageParameterHints,
+	LanguageParameterHintsContext,
+	LanguageParameterHintsProvider,
+	LanguageParameterHintsRequest,
+	LanguageParameterInformation,
+	LanguageSignatureInformation,
+} from './common/languages.js';
 export type { LanguageRenamePreparation, LanguageRenameProvider, LanguageRenameRequest } from './common/languages.js';
 export type { LanguageSelectionRangeProvider, LanguageSelectionRangeRequest } from './common/languages.js';
 export type { LanguageSemanticTokensProvider, LanguageSemanticTokensRequest } from './common/languages.js';
-export type { StandaloneServiceOverrides } from "./standalone/browser/standaloneServices.js";
-export type { NamedEditorThemeData, BuiltinTheme, IColors, IStandaloneThemeData } from "./standalone/common/standaloneTheme.js";
+export type { StandaloneServiceOverrides } from './standalone/browser/standaloneServices.js';
+export type {
+	NamedEditorThemeData,
+	BuiltinTheme,
+	IColors,
+	IStandaloneThemeData,
+} from './standalone/common/standaloneTheme.js';
 export const Position = baseApi.Position;
-export type { IPosition } from "./common/core/position.js";
+export type { IPosition } from './common/core/position.js';
 export const Range = baseApi.Range;
-export type { IRange } from "./common/core/range.js";
+export type { IRange } from './common/core/range.js';
 export const SelectionDirection = baseApi.SelectionDirection;
 export const Selection = baseApi.Selection;
-export type { ISelection } from "./common/core/selection.js";
-export { TextModel } from "./common/model/textModel.js";
-export type { TextEditOptions } from "./common/model/textModel.js";
-export type { TextModelHistoryLimit } from "./common/model/textModel.js";
-export type { TextModelMaintenanceOptions } from "./common/model/textModel.js";
-export type { TextModelOptions } from "./common/model/textModel.js";
-export { createLineDocumentSnapshot, LineFacetStore, LineSequence, PointStore, RangeStore, RegionStore, RelationStore, linePoint } from "./common/model/lineDocument.js";
-export type { AtomId, FacetId, InlineAtom, LineDocumentSnapshot, LineDocumentSnapshotInput, LineFacet, LineId, LinePoint, LineRegion, LineRelation, LineRelationTarget, LineSemanticAttributes, LineSemanticValue, MarkId, ModelLine, PersistentMark, RegionId, RelationId } from "./common/model/lineDocument.js";
+export type { ISelection } from './common/core/selection.js';
+export { TextModel } from './common/model/textModel.js';
+export type { TextEditOptions } from './common/model/textModel.js';
+export type { TextModelHistoryLimit } from './common/model/textModel.js';
+export type { TextModelMaintenanceOptions } from './common/model/textModel.js';
+export type { TextModelOptions } from './common/model/textModel.js';
+export {
+	createLineDocumentSnapshot,
+	LineFacetStore,
+	LineSequence,
+	PointStore,
+	RangeStore,
+	RegionStore,
+	RelationStore,
+	linePoint,
+} from './common/model/lineDocument.js';
+export type {
+	AtomId,
+	FacetId,
+	InlineAtom,
+	LineDocumentSnapshot,
+	LineDocumentSnapshotInput,
+	LineFacet,
+	LineId,
+	LinePoint,
+	LineRegion,
+	LineRelation,
+	LineRelationTarget,
+	LineSemanticAttributes,
+	LineSemanticValue,
+	MarkId,
+	ModelLine,
+	PersistentMark,
+	RegionId,
+	RelationId,
+} from './common/model/lineDocument.js';

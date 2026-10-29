@@ -39,10 +39,12 @@ test('ModelService owns model creation options and applies indentation detection
 		bracketPairColorizationOptions: { enabled: true, independentColorPoolPerBracketType: false },
 	});
 
-	using model = service.createModel('root\n  child\n    grandchild', {
-		languageId: 'plaintext',
-		onDidChange: Event.None,
-	}, resource, true);
+	using model = service.createModel(
+		'root\n  child\n    grandchild',
+		{ languageId: 'plaintext', onDidChange: Event.None },
+		resource,
+		true,
+	);
 	assert.equal(model.getOptions().tabSize, 2);
 	assert.equal(model.getOptions().indentSize, 2);
 	assert.equal(model.getOptions().insertSpaces, true);
@@ -60,11 +62,14 @@ test('ModelService applies large-file optimizations only when creating a model',
 
 	await configuration.updateValue('editor.largeFileOptimizations', true);
 	using optimized = service.createModel(text, null, URI.parse('inmemory://model-service/large-optimized.txt'));
-	assert.deepEqual({
-		unrestricted: unrestricted.isTooLargeForTokenization(),
-		optimized: optimized.isTooLargeForTokenization(),
-		optimizedSync: optimized.isTooLargeForSyncing(),
-	}, { unrestricted: false, optimized: true, optimizedSync: false });
+	assert.deepEqual(
+		{
+			unrestricted: unrestricted.isTooLargeForTokenization(),
+			optimized: optimized.isTooLargeForTokenization(),
+			optimizedSync: optimized.isTooLargeForSyncing(),
+		},
+		{ unrestricted: false, optimized: true, optimizedSync: false },
+	);
 });
 
 test('ModelService consumes ITextBufferFactory values and releases factory ownership', () => {
@@ -74,7 +79,14 @@ test('ModelService consumes ITextBufferFactory values and releases factory owner
 	const factory = {
 		create: (_defaultEOL: DefaultEndOfLine) => ({
 			textBuffer: createPieceTreeTextBuffer('factory value'),
-			disposable: { dispose: () => { disposalCount++; }, [Symbol.dispose]: () => { disposalCount++; } },
+			disposable: {
+				dispose: () => {
+					disposalCount++;
+				},
+				[Symbol.dispose]: () => {
+					disposalCount++;
+				},
+			},
 		}),
 		getFirstLineText: (lengthLimit: number) => 'factory value'.slice(0, lengthLimit),
 	};
@@ -84,19 +96,32 @@ test('ModelService consumes ITextBufferFactory values and releases factory owner
 	assert.equal(disposalCount, 1);
 
 	const source = EditSources.reloadFromDisk();
-	service.updateModel(model, {
-		...factory,
-		create: () => ({
-			textBuffer: createPieceTreeTextBuffer('\uFEFFupdated\r\nvalue'),
-			disposable: { dispose: () => { disposalCount++; }, [Symbol.dispose]: () => { disposalCount++; } },
-		}),
-	}, source);
+	service.updateModel(
+		model,
+		{
+			...factory,
+			create: () => ({
+				textBuffer: createPieceTreeTextBuffer('\uFEFFupdated\r\nvalue'),
+				disposable: {
+					dispose: () => {
+						disposalCount++;
+					},
+					[Symbol.dispose]: () => {
+						disposalCount++;
+					},
+				},
+			}),
+		},
+		source,
+	);
 	assert.equal(model.getValue(), 'updated\r\nvalue');
 	assert.equal(model.getValue(undefined, true), 'updated\r\nvalue');
 	assert.equal(model.getEOL(), '\r\n');
 	assert.equal(disposalCount, 2);
 	let observedSource: unknown;
-	using listener = model.onDidChangeContent(event => { observedSource = event.detailedReasons[0]; });
+	using listener = model.onDidChangeContent(event => {
+		observedSource = event.detailedReasons[0];
+	});
 	service.updateModel(model, 'latest value', source);
 	assert.equal(observedSource, source);
 	assert.equal(model.canUndo(), true);
@@ -143,12 +168,16 @@ test('ModelService owns resource identity, language events, and model removal', 
 	const resource = URI.parse('inmemory://model-service/lifecycle.txt');
 	let languageId = 'plaintext';
 	const selection = {
-		get languageId() { return languageId; },
+		get languageId() {
+			return languageId;
+		},
 		onDidChange: languageChanges.event,
 	};
 	const events: string[] = [];
 	using added = service.onModelAdded(model => events.push(`added:${model.uri.toString()}`));
-	using changed = service.onModelLanguageChanged(event => events.push(`language:${event.oldLanguageId}->${event.model.getLanguageId()}`));
+	using changed = service.onModelLanguageChanged(event =>
+		events.push(`language:${event.oldLanguageId}->${event.model.getLanguageId()}`),
+	);
 	using removed = service.onModelRemoved(model => events.push(`removed:${model.uri.toString()}`));
 
 	const model = service.createModel('value', selection, resource);
@@ -172,7 +201,7 @@ test('ModelService owns resource identity, language events, and model removal', 
 class TestTextResourcePropertiesService implements ITextResourcePropertiesService {
 	readonly _serviceBrand: undefined;
 
-	constructor(private readonly configuration: IConfigurationService) { }
+	constructor(private readonly configuration: IConfigurationService) {}
 
 	getEOL(resource: URI, language?: string): string {
 		const eol = this.configuration.getValue<string>('files.eol', { resource, overrideIdentifier: language });
@@ -183,13 +212,12 @@ class TestTextResourcePropertiesService implements ITextResourcePropertiesServic
 class TestResourceConfigurationService extends Disposable implements IConfigurationService {
 	readonly _serviceBrand = undefined;
 	private readonly configuration = this._register(new InMemoryConfigurationService());
-	readonly onDidChangeConfiguration: Event<IConfigurationChangeEvent> = (listener, thisArgs, disposables) => (
+	readonly onDidChangeConfiguration: Event<IConfigurationChangeEvent> = (listener, thisArgs, disposables) =>
 		this.configuration.onDidChangeConfiguration(
 			event => listener.call(thisArgs, resourceIndependentEvent(event)),
 			undefined,
 			disposables,
-		)
-	);
+		);
 
 	getValue<T>(): T;
 	getValue<T>(section: string): T;
@@ -208,9 +236,25 @@ class TestResourceConfigurationService extends Disposable implements IConfigurat
 
 	updateValue(key: string, value: unknown): Promise<void>;
 	updateValue(key: string, value: unknown, target: ConfigurationTarget): Promise<void>;
-	updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides): Promise<void>;
-	updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides, target: ConfigurationTarget, options?: IConfigurationUpdateOptions): Promise<void>;
-	updateValue(key: string, value: unknown, arg3?: ConfigurationTarget | IConfigurationOverrides | IConfigurationUpdateOverrides, target?: ConfigurationTarget, options?: IConfigurationUpdateOptions): Promise<void> {
+	updateValue(
+		key: string,
+		value: unknown,
+		overrides: IConfigurationOverrides | IConfigurationUpdateOverrides,
+	): Promise<void>;
+	updateValue(
+		key: string,
+		value: unknown,
+		overrides: IConfigurationOverrides | IConfigurationUpdateOverrides,
+		target: ConfigurationTarget,
+		options?: IConfigurationUpdateOptions,
+	): Promise<void>;
+	updateValue(
+		key: string,
+		value: unknown,
+		arg3?: ConfigurationTarget | IConfigurationOverrides | IConfigurationUpdateOverrides,
+		target?: ConfigurationTarget,
+		options?: IConfigurationUpdateOptions,
+	): Promise<void> {
 		if (arg3 === undefined) return this.configuration.updateValue(key, value);
 		if (typeof arg3 === 'number') return this.configuration.updateValue(key, value, arg3);
 		const overrides = withoutUpdateResource(arg3);
@@ -240,7 +284,9 @@ function withoutResource(overrides: IConfigurationOverrides): IConfigurationOver
 	return { overrideIdentifier: overrides.overrideIdentifier };
 }
 
-function withoutUpdateResource(overrides: IConfigurationOverrides | IConfigurationUpdateOverrides): IConfigurationOverrides | IConfigurationUpdateOverrides {
+function withoutUpdateResource(
+	overrides: IConfigurationOverrides | IConfigurationUpdateOverrides,
+): IConfigurationOverrides | IConfigurationUpdateOverrides {
 	return 'overrideIdentifiers' in overrides
 		? { overrideIdentifiers: overrides.overrideIdentifiers }
 		: withoutResource(overrides);
@@ -249,17 +295,25 @@ function withoutUpdateResource(overrides: IConfigurationOverrides | IConfigurati
 function resourceIndependentEvent(event: IConfigurationChangeEvent): IConfigurationChangeEvent {
 	return {
 		...event,
-		affectsConfiguration: (section, overrides) => event.affectsConfiguration(section, overrides ? withoutResource(overrides) : undefined),
+		affectsConfiguration: (section, overrides) =>
+			event.affectsConfiguration(section, overrides ? withoutResource(overrides) : undefined),
 	};
 }
-
 
 test('ModelService creates resource models against the product Profile configuration and applies language settings', async () => {
 	using configuration = new InMemoryConfigurationService();
 	await configuration.updateValue('editor.tabSize', 2, { overrideIdentifiers: ['markdown'] });
 	using service = new ModelService(configuration, { _serviceBrand: undefined, getEOL: () => '\n' });
-	using first = service.createModel('---\nname: review\n---', { languageId: 'markdown', onDidChange: Event.None }, URI.file('/skills/review/SKILL.md'));
-	using second = service.createModel('const value = 1;', { languageId: 'typescript', onDidChange: Event.None }, URI.file('/source/file.ts'));
+	using first = service.createModel(
+		'---\nname: review\n---',
+		{ languageId: 'markdown', onDidChange: Event.None },
+		URI.file('/skills/review/SKILL.md'),
+	);
+	using second = service.createModel(
+		'const value = 1;',
+		{ languageId: 'typescript', onDidChange: Event.None },
+		URI.file('/source/file.ts'),
+	);
 	assert.equal(first.getOptions().tabSize, 2);
 	assert.equal(second.getOptions().tabSize, 4);
 	assert.equal(service.getModels().length, 2);

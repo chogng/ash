@@ -1,23 +1,16 @@
-import { DEFAULT_FONT_FAMILY } from "../../../../base/browser/fonts.js";
-import { getWindow, h } from "../../../../base/browser/dom.js";
+import { DEFAULT_FONT_FAMILY } from '../../../../base/browser/fonts.js';
+import { getWindow, h } from '../../../../base/browser/dom.js';
 import { mainWindow } from '../../../../base/browser/window.js';
 import { dirname } from '../../../../base/common/resources.js';
 import {
 	isSafeMarkdownLink,
 	renderWorkbenchMarkdown,
 	sanitizeMarkdownHtmlToString,
-} from "../../../../base/browser/markdownRenderer.js";
-import {
-	Emitter,
-	type Event,
-} from "../../../../base/common/event.js";
-import {
-	Disposable,
-
-	toDisposable,
-} from "../../../../base/common/lifecycle.js";
-import { URI } from "../../../../base/common/uri.js";
-import { IWebviewService, type IWebviewElement } from "../../webview/browser/webview.js";
+} from '../../../../base/browser/markdownRenderer.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { URI } from '../../../../base/common/uri.js';
+import { IWebviewService, type IWebviewElement } from '../../webview/browser/webview.js';
 import { asWebviewUri } from '../../webview/common/webview.js';
 
 export interface MarkdownPreviewOptions {
@@ -27,7 +20,7 @@ export interface MarkdownPreviewOptions {
 }
 
 interface OpenLinkMessage {
-	readonly type: "openLink";
+	readonly type: 'openLink';
 	readonly href: string;
 }
 
@@ -127,30 +120,36 @@ export class MarkdownPreview extends Disposable {
 		super();
 		this.ownerDocument = container.ownerDocument;
 		this.baseUri = options.baseUri;
-		this.webview = this._register(webviews.createWebviewElement({
-			title: options.title ?? "Markdown preview",
-			options: {},
-			contentOptions: { allowScripts: true, localResourceRoots: this.baseUri ? [dirname(this.baseUri)] : [] },
-		}));
+		this.webview = this._register(
+			webviews.createWebviewElement({
+				title: options.title ?? 'Markdown preview',
+				options: {},
+				contentOptions: { allowScripts: true, localResourceRoots: this.baseUri ? [dirname(this.baseUri)] : [] },
+			}),
+		);
 		this.element = this.webview.element;
-		this._register(this.webview.onMessage(({ message }) => {
-			const openLink = validateOpenLinkMessage(message, this.baseUri);
-			if (openLink) this._onDidOpenLink.fire(openLink.href);
-		}));
-		this._register(toDisposable(() => {
-			this.active = false;
-		}));
-		this.setMarkdown(options.markdown ?? "");
+		this._register(
+			this.webview.onMessage(({ message }) => {
+				const openLink = validateOpenLinkMessage(message, this.baseUri);
+				if (openLink) this._onDidOpenLink.fire(openLink.href);
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				this.active = false;
+			}),
+		);
+		this.setMarkdown(options.markdown ?? '');
 		this.webview.mountTo(container, getWindow(container));
 	}
 
 	setMarkdown(markdown: string): void {
 		this.requireActive();
-		if (typeof markdown !== "string") {
-			throw new TypeError("Markdown must be a string");
+		if (typeof markdown !== 'string') {
+			throw new TypeError('Markdown must be a string');
 		}
 		if (markdown.length > MAX_MARKDOWN_LENGTH) {
-			throw new Error("Markdown exceeds the supported size");
+			throw new Error('Markdown exceeds the supported size');
 		}
 		const markdownContent = {
 			value: markdown,
@@ -159,10 +158,10 @@ export class MarkdownPreview extends Disposable {
 			...(this.baseUri ? { baseUri: this.baseUri } : {}),
 		};
 		const parserHtml = renderWorkbenchMarkdown(markdownContent, true);
-		const safeHtml = sanitizeMarkdownHtmlToString({
-			ownerDocument: this.ownerDocument,
-			markdown: markdownContent,
-		}, parserHtml);
+		const safeHtml = sanitizeMarkdownHtmlToString(
+			{ ownerDocument: this.ownerDocument, markdown: markdownContent },
+			parserHtml,
+		);
 		const content = h(mainWindow.document, 'template');
 		content.innerHTML = safeHtml;
 		for (const image of content.content.querySelectorAll('img[src]')) {
@@ -173,8 +172,8 @@ export class MarkdownPreview extends Disposable {
 		}
 		this.webview.setHtml(
 			`<style>${PREVIEW_STYLE}</style>` +
-			`<main class="ash-markdown-preview">${content.innerHTML}</main>` +
-			`<script>${LINK_BRIDGE_SCRIPT}</script>`,
+				`<main class="ash-markdown-preview">${content.innerHTML}</main>` +
+				`<script>${LINK_BRIDGE_SCRIPT}</script>`,
 		);
 	}
 
@@ -185,27 +184,21 @@ export class MarkdownPreview extends Disposable {
 
 	private requireActive(): void {
 		if (!this.active) {
-			throw new ReferenceError("MarkdownPreview is already disposed");
+			throw new ReferenceError('MarkdownPreview is already disposed');
 		}
 	}
 }
 
-function validateOpenLinkMessage(
-	message: unknown,
-	baseUri?: URI,
-): OpenLinkMessage | undefined {
-	if (typeof message !== "object" || message === null) return undefined;
+function validateOpenLinkMessage(message: unknown, baseUri?: URI): OpenLinkMessage | undefined {
+	if (typeof message !== 'object' || message === null) return undefined;
 	const candidate = message as Record<string, unknown>;
 	if (
 		Object.keys(candidate).length !== 2 ||
-		candidate.type !== "openLink" ||
-		typeof candidate.href !== "string" ||
-		!isSafeMarkdownLink(candidate.href, baseUri ? { value: "", baseUri } : undefined)
+		candidate.type !== 'openLink' ||
+		typeof candidate.href !== 'string' ||
+		!isSafeMarkdownLink(candidate.href, baseUri ? { value: '', baseUri } : undefined)
 	) {
 		return undefined;
 	}
-	return {
-		type: "openLink",
-		href: candidate.href,
-	};
+	return { type: 'openLink', href: candidate.href };
 }

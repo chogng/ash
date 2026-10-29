@@ -25,7 +25,6 @@ import type { IEditorHoverRenderContext, IRenderedHoverParts } from '../../hover
 import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { TrackedRangeStickiness } from '../../../common/model.js';
 
-
 /** Coordinates color detection, picker requests, focus, and one atomic editor edit. */
 export class ColorPickerController extends Disposable {
 	private readonly widget: ColorPickerWidget;
@@ -58,58 +57,104 @@ export class ColorPickerController extends Disposable {
 		@IContextKeyService contextKeyService: IContextKeyService,
 	) {
 		super();
-		if (viewport.textModel !== editor.getModel()) throw new TypeError('Stanza color picker dependencies must share a text model');
-		this.widget = this._register(instantiationService.createInstance(ColorPickerWidget,
-			editor,
-			(color: Color) => this.refreshPresentations(color),
-			() => this.apply(),
-			() => this.close(true),
-		));
+		if (viewport.textModel !== editor.getModel())
+			throw new TypeError('Stanza color picker dependencies must share a text model');
+		this.widget = this._register(
+			instantiationService.createInstance(
+				ColorPickerWidget,
+				editor,
+				(color: Color) => this.refreshPresentations(color),
+				() => this.apply(),
+				() => this.close(true),
+			),
+		);
 		this.colorRange = this._register(new TextDecorationCollection<void>(viewport.textModel));
 		this.standaloneVisible = EditorContextKeys.standaloneColorPickerVisible.bindTo(contextKeyService);
 		this.standaloneFocused = EditorContextKeys.standaloneColorPickerFocused.bindTo(contextKeyService);
 		// Overflow widgets still inherit this editor's command context when mounted outside its DOM.
 		const widgetContext = this._register(contextKeyService.createScoped(this.widget.domNode));
 		const textInputFocus = EditorContextKeys.textInputFocus.bindTo(widgetContext);
-		this._register(addDisposableListener(this.widget.domNode, 'focusin', event => {
-			const target = event.target as HTMLInputElement;
-			textInputFocus.set(target.tagName === 'INPUT' && target.type !== 'range');
-		}));
+		this._register(
+			addDisposableListener(this.widget.domNode, 'focusin', event => {
+				const target = event.target as HTMLInputElement;
+				textInputFocus.set(target.tagName === 'INPUT' && target.type !== 'range');
+			}),
+		);
 		const focusTracker = this._register(trackFocus(this.widget.domNode));
-		this._register(focusTracker.onDidFocus(() => {
-			this.standaloneFocused.set(this.mode === 'standalone');
-			if (this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.ColorPicker)) {
-				this.viewport.announceAccessibilityStatus(localize('colorPicker.helpHint', 'Press Alt+F1 for color picker help.'));
-			}
-		}));
+		this._register(
+			focusTracker.onDidFocus(() => {
+				this.standaloneFocused.set(this.mode === 'standalone');
+				if (this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.ColorPicker)) {
+					this.viewport.announceAccessibilityStatus(
+						localize('colorPicker.helpHint', 'Press Alt+F1 for color picker help.'),
+					);
+				}
+			}),
+		);
 		this._register(focusTracker.onDidBlur(() => this.standaloneFocused.reset()));
 		this._register(addDisposableListener(editorInput, 'keydown', event => this.handleEditorKeyDown(event), true));
 		this._register(editor.onMouseDown(event => this.handleEditorMouseDown(event)));
-		this._register(addDisposableListener(viewport.domNode.domNode.ownerDocument, 'pointerdown', event => {
-			const target = event.target;
-			const targetNode = target && typeof (target as Node).nodeType === 'number' ? target as Node : undefined;
-			if (!this.widget.visible) return;
-			if (targetNode && this.widget.domNode.contains(targetNode)) { return; }
-			if (targetNode && this.hoverContext?.container.contains(targetNode)) { return; }
-			if (colorSwatch(target)) return;
-			this.close(false);
-		}, true));
-		this._register(viewport.textModel.onDidChangeContent(() => { if (!this.updatingEditor) { this.close(false); } }));
+		this._register(
+			addDisposableListener(
+				viewport.domNode.domNode.ownerDocument,
+				'pointerdown',
+				event => {
+					const target = event.target;
+					const targetNode =
+						target && typeof (target as Node).nodeType === 'number' ? (target as Node) : undefined;
+					if (!this.widget.visible) return;
+					if (targetNode && this.widget.domNode.contains(targetNode)) {
+						return;
+					}
+					if (targetNode && this.hoverContext?.container.contains(targetNode)) {
+						return;
+					}
+					if (colorSwatch(target)) return;
+					this.close(false);
+				},
+				true,
+			),
+		);
+		this._register(
+			viewport.textModel.onDidChangeContent(() => {
+				if (!this.updatingEditor) {
+					this.close(false);
+				}
+			}),
+		);
 		this._register(viewport.textModel.onDidChangeLanguage(() => this.close(false)));
 		this._register(viewport.textModel.onWillDispose(() => this.close(false)));
 		this._register(service.onDidChange(() => this.close(false)));
-		this._register(editor.onDidChangeConfiguration(event => {
-			if (event.hasChanged(EditorOption.readOnly) || event.hasChanged(EditorOption.colorDecorators) || event.hasChanged(EditorOption.colorDecoratorsLimit) || event.hasChanged(EditorOption.defaultColorDecorators) || event.hasChanged(EditorOption.colorDecoratorsActivatedOn)) {
-				this.close(this.widget.domNode.contains(this.widget.domNode.ownerDocument.activeElement));
-			}
-		}));
-		this._register(editor.onDidChangeCursorPosition(() => { if (!this.updatingEditor) { this.close(false); } }));
+		this._register(
+			editor.onDidChangeConfiguration(event => {
+				if (
+					event.hasChanged(EditorOption.readOnly) ||
+					event.hasChanged(EditorOption.colorDecorators) ||
+					event.hasChanged(EditorOption.colorDecoratorsLimit) ||
+					event.hasChanged(EditorOption.defaultColorDecorators) ||
+					event.hasChanged(EditorOption.colorDecoratorsActivatedOn)
+				) {
+					this.close(this.widget.domNode.contains(this.widget.domNode.ownerDocument.activeElement));
+				}
+			}),
+		);
+		this._register(
+			editor.onDidChangeCursorPosition(() => {
+				if (!this.updatingEditor) {
+					this.close(false);
+				}
+			}),
+		);
 		this._register(editor.onDidScrollChange(() => this.close(false)));
 		this._register(viewport.onDidChangeLayout(() => this.close(false)));
 	}
 
-	public get isStandaloneVisible(): boolean { return this.widget.visible && this.mode === 'standalone'; }
-	public getColorData(position: Position): ColorData | null { return this.detector.getColorData(position); }
+	public get isStandaloneVisible(): boolean {
+		return this.widget.visible && this.mode === 'standalone';
+	}
+	public getColorData(position: Position): ColorData | null {
+		return this.detector.getColorData(position);
+	}
 
 	public renderHover(context: IEditorHoverRenderContext, data: ColorData): IRenderedHoverParts {
 		this.close(false);
@@ -118,10 +163,24 @@ export class ColorPickerController extends Disposable {
 		this.initializeModel(data);
 		const model = this.model.value!;
 		this.widget.showHover(model, context.container);
-		this.colorRange.replaceAll([{ range: data.information.range, stickiness: TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges, metadata: undefined }]);
-		this.modelListeners.add(model.onColorFlushed(color => { void this.commitHover(model, color); }));
+		this.colorRange.replaceAll([
+			{
+				range: data.information.range,
+				stickiness: TrackedRangeStickiness.AlwaysGrowsWhenTypingAtEdges,
+				metadata: undefined,
+			},
+		]);
+		this.modelListeners.add(
+			model.onColorFlushed(color => {
+				void this.commitHover(model, color);
+			}),
+		);
 		this.pendingPresentations = this.loadPresentations(model, model.color);
-		const dispose = (): void => { if (this.model.value === model) { this.close(false); } };
+		const dispose = (): void => {
+			if (this.model.value === model) {
+				this.close(false);
+			}
+		};
 		return {
 			dispose,
 			[Symbol.dispose]: dispose,
@@ -132,12 +191,16 @@ export class ColorPickerController extends Disposable {
 
 	async showAtPosition(position: Position, focus = true): Promise<void> {
 		this.documentColorRequest?.abort();
-		const request = this.documentColorRequest = new AbortController();
+		const request = (this.documentColorRequest = new AbortController());
 		try {
 			let insertionRanges: readonly Range[] | undefined;
 			let data = this.detector.getColorData(position) ?? undefined;
 			if (!data) {
-				const colors = await this.service.provideDocumentColors(this.viewport.textModel.getLanguageId(), 'auto', request.signal);
+				const colors = await this.service.provideDocumentColors(
+					this.viewport.textModel.getLanguageId(),
+					'auto',
+					request.signal,
+				);
 				if (request.signal.aborted) return;
 				data = colors.find(candidate => candidate.information.range.containsPosition(position));
 			}
@@ -172,7 +235,9 @@ export class ColorPickerController extends Disposable {
 		const model = this.model.value;
 		const pending = this.pendingPresentations;
 		await pending;
-		if (model && this.model.value === model && this.pendingPresentations === pending) { this.apply(); }
+		if (model && this.model.value === model && this.pendingPresentations === pending) {
+			this.apply();
+		}
 	}
 
 	private handleEditorKeyDown(event: KeyboardEvent): void {
@@ -182,7 +247,8 @@ export class ColorPickerController extends Disposable {
 			this.close(true);
 			return;
 		}
-		if (!event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== 'c') return;
+		if (!event.shiftKey || (!event.ctrlKey && !event.metaKey) || event.altKey || event.key.toLowerCase() !== 'c')
+			return;
 		stopEvent(event);
 		this.editor.trigger('keyboard', 'editor.action.showOrFocusStandaloneColorPicker', {});
 	}
@@ -190,12 +256,21 @@ export class ColorPickerController extends Disposable {
 	private handleEditorMouseDown(event: IEditorMouseEvent): void {
 		if (this.editor.getOption(EditorOption.colorDecoratorsActivatedOn) === 'hover') return;
 		const target = event.target;
-		if (target?.type !== MouseTargetType.CONTENT_TEXT || target.detail.injectedText?.options.attachedData !== ColorDecorationInjectedTextMarker || !target.position) return;
-		const data = this.detector.getColorData(this.viewport.coordinatesConverter.convertViewPositionToModelPosition(target.position));
+		if (
+			target?.type !== MouseTargetType.CONTENT_TEXT ||
+			target.detail.injectedText?.options.attachedData !== ColorDecorationInjectedTextMarker ||
+			!target.position
+		)
+			return;
+		const data = this.detector.getColorData(
+			this.viewport.coordinatesConverter.convertViewPositionToModelPosition(target.position),
+		);
 		if (!data) return;
 		event.event.preventDefault();
 		event.event.stopPropagation();
-		this.editor.getContribution<ContentHoverController>('editor.contrib.hover')!.showContentHover(data.information.range.getStartPosition(), event.event.target as HTMLElement);
+		this.editor
+			.getContribution<ContentHoverController>('editor.contrib.hover')!
+			.showContentHover(data.information.range.getStartPosition(), event.event.target as HTMLElement);
 	}
 
 	private async show(data: ColorData, focus: boolean, insertionRanges?: readonly Range[]): Promise<void> {
@@ -235,11 +310,16 @@ export class ColorPickerController extends Disposable {
 		const data = this.activeData;
 		if (!data) return;
 		this.presentationRequest?.abort();
-		const request = this.presentationRequest = new AbortController();
+		const request = (this.presentationRequest = new AbortController());
 		// Formats contain concrete edits for one color. Invalidate them before requesting another.
 		model.colorPresentations = [];
 		try {
-			const presentations = await this.service.provideColorPresentations(this.viewport.textModel.getLanguageId(), data, toLanguageColor(color), request.signal);
+			const presentations = await this.service.provideColorPresentations(
+				this.viewport.textModel.getLanguageId(),
+				data,
+				toLanguageColor(color),
+				request.signal,
+			);
 			if (request.signal.aborted || this.model.value !== model) return;
 			model.colorPresentations = [...presentations];
 			if (this.shouldGuessPresentation && presentations.length > 0) {
@@ -255,7 +335,14 @@ export class ColorPickerController extends Disposable {
 	private async commitHover(model: ColorPickerModel, color: Color): Promise<void> {
 		const sequence = ++this.commitSequence;
 		await this.pendingPresentations;
-		if (sequence !== this.commitSequence || this.mode !== 'hover' || this.model.value !== model || !model.color.equals(color)) { return; }
+		if (
+			sequence !== this.commitSequence ||
+			this.mode !== 'hover' ||
+			this.model.value !== model ||
+			!model.color.equals(color)
+		) {
+			return;
+		}
 		this.apply();
 	}
 
@@ -271,10 +358,14 @@ export class ColorPickerController extends Disposable {
 		const colorEdits = this.insertionRanges
 			? this.insertionRanges.map(range => ({ range, text: presentation.textEdit?.text ?? presentation.label }))
 			: [presentation.textEdit ?? { range: data.information.range, text: presentation.label }];
-		const edits = [
-			...colorEdits,
-			...(presentation.additionalTextEdits ?? []),
-		].sort((left, right) => Position.compare(Range.lift(left.range).getStartPosition(), Range.lift(right.range).getStartPosition()) || Position.compare(Range.lift(left.range).getEndPosition(), Range.lift(right.range).getEndPosition()));
+		const edits = [...colorEdits, ...(presentation.additionalTextEdits ?? [])].sort(
+			(left, right) =>
+				Position.compare(
+					Range.lift(left.range).getStartPosition(),
+					Range.lift(right.range).getStartPosition(),
+				) ||
+				Position.compare(Range.lift(left.range).getEndPosition(), Range.lift(right.range).getEndPosition()),
+		);
 		try {
 			this.updatingEditor = true;
 			this.editor.pushUndoStop();
@@ -282,7 +373,10 @@ export class ColorPickerController extends Disposable {
 			this.editor.pushUndoStop();
 			if (this.mode === 'hover') {
 				const range = this.colorRange.decorations[0]!.range;
-				this.activeData = { provider: data.provider, information: { color: toLanguageColor(this.model.value!.color), range } };
+				this.activeData = {
+					provider: data.provider,
+					information: { color: toLanguageColor(this.model.value!.color), range },
+				};
 				this.originalText = this.viewport.textModel.getTextInRange(range);
 				// The next edit must use provider ranges from the new document version.
 				this.pendingPresentations = this.loadPresentations(this.model.value!, this.model.value!.color);
@@ -341,6 +435,6 @@ function toLanguageColor(color: Color): IColor {
 
 function colorSwatch(target: EventTarget | null): HTMLElement | undefined {
 	return target && typeof (target as Element).closest === 'function'
-		? (target as Element).closest<HTMLElement>('.colorpicker-color-decoration') ?? undefined
+		? ((target as Element).closest<HTMLElement>('.colorpicker-color-decoration') ?? undefined)
 		: undefined;
 }

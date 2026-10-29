@@ -61,7 +61,7 @@ export interface INumberWithOptionsSetting extends ISettingBase {
 	readonly minimum: number;
 	readonly maximum: number;
 	readonly integer: boolean;
-	readonly options: readonly { readonly value: string | null; readonly label: string; }[];
+	readonly options: readonly { readonly value: string | null; readonly label: string }[];
 }
 
 export interface ISelectSetting extends ISettingBase {
@@ -97,7 +97,14 @@ export interface IComplexSetting extends ISettingBase {
 	readonly configuration: IRegisteredConfiguration;
 }
 
-export type ISetting = IBooleanSetting | INumberSetting | INumberWithOptionsSetting | ISelectSetting | ITextSetting | IStringMapSetting | IComplexSetting;
+export type ISetting =
+	| IBooleanSetting
+	| INumberSetting
+	| INumberWithOptionsSetting
+	| ISelectSetting
+	| ITextSetting
+	| IStringMapSetting
+	| IComplexSetting;
 
 export interface ISelectSettingOption {
 	readonly value: string | boolean;
@@ -136,65 +143,162 @@ export interface IOpenSettingsOptions extends IEditorOptions {
 	/** Ash Settings page or section identity; independent of the configuration target. */
 	readonly section?: string;
 	/** Reveals a setting in JSONC, or filters the graphical editor to its ID. */
-	readonly revealSetting?: { readonly key: string; readonly edit?: boolean; };
+	readonly revealSetting?: { readonly key: string; readonly edit?: boolean };
 }
 
 /** Both graphical hosts validate opening requests before changing their live surface. */
 export function validateSettingsEditorOptions(options: IOpenSettingsOptions = {}): IOpenSettingsOptions {
 	if (typeof options !== 'object' || options === null || Array.isArray(options)) {
-		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidOptions' }, 'Settings opening options must be an object.'));
+		throw new TypeError(
+			localize(
+				{ bundle: 'ash.settings', key: 'open.invalidOptions' },
+				'Settings opening options must be an object.',
+			),
+		);
 	}
 	const supported = [
-		'query', 'section', 'target', 'folderUri', 'focusSearch', 'jsonEditor', 'revealSetting', 'openToSide', 'groupId',
-		'pinned', 'preserveFocus', 'forceReload', 'revealIfOpened', 'ignoreError', 'source',
+		'query',
+		'section',
+		'target',
+		'folderUri',
+		'focusSearch',
+		'jsonEditor',
+		'revealSetting',
+		'openToSide',
+		'groupId',
+		'pinned',
+		'preserveFocus',
+		'forceReload',
+		'revealIfOpened',
+		'ignoreError',
+		'source',
 	];
 	const unsupported = Object.keys(options).find(key => !supported.includes(key));
 	if (unsupported !== undefined) {
-		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.unsupportedOption' }, 'Settings opening option {0} is not supported.', unsupported));
+		throw new TypeError(
+			localize(
+				{ bundle: 'ash.settings', key: 'open.unsupportedOption' },
+				'Settings opening option {0} is not supported.',
+				unsupported,
+			),
+		);
 	}
 	if (options.query !== undefined && typeof options.query !== 'string') {
-		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidQuery' }, 'The Settings query must be a string.'));
+		throw new TypeError(
+			localize({ bundle: 'ash.settings', key: 'open.invalidQuery' }, 'The Settings query must be a string.'),
+		);
 	}
 	if (options.jsonEditor !== undefined && typeof options.jsonEditor !== 'boolean') {
-		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidEditor' }, 'The JSON editor option must be true or false.'));
+		throw new TypeError(
+			localize(
+				{ bundle: 'ash.settings', key: 'open.invalidEditor' },
+				'The JSON editor option must be true or false.',
+			),
+		);
 	}
 	if (options.openToSide !== undefined && typeof options.openToSide !== 'boolean') {
-		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidSide' }, 'The side editor option must be true or false.'));
+		throw new TypeError(
+			localize(
+				{ bundle: 'ash.settings', key: 'open.invalidSide' },
+				'The side editor option must be true or false.',
+			),
+		);
 	}
 	if (options.groupId !== undefined && (!Number.isSafeInteger(options.groupId) || options.groupId < 0)) {
-		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidGroup' }, 'The editor group ID must be a non-negative integer.'));
+		throw new TypeError(
+			localize(
+				{ bundle: 'ash.settings', key: 'open.invalidGroup' },
+				'The editor group ID must be a non-negative integer.',
+			),
+		);
 	}
 	for (const key of ['pinned', 'preserveFocus', 'forceReload', 'revealIfOpened', 'ignoreError'] as const) {
 		if (options[key] !== undefined && typeof options[key] !== 'boolean') {
-			throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidEditorOption' }, 'Editor option {0} must be true or false.', key));
+			throw new TypeError(
+				localize(
+					{ bundle: 'ash.settings', key: 'open.invalidEditorOption' },
+					'Editor option {0} must be true or false.',
+					key,
+				),
+			);
 		}
 	}
-	if (options.source !== undefined && options.source !== EditorOpenSource.API && options.source !== EditorOpenSource.USER) {
-		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.unsupportedOption' }, 'Settings opening option {0} is not supported.', 'source'));
+	if (
+		options.source !== undefined &&
+		options.source !== EditorOpenSource.API &&
+		options.source !== EditorOpenSource.USER
+	) {
+		throw new TypeError(
+			localize(
+				{ bundle: 'ash.settings', key: 'open.unsupportedOption' },
+				'Settings opening option {0} is not supported.',
+				'source',
+			),
+		);
 	}
 	if (options.focusSearch !== undefined && typeof options.focusSearch !== 'boolean') {
-		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidFocus' }, 'The search focus option must be true or false.'));
+		throw new TypeError(
+			localize(
+				{ bundle: 'ash.settings', key: 'open.invalidFocus' },
+				'The search focus option must be true or false.',
+			),
+		);
 	}
 	if (options.folderUri !== undefined && !URI.isUri(options.folderUri)) {
-		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidFolder' }, 'The Settings folder must be a URI.'));
+		throw new TypeError(
+			localize({ bundle: 'ash.settings', key: 'open.invalidFolder' }, 'The Settings folder must be a URI.'),
+		);
 	}
 	if (options.revealSetting !== undefined) {
 		const reveal = options.revealSetting;
-		if (!reveal || typeof reveal !== 'object' || Array.isArray(reveal)
-			|| typeof reveal.key !== 'string' || !reveal.key.trim()
-			|| reveal.edit !== undefined && typeof reveal.edit !== 'boolean'
-			|| Object.keys(reveal).some(key => key !== 'key' && key !== 'edit')) {
-			throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidReveal' }, 'A setting to reveal must have a key and an optional edit flag.'));
+		if (
+			!reveal ||
+			typeof reveal !== 'object' ||
+			Array.isArray(reveal) ||
+			typeof reveal.key !== 'string' ||
+			!reveal.key.trim() ||
+			(reveal.edit !== undefined && typeof reveal.edit !== 'boolean') ||
+			Object.keys(reveal).some(key => key !== 'key' && key !== 'edit')
+		) {
+			throw new TypeError(
+				localize(
+					{ bundle: 'ash.settings', key: 'open.invalidReveal' },
+					'A setting to reveal must have a key and an optional edit flag.',
+				),
+			);
 		}
 	}
 	if (options.section !== undefined && (typeof options.section !== 'string' || options.section.trim().length === 0)) {
-		throw new TypeError(localize({ bundle: 'ash.settings', key: 'open.invalidSection' }, 'The Settings section must be a non-empty string.'));
+		throw new TypeError(
+			localize(
+				{ bundle: 'ash.settings', key: 'open.invalidSection' },
+				'The Settings section must be a non-empty string.',
+			),
+		);
 	}
-	if (options.target !== undefined && ![ConfigurationTarget.USER, ConfigurationTarget.USER_LOCAL, ConfigurationTarget.WORKSPACE, ConfigurationTarget.WORKSPACE_FOLDER].includes(options.target)) {
-		throw new Error(localize({ bundle: 'ash.settings', key: 'open.unsupportedTarget' }, 'This Settings editor supports local user, workspace and folder settings.'));
+	if (
+		options.target !== undefined &&
+		![
+			ConfigurationTarget.USER,
+			ConfigurationTarget.USER_LOCAL,
+			ConfigurationTarget.WORKSPACE,
+			ConfigurationTarget.WORKSPACE_FOLDER,
+		].includes(options.target)
+	) {
+		throw new Error(
+			localize(
+				{ bundle: 'ash.settings', key: 'open.unsupportedTarget' },
+				'This Settings editor supports local user, workspace and folder settings.',
+			),
+		);
 	}
 	if (options.target === ConfigurationTarget.WORKSPACE_FOLDER && !options.folderUri) {
-		throw new Error(localize({ bundle: 'ash.settings', key: 'open.missingFolder' }, 'Choose a workspace folder to open its settings.'));
+		throw new Error(
+			localize(
+				{ bundle: 'ash.settings', key: 'open.missingFolder' },
+				'Choose a workspace folder to open its settings.',
+			),
+		);
 	}
 	return options;
 }

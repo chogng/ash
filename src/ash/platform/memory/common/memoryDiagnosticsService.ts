@@ -1,7 +1,18 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { Event } from '../../../base/common/event.js';
 
-export type MemoryMetricKind = 'residentBytes' | 'javaScriptHeapBytes' | 'domNodes' | 'eventListeners' | 'uiObjects' | 'windows' | 'cacheBytes' | 'gpuEstimatedBytes' | 'gpuResources' | 'renderCacheEntries' | 'tasks';
+export type MemoryMetricKind =
+	| 'residentBytes'
+	| 'javaScriptHeapBytes'
+	| 'domNodes'
+	| 'eventListeners'
+	| 'uiObjects'
+	| 'windows'
+	| 'cacheBytes'
+	| 'gpuEstimatedBytes'
+	| 'gpuResources'
+	| 'renderCacheEntries'
+	| 'tasks';
 export interface MemoryMetric {
 	kind: MemoryMetricKind;
 	value: number | null;
@@ -19,7 +30,12 @@ export interface MemoryDiagnosticSummary {
 	readonly status: string;
 	readonly elapsedSeconds: number;
 	readonly evidenceGaps: number;
-	readonly targets: readonly { readonly label: string; readonly samples: number; readonly metrics: readonly string[]; readonly findings: readonly string[]; }[];
+	readonly targets: readonly {
+		readonly label: string;
+		readonly samples: number;
+		readonly metrics: readonly string[];
+		readonly findings: readonly string[];
+	}[];
 }
 export interface IMemoryDiagnosticsService {
 	readonly onDidChange: Event<void>;

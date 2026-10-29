@@ -2,7 +2,11 @@ import { h } from '../../../../base/browser/dom.js';
 import { createFastDomNode, type FastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { type IOverviewRuler } from '../../editorBrowser.js';
 import { EditorOption, type OverviewRulerPosition } from '../../../common/config/editorOptions.js';
-import { type ColorZone, type OverviewRulerZone, OverviewZoneManager } from '../../../common/viewModel/overviewZoneManager.js';
+import {
+	type ColorZone,
+	type OverviewRulerZone,
+	OverviewZoneManager,
+} from '../../../common/viewModel/overviewZoneManager.js';
 import { type ViewContext } from '../../../common/viewModel/viewContext.js';
 import * as viewEvents from '../../../common/viewEvents.js';
 import { ViewEventHandler } from '../../../common/viewEventHandler.js';
@@ -22,7 +26,9 @@ export class OverviewRuler extends ViewEventHandler implements IOverviewRuler {
 		this._domNode.setLayerHinting(true);
 		this._domNode.setContain('strict');
 		this._domNode.setAttribute('aria-hidden', 'true');
-		this._zoneManager = new OverviewZoneManager(lineNumber => context.viewLayout.getVerticalOffsetForLineNumber(lineNumber));
+		this._zoneManager = new OverviewZoneManager(lineNumber =>
+			context.viewLayout.getVerticalOffsetForLineNumber(lineNumber),
+		);
 		this._zoneManager.setDOMWidth(0);
 		this._zoneManager.setDOMHeight(0);
 		this._zoneManager.setOuterHeight(context.viewLayout.getScrollHeight());
@@ -106,7 +112,12 @@ export class OverviewRuler extends ViewEventHandler implements IOverviewRuler {
 		return true;
 	}
 
-	private _renderOneLane(context: CanvasRenderingContext2D, zones: ColorZone[], id2Color: string[], width: number): void {
+	private _renderOneLane(
+		context: CanvasRenderingContext2D,
+		zones: ColorZone[],
+		id2Color: string[],
+		width: number,
+	): void {
 		let colorId = 0;
 		let from = 0;
 		let to = 0;

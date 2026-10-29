@@ -24,9 +24,16 @@ suite('ResourceTree', () => {
 		const node = tree.getNode(first)!;
 		tree.add(first, 'updated');
 		assert.equal(tree.getNode(first), node);
-		assert.deepEqual({ count: tree.root.childrenCount, name: node.name, path: node.relativePath, context: node.context, values: ResourceTree.collect(tree.root) }, {
-			count: 1, name: 'first.txt', path: '/one/first.txt', context, values: ['updated', 'second'],
-		});
+		assert.deepEqual(
+			{
+				count: tree.root.childrenCount,
+				name: node.name,
+				path: node.relativePath,
+				context: node.context,
+				values: ResourceTree.collect(tree.root),
+			},
+			{ count: 1, name: 'first.txt', path: '/one/first.txt', context, values: ['updated', 'second'] },
+		);
 		assert.equal(tree.root.get('one')!.get('first.txt'), node);
 		assert.equal(ResourceTree.getRoot(node), tree.root);
 		assert.equal(ResourceTree.isResourceNode(node), true);
@@ -61,7 +68,13 @@ suite('ResourceTree', () => {
 		const tree = new ResourceTree<number, undefined>(undefined, root);
 		const file = URI.joinPath(root, 'file');
 		tree.add(file, 0);
-		for (const outside of [file.with({ scheme: 'other' }), file.with({ authority: 'elsewhere' }), file.with({ query: 'revision=2' }), file.with({ fragment: 'other' }), file.with({ path: '/roots/file' })]) {
+		for (const outside of [
+			file.with({ scheme: 'other' }),
+			file.with({ authority: 'elsewhere' }),
+			file.with({ query: 'revision=2' }),
+			file.with({ fragment: 'other' }),
+			file.with({ path: '/roots/file' }),
+		]) {
 			assert.throws(() => tree.add(outside, 1), RangeError);
 			assert.equal(tree.getNode(outside), undefined);
 			assert.equal(tree.delete(outside), undefined);

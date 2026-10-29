@@ -8,8 +8,14 @@ test('RangeMap preserves row boundaries through insertions, removals and height 
 	map.splice(1, 1, [{ size: 12 }, { size: 18 }]);
 	assert.equal(map.size, 60);
 	assert.equal(map.count, 4);
-	assert.deepEqual([0, 1, 2, 3].map(index => map.positionAt(index)), [0, 20, 32, 50]);
-	assert.deepEqual([0, 19, 20, 31, 32, 59, 60].map(position => map.indexAt(position)), [0, 0, 1, 1, 2, 3, 4]);
+	assert.deepEqual(
+		[0, 1, 2, 3].map(index => map.positionAt(index)),
+		[0, 20, 32, 50],
+	);
+	assert.deepEqual(
+		[0, 19, 20, 31, 32, 59, 60].map(position => map.indexAt(position)),
+		[0, 0, 1, 1, 2, 3, 4],
+	);
 	assert.equal(map.indexAfter(20), 2);
 	map.splice(0, 2);
 	assert.equal(map.size, 28);

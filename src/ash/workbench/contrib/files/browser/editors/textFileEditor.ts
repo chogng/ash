@@ -33,11 +33,25 @@ export class TextFileEditor extends TextResourceEditor {
 		@IFilesConfigurationService private readonly filesConfiguration: IFilesConfigurationService,
 		@IFileDialogService private readonly fileDialogs: IFileDialogService,
 	) {
-		super(resourceStore, options, modelService, instantiationService, configurationService, textModelService, themeService, storageService);
+		super(
+			resourceStore,
+			options,
+			modelService,
+			instantiationService,
+			configurationService,
+			textModelService,
+			themeService,
+			storageService,
+		);
 		this.saveErrorHandler = instantiationService.createInstance(TextFileSaveErrorHandler);
-		this._register(filesConfiguration.onDidChangeReadonly(() => {
-			if (this.fileInput) this.getControl()?.updateOptions({ readOnly: this.fileInput.readOnly || !!filesConfiguration.isReadonly(this.fileInput.resource) });
-		}));
+		this._register(
+			filesConfiguration.onDidChangeReadonly(() => {
+				if (this.fileInput)
+					this.getControl()?.updateOptions({
+						readOnly: this.fileInput.readOnly || !!filesConfiguration.isReadonly(this.fileInput.resource),
+					});
+			}),
+		);
 	}
 
 	override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
@@ -47,13 +61,22 @@ export class TextFileEditor extends TextResourceEditor {
 		}
 		await super.setInput(input, signal);
 		this.fileInput = input;
-		this.getControl()?.updateOptions({ readOnly: input.readOnly || !!this.filesConfiguration.isReadonly(input.resource) });
+		this.getControl()?.updateOptions({
+			readOnly: input.readOnly || !!this.filesConfiguration.isReadonly(input.resource),
+		});
 	}
 
 	public override async save(options?: ISaveOptions): Promise<void> {
 		if (this.fileInput && this.filesConfiguration.isReadonly(this.fileInput.resource)) {
-			const error = new Error(localize('files.configuredReadonly', 'This file is read-only because it matches the configured read-only patterns.'));
-			if (await this.handleSaveError(error)) { return; }
+			const error = new Error(
+				localize(
+					'files.configuredReadonly',
+					'This file is read-only because it matches the configured read-only patterns.',
+				),
+			);
+			if (await this.handleSaveError(error)) {
+				return;
+			}
 			throw new CancellationError(undefined, error);
 		}
 		await super.save(options);
@@ -67,21 +90,45 @@ export class TextFileEditor extends TextResourceEditor {
 
 	protected override handleSaveError(error: unknown): Promise<boolean> {
 		const workingCopy = this.workingCopy;
-		return this.saveErrorHandler.onSaveError(error, workingCopy?.resource, workingCopy ? async options => {
-			if (this.workingCopy !== workingCopy) { throw new Error(localize('files.saveEditorClosed', 'The editor was closed before the save retry.')); }
-			const controller = new AbortController();
-			const cancellation = toDisposable(() => controller.abort());
-			this.retryCancellation.value = cancellation;
-			try { await workingCopy.save(controller.signal, options); }
-			finally { if (this.retryCancellation.value === cancellation) { this.retryCancellation.clear(); } }
-		} : undefined, workingCopy ? {
-			saveAs: async () => {
-				const target = await this.fileDialogs.pickFileToSave(workingCopy.resource);
-				if (!target || this.workingCopy !== workingCopy) { return false; }
-				await this.saveAs(target);
-				return true;
-			},
-			revert: async () => { if (this.workingCopy === workingCopy) { await workingCopy.revert(new AbortController().signal); } },
-		} : undefined);
+		return this.saveErrorHandler.onSaveError(
+			error,
+			workingCopy?.resource,
+			workingCopy
+				? async options => {
+						if (this.workingCopy !== workingCopy) {
+							throw new Error(
+								localize('files.saveEditorClosed', 'The editor was closed before the save retry.'),
+							);
+						}
+						const controller = new AbortController();
+						const cancellation = toDisposable(() => controller.abort());
+						this.retryCancellation.value = cancellation;
+						try {
+							await workingCopy.save(controller.signal, options);
+						} finally {
+							if (this.retryCancellation.value === cancellation) {
+								this.retryCancellation.clear();
+							}
+						}
+					}
+				: undefined,
+			workingCopy
+				? {
+						saveAs: async () => {
+							const target = await this.fileDialogs.pickFileToSave(workingCopy.resource);
+							if (!target || this.workingCopy !== workingCopy) {
+								return false;
+							}
+							await this.saveAs(target);
+							return true;
+						},
+						revert: async () => {
+							if (this.workingCopy === workingCopy) {
+								await workingCopy.revert(new AbortController().signal);
+							}
+						},
+					}
+				: undefined,
+		);
 	}
 }

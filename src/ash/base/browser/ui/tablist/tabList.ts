@@ -1,15 +1,20 @@
-import "./tablist.css";
-import { addDisposableListener, getActiveElement } from "../../dom.js";
+import './tablist.css';
+import { addDisposableListener, getActiveElement } from '../../dom.js';
 import { AnimationFrameScheduler } from '../../scheduler.js';
-import type { Icon } from "../../../common/icon.js";
-import type { IAction } from "../../../common/actions.js";
-import { Disposable, toDisposable, type IDisposable } from "../../../common/lifecycle.js";
-import { ActionBar, type ActionBarDragAndDrop, type ActionBarDropPosition, type ActionBarOrientation } from "../actionbar/actionbar.js";
-import { ScrollableElement } from "../scrollbar/scrollableElement.js";
+import type { Icon } from '../../../common/icon.js';
+import type { IAction } from '../../../common/actions.js';
+import { Disposable, toDisposable, type IDisposable } from '../../../common/lifecycle.js';
+import {
+	ActionBar,
+	type ActionBarDragAndDrop,
+	type ActionBarDropPosition,
+	type ActionBarOrientation,
+} from '../actionbar/actionbar.js';
+import { ScrollableElement } from '../scrollbar/scrollableElement.js';
 import type { ScrollableElementUpdateOptions } from '../scrollbar/scrollableElementOptions.js';
-import { TabAction, TabActionViewItem } from "./tabActionViewItem.js";
+import { TabAction, TabActionViewItem } from './tabActionViewItem.js';
 
-export { TAB_CLOSE_ACTION_ID } from "./tabActionViewItem.js";
+export { TAB_CLOSE_ACTION_ID } from './tabActionViewItem.js';
 
 /** Accessible actions rendered after one Tab's label content. */
 export interface TabListActions {
@@ -42,9 +47,11 @@ export interface TabListItem<T> {
 }
 
 /** Flush and inset serve document tabs; navigation and underline fit page categories to their labels. */
-export type TabListPresentation = "flush" | "inset" | "navigation" | "underline";
+export type TabListPresentation = 'flush' | 'inset' | 'navigation' | 'underline';
 /** Fit preserves labels; shrink shares available space; fixed shares bounded equal widths. */
-export type TabListSizing = { readonly mode: 'fit' | 'shrink'; } | { readonly mode: 'fixed'; readonly minWidth: number; readonly maxWidth: number; };
+export type TabListSizing =
+	| { readonly mode: 'fit' | 'shrink' }
+	| { readonly mode: 'fixed'; readonly minWidth: number; readonly maxWidth: number };
 export type TabListDropPosition = ActionBarDropPosition;
 
 /** Drag callbacks for a tab list; the caller owns payload and mutation semantics. */
@@ -52,7 +59,12 @@ export interface TabListDragAndDrop<T> {
 	readonly canDrop: (event: DragEvent, target: T | undefined, position: TabListDropPosition) => boolean;
 	readonly onDragStart: (value: T, event: DragEvent) => void;
 	readonly onDragEnter?: (target: T | undefined, position: TabListDropPosition, event: DragEvent) => void;
-	readonly onDragOver?: (target: T | undefined, position: TabListDropPosition, event: DragEvent, duration: number) => void;
+	readonly onDragOver?: (
+		target: T | undefined,
+		position: TabListDropPosition,
+		event: DragEvent,
+		duration: number,
+	) => void;
 	readonly onDragLeave?: () => void;
 	readonly onDrop: (target: T | undefined, position: TabListDropPosition, event: DragEvent) => void;
 	readonly onDragEnd: () => void;
@@ -94,92 +106,143 @@ export class TabList<T> extends Disposable {
 
 	constructor(container: HTMLElement, options: TabListOptions<T>) {
 		super();
-		this._register(toDisposable(() => {
-			this.actions.clear();
-			this.views.clear();
-		}));
+		this._register(
+			toDisposable(() => {
+				this.actions.clear();
+				this.views.clear();
+			}),
+		);
 		this.activate = options.onActivate;
 		this.select = options.onSelect;
 		const onClose = options.onClose;
 		const closeActionIcon = options.closeActionIcon;
-		const presentation = options.presentation ?? "flush";
+		const presentation = options.presentation ?? 'flush';
 		this.presentation = presentation;
-		const orientation = options.orientation ?? "horizontal";
+		const orientation = options.orientation ?? 'horizontal';
 		const dragAndDrop = options.dragAndDrop;
 		const actionBarDragAndDrop: ActionBarDragAndDrop | undefined = dragAndDrop
 			? {
-				canDrop: (event, action, position) => dragAndDrop.canDrop(event, action instanceof TabAction ? action.tab.value : undefined, position),
-				onDragStart: (action, event) => {
-					if (action instanceof TabAction) dragAndDrop.onDragStart(action.tab.value, event);
-				},
-				onDragEnter: (action, position, event) => {
-					dragAndDrop.onDragEnter?.(action instanceof TabAction ? action.tab.value : undefined, position, event);
-				},
-				onDragOver: (action, position, event, duration) => {
-					dragAndDrop.onDragOver?.(action instanceof TabAction ? action.tab.value : undefined, position, event, duration);
-				},
-				onDragLeave: () => dragAndDrop.onDragLeave?.(),
-				onDrop: (action, position, event) => {
-					dragAndDrop.onDrop(action instanceof TabAction ? action.tab.value : undefined, position, event);
-				},
-				onDragEnd: () => dragAndDrop.onDragEnd(),
-			}
-			: undefined;
-		const scrollableOptions = orientation === "vertical"
-			? { direction: "vertical" as const, vertical: "auto" as const, tabIndex: -1, wheel: { consume: "when-scrolling" as const } }
-			: { direction: "horizontal" as const, horizontal: "auto" as const, tabIndex: -1, wheel: { consume: "when-scrolling" as const } };
-		this.scrollable = this._register(new ScrollableElement(container, scrollableOptions));
-		this.actionBar = this._register(new ActionBar(this.scrollable.contentElement, {
-			ariaLabel: options.ariaLabel,
-			ariaRole: "tablist",
-			orientation,
-			dragAndDrop: actionBarDragAndDrop,
-			actionViewItemProvider: (action) => {
-				if (!(action instanceof TabAction)) {
-					throw new TypeError(`Unsupported TabList action: ${action.id}`);
+					canDrop: (event, action, position) =>
+						dragAndDrop.canDrop(
+							event,
+							action instanceof TabAction ? action.tab.value : undefined,
+							position,
+						),
+					onDragStart: (action, event) => {
+						if (action instanceof TabAction) dragAndDrop.onDragStart(action.tab.value, event);
+					},
+					onDragEnter: (action, position, event) => {
+						dragAndDrop.onDragEnter?.(
+							action instanceof TabAction ? action.tab.value : undefined,
+							position,
+							event,
+						);
+					},
+					onDragOver: (action, position, event, duration) => {
+						dragAndDrop.onDragOver?.(
+							action instanceof TabAction ? action.tab.value : undefined,
+							position,
+							event,
+							duration,
+						);
+					},
+					onDragLeave: () => dragAndDrop.onDragLeave?.(),
+					onDrop: (action, position, event) => {
+						dragAndDrop.onDrop(action instanceof TabAction ? action.tab.value : undefined, position, event);
+					},
+					onDragEnd: () => dragAndDrop.onDragEnd(),
 				}
-				const view = new TabActionViewItem<T>(action, onClose, closeActionIcon, options.draggable === true);
-				this.views.set(action.id, view);
-				return view;
-			},
-		}));
-		this.scrollable.element.classList.add("ash-tab-list");
-		this.scrollable.element.classList.add(`ash-tab-list-${presentation}`);
-		this.scrollable.contentElement.classList.add(
-			"ash-tab-list-scroll-content",
+			: undefined;
+		const scrollableOptions =
+			orientation === 'vertical'
+				? {
+						direction: 'vertical' as const,
+						vertical: 'auto' as const,
+						tabIndex: -1,
+						wheel: { consume: 'when-scrolling' as const },
+					}
+				: {
+						direction: 'horizontal' as const,
+						horizontal: 'auto' as const,
+						tabIndex: -1,
+						wheel: { consume: 'when-scrolling' as const },
+					};
+		this.scrollable = this._register(new ScrollableElement(container, scrollableOptions));
+		this.actionBar = this._register(
+			new ActionBar(this.scrollable.contentElement, {
+				ariaLabel: options.ariaLabel,
+				ariaRole: 'tablist',
+				orientation,
+				dragAndDrop: actionBarDragAndDrop,
+				actionViewItemProvider: action => {
+					if (!(action instanceof TabAction)) {
+						throw new TypeError(`Unsupported TabList action: ${action.id}`);
+					}
+					const view = new TabActionViewItem<T>(action, onClose, closeActionIcon, options.draggable === true);
+					this.views.set(action.id, view);
+					return view;
+				},
+			}),
 		);
+		this.scrollable.element.classList.add('ash-tab-list');
+		this.scrollable.element.classList.add(`ash-tab-list-${presentation}`);
+		this.scrollable.contentElement.classList.add('ash-tab-list-scroll-content');
 		this.element = this.scrollable.element;
 		this.scrollableElement = this.scrollable.scrollableElement;
-		this.layoutScheduler = this._register(new AnimationFrameScheduler(container.ownerDocument.defaultView!, () => {
-			// Refreshes must keep a manually focused tab visible even when it is not selected.
-			const focusedTab = getActiveElement(this.element.ownerDocument)?.closest<HTMLElement>('.ash-tab');
-			const revealTab = focusedTab && this.actionBar.element.contains(focusedTab) ? focusedTab : this.selectedTab;
-			if (revealTab?.isConnected) {
-				this.scrollable.reveal(revealTab);
-			} else {
-				this.scrollable.layout();
-			}
-		}));
-		if (this.select) this.actionBar.element.setAttribute("aria-multiselectable", "true");
+		this.layoutScheduler = this._register(
+			new AnimationFrameScheduler(container.ownerDocument.defaultView!, () => {
+				// Refreshes must keep a manually focused tab visible even when it is not selected.
+				const focusedTab = getActiveElement(this.element.ownerDocument)?.closest<HTMLElement>('.ash-tab');
+				const revealTab =
+					focusedTab && this.actionBar.element.contains(focusedTab) ? focusedTab : this.selectedTab;
+				if (revealTab?.isConnected) {
+					this.scrollable.reveal(revealTab);
+				} else {
+					this.scrollable.layout();
+				}
+			}),
+		);
+		if (this.select) this.actionBar.element.setAttribute('aria-multiselectable', 'true');
 		// Keyboard focus may move without changing the selected tab. Reveal the
 		// focused item through the shared scrollbar so both states stay accessible.
 		let pointerActivation = false;
-		this._register(addDisposableListener(this.actionBar.element, 'pointerdown', () => { pointerActivation = true; }, true));
-		this._register(addDisposableListener(this.actionBar.element.ownerDocument, 'pointerup', () => { pointerActivation = false; }));
-		this._register(addDisposableListener(this.actionBar.element.ownerDocument, 'pointercancel', () => { pointerActivation = false; }));
-		this._register(addDisposableListener(this.actionBar.element, "focusin", event => {
-			const target = event.target as HTMLElement;
-			// Moving the pressed tab before pointerup prevents its click from completing.
-			if (pointerActivation || target.getAttribute('role') !== 'tab') return;
-			const tab = target.closest<HTMLElement>(".ash-tab");
-			if (tab) {
-				this.layoutScheduler.cancel();
-				this.scrollable.reveal(tab);
-			}
-		}));
+		this._register(
+			addDisposableListener(
+				this.actionBar.element,
+				'pointerdown',
+				() => {
+					pointerActivation = true;
+				},
+				true,
+			),
+		);
+		this._register(
+			addDisposableListener(this.actionBar.element.ownerDocument, 'pointerup', () => {
+				pointerActivation = false;
+			}),
+		);
+		this._register(
+			addDisposableListener(this.actionBar.element.ownerDocument, 'pointercancel', () => {
+				pointerActivation = false;
+			}),
+		);
+		this._register(
+			addDisposableListener(this.actionBar.element, 'focusin', event => {
+				const target = event.target as HTMLElement;
+				// Moving the pressed tab before pointerup prevents its click from completing.
+				if (pointerActivation || target.getAttribute('role') !== 'tab') return;
+				const tab = target.closest<HTMLElement>('.ash-tab');
+				if (tab) {
+					this.layoutScheduler.cancel();
+					this.scrollable.reveal(tab);
+				}
+			}),
+		);
 	}
 
-	public get onDidScroll(): ScrollableElement['onDidScroll'] { return this.scrollable.onDidScroll; }
+	public get onDidScroll(): ScrollableElement['onDidScroll'] {
+		return this.scrollable.onDidScroll;
+	}
 
 	public updateScrollbarOptions(options: ScrollableElementUpdateOptions): void {
 		this.scrollable.updateOptions(options);
@@ -205,11 +268,7 @@ export class TabList<T> extends Disposable {
 		}
 	}
 
-	setTabs(
-		tabs: readonly TabListItem<T>[],
-		selectedId: string | undefined,
-		selectedIds?: ReadonlySet<string>,
-	): void {
+	setTabs(tabs: readonly TabListItem<T>[], selectedId: string | undefined, selectedIds?: ReadonlySet<string>): void {
 		const ids = new Set<string>();
 		const tabIds = new Set<string>();
 		for (const tab of tabs) {

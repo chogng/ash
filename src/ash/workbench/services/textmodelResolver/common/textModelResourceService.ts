@@ -1,12 +1,15 @@
 import type { DocumentCodec } from '../../documentEditor/common/documentCodec.js';
 import type { DocumentTextModel } from '../../documentEditor/common/documentCodec.js';
 import type { FileReadOperation } from '../../../../platform/files/common/files.js';
-import { createServiceIdentifier, type ServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import { type Event } from "../../../../base/common/event.js";
-import { type IDisposable } from "../../../../base/common/lifecycle.js";
-import { type URI } from "../../../../base/common/uri.js";
+import {
+	createServiceIdentifier,
+	type ServiceIdentifier,
+} from '../../../../platform/instantiation/common/instantiation.js';
+import { type Event } from '../../../../base/common/event.js';
+import { type IDisposable } from '../../../../base/common/lifecycle.js';
+import { type URI } from '../../../../base/common/uri.js';
 import type { DocumentNode } from '../../documentEditor/common/documentCodec.js';
-import { type TextModel } from "../../../../editor/common/model/textModel.js";
+import { type TextModel } from '../../../../editor/common/model/textModel.js';
 import type { ISaveOptions, SaveReason } from '../../../common/editor.js';
 import type { IEncodingSupport } from '../../textfile/common/textfiles.js';
 
@@ -26,7 +29,11 @@ export interface TextModelSaveRecoveryContext {
 
 /** Prepares durable recovery content after editing participants and before file publication. */
 export interface ITextModelSaveCompletionParticipant {
-	prepare(model: TextModel, signal: AbortSignal, recovery: TextModelSaveRecoveryContext): Promise<TextModelSaveCompletion | undefined>;
+	prepare(
+		model: TextModel,
+		signal: AbortSignal,
+		recovery: TextModelSaveRecoveryContext,
+	): Promise<TextModelSaveCompletion | undefined>;
 }
 
 /** The minimum identity and bootstrap data needed to acquire a text model. */
@@ -67,7 +74,7 @@ export interface TextModelReference extends IDisposable {
 /** TextModel reference that also participates in Workbench backup and Save As. */
 export interface TextModelWorkingCopyReference extends TextModelReference {
 	readonly model: DocumentTextModel;
-	readonly backupKind: "structuredDocument";
+	readonly backupKind: 'structuredDocument';
 	readonly backupContentType?: string;
 	readonly onDidChangeContent: Event<void>;
 	backup(): string;
@@ -81,7 +88,10 @@ export interface TextModelAcquireOptions {
 }
 
 /** Resolves resource identities to reference-counted text models and their persisted baseline. */
-export interface ITextModelResourceService<TInput extends TextModelInput = TextModelInput, TReference extends TextModelReference = TextModelReference> extends IDisposable {
+export interface ITextModelResourceService<
+	TInput extends TextModelInput = TextModelInput,
+	TReference extends TextModelReference = TextModelReference,
+> extends IDisposable {
 	acquire(input: TInput, signal: AbortSignal, options?: TextModelAcquireOptions): Promise<TReference>;
 }
 
@@ -98,25 +108,27 @@ export interface IFileTextModelService extends ITextModelResourceService {
 	waitForSaveRecovery(resource?: URI): Promise<void>;
 	readonly onModelAdded: Event<TextModel>;
 	readonly onModelRemoved: Event<TextModel>;
-	readonly onModelLanguageChanged: Event<{ readonly model: TextModel; readonly oldLanguageId: string; }>;
+	readonly onModelLanguageChanged: Event<{ readonly model: TextModel; readonly oldLanguageId: string }>;
 	getModel(resource: URI): TextModel | null;
 	getModels(): readonly TextModel[];
 	/** Revalidates an open file after the host regains focus. */
 	refresh(resource: URI): Promise<void>;
 }
 
-export const IFileTextModelService: ServiceIdentifier<IFileTextModelService> = createServiceIdentifier<IFileTextModelService>('fileTextModelService');
+export const IFileTextModelService: ServiceIdentifier<IFileTextModelService> =
+	createServiceIdentifier<IFileTextModelService>('fileTextModelService');
 
-export type { ITextResourceStore } from "./textResourceStore.js";
+export type { ITextResourceStore } from './textResourceStore.js';
 
 /** Service key used by hosts that register a text model service. */
-export const ITextModelResourceService: ServiceIdentifier<ITextModelResourceService> = createServiceIdentifier<ITextModelResourceService>("textModelResourceService");
+export const ITextModelResourceService: ServiceIdentifier<ITextModelResourceService> =
+	createServiceIdentifier<ITextModelResourceService>('textModelResourceService');
 
 /** Reports that a resource changed after the model established its saved baseline. */
 export class TextModelConflictError extends Error {
 	constructor(readonly resource: URI) {
 		super(`Cannot save '${resource.toString()}' because it changed outside the editor`);
-		this.name = "TextModelConflictError";
+		this.name = 'TextModelConflictError';
 	}
 }
 
@@ -124,7 +136,10 @@ export class TextModelConflictError extends Error {
 export class TextModelSaveCompletionError extends Error {
 	public readonly fileSaved = true;
 
-	constructor(public readonly resource: URI, cause: unknown) {
+	constructor(
+		public readonly resource: URI,
+		cause: unknown,
+	) {
 		super(cause instanceof Error ? cause.message : String(cause), { cause });
 		this.name = 'TextModelSaveCompletionError';
 	}

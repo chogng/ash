@@ -31,7 +31,17 @@ export interface OpenDialogOptions {
 	defaultPath?: string;
 	buttonLabel?: string;
 	filters?: FileFilter[];
-	properties?: Array<'openFile' | 'openDirectory' | 'multiSelections' | 'showHiddenFiles' | 'createDirectory' | 'promptToCreate' | 'noResolveAliases' | 'treatPackageAsDirectory' | 'dontAddToRecent'>;
+	properties?: Array<
+		| 'openFile'
+		| 'openDirectory'
+		| 'multiSelections'
+		| 'showHiddenFiles'
+		| 'createDirectory'
+		| 'promptToCreate'
+		| 'noResolveAliases'
+		| 'treatPackageAsDirectory'
+		| 'dontAddToRecent'
+	>;
 	message?: string;
 	securityScopedBookmarks?: boolean;
 }
@@ -51,7 +61,13 @@ export interface SaveDialogOptions {
 	message?: string;
 	nameFieldLabel?: string;
 	showsTagField?: boolean;
-	properties?: Array<'showHiddenFiles' | 'createDirectory' | 'treatPackageAsDirectory' | 'showOverwriteConfirmation' | 'dontAddToRecent'>;
+	properties?: Array<
+		| 'showHiddenFiles'
+		| 'createDirectory'
+		| 'treatPackageAsDirectory'
+		| 'showOverwriteConfirmation'
+		| 'dontAddToRecent'
+	>;
 	securityScopedBookmarks?: boolean;
 }
 

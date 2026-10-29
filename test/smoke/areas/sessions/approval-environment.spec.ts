@@ -4,7 +4,12 @@ import { Editor } from '../../../automation/editor.js';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-test('Sessions review environment scans a draft, accepts entries, and excludes changed sources', async ({ application, target, workbench, testWorkspace }) => {
+test('Sessions review environment scans a draft, accepts entries, and excludes changed sources', async ({
+	application,
+	target,
+	workbench,
+	testWorkspace,
+}) => {
 	let page = await workbench.openAgentsWindow(target.kind);
 	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
 	const editor = new Editor(page.locator('.ash-sessions-chat-slot.active:visible'));
@@ -12,12 +17,20 @@ test('Sessions review environment scans a draft, accepts entries, and excludes c
 	await page.keyboard.insertText('/permission auto');
 	await editor.waitForEditorContents(text => text === '/permission auto');
 	await page.keyboard.press('Enter');
-	await expect(page.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)').first().getByRole('button', { name: 'Permissions: Auto', exact: true })).toBeVisible();
+	await expect(
+		page
+			.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')
+			.first()
+			.getByRole('button', { name: 'Permissions: Auto', exact: true }),
+	).toBeVisible();
 	await editor.waitForEditorFocus();
 	await page.keyboard.insertText('/permission manual');
 	await editor.waitForEditorContents(text => text === '/permission manual');
 	await page.keyboard.press('Enter');
-	const permissions = page.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)').first().getByRole('button', { name: 'Permissions: Manual', exact: true });
+	const permissions = page
+		.locator(':is(.ash-sessions-chat-input,.ash-sessions-cowork-input)')
+		.first()
+		.getByRole('button', { name: 'Permissions: Manual', exact: true });
 	await permissions.press('ArrowDown');
 	const menu = page.getByRole('menu', { name: 'Permissions', exact: true });
 	const prepare = menu.getByRole('menuitem', { name: 'Prepare review environment…', exact: true });
@@ -34,7 +47,9 @@ test('Sessions review environment scans a draft, accepts entries, and excludes c
 	await prepare.click();
 	const quick = new QuickAccess(page);
 	await quick.select('Scan project…');
-	await expect(quick.items.filter({ hasText: 'Include recent project sessions' })).toContainText('aggregates command names and targets');
+	await expect(quick.items.filter({ hasText: 'Include recent project sessions' })).toContainText(
+		'aggregates command names and targets',
+	);
 	await quick.select('Include recent project sessions');
 	await expect(quick.items.filter({ hasText: 'Session limit: 50' })).toHaveCount(1);
 	await expect(quick.items.filter({ hasText: 'Commands per session: 200' })).toHaveCount(1);
@@ -44,13 +59,19 @@ test('Sessions review environment scans a draft, accepts entries, and excludes c
 	await sessionLimit.fill('100');
 	await sessionLimit.press('Enter');
 	await expect(quick.items.filter({ hasText: 'Session limit: 100' })).toHaveCount(1);
-	await expect(quick.items.filter({ hasText: 'Include shell history executable names' })).toContainText('excludes arguments');
-	await expect(quick.items.filter({ hasText: 'Include other repositories in the home directory' })).toContainText('excludes source code');
+	await expect(quick.items.filter({ hasText: 'Include shell history executable names' })).toContainText(
+		'excludes arguments',
+	);
+	await expect(quick.items.filter({ hasText: 'Include other repositories in the home directory' })).toContainText(
+		'excludes source code',
+	);
 	// This fixture has no model connection. Explicitly choose direct extraction before scanning.
 	await quick.select('Summarize with the current task model');
 	await quick.select('Continue — generate draft');
 	await expect(quick.input).toHaveAttribute('placeholder', /0\/0 sessions/u);
-	const entry = quick.items.filter({ has: page.locator('.ash-quick-pick-row-label').getByText('package.json', { exact: true }) });
+	const entry = quick.items.filter({
+		has: page.locator('.ash-quick-pick-row-label').getByText('package.json', { exact: true }),
+	});
 	await expect(entry).toContainText('Pending review');
 	await expect(entry).toContainText('pnpm build');
 	await quick.select('package.json');

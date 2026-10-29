@@ -1,14 +1,18 @@
-import { addDisposableListener } from "../../../../../base/browser/dom.js";
+import { addDisposableListener } from '../../../../../base/browser/dom.js';
 import { type FastDomNode } from '../../../../../base/browser/fastDomNode.js';
-import { Disposable, MutableDisposable, toDisposable } from "../../../../../base/common/lifecycle.js";
-import { type Event } from "../../../../../base/common/event.js";
-import { AccessibilitySupport } from "../../../../../platform/accessibility/common/accessibility.js";
-import { Position } from "../../../../common/core/position.js";
-import { type View } from "../../../view.js";
-import { RichScreenReaderContent } from "./screenReaderContentRich.js";
-import { SimpleScreenReaderContent } from "./screenReaderContentSimple.js";
-import { type IScreenReaderContent, type ScreenReaderContentLayout, type ScreenReaderContentState } from "./screenReaderUtils.js";
-import { type SemanticTokenSource } from "../../../viewParts/viewLines/viewLine.js";
+import { Disposable, MutableDisposable, toDisposable } from '../../../../../base/common/lifecycle.js';
+import { type Event } from '../../../../../base/common/event.js';
+import { AccessibilitySupport } from '../../../../../platform/accessibility/common/accessibility.js';
+import { Position } from '../../../../common/core/position.js';
+import { type View } from '../../../view.js';
+import { RichScreenReaderContent } from './screenReaderContentRich.js';
+import { SimpleScreenReaderContent } from './screenReaderContentSimple.js';
+import {
+	type IScreenReaderContent,
+	type ScreenReaderContentLayout,
+	type ScreenReaderContentState,
+} from './screenReaderUtils.js';
+import { type SemanticTokenSource } from '../../../viewParts/viewLines/viewLine.js';
 import { type IEditorAriaOptions } from '../../../editorBrowser.js';
 import { type RenderingContext, type RestrictedRenderingContext } from '../../../view/renderingContext.js';
 import * as viewEvents from '../../../../common/viewEvents.js';
@@ -52,15 +56,15 @@ export class ScreenReaderSupport extends Disposable {
 		if (options.onDidFocus) {
 			this._register(options.onDidFocus(() => this.handleFocusChange(true)));
 		} else {
-			this._register(addDisposableListener(element, "focus", () => this.handleFocusChange(true)));
+			this._register(addDisposableListener(element, 'focus', () => this.handleFocusChange(true)));
 		}
 		if (options.onDidBlur) {
 			this._register(options.onDidBlur(() => this.handleFocusChange(false)));
 		} else {
-			this._register(addDisposableListener(element, "blur", () => this.handleFocusChange(false)));
+			this._register(addDisposableListener(element, 'blur', () => this.handleFocusChange(false)));
 		}
-		this._register(addDisposableListener(element, "cut", () => this.onWillCut()));
-		this._register(addDisposableListener(element, "paste", () => this.onWillPaste()));
+		this._register(addDisposableListener(element, 'cut', () => this.onWillCut()));
+		this._register(addDisposableListener(element, 'paste', () => this.onWillPaste()));
 		this._register(options.viewport.onDidChangeLayout(() => this.scheduleSynchronization()));
 		if (options.semanticTokenSource) {
 			this._register(options.semanticTokenSource.onDidChange(() => this.scheduleSynchronization()));
@@ -69,7 +73,10 @@ export class ScreenReaderSupport extends Disposable {
 	}
 
 	private isEnabled(): boolean {
-		return this.options.context.configuration.options.get(EditorOption.accessibilitySupport) === AccessibilitySupport.Enabled;
+		return (
+			this.options.context.configuration.options.get(EditorOption.accessibilitySupport) ===
+			AccessibilitySupport.Enabled
+		);
 	}
 
 	onWillCut(): void {
@@ -173,19 +180,21 @@ export class ScreenReaderSupport extends Disposable {
 		const scrollPosition = viewportLayout.scrollPosition;
 		const viewportWidth = viewportLayout.viewportSize.width;
 		const viewportHeight = viewportLayout.viewportSize.height;
-		const cursorVisible = viewportWidth > 0 && viewportHeight > 0 &&
+		const cursorVisible =
+			viewportWidth > 0 &&
+			viewportHeight > 0 &&
 			position.left >= scrollPosition.left &&
 			position.left <= scrollPosition.left + viewportWidth &&
 			position.top >= scrollPosition.top &&
 			position.top <= scrollPosition.top + viewportHeight;
-		const textLeft = this.options.viewport.getPositionContentCoordinates(new Position((0) + 1, (0) + 1)).left;
+		const textLeft = this.options.viewport.getPositionContentCoordinates(new Position(0 + 1, 0 + 1)).left;
 		const desiredLeft = cursorVisible ? textLeft - scrollPosition.left : 0;
 		const desiredTop = cursorVisible ? position.top - scrollPosition.top : 0;
 		const lineHeight = Math.max(1, position.height);
 		const element = this.options.domNode.domNode;
 		const rootLeft = readInlinePixel(element.style.left);
 		const rootTop = readInlinePixel(element.style.top);
-		element.classList.add("stanza-native-screen-reader-content-active");
+		element.classList.add('stanza-native-screen-reader-content-active');
 		content.layout({
 			left: desiredLeft - rootLeft,
 			top: desiredTop - rootTop,
@@ -197,7 +206,7 @@ export class ScreenReaderSupport extends Disposable {
 	}
 
 	private resetNativeScreenReaderLayout(): void {
-		this.options.domNode.domNode.classList.remove("stanza-native-screen-reader-content-active");
+		this.options.domNode.domNode.classList.remove('stanza-native-screen-reader-content-active');
 	}
 
 	private refreshContent(): void {
@@ -208,19 +217,10 @@ export class ScreenReaderSupport extends Disposable {
 			return;
 		}
 		const content = renderRichContent
-			? new RichScreenReaderContent(
-				this.options.domNode,
-				this.options.context,
-				this.options.viewController,
-				{
+			? new RichScreenReaderContent(this.options.domNode, this.options.context, this.options.viewController, {
 					semanticTokenSource: this.options.semanticTokenSource,
-				},
-			)
-			: new SimpleScreenReaderContent(
-				this.options.domNode,
-				this.options.context,
-				this.options.viewController,
-			);
+				})
+			: new SimpleScreenReaderContent(this.options.domNode, this.options.context, this.options.viewController);
 		content.onConfigurationChanged(configuration.options);
 		content.onFocusChange(this.focused);
 		this.content.value = content;

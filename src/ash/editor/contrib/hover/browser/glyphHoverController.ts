@@ -14,7 +14,10 @@ export class GlyphHoverController extends Disposable {
 	private readonly timer = this._register(new RunOnceScheduler(() => this.show(), 0));
 	private pending: IEditorMouseEvent | undefined;
 
-	constructor(private readonly editor: ICodeEditor, @IHoverService private readonly hoverService: IHoverService) {
+	constructor(
+		private readonly editor: ICodeEditor,
+		@IHoverService private readonly hoverService: IHoverService,
+	) {
 		super();
 		this._register(editor.onMouseMove(event => this.schedule(event)));
 		this._register(editor.onMouseLeave(() => this.hide()));
@@ -29,16 +32,28 @@ export class GlyphHoverController extends Disposable {
 	private schedule(event: IEditorMouseEvent): void {
 		const target = event.target;
 		const options = this.editor.getOption(EditorOption.hover);
-		const modifier = this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
-			? (isMacintosh ? event.event.metaKey : event.event.ctrlKey) : event.event.altKey;
-		if (target.type !== MouseTargetType.GUTTER_GLYPH_MARGIN || target.detail.isAfterLines || event.event.buttons
-			|| options.enabled === 'off' || options.enabled === 'onKeyboardModifier' && !modifier) {
+		const modifier =
+			this.editor.getOption(EditorOption.multiCursorModifier) === 'altKey'
+				? isMacintosh
+					? event.event.metaKey
+					: event.event.ctrlKey
+				: event.event.altKey;
+		if (
+			target.type !== MouseTargetType.GUTTER_GLYPH_MARGIN ||
+			target.detail.isAfterLines ||
+			event.event.buttons ||
+			options.enabled === 'off' ||
+			(options.enabled === 'onKeyboardModifier' && !modifier)
+		) {
 			this.hide();
 			return;
 		}
 		const previous = this.pending?.target;
-		if (previous?.type === target.type && previous.position.lineNumber === target.position.lineNumber
-			&& previous.detail.glyphMarginLane === target.detail.glyphMarginLane) {
+		if (
+			previous?.type === target.type &&
+			previous.position.lineNumber === target.position.lineNumber &&
+			previous.detail.glyphMarginLane === target.detail.glyphMarginLane
+		) {
 			this.pending = event;
 			return;
 		}
@@ -57,13 +72,20 @@ export class GlyphHoverController extends Disposable {
 		const cell = element?.closest<HTMLElement>('.stanza-editor-glyph-margin-decoration');
 		if (!cell || !root.contains(cell)) return;
 		const lane = Number(cell.dataset.glyphMarginLane) as GlyphMarginLane;
-		const messages = (this.editor.getLineDecorations(event.target.position.lineNumber) ?? []).flatMap(decoration => {
-			if ((decoration.options.glyphMargin?.position ?? GlyphMarginLane.Center) !== lane) return [];
-			const message = decoration.options.glyphMarginHoverMessage;
-			return (Array.isArray(message) ? message : message ? [message] : []).map(value => value.value);
-		});
+		const messages = (this.editor.getLineDecorations(event.target.position.lineNumber) ?? []).flatMap(
+			decoration => {
+				if ((decoration.options.glyphMargin?.position ?? GlyphMarginLane.Center) !== lane) return [];
+				const message = decoration.options.glyphMarginHoverMessage;
+				return (Array.isArray(message) ? message : message ? [message] : []).map(value => value.value);
+			},
+		);
 		if (!messages.length) return;
-		this.hover.value = this.hoverService.showHover({ target: cell, content: messages.join('\n\n'), anchorAxisAlignment: AnchorAxisAlignment.Horizontal, anchorPosition: AnchorPosition.Below });
+		this.hover.value = this.hoverService.showHover({
+			target: cell,
+			content: messages.join('\n\n'),
+			anchorAxisAlignment: AnchorAxisAlignment.Horizontal,
+			anchorPosition: AnchorPosition.Below,
+		});
 	}
 
 	private hide(): void {

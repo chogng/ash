@@ -20,7 +20,8 @@ class ExtensionsRegistryImpl {
 	private readonly points = new Map<string, IExtensionPoint<unknown>>();
 
 	registerExtensionPoint<T>(descriptor: IExtensionPointDescriptor<T>): IExtensionPoint<T> {
-		if (this.points.has(descriptor.extensionPoint)) throw new Error(`Extension point already registered: ${descriptor.extensionPoint}`);
+		if (this.points.has(descriptor.extensionPoint))
+			throw new Error(`Extension point already registered: ${descriptor.extensionPoint}`);
 		const point = Object.freeze({ name: descriptor.extensionPoint, validate: descriptor.validate });
 		this.points.set(point.name, point);
 		return point;

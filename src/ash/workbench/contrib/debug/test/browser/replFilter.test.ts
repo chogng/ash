@@ -8,7 +8,10 @@ suite('Debug Console filtering', () => {
 	test('combines alternatives and gives exclusions priority regardless of query order', () => {
 		const filter = new ReplFilter();
 		const entries = ['network ready', 'network denied', 'disk ready', 'idle'].map(output => entry(output));
-		const visible = () => entries.filter(value => filter.filter(value, TreeVisibility.Visible) === TreeVisibility.Visible).map(value => value.output);
+		const visible = () =>
+			entries
+				.filter(value => filter.filter(value, TreeVisibility.Visible) === TreeVisibility.Visible)
+				.map(value => value.output);
 		filter.filterQuery = 'network, disk';
 		assert.deepEqual(visible(), ['network ready', 'network denied', 'disk ready']);
 		for (const query of ['ready, !disk', '!disk, ready']) {
@@ -66,5 +69,18 @@ suite('Debug Console filtering', () => {
 });
 
 function entry(output: string, kind: DebugConsoleEntry['kind'] = 'output'): DebugConsoleEntry {
-	return { id: 1, sessionId: 'session', kind, output, category: 'console', parentId: null, collapsed: false, variablesReference: null, source: null, line: null, column: null, data: null };
+	return {
+		id: 1,
+		sessionId: 'session',
+		kind,
+		output,
+		category: 'console',
+		parentId: null,
+		collapsed: false,
+		variablesReference: null,
+		source: null,
+		line: null,
+		column: null,
+		data: null,
+	};
 }

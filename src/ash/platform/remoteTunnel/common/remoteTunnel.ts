@@ -30,18 +30,37 @@ export interface ConnectionInfo {
 }
 
 export namespace TunnelStates {
-	export interface Uninitialized { readonly type: 'uninitialized'; }
-	export interface Connecting { readonly type: 'connecting'; readonly progress?: string; }
-	export interface Connected { readonly type: 'connected'; readonly info: ConnectionInfo; readonly serviceInstallFailed: boolean; }
-	export interface Disconnected { readonly type: 'disconnected'; readonly onTokenFailed?: IRemoteTunnelSession; }
+	export interface Uninitialized {
+		readonly type: 'uninitialized';
+	}
+	export interface Connecting {
+		readonly type: 'connecting';
+		readonly progress?: string;
+	}
+	export interface Connected {
+		readonly type: 'connected';
+		readonly info: ConnectionInfo;
+		readonly serviceInstallFailed: boolean;
+	}
+	export interface Disconnected {
+		readonly type: 'disconnected';
+		readonly onTokenFailed?: IRemoteTunnelSession;
+	}
 
 	export const uninitialized: Uninitialized = Object.freeze({ type: 'uninitialized' });
-	export function connecting(progress?: string): Connecting { return { type: 'connecting', progress }; }
-	export function connected(info: ConnectionInfo, serviceInstallFailed: boolean): Connected { return { type: 'connected', info, serviceInstallFailed }; }
-	export function disconnected(onTokenFailed?: IRemoteTunnelSession): Disconnected { return { type: 'disconnected', onTokenFailed }; }
+	export function connecting(progress?: string): Connecting {
+		return { type: 'connecting', progress };
+	}
+	export function connected(info: ConnectionInfo, serviceInstallFailed: boolean): Connected {
+		return { type: 'connected', info, serviceInstallFailed };
+	}
+	export function disconnected(onTokenFailed?: IRemoteTunnelSession): Disconnected {
+		return { type: 'disconnected', onTokenFailed };
+	}
 }
 
-export type TunnelStatus = TunnelStates.Uninitialized | TunnelStates.Connecting | TunnelStates.Connected | TunnelStates.Disconnected;
+export type TunnelStatus =
+	TunnelStates.Uninitialized | TunnelStates.Connecting | TunnelStates.Connected | TunnelStates.Disconnected;
 export const IRemoteTunnelService = createDecorator<IRemoteTunnelService>('IRemoteTunnelService');
 
 /** Application-scoped inbound access. Port forwarding belongs to ITunnelService. */

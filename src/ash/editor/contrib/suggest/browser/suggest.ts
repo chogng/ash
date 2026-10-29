@@ -2,7 +2,12 @@ import * as languages from '../../../common/languages.js';
 import { URI } from '../../../../base/common/uri.js';
 import { Emitter, type Event } from '../../../../base/common/event.js';
 import { Disposable, MutableDisposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
-import { LanguageRequestCoordinator, type LanguageRequestOptions, type LanguageRequestOutcome, type LanguageWorkerRequest } from '../../../common/model/languageRequestCoordinator.js';
+import {
+	LanguageRequestCoordinator,
+	type LanguageRequestOptions,
+	type LanguageRequestOutcome,
+	type LanguageWorkerRequest,
+} from '../../../common/model/languageRequestCoordinator.js';
 import { LanguageResultAcceptance, VersionedLanguageResultStore } from '../../../common/model/languageResultStore.js';
 import { LanguageCompletionProviderRegistry } from '../../../common/languageFeatureRegistry.js';
 import { assertLanguageId } from '../../../common/languages/language.js';
@@ -31,7 +36,11 @@ export class LanguageCompletionService extends Disposable implements languages.L
 	private readonly catalogEmitter = this._register(new Emitter<languages.LanguageCompletionProviderCatalog>());
 	private readonly catalogSubscription = this._register(new MutableDisposable<IDisposable>());
 	readonly results: ReturnType<typeof createLanguageCompletionStore>;
-	private readonly coordinator: LanguageRequestCoordinator<languages.LanguageCompletionLane, languages.LanguageCompletionRequest, languages.LanguageCompletionResult>;
+	private readonly coordinator: LanguageRequestCoordinator<
+		languages.LanguageCompletionLane,
+		languages.LanguageCompletionRequest,
+		languages.LanguageCompletionResult
+	>;
 	private readonly registry: LanguageCompletionProviderRegistry;
 	private catalogSource: languages.LanguageCompletionProviderCatalogSource;
 	private catalog: languages.LanguageCompletionProviderCatalog;
@@ -52,21 +61,21 @@ export class LanguageCompletionService extends Disposable implements languages.L
 		this.registry = registry;
 		this.catalogSource = registry;
 		this.catalog = registry.providerCatalog;
-		if (options.onProviderError !== undefined && typeof options.onProviderError !== "function") {
+		if (options.onProviderError !== undefined && typeof options.onProviderError !== 'function') {
 			this.dispose();
-			throw new TypeError("Language completion provider error handler must be a function");
+			throw new TypeError('Language completion provider error handler must be a function');
 		}
-		if (options.workerFactory !== undefined && typeof options.workerFactory !== "function") {
+		if (options.workerFactory !== undefined && typeof options.workerFactory !== 'function') {
 			this.dispose();
-			throw new TypeError("Language completion worker factory must be a function");
+			throw new TypeError('Language completion worker factory must be a function');
 		}
 		if (options.resource !== undefined && !(options.resource instanceof URI)) {
 			this.dispose();
-			throw new TypeError("Language completion resource must be a URI");
+			throw new TypeError('Language completion resource must be a URI');
 		}
 		if (options.workerFactory && options.onProviderError) {
 			this.dispose();
-			throw new TypeError("A custom language completion worker owns its provider error policy");
+			throw new TypeError('A custom language completion worker owns its provider error policy');
 		}
 		this.results = this._register(createLanguageCompletionStore(model));
 		this.resource = options.resource;
@@ -86,10 +95,7 @@ export class LanguageCompletionService extends Disposable implements languages.L
 				throw error;
 			}
 		};
-		this.coordinator = this._register(new LanguageRequestCoordinator(
-			model,
-			createWorker,
-		));
+		this.coordinator = this._register(new LanguageRequestCoordinator(model, createWorker));
 		this.bindCatalogSource(registry);
 		if (options.workerFactory) {
 			try {
@@ -99,9 +105,11 @@ export class LanguageCompletionService extends Disposable implements languages.L
 				throw error;
 			}
 		}
-		this._register(toDisposable(() => {
-			this.currentResolver = undefined;
-		}));
+		this._register(
+			toDisposable(() => {
+				this.currentResolver = undefined;
+			}),
+		);
 	}
 
 	private readonly resource: URI | undefined;
@@ -116,10 +124,17 @@ export class LanguageCompletionService extends Disposable implements languages.L
 
 	supportsTriggerCharacter(languageId: string, triggerCharacter: string): boolean {
 		const context = languages.createLanguageCompletionTriggerCharacterContext(triggerCharacter);
-		return this.catalog.providers.some(provider => languages.languageCompletionProviderMatches(provider, languageId, context));
+		return this.catalog.providers.some(provider =>
+			languages.languageCompletionProviderMatches(provider, languageId, context),
+		);
 	}
 
-	async requestTriggerCharacter(languageId: string, position: Position, triggerCharacter: string, options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome | undefined> {
+	async requestTriggerCharacter(
+		languageId: string,
+		position: Position,
+		triggerCharacter: string,
+		options: LanguageRequestOptions = {},
+	): Promise<LanguageRequestOutcome | undefined> {
 		const context = languages.createLanguageCompletionTriggerCharacterContext(triggerCharacter);
 		const modelVersion = this.model.version;
 		this.model.offsetAt(position);
@@ -133,14 +148,28 @@ export class LanguageCompletionService extends Disposable implements languages.L
 			throw error;
 		}
 		if (this.model.version !== modelVersion) return undefined;
-		if (!catalog.providers.some(provider => languages.languageCompletionProviderMatches(provider, languageId, context))) {
+		if (
+			!catalog.providers.some(provider =>
+				languages.languageCompletionProviderMatches(provider, languageId, context),
+			)
+		) {
 			return undefined;
 		}
 		return this.request(languageId, position, context, options);
 	}
 
-	request(languageId: string, position: Position, context: languages.LanguageCompletionRequest["context"], options: LanguageRequestOptions = {}): Promise<LanguageRequestOutcome> {
-		const request = Object.freeze({ languageId, ...(this.resource ? { resource: this.resource } : {}), position, context });
+	request(
+		languageId: string,
+		position: Position,
+		context: languages.LanguageCompletionRequest['context'],
+		options: LanguageRequestOptions = {},
+	): Promise<LanguageRequestOutcome> {
+		const request = Object.freeze({
+			languageId,
+			...(this.resource ? { resource: this.resource } : {}),
+			position,
+			context,
+		});
 		languages.assertLanguageCompletionRequest(request);
 		this.model.offsetAt(position);
 		return this.coordinator.runLatest(
@@ -156,7 +185,10 @@ export class LanguageCompletionService extends Disposable implements languages.L
 		);
 	}
 
-	async resolveCompletionItem(request: languages.LanguageCompletionResolveRequest, signal: AbortSignal): Promise<languages.LanguageCompletionItemDetails> {
+	async resolveCompletionItem(
+		request: languages.LanguageCompletionResolveRequest,
+		signal: AbortSignal,
+	): Promise<languages.LanguageCompletionItemDetails> {
 		this.assertNotDisposed();
 		signal.throwIfAborted();
 		const normalized = languages.normalizeLanguageCompletionResolveRequest(request);
@@ -164,7 +196,7 @@ export class LanguageCompletionService extends Disposable implements languages.L
 		this.coordinator.startWorker();
 		const resolver = this.currentResolver;
 		if (!resolver) {
-			throw new ReferenceError("The current language completion Worker does not support item resolution");
+			throw new ReferenceError('The current language completion Worker does not support item resolution');
 		}
 		const details = await resolver.resolveCompletionItem(normalized, signal);
 		signal.throwIfAborted();
@@ -173,14 +205,29 @@ export class LanguageCompletionService extends Disposable implements languages.L
 		return languages.normalizeLanguageCompletionItemDetails(details);
 	}
 
-	async executeCompletionCommand(languageId: string, item: languages.LanguageCompletionItem, signal: AbortSignal): Promise<void> {
+	async executeCompletionCommand(
+		languageId: string,
+		item: languages.LanguageCompletionItem,
+		signal: AbortSignal,
+	): Promise<void> {
 		this.assertNotDisposed();
 		assertLanguageId(languageId);
 		signal.throwIfAborted();
 		if (!item.command) return;
 		const provider = this.registry.getProvider(item.providerId);
-		if (!provider?.executeCompletionCommand) throw new ReferenceError(`Language completion provider '${item.providerId}' cannot execute completion commands`);
-		await provider.executeCompletionCommand(Object.freeze({ languageId, ...(this.resource ? { resource: this.resource } : {}), snapshot: this.model.createVersionedSnapshot(), command: item.command }), signal);
+		if (!provider?.executeCompletionCommand)
+			throw new ReferenceError(
+				`Language completion provider '${item.providerId}' cannot execute completion commands`,
+			);
+		await provider.executeCompletionCommand(
+			Object.freeze({
+				languageId,
+				...(this.resource ? { resource: this.resource } : {}),
+				snapshot: this.model.createVersionedSnapshot(),
+				command: item.command,
+			}),
+			signal,
+		);
 		signal.throwIfAborted();
 		this.assertNotDisposed();
 	}
@@ -201,23 +248,31 @@ export class LanguageCompletionService extends Disposable implements languages.L
 		} catch (disposalError) {
 			throw new AggregateError(
 				[catalogError, disposalError],
-				"Completion provider catalog and Worker disposal both failed",
+				'Completion provider catalog and Worker disposal both failed',
 			);
 		}
 	}
 
 	private assertCurrentResolveRequest(request: languages.LanguageCompletionResolveRequest): void {
 		const result = this.results.result;
-		const item = result?.value.items.find(candidate => candidate.providerId === request.providerId && candidate.id === request.itemId);
-		if (!result || result.requestId !== request.completionRequestId || result.modelVersion !== request.modelVersion || !item?.hasDeferredDetails) {
-			throw new ReferenceError("Language completion resolve request is not the current deferred item");
+		const item = result?.value.items.find(
+			candidate => candidate.providerId === request.providerId && candidate.id === request.itemId,
+		);
+		if (
+			!result ||
+			result.requestId !== request.completionRequestId ||
+			result.modelVersion !== request.modelVersion ||
+			!item?.hasDeferredDetails
+		) {
+			throw new ReferenceError('Language completion resolve request is not the current deferred item');
 		}
 	}
-
 }
 
 /** Coordinator-compatible host that runs matching providers concurrently. */
-export class LanguageCompletionProviderWorker implements languages.LanguageCompletionWorker, languages.LanguageCompletionItemResolver {
+export class LanguageCompletionProviderWorker
+	implements languages.LanguageCompletionWorker, languages.LanguageCompletionItemResolver
+{
 	private resolutionCache: CompletionResolutionCache | undefined;
 	private disposed = false;
 
@@ -225,29 +280,32 @@ export class LanguageCompletionProviderWorker implements languages.LanguageCompl
 		private readonly registry: LanguageCompletionProviderRegistry,
 		private readonly onProviderError: LanguageCompletionProviderErrorHandler = reportProviderError,
 	) {
-		if (typeof onProviderError !== "function") {
-			throw new TypeError("Language completion provider error handler must be a function");
+		if (typeof onProviderError !== 'function') {
+			throw new TypeError('Language completion provider error handler must be a function');
 		}
 	}
 
-	async run(request: LanguageWorkerRequest<languages.LanguageCompletionLane, languages.LanguageCompletionRequest>, signal: AbortSignal): Promise<languages.LanguageCompletionResult> {
+	async run(
+		request: LanguageWorkerRequest<languages.LanguageCompletionLane, languages.LanguageCompletionRequest>,
+		signal: AbortSignal,
+	): Promise<languages.LanguageCompletionResult> {
 		this.ensureAlive();
 		signal.throwIfAborted();
 		languages.assertLanguageCompletionRequest(request.payload);
-		const providers = this.registry.getProviders(
-			request.payload.languageId,
-			request.payload.context,
-		);
+		const providers = this.registry.getProviders(request.payload.languageId, request.payload.context);
 		if (providers.length === 0) {
 			this.resolutionCache = createResolutionCache(request, []);
 			return mergeProviderResults(request.payload.position, []);
 		}
 		const normalizeResult = languages.createLanguageCompletionSnapshotNormalizer(request.snapshot);
-		const batches = await Promise.all(providers.map(provider => (
-			this.runProvider(provider, request, signal, normalizeResult)
-		)));
+		const batches = await Promise.all(
+			providers.map(provider => this.runProvider(provider, request, signal, normalizeResult)),
+		);
 		signal.throwIfAborted();
-		const result = mergeProviderResults(request.payload.position, batches.map(batch => batch?.result));
+		const result = mergeProviderResults(
+			request.payload.position,
+			batches.map(batch => batch?.result),
+		);
 		this.resolutionCache = createResolutionCache(request, batches);
 		return result;
 	}
@@ -261,25 +319,41 @@ export class LanguageCompletionProviderWorker implements languages.LanguageCompl
 		this.dispose();
 	}
 
-	async resolveCompletionItem(request: languages.LanguageCompletionResolveRequest, signal: AbortSignal): Promise<languages.LanguageCompletionItemDetails> {
+	async resolveCompletionItem(
+		request: languages.LanguageCompletionResolveRequest,
+		signal: AbortSignal,
+	): Promise<languages.LanguageCompletionItemDetails> {
 		this.ensureAlive();
 		signal.throwIfAborted();
 		const normalized = languages.normalizeLanguageCompletionResolveRequest(request);
 		const cache = this.resolutionCache;
-		if (!cache || cache.completionRequestId !== normalized.completionRequestId || cache.modelVersion !== normalized.modelVersion) {
-			throw new ReferenceError("Language completion resolve request no longer has a provider result");
+		if (
+			!cache ||
+			cache.completionRequestId !== normalized.completionRequestId ||
+			cache.modelVersion !== normalized.modelVersion
+		) {
+			throw new ReferenceError('Language completion resolve request no longer has a provider result');
 		}
 		const entry = cache.items.get(completionIdentity(normalized.providerId, normalized.itemId));
-		if (!entry || this.registry.getProvider(normalized.providerId) !== entry.provider || !entry.provider.resolveCompletionItem) {
-			throw new ReferenceError(`Language completion item '${normalized.providerId}/${normalized.itemId}' cannot be resolved`);
+		if (
+			!entry ||
+			this.registry.getProvider(normalized.providerId) !== entry.provider ||
+			!entry.provider.resolveCompletionItem
+		) {
+			throw new ReferenceError(
+				`Language completion item '${normalized.providerId}/${normalized.itemId}' cannot be resolved`,
+			);
 		}
 		let details: languages.LanguageCompletionItemDetails;
 		try {
-			const value = await entry.provider.resolveCompletionItem(Object.freeze({
-				completionRequestId: normalized.completionRequestId,
-				modelVersion: normalized.modelVersion,
-				item: entry.item,
-			}), signal);
+			const value = await entry.provider.resolveCompletionItem(
+				Object.freeze({
+					completionRequestId: normalized.completionRequestId,
+					modelVersion: normalized.modelVersion,
+					item: entry.item,
+				}),
+				signal,
+			);
 			signal.throwIfAborted();
 			details = languages.normalizeLanguageCompletionItemDetails(value);
 		} catch (error) {
@@ -287,7 +361,7 @@ export class LanguageCompletionProviderWorker implements languages.LanguageCompl
 			throw error;
 		}
 		if (this.resolutionCache !== cache || this.registry.getProvider(normalized.providerId) !== entry.provider) {
-			throw new ReferenceError("Language completion resolve result became stale");
+			throw new ReferenceError('Language completion resolve result became stale');
 		}
 		return details;
 	}
@@ -308,17 +382,28 @@ export class LanguageCompletionProviderWorker implements languages.LanguageCompl
 			signal.throwIfAborted();
 			if (value === undefined) return undefined;
 			assertProviderResult(value);
-			const result = normalizeResult(validateCompletionSnippets({
-				position: request.payload.position,
-				items: value.items.map(item => createCompletionResultItem(provider, item)),
-				isIncomplete: value.isIncomplete,
-			}));
-			const resolutions = provider.resolveCompletionItem === undefined
-				? Object.freeze([])
-				: Object.freeze(result.items.flatMap((item, index) => value.items[index]!.resolveData === undefined ? [] : [Object.freeze({
-					provider,
-					item: createProviderResolveItem(item, value.items[index]!.resolveData),
-				})]));
+			const result = normalizeResult(
+				validateCompletionSnippets({
+					position: request.payload.position,
+					items: value.items.map(item => createCompletionResultItem(provider, item)),
+					isIncomplete: value.isIncomplete,
+				}),
+			);
+			const resolutions =
+				provider.resolveCompletionItem === undefined
+					? Object.freeze([])
+					: Object.freeze(
+							result.items.flatMap((item, index) =>
+								value.items[index]!.resolveData === undefined
+									? []
+									: [
+											Object.freeze({
+												provider,
+												item: createProviderResolveItem(item, value.items[index]!.resolveData),
+											}),
+										],
+							),
+						);
 			return Object.freeze({ result, resolutions });
 		} catch (error) {
 			if (signal.aborted) throw error;
@@ -331,16 +416,16 @@ export class LanguageCompletionProviderWorker implements languages.LanguageCompl
 		try {
 			this.onProviderError(providerId, error);
 		} catch (reportingError) {
-			reportProviderError(providerId, new AggregateError(
-				[error, reportingError],
-				"Completion provider and error reporter both failed",
-			));
+			reportProviderError(
+				providerId,
+				new AggregateError([error, reportingError], 'Completion provider and error reporter both failed'),
+			);
 		}
 	}
 
 	private ensureAlive(): void {
 		if (this.disposed) {
-			throw new ReferenceError("LanguageCompletionProviderWorker is already disposed");
+			throw new ReferenceError('LanguageCompletionProviderWorker is already disposed');
 		}
 	}
 }
@@ -366,7 +451,10 @@ interface CompletionResolutionCache {
 	readonly items: ReadonlyMap<string, CompletionResolutionEntry>;
 }
 
-function mergeProviderResults(position: Position, batches: readonly (ProviderBatch | undefined)[]): languages.LanguageCompletionResult {
+function mergeProviderResults(
+	position: Position,
+	batches: readonly (ProviderBatch | undefined)[],
+): languages.LanguageCompletionResult {
 	const items: languages.LanguageCompletionItem[] = [];
 	let hasPreselection = false;
 	let isIncomplete = false;
@@ -377,34 +465,34 @@ function mergeProviderResults(position: Position, batches: readonly (ProviderBat
 			const { preselect, ...rest } = item;
 			const keepPreselection: boolean = preselect === true && !hasPreselection;
 			if (keepPreselection) hasPreselection = true;
-			items.push(Object.freeze({
-				...rest,
-				...(keepPreselection ? { preselect: true } : preselect === false ? { preselect: false } : {}),
-			}));
+			items.push(
+				Object.freeze({
+					...rest,
+					...(keepPreselection ? { preselect: true } : preselect === false ? { preselect: false } : {}),
+				}),
+			);
 		}
 	}
-	return Object.freeze({
-		position,
-		items: Object.freeze(items),
-		isIncomplete,
-	});
+	return Object.freeze({ position, items: Object.freeze(items), isIncomplete });
 }
 
-function createResolutionCache(request: LanguageWorkerRequest<languages.LanguageCompletionLane, languages.LanguageCompletionRequest>, batches: readonly (ResolvedProviderBatch | undefined)[]): CompletionResolutionCache {
+function createResolutionCache(
+	request: LanguageWorkerRequest<languages.LanguageCompletionLane, languages.LanguageCompletionRequest>,
+	batches: readonly (ResolvedProviderBatch | undefined)[],
+): CompletionResolutionCache {
 	const items = new Map<string, CompletionResolutionEntry>();
 	for (const batch of batches) {
 		for (const entry of batch?.resolutions ?? []) {
 			items.set(completionIdentity(entry.provider.id, entry.item.id), entry);
 		}
 	}
-	return Object.freeze({
-		completionRequestId: request.requestId,
-		modelVersion: request.snapshot.version,
-		items,
-	});
+	return Object.freeze({ completionRequestId: request.requestId, modelVersion: request.snapshot.version, items });
 }
 
-function createProviderResolveItem(item: languages.LanguageCompletionItem, resolveData: unknown): languages.LanguageCompletionProviderItem {
+function createProviderResolveItem(
+	item: languages.LanguageCompletionItem,
+	resolveData: unknown,
+): languages.LanguageCompletionProviderItem {
 	return Object.freeze({
 		id: item.id,
 		label: item.label,
@@ -426,7 +514,10 @@ function createProviderResolveItem(item: languages.LanguageCompletionItem, resol
 	});
 }
 
-function createCompletionResultItem(provider: languages.RegisteredLanguageCompletionProvider, item: languages.LanguageCompletionProviderItem): languages.LanguageCompletionItem {
+function createCompletionResultItem(
+	provider: languages.RegisteredLanguageCompletionProvider,
+	item: languages.LanguageCompletionProviderItem,
+): languages.LanguageCompletionItem {
 	return {
 		providerId: provider.id,
 		id: item.id,
@@ -445,7 +536,9 @@ function createCompletionResultItem(provider: languages.RegisteredLanguageComple
 		...(item.commitCharacters === undefined ? {} : { commitCharacters: item.commitCharacters }),
 		...(item.additionalTextEdits === undefined ? {} : { additionalTextEdits: item.additionalTextEdits }),
 		...(item.command === undefined ? {} : { command: item.command }),
-		...(provider.resolveCompletionItem === undefined || item.resolveData === undefined ? {} : { hasDeferredDetails: true }),
+		...(provider.resolveCompletionItem === undefined || item.resolveData === undefined
+			? {}
+			: { hasDeferredDetails: true }),
 	};
 }
 
@@ -455,12 +548,12 @@ function completionIdentity(providerId: string, itemId: string): string {
 
 function assertProviderResult(result: languages.LanguageCompletionProviderResult): void {
 	if (
-		typeof result !== "object" ||
+		typeof result !== 'object' ||
 		result === null ||
 		!Array.isArray(result.items) ||
-		typeof result.isIncomplete !== "boolean"
+		typeof result.isIncomplete !== 'boolean'
 	) {
-		throw new TypeError("Language completion provider result must contain items and isIncomplete");
+		throw new TypeError('Language completion provider result must contain items and isIncomplete');
 	}
 }
 
@@ -468,35 +561,52 @@ function reportProviderError(providerId: string, error: unknown): void {
 	console.error(`Language completion provider '${providerId}' failed`, error);
 }
 
-function isCatalogSource(value: languages.LanguageCompletionWorker): value is languages.LanguageCompletionWorker & languages.LanguageCompletionProviderCatalogSource {
+function isCatalogSource(
+	value: languages.LanguageCompletionWorker,
+): value is languages.LanguageCompletionWorker & languages.LanguageCompletionProviderCatalogSource {
 	const candidate = value as Partial<languages.LanguageCompletionProviderCatalogSource>;
-	return typeof candidate.onDidChangeProviderCatalog === "function" &&
-		typeof candidate.waitForProviderCatalog === "function" &&
-		typeof candidate.providerCatalogReady === "boolean" &&
-		typeof candidate.providerCatalog === "object";
+	return (
+		typeof candidate.onDidChangeProviderCatalog === 'function' &&
+		typeof candidate.waitForProviderCatalog === 'function' &&
+		typeof candidate.providerCatalogReady === 'boolean' &&
+		typeof candidate.providerCatalog === 'object'
+	);
 }
 
-function isCompletionItemResolver(value: languages.LanguageCompletionWorker): value is languages.LanguageCompletionWorker & languages.LanguageCompletionItemResolver {
-	return typeof (value as Partial<languages.LanguageCompletionItemResolver>).resolveCompletionItem === "function";
+function isCompletionItemResolver(
+	value: languages.LanguageCompletionWorker,
+): value is languages.LanguageCompletionWorker & languages.LanguageCompletionItemResolver {
+	return typeof (value as Partial<languages.LanguageCompletionItemResolver>).resolveCompletionItem === 'function';
 }
 
-function waitForCatalog(source: languages.LanguageCompletionProviderCatalogSource, signal: AbortSignal | undefined): Promise<languages.LanguageCompletionProviderCatalog> {
+function waitForCatalog(
+	source: languages.LanguageCompletionProviderCatalogSource,
+	signal: AbortSignal | undefined,
+): Promise<languages.LanguageCompletionProviderCatalog> {
 	if (!signal) return source.waitForProviderCatalog();
-	return raceCancellationError(source.waitForProviderCatalog(), signal, "Completion provider catalog wait was cancelled");
+	return raceCancellationError(
+		source.waitForProviderCatalog(),
+		signal,
+		'Completion provider catalog wait was cancelled',
+	);
 }
 
-export function createLanguageCompletionStore(model: TextModel): VersionedLanguageResultStore<languages.LanguageCompletionResult> {
-	return new VersionedLanguageResultStore(model, (value) => languages.normalizeLanguageCompletionResult(
-		validateCompletionSnippets(value),
-		position => model.offsetAt(position),
-		(position, range) => assertModelCompletionRange(model, position, range),
-		range => assertModelTextEditRange(model, range),
-	));
+export function createLanguageCompletionStore(
+	model: TextModel,
+): VersionedLanguageResultStore<languages.LanguageCompletionResult> {
+	return new VersionedLanguageResultStore(model, value =>
+		languages.normalizeLanguageCompletionResult(
+			validateCompletionSnippets(value),
+			position => model.offsetAt(position),
+			(position, range) => assertModelCompletionRange(model, position, range),
+			range => assertModelTextEditRange(model, range),
+		),
+	);
 }
 
 function assertModelCompletionRange(model: TextModel, position: Position, range: Range): void {
 	if (!(range instanceof Range)) {
-		throw new TypeError("Language completion item range must be a Range");
+		throw new TypeError('Language completion item range must be a Range');
 	}
 	model.offsetAt(range.getStartPosition());
 	model.offsetAt(range.getEndPosition());
@@ -504,16 +614,19 @@ function assertModelCompletionRange(model: TextModel, position: Position, range:
 		range.getStartPosition().lineNumber !== position.lineNumber ||
 		range.getEndPosition().lineNumber !== position.lineNumber
 	) {
-		throw new RangeError("Language completion item range must stay on the trigger line");
+		throw new RangeError('Language completion item range must stay on the trigger line');
 	}
-	if (Position.compare(range.getStartPosition(), position) > 0 || Position.compare(range.getEndPosition(), position) < 0) {
-		throw new RangeError("Language completion item range must contain the trigger position");
+	if (
+		Position.compare(range.getStartPosition(), position) > 0 ||
+		Position.compare(range.getEndPosition(), position) < 0
+	) {
+		throw new RangeError('Language completion item range must contain the trigger position');
 	}
 }
 
 function assertModelTextEditRange(model: TextModel, range: Range): void {
 	if (!(range instanceof Range)) {
-		throw new TypeError("Language completion additional edit range must be a Range");
+		throw new TypeError('Language completion additional edit range must be a Range');
 	}
 	model.offsetAt(range.getStartPosition());
 	model.offsetAt(range.getEndPosition());

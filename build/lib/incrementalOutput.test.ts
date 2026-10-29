@@ -12,14 +12,29 @@ test('unit compilation reuses outputs, restores transitive emits and removes del
 	await mkdir(join(root, 'src'));
 	await writeFile(join(root, 'package.json'), '{"type":"module"}');
 	const config = join(root, 'tsconfig.json');
-	const settings = { compilerOptions: { module: 'NodeNext', target: 'ES2022', types: [], rootDir: '.', outDir: 'out', incremental: true, tsBuildInfoFile: 'test.tsbuildinfo' }, include: ['src/*.ts'] };
+	const settings = {
+		compilerOptions: {
+			module: 'NodeNext',
+			target: 'ES2022',
+			types: [],
+			rootDir: '.',
+			outDir: 'out',
+			incremental: true,
+			tsBuildInfoFile: 'test.tsbuildinfo',
+		},
+		include: ['src/*.ts'],
+	};
 	await writeFile(config, JSON.stringify(settings));
 	await writeFile(join(root, 'shared.ts'), 'export const value = 1;');
 	await writeFile(join(root, 'src/selected.test.ts'), "export { value } from '../shared.js';");
 	await writeFile(join(root, 'src/removed.test.ts'), 'export const value = 2;');
 	const compile = async () => {
 		await prepareIncrementalOutput(config);
-		const result = spawnSync(process.execPath, [resolve(import.meta.dirname, '../../node_modules/@ash/typescript-compiler/bin/tsc'), '-p', config], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 10_000 });
+		const result = spawnSync(
+			process.execPath,
+			[resolve(import.meta.dirname, '../../node_modules/@ash/typescript-compiler/bin/tsc'), '-p', config],
+			{ cwd: root, encoding: 'utf8', windowsHide: true, timeout: 10_000 },
+		);
 		assert.ifError(result.error);
 		assert.equal(result.status, 0, result.stdout + result.stderr);
 	};

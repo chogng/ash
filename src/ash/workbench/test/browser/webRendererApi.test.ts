@@ -3,44 +3,86 @@ import { createAppServerAgentThreadService } from '../../../platform/agentHost/b
 import type { ThreadTranscriptUpdateEnvelope, ThreadUpdateEnvelope } from '../../../platform/agentHost/common/agent.js';
 import { URI } from '../../../base/common/uri.js';
 import { createTestInitializeResult } from '../../../platform/agentHost/test/common/testAppServerProtocol.js';
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
-import { CancellationError, isCancellationError } from "../../../base/common/errors.js";
-import { AppServerProtocolDecodeError, decodeAppServerServerResponse } from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
+import { CancellationError, isCancellationError } from '../../../base/common/errors.js';
+import {
+	AppServerProtocolDecodeError,
+	decodeAppServerServerResponse,
+} from '../../../../../.build/protocol/typescript/AppServerProtocolDecoder.js';
 import { DisposableStore, toDisposable } from '../../../base/common/lifecycle.js';
-import { isRecord } from "../../../base/common/types.js";
-import { AppServerRemoteError } from "../../../platform/agentHost/common/appServerError.js";
-import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, APP_SERVER_PROTOCOL_MAJOR, APP_SERVER_SCHEMA_HASH, type InitializeResult, type ServerNotification } from "../../../../../.build/protocol/typescript/index.js";
-import { connectWebRendererApi } from "../../browser/webRendererApi.js";
-import { WEB_APP_SERVER_CLOSED_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_DISCONNECT_EVENT, WEB_APP_SERVER_FRAME_EVENT, WEB_APP_SERVER_PROTOCOL_VERSION, type AppServerTransport } from "../../../platform/agentHost/common/appServerTransport.js";
-import { AppServerProtocolClient } from "../../../platform/agentHost/browser/appServerProtocolClient.js";
+import { isRecord } from '../../../base/common/types.js';
+import { AppServerRemoteError } from '../../../platform/agentHost/common/appServerError.js';
+import {
+	APP_SERVER_METHODS,
+	APP_SERVER_SERVER_REQUESTS,
+	APP_SERVER_PROTOCOL_MAJOR,
+	APP_SERVER_SCHEMA_HASH,
+	type InitializeResult,
+	type ServerNotification,
+} from '../../../../../.build/protocol/typescript/index.js';
+import { connectWebRendererApi } from '../../browser/webRendererApi.js';
+import {
+	WEB_APP_SERVER_CLOSED_EVENT,
+	WEB_APP_SERVER_CONNECTED_EVENT,
+	WEB_APP_SERVER_CONNECT_EVENT,
+	WEB_APP_SERVER_DISCONNECT_EVENT,
+	WEB_APP_SERVER_FRAME_EVENT,
+	WEB_APP_SERVER_PROTOCOL_VERSION,
+	type AppServerTransport,
+} from '../../../platform/agentHost/common/appServerTransport.js';
+import { AppServerProtocolClient } from '../../../platform/agentHost/browser/appServerProtocolClient.js';
 import { CancellationTokenSource } from '../../../base/common/cancellation.js';
-import { GitHubError, GitHubErrorCode, GitHubIssueState, GitHubMergeMethod } from '../../../platform/github/common/githubService.js';
+import {
+	GitHubError,
+	GitHubErrorCode,
+	GitHubIssueState,
+	GitHubMergeMethod,
+} from '../../../platform/github/common/githubService.js';
 import type { BrowserCreateParams } from '../../../../../.build/protocol/typescript/index.js';
-import { createAppServerAppServerApi, createAppServerSkillOperations } from '../../../platform/agentHost/browser/appServerApi.js';
+import {
+	createAppServerAppServerApi,
+	createAppServerSkillOperations,
+} from '../../../platform/agentHost/browser/appServerApi.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
 import { createHash } from 'node:crypto';
 import { SecretStorageError } from '../../../platform/secrets/common/secrets.js';
 
-const pinnedSkill = { id: { source: 'user:skill-source:test', name: 'review' }, version: { type: 'pinnedDigest' as const, digest: `sha256:${'a'.repeat(64)}` } };
+const pinnedSkill = {
+	id: { source: 'user:skill-source:test', name: 'review' },
+	version: { type: 'pinnedDigest' as const, digest: `sha256:${'a'.repeat(64)}` },
+};
 
 test('Session runtime adapter negotiates its contract and preserves cancellation identity', async () => {
-	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, sessionRuntimes: { version: 1 } } } }));
+	const transport = new FakeTransport(value => ({
+		...value,
+		capabilities: {
+			...value.capabilities,
+			contracts: { ...value.capabilities.contracts, sessionRuntimes: { version: 1 } },
+		},
+	}));
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	const cancellation = new AbortController();
-	const pending = connected.api.session.invokeRuntime!('ash.dev-containers', { operation: 'prepare', workspace: 'C:\\work' }, cancellation.signal);
+	const pending = connected.api.session.invokeRuntime!(
+		'ash.dev-containers',
+		{ operation: 'prepare', workspace: 'C:\\work' },
+		cancellation.signal,
+	);
 	const index = transport.requests.length - 1;
 	const request = transport.requests[index]!;
 	assert.equal(request.method, 'session/runtime/invoke');
-	const params = request.params as { operationId: string; providerId: string; request: unknown; };
+	const params = request.params as { operationId: string; providerId: string; request: unknown };
 	assert.equal(params.providerId, 'ash.dev-containers');
 	assert.deepEqual(params.request, { operation: 'prepare', workspace: 'C:\\work' });
 	cancellation.abort();
 	assert.equal(transport.requests.at(-1)?.method, 'session/runtime/cancel');
 	assert.deepEqual(transport.requests.at(-1)?.params, { operationId: params.operationId });
 	transport.respondAt(-1, null);
-	transport.respondAt(index, { type: 'target', target: { type: 'provider', providerId: 'ash.dev-containers', workspace: 'C:\\work', root: '/workspace' } });
+	transport.respondAt(index, {
+		type: 'target',
+		target: { type: 'provider', providerId: 'ash.dev-containers', workspace: 'C:\\work', root: '/workspace' },
+	});
 	await assert.rejects(pending, isCancellationError);
 });
 
@@ -49,7 +91,14 @@ test('Session runtime discovery reports unavailable when its contract was not ne
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	const before = transport.requests.length;
-	assert.deepEqual(await connected.api.session.invokeRuntime!('ash.dev-containers', { operation: 'probe', workspace: 'C:\\work' }, new AbortController().signal), { type: 'availability', available: false });
+	assert.deepEqual(
+		await connected.api.session.invokeRuntime!(
+			'ash.dev-containers',
+			{ operation: 'probe', workspace: 'C:\\work' },
+			new AbortController().signal,
+		),
+		{ type: 'availability', available: false },
+	);
 	assert.equal(transport.requests.length, before);
 });
 
@@ -145,14 +194,35 @@ test('Renderer host separates the tool transport from sandbox and connection dia
 	transport.emitNotification({ method: 'agent/tools/changed', params: {} });
 	assert.equal(changes, 1);
 	assert.equal(diagnosticChanges, 1);
-	const tools = [{ name: 'read_file', description: 'Read a file', source: 'local', sourceChain: [{ type: 'product', component: 'directory' }], exposure: 'direct', authority: 'directoryRead', category: undefined }];
+	const tools = [
+		{
+			name: 'read_file',
+			description: 'Read a file',
+			source: 'local',
+			sourceChain: [{ type: 'product', component: 'directory' }],
+			exposure: 'direct',
+			authority: 'directoryRead',
+			category: undefined,
+		},
+	];
 	const toolSets = [{ id: 'directory', source: 'local', sourceId: 'directory', tools: ['read_file'] }];
 	const environment = {
-		localProcessSandboxConfigured: true, sandboxBackends: ['mxc'], directoryGrantsReadable: false,
-		sandboxDiagnostics: [{ backend: 'mxc', network: 'managed', readiness: { type: 'unsupported', reason: 'Network policy unsupported' } }],
+		localProcessSandboxConfigured: true,
+		sandboxBackends: ['mxc'],
+		directoryGrantsReadable: false,
+		sandboxDiagnostics: [
+			{
+				backend: 'mxc',
+				network: 'managed',
+				readiness: { type: 'unsupported', reason: 'Network policy unsupported' },
+			},
+		],
 	};
 	const toolRead = connected.api.agentTools.read();
-	assert.deepEqual({ method: transport.requests.at(-1)?.method, params: transport.requests.at(-1)?.params }, { method: 'agent/capabilities/read', params: {} });
+	assert.deepEqual(
+		{ method: transport.requests.at(-1)?.method, params: transport.requests.at(-1)?.params },
+		{ method: 'agent/capabilities/read', params: {} },
+	);
 	transport.respondAt(-1, { tools, toolSets, sourceGroups: [], profiles: [], ...environment });
 	assert.deepEqual(await toolRead, { tools, toolSets, sourceGroups: [], profiles: [] });
 	const environmentRead = connected.api.agentCapabilities.read();
@@ -165,13 +235,39 @@ test('Skill body reading opens exact authorized bytes lazily and releases the co
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	const body = await createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal, 'skill-session');
+	const body = await createAppServerSkillOperations(client).readTextResource(
+		pinnedSkill,
+		'SKILL.md',
+		new AbortController().signal,
+		'skill-session',
+	);
 	assert.equal(body, '# Review\n审阅 changes\n');
-	assert.deepEqual(transport.requests.filter(request => request.method === 'skill/resource/open' || request.method === 'resource/read' || request.method === 'resource/release').map(request => [request.method, request.params]), [
-		['skill/resource/open', { sessionId: 'skill-session', skillId: pinnedSkill.id, skillContentDigest: pinnedSkill.version.digest, path: 'SKILL.md' }],
-		['resource/read', { resourceId: 'resource_0000000000000001', offset: 0, maxBytes: Buffer.byteLength(body) }],
-		['resource/release', { resourceId: 'resource_0000000000000001' }],
-	]);
+	assert.deepEqual(
+		transport.requests
+			.filter(
+				request =>
+					request.method === 'skill/resource/open' ||
+					request.method === 'resource/read' ||
+					request.method === 'resource/release',
+			)
+			.map(request => [request.method, request.params]),
+		[
+			[
+				'skill/resource/open',
+				{
+					sessionId: 'skill-session',
+					skillId: pinnedSkill.id,
+					skillContentDigest: pinnedSkill.version.digest,
+					path: 'SKILL.md',
+				},
+			],
+			[
+				'resource/read',
+				{ resourceId: 'resource_0000000000000001', offset: 0, maxBytes: Buffer.byteLength(body) },
+			],
+			['resource/release', { resourceId: 'resource_0000000000000001' }],
+		],
+	);
 });
 
 test('Skill reference reading uses the same exact identity and connection resource lifetime', async () => {
@@ -179,8 +275,21 @@ test('Skill reference reading uses the same exact identity and connection resour
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	assert.equal(await createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'references/checks.md', new AbortController().signal, 'reference-session'), 'Reference text');
-	assert.deepEqual(transport.requests.find(request => request.method === 'skill/resource/open')?.params, { sessionId: 'reference-session', skillId: pinnedSkill.id, skillContentDigest: pinnedSkill.version.digest, path: 'references/checks.md' });
+	assert.equal(
+		await createAppServerSkillOperations(client).readTextResource(
+			pinnedSkill,
+			'references/checks.md',
+			new AbortController().signal,
+			'reference-session',
+		),
+		'Reference text',
+	);
+	assert.deepEqual(transport.requests.find(request => request.method === 'skill/resource/open')?.params, {
+		sessionId: 'reference-session',
+		skillId: pinnedSkill.id,
+		skillContentDigest: pinnedSkill.version.digest,
+		path: 'references/checks.md',
+	});
 	assert.deepEqual(transport.requests.at(-1)?.params, { resourceId: 'resource_0000000000000001' });
 });
 
@@ -191,8 +300,16 @@ test('Cancellation while opening a Skill releases its late handle without reques
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	await assert.rejects(createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', controller.signal), isCancellationError);
-	assert.deepEqual(transport.requests.filter(request => String(request.method).startsWith('resource/')).map(request => request.method), ['resource/release']);
+	await assert.rejects(
+		createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', controller.signal),
+		isCancellationError,
+	);
+	assert.deepEqual(
+		transport.requests
+			.filter(request => String(request.method).startsWith('resource/'))
+			.map(request => request.method),
+		['resource/release'],
+	);
 });
 
 test('Skill snapshots reject invalid UTF-8 after releasing the resource', async () => {
@@ -200,7 +317,10 @@ test('Skill snapshots reject invalid UTF-8 after releasing the resource', async 
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	await assert.rejects(createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal), TypeError);
+	await assert.rejects(
+		createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal),
+		TypeError,
+	);
 	assert.equal(transport.requests.at(-1)?.method, 'resource/release');
 });
 
@@ -209,8 +329,16 @@ test('Skill snapshots reject oversized instructions before reading chunks and re
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
-	await assert.rejects(createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal), /size/u);
-	assert.deepEqual(transport.requests.filter(request => String(request.method).startsWith('resource/')).map(request => request.method), ['resource/release']);
+	await assert.rejects(
+		createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal),
+		/size/u,
+	);
+	assert.deepEqual(
+		transport.requests
+			.filter(request => String(request.method).startsWith('resource/'))
+			.map(request => request.method),
+		['resource/release'],
+	);
 });
 
 test('A replaced connection never receives a Skill resource read or release from the retired connection', async () => {
@@ -219,8 +347,14 @@ test('A replaced connection never receives a Skill resource read or release from
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
 	let reconnecting: ReturnType<AppServerProtocolClient['connect']> | undefined;
-	transport.onRead = () => { client.disconnect(); reconnecting = client.connect(); };
-	await assert.rejects(createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal), /replaced/u);
+	transport.onRead = () => {
+		client.disconnect();
+		reconnecting = client.connect();
+	};
+	await assert.rejects(
+		createAppServerSkillOperations(client).readTextResource(pinnedSkill, 'SKILL.md', new AbortController().signal),
+		/replaced/u,
+	);
 	await reconnecting;
 	assert.equal(client.state, 'ready');
 	assert.equal(transport.requests.filter(request => request.method === 'resource/release').length, 0);
@@ -245,7 +379,13 @@ test('Skill catalog and enablement share Session scope and invalidate across con
 	const params = transport.requests.at(-1)?.params;
 	assert.ok(isRecord(params));
 	assert.equal(transport.requests.at(-1)?.method, 'skill/enablement/set');
-	assert.deepEqual(params, { commandId: params.commandId, expectedRevision: 7, skillId, enablement: 'disabled', sessionId: 'skill-session' });
+	assert.deepEqual(params, {
+		commandId: params.commandId,
+		expectedRevision: 7,
+		skillId,
+		enablement: 'disabled',
+		sessionId: 'skill-session',
+	});
 	transport.respondAt(-1, { revision: 8, generation: 8, disposition: 'updated' });
 	await mutation;
 	transport.emitNotification({ method: 'config/changed', params: { revision: 8, generation: 8 } });
@@ -268,17 +408,43 @@ test('Skill adapter exposes immutable domain metadata for enabled, disabled and 
 	const listing = skills.list('cached', 'skill-session');
 	const id = { source: 'user:skill-source:test', name: 'review' };
 	const contentDigest = `sha256:${'a'.repeat(64)}`;
-	const entry = { id, description: 'Review changes', sourceKind: 'user', contentDigest, enablement: 'enabled', compatibility: { type: 'compatible' } };
+	const entry = {
+		id,
+		description: 'Review changes',
+		sourceKind: 'user',
+		contentDigest,
+		enablement: 'enabled',
+		compatibility: { type: 'compatible' },
+	};
 	transport.respondAt(-1, {
 		generation: 4,
-		skills: [entry, { ...entry, id: { ...id, name: 'disabled' }, enablement: 'disabled' }, { ...entry, id: { ...id, name: 'unknown' }, compatibility: { type: 'unknown', note: 'Requires a newer runtime' } }],
+		skills: [
+			entry,
+			{ ...entry, id: { ...id, name: 'disabled' }, enablement: 'disabled' },
+			{
+				...entry,
+				id: { ...id, name: 'unknown' },
+				compatibility: { type: 'unknown', note: 'Requires a newer runtime' },
+			},
+		],
 		diagnostics: [],
 	});
 	const catalog = await listing;
-	const descriptor = { id, description: entry.description, contentDigest, enabled: true, compatible: true, metadata: {} };
+	const descriptor = {
+		id,
+		description: entry.description,
+		contentDigest,
+		enabled: true,
+		compatible: true,
+		metadata: {},
+	};
 	assert.deepEqual(catalog, {
 		generation: 4,
-		skills: [descriptor, { ...descriptor, id: { ...id, name: 'disabled' }, enabled: false }, { ...descriptor, id: { ...id, name: 'unknown' }, compatible: false }],
+		skills: [
+			descriptor,
+			{ ...descriptor, id: { ...id, name: 'disabled' }, enabled: false },
+			{ ...descriptor, id: { ...id, name: 'unknown' }, compatible: false },
+		],
 	});
 	assert.ok(Object.isFrozen(catalog) && Object.isFrozen(catalog.skills));
 	assert.ok(catalog.skills.every(skill => Object.isFrozen(skill) && Object.isFrozen(skill.id)));
@@ -293,7 +459,16 @@ test('Skill adapter rejects oversized metadata and keeps the connection usable f
 	const listing = skills.list('cached');
 	transport.respondAt(-1, {
 		generation: 4,
-		skills: [{ id: { source: 'user:skill-source:test', name: 'review' }, description: 'a'.repeat(1025), sourceKind: 'user', contentDigest: `sha256:${'a'.repeat(64)}`, enablement: 'enabled', compatibility: { type: 'compatible' } }],
+		skills: [
+			{
+				id: { source: 'user:skill-source:test', name: 'review' },
+				description: 'a'.repeat(1025),
+				sourceKind: 'user',
+				contentDigest: `sha256:${'a'.repeat(64)}`,
+				enablement: 'enabled',
+				compatibility: { type: 'compatible' },
+			},
+		],
 		diagnostics: [],
 	});
 	await assert.rejects(listing, { name: 'TypeError', message: 'Skill description is invalid' });
@@ -312,7 +487,16 @@ test('Malformed Skill wire responses fail the connection before a frontend catal
 	const listing = skills.list('cached');
 	transport.respondAt(-1, {
 		generation: 4,
-		skills: [{ id: { source: 'user:skill-source:test', name: 'review' }, description: 'Review changes', sourceKind: 'user', contentDigest: `sha256:${'a'.repeat(64)}`, enablement: 'invalid', compatibility: { type: 'compatible' } }],
+		skills: [
+			{
+				id: { source: 'user:skill-source:test', name: 'review' },
+				description: 'Review changes',
+				sourceKind: 'user',
+				contentDigest: `sha256:${'a'.repeat(64)}`,
+				enablement: 'invalid',
+				compatibility: { type: 'compatible' },
+			},
+		],
 		diagnostics: [],
 	});
 	await assert.rejects(listing);
@@ -320,7 +504,15 @@ test('Malformed Skill wire responses fail the connection before a frontend catal
 });
 
 const githubRepository = { host: 'github.com', owner: 'team', name: 'repo' };
-const githubIssue = { number: 7, title: 'Issue', url: 'https://github.com/team/repo/issues/7', updatedAt: '2026-10-04', state: 'open', labels: ['bug'], assignees: ['owner'] };
+const githubIssue = {
+	number: 7,
+	title: 'Issue',
+	url: 'https://github.com/team/repo/issues/7',
+	updatedAt: '2026-10-04',
+	state: 'open',
+	labels: ['bug'],
+	assignees: ['owner'],
+};
 
 test('instruction catalog uses the shared connection and exposes metadata without loading bodies', async () => {
 	const transport = new FakeTransport();
@@ -328,9 +520,26 @@ test('instruction catalog uses the shared connection and exposes metadata withou
 	using cleanup = toDisposable(() => connected.dispose());
 	assert.equal(connected.api.instructions.isAvailable, true);
 	const catalog = connected.api.instructions.list('instruction-session');
-	assert.deepEqual({ method: transport.requests.at(-1)?.method, params: transport.requests.at(-1)?.params }, { method: 'instructions/list', params: { sessionId: 'instruction-session' } });
-	transport.respondAt(-1, { instructions: [{ path: '/workspace/.ash/instructions/review.md', name: 'Review', description: null, scope: 'directory', load: 'onDemand', patterns: [] }], diagnostics: [] });
-	assert.deepEqual(await catalog, [{ path: '/workspace/.ash/instructions/review.md', name: 'Review', description: undefined, scope: 'directory' }]);
+	assert.deepEqual(
+		{ method: transport.requests.at(-1)?.method, params: transport.requests.at(-1)?.params },
+		{ method: 'instructions/list', params: { sessionId: 'instruction-session' } },
+	);
+	transport.respondAt(-1, {
+		instructions: [
+			{
+				path: '/workspace/.ash/instructions/review.md',
+				name: 'Review',
+				description: null,
+				scope: 'directory',
+				load: 'onDemand',
+				patterns: [],
+			},
+		],
+		diagnostics: [],
+	});
+	assert.deepEqual(await catalog, [
+		{ path: '/workspace/.ash/instructions/review.md', name: 'Review', description: undefined, scope: 'directory' },
+	]);
 });
 
 test('Terminal host adapts raw bytes and command exit codes at the protocol boundary', async () => {
@@ -344,41 +553,88 @@ test('Terminal host adapts raw bytes and command exit codes at the protocol boun
 	assert.deepEqual(await profiles, [profile]);
 	const creation = terminal.create({ dirId: 'workspace-folder', rows: 24, cols: 80, profile: { type: 'default' } });
 	const createRequest = transport.requests.at(-1)!;
-	assert.deepEqual({ method: createRequest.method, params: createRequest.params }, {
-		method: 'terminal/create',
-		params: { dirId: 'workspace-folder', rows: 24, cols: 80, profile: { type: 'default' }, lifecycle: { type: 'connectionOwned' } },
+	assert.deepEqual(
+		{ method: createRequest.method, params: createRequest.params },
+		{
+			method: 'terminal/create',
+			params: {
+				dirId: 'workspace-folder',
+				rows: 24,
+				cols: 80,
+				profile: { type: 'default' },
+				lifecycle: { type: 'connectionOwned' },
+			},
+		},
+	);
+	transport.respondAt(-1, {
+		ready: { pid: 1234, cwd: '/backend/workspace' },
+		terminalId: 'terminal-1',
+		profile,
+		reconnect: null,
 	});
-	transport.respondAt(-1, { ready: { pid: 1234, cwd: '/backend/workspace' }, terminalId: 'terminal-1', profile, reconnect: null });
-	assert.deepEqual(await creation, { ready: { pid: 1234, cwd: '/backend/workspace' }, terminalId: 'terminal-1', profile, connectionPersistence: 'connectionOwned' });
-	const binary = terminal.write({ dirId: 'workspace-folder', terminalId: 'terminal-1', data: new Uint8Array([0, 0x80, 0xff]) });
-	assert.deepEqual(transport.requests.at(-1)?.params, { dirId: 'workspace-folder', terminalId: 'terminal-1', dataBase64: 'AID/' });
+	assert.deepEqual(await creation, {
+		ready: { pid: 1234, cwd: '/backend/workspace' },
+		terminalId: 'terminal-1',
+		profile,
+		connectionPersistence: 'connectionOwned',
+	});
+	const binary = terminal.write({
+		dirId: 'workspace-folder',
+		terminalId: 'terminal-1',
+		data: new Uint8Array([0, 0x80, 0xff]),
+	});
+	assert.deepEqual(transport.requests.at(-1)?.params, {
+		dirId: 'workspace-folder',
+		terminalId: 'terminal-1',
+		dataBase64: 'AID/',
+	});
 	assert.equal(transport.requests.at(-1)?.method, 'terminal/writeBinary');
 	transport.respondAt(-1, null);
 	await binary;
 	const interrupt = terminal.sendSignal({ dirId: 'workspace-folder', terminalId: 'terminal-1', signal: 'interrupt' });
 	assert.equal(transport.requests.at(-1)?.method, 'terminal/sendSignal');
-	assert.deepEqual(transport.requests.at(-1)?.params, { dirId: 'workspace-folder', terminalId: 'terminal-1', signal: 'interrupt' });
+	assert.deepEqual(transport.requests.at(-1)?.params, {
+		dirId: 'workspace-folder',
+		terminalId: 'terminal-1',
+		signal: 'interrupt',
+	});
 	transport.respondAt(-1, null);
 	await interrupt;
-	const read = terminal.read({ dirId: 'workspace-folder', terminalId: 'terminal-1', afterSequence: 0, afterCommandSequence: 0, maxChunks: 128 });
+	const read = terminal.read({
+		dirId: 'workspace-folder',
+		terminalId: 'terminal-1',
+		afterSequence: 0,
+		afterCommandSequence: 0,
+		maxChunks: 128,
+	});
 	const bytes = Buffer.from([0xe4, 0xb8, 0xad, 0xff, 0x1b]);
 	transport.respondAt(-1, {
-		terminalId: 'terminal-1', chunks: [{ sequence: 1, dataBase64: bytes.toString('base64') }],
-		nextSequence: 1, outputGap: true,
+		terminalId: 'terminal-1',
+		chunks: [{ sequence: 1, dataBase64: bytes.toString('base64') }],
+		nextSequence: 1,
+		outputGap: true,
 		commandEvents: [
 			{ sequence: 1, commandId: 'command-1', status: 'running', exitCode: null, afterOutputSequence: 0 },
 			{ sequence: 2, commandId: 'command-1', status: 'failed', exitCode: 17, afterOutputSequence: 1 },
 		],
-		nextCommandSequence: 2, commandEventGap: true, exited: true, exitCode: 17,
+		nextCommandSequence: 2,
+		commandEventGap: true,
+		exited: true,
+		exitCode: 17,
 	});
 	assert.deepEqual(await read, {
-		terminalId: 'terminal-1', chunks: [{ sequence: 1, data: new Uint8Array(bytes) }],
-		nextSequence: 1, outputGap: true,
+		terminalId: 'terminal-1',
+		chunks: [{ sequence: 1, data: new Uint8Array(bytes) }],
+		nextSequence: 1,
+		outputGap: true,
 		commandEvents: [
 			{ sequence: 1, commandId: 'command-1', status: 'running', exitCode: undefined, afterOutputSequence: 0 },
 			{ sequence: 2, commandId: 'command-1', status: 'failed', exitCode: 17, afterOutputSequence: 1 },
 		],
-		nextCommandSequence: 2, commandEventGap: true, exited: true, exitCode: 17,
+		nextCommandSequence: 2,
+		commandEventGap: true,
+		exited: true,
+		exitCode: 17,
 	});
 	const close = terminal.close({ dirId: 'workspace-folder', terminalId: 'terminal-1' });
 	transport.respondAt(-1, null);
@@ -392,8 +648,16 @@ test('GitHub domain service is assembled on the shared connection and maps issue
 	const pending = connected.api.github.readIssue(githubRepository, 7);
 	const request = transport.requests.at(-1)!;
 	assert.equal(request.method, 'github/issue/read');
-	assert.deepEqual({ ...(request.params as object), operationId: 'generated' }, { repository: githubRepository, number: 7, operationId: 'generated' });
-	const comment = { id: 9, body: 'Discussion', url: 'https://github.com/team/repo/issues/7#issuecomment-9', updatedAt: '2026-10-04' };
+	assert.deepEqual(
+		{ ...(request.params as object), operationId: 'generated' },
+		{ repository: githubRepository, number: 7, operationId: 'generated' },
+	);
+	const comment = {
+		id: 9,
+		body: 'Discussion',
+		url: 'https://github.com/team/repo/issues/7#issuecomment-9',
+		updatedAt: '2026-10-04',
+	};
 	transport.respondAt(-1, { issue: githubIssue, body: 'Body', comments: [comment] });
 	assert.deepEqual(await pending, { ...githubIssue, body: 'Body', comments: [comment] });
 });
@@ -415,7 +679,10 @@ test('GitHub retains error categories independently of product issue reporting',
 		['GitHubOperationFailed', GitHubErrorCode.OperationFailed],
 	] as const) {
 		const pending = connected.api.github.readIssue(githubRepository, 7);
-		const rejected = assert.rejects(pending, (error: unknown) => error instanceof GitHubError && error.code === code);
+		const rejected = assert.rejects(
+			pending,
+			(error: unknown) => error instanceof GitHubError && error.code === code,
+		);
 		transport.rejectAt(-1, { code: -32070, message: kind, data: { kind } });
 		await rejected;
 	}
@@ -432,9 +699,15 @@ test('GitHub cancels its original operation and releases cancellation listeners'
 	const rejected = assert.rejects(pending, isCancellationError);
 	cancellation.cancel();
 	assert.equal(transport.requests.at(-1)!.method, 'github/cancel');
-	assert.deepEqual(transport.requests.at(-1)!.params, { operationId: (original.params as { operationId: string; }).operationId });
+	assert.deepEqual(transport.requests.at(-1)!.params, {
+		operationId: (original.params as { operationId: string }).operationId,
+	});
 	transport.respondAt(-1, { status: 'requested' });
-	transport.rejectAt(originalIndex, { code: -32800, message: 'RequestCancelled', data: { kind: 'RequestCancelled' } });
+	transport.rejectAt(originalIndex, {
+		code: -32800,
+		message: 'RequestCancelled',
+		data: { kind: 'RequestCancelled' },
+	});
 	await rejected;
 	const count = transport.requests.length;
 	await assert.rejects(connected.api.github.readIssue(githubRepository, 7, cancellation.token), isCancellationError);
@@ -453,7 +726,11 @@ test('GitHub keeps a confirmed write when cancellation races with its response',
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	using cancellation = new CancellationTokenSource();
-	const pending = connected.api.github.createIssue(githubRepository, { title: 'Issue', body: 'Body', labels: ['bug'], assignees: ['owner'] }, cancellation.token);
+	const pending = connected.api.github.createIssue(
+		githubRepository,
+		{ title: 'Issue', body: 'Body', labels: ['bug'], assignees: ['owner'] },
+		cancellation.token,
+	);
 	const originalIndex = transport.requests.length - 1;
 	cancellation.cancel();
 	transport.respondAt(-1, { status: 'completed' });
@@ -466,7 +743,10 @@ test('GitHub reports a lost write response as uncertain and never resubmits it',
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	const pending = connected.api.github.createComment(githubRepository, 7, 'Discussion');
-	const rejected = assert.rejects(pending, (error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain);
+	const rejected = assert.rejects(
+		pending,
+		(error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.SubmissionUncertain,
+	);
 	transport.close('connection lost');
 	await rejected;
 	assert.equal(transport.requests.filter(request => request.method === 'github/comment/create').length, 1);
@@ -477,8 +757,11 @@ test('GitHub merge carries the reviewed head and file limits remain visible', as
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	const commit = 'a'.repeat(40);
-	const merge = connected.api.github.mergePullRequest(githubRepository, 7, { commit, method: GitHubMergeMethod.Squash });
-	const params = transport.requests.at(-1)!.params as { commit: string; method: string; };
+	const merge = connected.api.github.mergePullRequest(githubRepository, 7, {
+		commit,
+		method: GitHubMergeMethod.Squash,
+	});
+	const params = transport.requests.at(-1)!.params as { commit: string; method: string };
 	assert.deepEqual({ commit: params.commit, method: params.method }, { commit, method: 'squash' });
 	transport.respondAt(-1, { commit: 'b'.repeat(40), merged: true, message: 'Merged' });
 	assert.equal((await merge).merged, true);
@@ -492,11 +775,21 @@ test('GitHub merge carries the reviewed head and file limits remain visible', as
 });
 
 test('GitHub rejects an unavailable contract before dispatching a mutation', async () => {
-	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, github: false, contracts: { ...value.capabilities.contracts, github: { version: 2 } } } }));
+	const transport = new FakeTransport(value => ({
+		...value,
+		capabilities: {
+			...value.capabilities,
+			github: false,
+			contracts: { ...value.capabilities.contracts, github: { version: 2 } },
+		},
+	}));
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	const count = transport.requests.length;
-	await assert.rejects(connected.api.github.deleteComment(githubRepository, 9), (error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.Unavailable);
+	await assert.rejects(
+		connected.api.github.deleteComment(githubRepository, 9),
+		(error: unknown) => error instanceof GitHubError && error.code === GitHubErrorCode.Unavailable,
+	);
 	assert.equal(transport.requests.length, count);
 });
 
@@ -506,7 +799,7 @@ const connectorHostServices = {
 		triggerPaste: () => undefined,
 		read: async () => [],
 		readFindText: async () => '',
-		writeFindText: async () => { },
+		writeFindText: async () => {},
 		readImage: async () => new Uint8Array(),
 		readText: async () => '',
 		writeText: async () => undefined,
@@ -528,14 +821,20 @@ test('Web reconnect initializes again without replaying an uncertain write', asy
 		await new Promise<void>((resolve, reject) => {
 			const timeout = setTimeout(() => reject(new Error('Web did not reconnect')), 3_000);
 			const subscription = connected.api.appServer.onConnectionState(state => {
-				if (state === 'ready') { clearTimeout(timeout); subscription.dispose(); resolve(); }
+				if (state === 'ready') {
+					clearTimeout(timeout);
+					subscription.dispose();
+					resolve();
+				}
 			});
 		});
 		assert.equal(transport.requests.filter(request => request.method === 'initialize').length, 2);
 		assert.equal(connected.api.appServer.connectionGeneration, 2);
 		assert.equal(transport.requests.filter(request => request.method === 'fs/writeFile').length, 1);
 		assert.deepEqual(await connected.api.session.list(), { sessions: [] });
-	} finally { connected.dispose(); }
+	} finally {
+		connected.dispose();
+	}
 });
 
 test('Web disposal cancels scheduled reconnect and revoked authorization is terminal', async () => {
@@ -552,7 +851,9 @@ test('Web disposal cancels scheduled reconnect and revoked authorization is term
 		await new Promise(resolve => setTimeout(resolve, 600));
 		assert.equal(await revoked.api.appServer.getConnectionState(), 'stopped');
 		assert.equal(revokedTransport.sentEvents.filter(event => event === WEB_APP_SERVER_CONNECT_EVENT).length, 1);
-	} finally { revoked.dispose(); }
+	} finally {
+		revoked.dispose();
+	}
 });
 
 test('Hooks use the shared protocol, retain disabled declarations, and refresh on configuration changes', async () => {
@@ -563,17 +864,38 @@ test('Hooks use the shared protocol, retain disabled declarations, and refresh o
 	assert.deepEqual(transport.requests.at(-1)?.params, { sessionId: 'session-hooks' });
 	assert.equal(transport.requests.at(-1)?.method, 'hook/list');
 	transport.respondAt(-1, {
-		sources: [{
-			namespace: 'user', configPath: '/profile/config.toml', hooks: [
-				{ id: 'user:hook:check', event: 'preToolUse', enablement: 'disabled', matcher: { toolNames: ['shell-command'] }, action: { type: 'process', program: '/program with spaces', args: ['two words', '"quote"'] } },
-			]
-		}]
+		sources: [
+			{
+				namespace: 'user',
+				configPath: '/profile/config.toml',
+				hooks: [
+					{
+						id: 'user:hook:check',
+						event: 'preToolUse',
+						enablement: 'disabled',
+						matcher: { toolNames: ['shell-command'] },
+						action: { type: 'process', program: '/program with spaces', args: ['two words', '"quote"'] },
+					},
+				],
+			},
+		],
 	});
-	assert.deepEqual(await pending, [{
-		namespace: 'user', configPath: '/profile/config.toml', hooks: [
-			{ id: 'user:hook:check', event: 'preToolUse', enabled: false, toolNames: ['shell-command'], program: '/program with spaces', args: ['two words', '"quote"'] },
-		]
-	}]);
+	assert.deepEqual(await pending, [
+		{
+			namespace: 'user',
+			configPath: '/profile/config.toml',
+			hooks: [
+				{
+					id: 'user:hook:check',
+					event: 'preToolUse',
+					enabled: false,
+					toolNames: ['shell-command'],
+					program: '/program with spaces',
+					args: ['two words', '"quote"'],
+				},
+			],
+		},
+	]);
 	const userRead = connected.api.hooks.list();
 	assert.deepEqual(transport.requests.at(-1)?.params, {});
 	transport.respondAt(-1, { sources: [{ namespace: 'user', configPath: '/profile/config.toml', hooks: [] }] });
@@ -595,31 +917,104 @@ test('review environment adapter preserves scope, provenance, cancellation, and 
 	const environment = connected.api.approvalEnvironment;
 	assert.ok(environment);
 	const scope = { type: 'thread' as const, threadId: 'own-thread' };
-	const entry = { id: 'entry-1', kind: 'fact' as const, title: 'Build', content: 'pnpm build', source: { id: 'source-1', kind: 'projectFile' as const, label: 'package.json', revision: 'sha256-version' }, accepted: false, current: true };
-	const defaults = { recentCommands: false, shellHistory: false, otherRepositories: false, summarizeWithModel: false, history: { sessions: 50, commandsPerSession: 200, days: null } };
+	const entry = {
+		id: 'entry-1',
+		kind: 'fact' as const,
+		title: 'Build',
+		content: 'pnpm build',
+		source: { id: 'source-1', kind: 'projectFile' as const, label: 'package.json', revision: 'sha256-version' },
+		accepted: false,
+		current: true,
+	};
+	const defaults = {
+		recentCommands: false,
+		shellHistory: false,
+		otherRepositories: false,
+		summarizeWithModel: false,
+		history: { sessions: 50, commandsPerSession: 200, days: null },
+	};
 	const read = environment.read(scope);
 	assert.deepEqual(transport.requests.at(-1)?.params, { scope });
-	transport.respondAt(-1, { root: '/own-worktree', scanOptions: defaults, profile: { revision: 3, entries: [entry], observations: [] } });
+	transport.respondAt(-1, {
+		root: '/own-worktree',
+		scanOptions: defaults,
+		profile: { revision: 3, entries: [entry], observations: [] },
+	});
 	assert.deepEqual(await read, { root: '/own-worktree', scanOptions: defaults, revision: 3, entries: [entry] });
 	const options = { ...defaults, summarizeWithModel: true };
 	const model = { provider: 'openai', model: 'task-model' };
 	const scan = environment.scan(scope, 'scan-id', options, model);
 	assert.equal(transport.requests.at(-1)?.method, 'approval/environment/scan');
 	assert.deepEqual(transport.requests.at(-1)?.params, { scope, operationId: 'scan-id', options, model });
-	const historical = { ...entry, source: { ...entry.source, kind: 'recentCommand' as const, command: { occurrences: 7, sessionCount: 3, samples: [{ sessionId: 'another-session', threadId: 'another-thread', turnId: 'another-turn', sequence: 7, recordedAtUnixMs: 1000 }] } } };
-	const history = { sessionsAvailable: 60, sessionsScanned: 50, commandsAvailable: 2000, commandsScanned: 1000, factsAvailable: 80, factsIncluded: 40 };
-	transport.respondAt(-1, { root: '/own-worktree', history, draft: { id: 'scan-id', baseRevision: 3, entries: [historical] } });
-	assert.deepEqual(await scan, { root: '/own-worktree', history, id: 'scan-id', baseRevision: 3, entries: [historical] });
+	const historical = {
+		...entry,
+		source: {
+			...entry.source,
+			kind: 'recentCommand' as const,
+			command: {
+				occurrences: 7,
+				sessionCount: 3,
+				samples: [
+					{
+						sessionId: 'another-session',
+						threadId: 'another-thread',
+						turnId: 'another-turn',
+						sequence: 7,
+						recordedAtUnixMs: 1000,
+					},
+				],
+			},
+		},
+	};
+	const history = {
+		sessionsAvailable: 60,
+		sessionsScanned: 50,
+		commandsAvailable: 2000,
+		commandsScanned: 1000,
+		factsAvailable: 80,
+		factsIncluded: 40,
+	};
+	transport.respondAt(-1, {
+		root: '/own-worktree',
+		history,
+		draft: { id: 'scan-id', baseRevision: 3, entries: [historical] },
+	});
+	assert.deepEqual(await scan, {
+		root: '/own-worktree',
+		history,
+		id: 'scan-id',
+		baseRevision: 3,
+		entries: [historical],
+	});
 	const cancel = environment.cancel('scan-id');
 	assert.deepEqual(transport.requests.at(-1)?.params, { operationId: 'scan-id' });
 	transport.respondAt(-1, null);
 	await cancel;
-	const input = { id: entry.id, kind: entry.kind, title: entry.title, content: entry.content, sourceId: entry.source.id };
+	const input = {
+		id: entry.id,
+		kind: entry.kind,
+		title: entry.title,
+		content: entry.content,
+		sourceId: entry.source.id,
+	};
 	const save = environment.save(scope, 'save-id', 3, [input], 'scan-id');
-	assert.deepEqual(transport.requests.at(-1)?.params, { scope, commandId: 'save-id', expectedRevision: 3, entries: [input], draftId: 'scan-id' });
-	transport.rejectAt(-1, { code: -32091, message: 'ApprovalEnvironmentConflict', data: { kind: 'ApprovalEnvironmentConflict' } });
+	assert.deepEqual(transport.requests.at(-1)?.params, {
+		scope,
+		commandId: 'save-id',
+		expectedRevision: 3,
+		entries: [input],
+		draftId: 'scan-id',
+	});
+	transport.rejectAt(-1, {
+		code: -32091,
+		message: 'ApprovalEnvironmentConflict',
+		data: { kind: 'ApprovalEnvironmentConflict' },
+	});
 	await assert.rejects(save, /Rescan before saving/);
-	const disabledTransport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, approvalEnvironment: false } }));
+	const disabledTransport = new FakeTransport(value => ({
+		...value,
+		capabilities: { ...value.capabilities, approvalEnvironment: false },
+	}));
 	const disabled = await connectWebRendererApi(disabledTransport, connectorHostServices);
 	using disabledCleanup = toDisposable(() => disabled.dispose());
 	assert.equal(disabled.api.approvalEnvironment, undefined);
@@ -627,12 +1022,21 @@ test('review environment adapter preserves scope, provenance, cancellation, and 
 
 test('server path platform belongs to the initialized connection and clears on disconnect', async () => {
 	let targetOS: 'windows' | 'mac' = 'windows';
-	const transport = new FakeTransport(value => ({ ...value, serverInfo: { ...value.serverInfo, operatingSystem: targetOS, userHome: targetOS === 'windows' ? 'C:\\Users\\test' : '/Users/test' } }));
+	const transport = new FakeTransport(value => ({
+		...value,
+		serverInfo: {
+			...value.serverInfo,
+			operatingSystem: targetOS,
+			userHome: targetOS === 'windows' ? 'C:\\Users\\test' : '/Users/test',
+		},
+	}));
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	const api = createAppServerAppServerApi(client);
 	const readyPlatforms: (OperatingSystem | undefined)[] = [];
-	using listener = client.onStateChange(state => { if (state === 'ready') readyPlatforms.push(api.operatingSystem); });
+	using listener = client.onStateChange(state => {
+		if (state === 'ready') readyPlatforms.push(api.operatingSystem);
+	});
 	assert.equal(api.operatingSystem, undefined);
 	await client.connect();
 	assert.equal(api.operatingSystem, OperatingSystem.Windows);
@@ -665,19 +1069,27 @@ test('elevated file cancellation retains the original response and routes to its
 	try {
 		const controller = new AbortController();
 		const sessionDirectory = { sessionId: 'session', path: '/workspace/worktree' };
-		const pending = connected.api.fs.writeFileElevated({ operationId: 'save', sessionDirectory, path: 'notes.txt', dataBase64: 'bmV3', expectedRevision: 'old' }, controller.signal);
+		const pending = connected.api.fs.writeFileElevated(
+			{ operationId: 'save', sessionDirectory, path: 'notes.txt', dataBase64: 'bmV3', expectedRevision: 'old' },
+			controller.signal,
+		);
 		let settled = false;
-		void pending.then(() => settled = true);
+		void pending.then(() => (settled = true));
 		controller.abort();
 		assert.deepEqual(transport.requests.at(-1)?.params, { operationId: 'save', sessionDirectory });
 		assert.equal(transport.requests.at(-1)?.method, 'fs/writeFileElevated/cancel');
 		transport.respondAt(-1, null);
 		await Promise.resolve();
 		assert.equal(settled, false);
-		const result = { revision: 'new', metadata: { fileType: 'file', readonly: true, sizeBytes: 3, modifiedAtMillis: 1 } };
+		const result = {
+			revision: 'new',
+			metadata: { fileType: 'file', readonly: true, sizeBytes: 3, modifiedAtMillis: 1 },
+		};
 		transport.respondAt(-2, result);
 		assert.deepEqual(await pending, result);
-	} finally { connected.dispose(); }
+	} finally {
+		connected.dispose();
+	}
 });
 
 test('elevated cancellation errors preserve the backend terminal result and never replay a write', async () => {
@@ -685,21 +1097,39 @@ test('elevated cancellation errors preserve the backend terminal result and neve
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	try {
 		const controller = new AbortController();
-		const pending = connected.api.fs.writeFileElevated({ operationId: 'save', dirId: 'workspace', path: 'notes.txt', dataBase64: 'bmV3' }, controller.signal);
+		const pending = connected.api.fs.writeFileElevated(
+			{ operationId: 'save', dirId: 'workspace', path: 'notes.txt', dataBase64: 'bmV3' },
+			controller.signal,
+		);
 		const rejected = assert.rejects(pending, isCancellationError);
 		controller.abort();
 		assert.deepEqual(transport.requests.at(-1)?.params, { operationId: 'save', dirId: 'workspace' });
 		transport.respondAt(-1, null);
-		transport.rejectAt(-2, { code: -32800, message: 'cancelled before commit', data: { kind: 'RequestCancelled' } });
+		transport.rejectAt(-2, {
+			code: -32800,
+			message: 'cancelled before commit',
+			data: { kind: 'RequestCancelled' },
+		});
 		await rejected;
 		assert.equal(transport.requests.filter(request => request.method === 'fs/writeFileElevated').length, 1);
-		await assert.rejects(connected.api.fs.writeFileElevated({ operationId: 'other', dirId: 'workspace', path: 'notes.txt', dataBase64: 'bmV3' }, controller.signal), isCancellationError);
+		await assert.rejects(
+			connected.api.fs.writeFileElevated(
+				{ operationId: 'other', dirId: 'workspace', path: 'notes.txt', dataBase64: 'bmV3' },
+				controller.signal,
+			),
+			isCancellationError,
+		);
 		assert.equal(transport.requests.filter(request => request.method === 'fs/writeFileElevated').length, 1);
-	} finally { connected.dispose(); }
+	} finally {
+		connected.dispose();
+	}
 });
 
 class FakeTransport implements AppServerTransport {
-	constructor(private readonly initialize: (value: InitializeResult) => unknown = value => value, private readonly initializeDelayMs = 0) { }
+	constructor(
+		private readonly initialize: (value: InitializeResult) => unknown = value => value,
+		private readonly initializeDelayMs = 0,
+	) {}
 	private readonly listeners = new Map<string, Set<(payload: unknown) => void>>();
 	readonly requests: Array<Record<string, unknown>> = [];
 	readonly sentEvents: string[] = [];
@@ -722,38 +1152,45 @@ class FakeTransport implements AppServerTransport {
 		if (event === WEB_APP_SERVER_CONNECT_EVENT) {
 			this.emit(WEB_APP_SERVER_CONNECTED_EVENT, {
 				protocolVersion: WEB_APP_SERVER_PROTOCOL_VERSION,
-				workspaceId: "web-dev:test",
-				workspaceRoot: "C:\\workspace",
+				workspaceId: 'web-dev:test',
+				workspaceRoot: 'C:\\workspace',
 			});
 			return;
 		}
-		if (event !== WEB_APP_SERVER_FRAME_EVENT || !isRecord(payload) || typeof payload.frame !== "string") return;
+		if (event !== WEB_APP_SERVER_FRAME_EVENT || !isRecord(payload) || typeof payload.frame !== 'string') return;
 		const request = JSON.parse(payload.frame) as Record<string, unknown>;
 		this.requests.push(request);
-		if (request.method === "initialize") {
+		if (request.method === 'initialize') {
 			const result = this.initialize(createTestInitializeResult());
 			if (this.initializeDelayMs > 0) {
 				setTimeout(() => this.respond(request, result), this.initializeDelayMs);
 			} else {
 				this.respond(request, result);
 			}
-		} else if (request.method === "env/dirs/set") {
+		} else if (request.method === 'env/dirs/set') {
 			this.respond(request, { dirs: [] });
-		} else if (request.method === "session/list") {
+		} else if (request.method === 'session/list') {
 			this.respond(request, { sessions: [] });
-		} else if (request.method === "syntax/open" || request.method === "syntax/update") {
+		} else if (request.method === 'syntax/open' || request.method === 'syntax/update') {
 			this.respond(request, null);
-		} else if (request.method === "syntax/analyze") {
-			this.respond(request, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
-		} else if (request.method === "syntax/selectionRanges") {
+		} else if (request.method === 'syntax/analyze') {
+			this.respond(request, {
+				revision: 4,
+				hasErrors: false,
+				tokens: [],
+				foldingRanges: [],
+				symbols: [],
+				diagnostics: [],
+			});
+		} else if (request.method === 'syntax/selectionRanges') {
 			this.respond(request, { revision: 4, ranges: [] });
-		} else if (request.method === "syntax/close") {
+		} else if (request.method === 'syntax/close') {
 			this.respond(request, null);
 		}
 	}
 
 	emitNotification(notification: ServerNotification): void {
-		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: "2.0", ...notification }) });
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', ...notification }) });
 	}
 
 	close(message: string): void {
@@ -769,11 +1206,11 @@ class FakeTransport implements AppServerTransport {
 	rejectAt(index: number, error: unknown): void {
 		const request = this.requests.at(index);
 		if (!request) throw new Error(`No request at index ${index}`);
-		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: "2.0", id: request.id, error }) });
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, error }) });
 	}
 
 	private respond(request: Record<string, unknown>, result: unknown): void {
-		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: "2.0", id: request.id, result }) });
+		this.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) });
 	}
 
 	public emit(event: string, payload: unknown): void {
@@ -784,19 +1221,36 @@ class FakeTransport implements AppServerTransport {
 class SkillResourceTransport extends FakeTransport {
 	public onOpen: (() => void) | undefined;
 	public onRead: (() => void) | undefined;
-	constructor(private readonly bytes: Buffer) { super(); }
+	constructor(private readonly bytes: Buffer) {
+		super();
+	}
 	public override send(event: string, payload?: unknown): void {
 		super.send(event, payload);
 		if (event !== WEB_APP_SERVER_FRAME_EVENT) return;
 		const request = this.requests.at(-1)!;
 		if (request.method === 'skill/resource/open') {
 			this.onOpen?.();
-			this.respondAt(-1, { path: 'SKILL.md', kind: 'instructions', resource: { resourceId: 'resource_0000000000000001', mimeType: 'text/markdown', size: this.bytes.length, sha256: `sha256:${createHash('sha256').update(this.bytes).digest('hex')}` } });
+			this.respondAt(-1, {
+				path: 'SKILL.md',
+				kind: 'instructions',
+				resource: {
+					resourceId: 'resource_0000000000000001',
+					mimeType: 'text/markdown',
+					size: this.bytes.length,
+					sha256: `sha256:${createHash('sha256').update(this.bytes).digest('hex')}`,
+				},
+			});
 		} else if (request.method === 'resource/read') {
 			this.onRead?.();
-			const params = request.params as { offset: number; maxBytes: number; };
+			const params = request.params as { offset: number; maxBytes: number };
 			const chunk = this.bytes.subarray(params.offset, params.offset + params.maxBytes);
-			this.respondAt(-1, { resourceId: 'resource_0000000000000001', offset: params.offset, dataBase64: chunk.toString('base64'), decodedLength: chunk.length, eof: params.offset + chunk.length === this.bytes.length });
+			this.respondAt(-1, {
+				resourceId: 'resource_0000000000000001',
+				offset: params.offset,
+				dataBase64: chunk.toString('base64'),
+				decodedLength: chunk.length,
+				eof: params.offset + chunk.length === this.bytes.length,
+			});
 		} else if (request.method === 'resource/release') this.respondAt(-1, null);
 	}
 }
@@ -807,7 +1261,9 @@ test('initialization can outlast bridge connection without timing out', async ()
 	try {
 		await client.connect();
 		assert.equal(client.state, 'ready');
-	} finally { client.dispose(); }
+	} finally {
+		client.dispose();
+	}
 });
 
 for (const stage of ['bridge', 'initialize'] as const) {
@@ -823,10 +1279,10 @@ for (const stage of ['bridge', 'initialize'] as const) {
 			else client[close]();
 			const requestCount = transport.requests.length;
 			await rejected;
-			assert.deepEqual({
-				state: client.state,
-				newRequests: transport.requests.length - requestCount,
-			}, { state: close === 'transport' ? 'crashed' : 'stopped', newRequests: 0 });
+			assert.deepEqual(
+				{ state: client.state, newRequests: transport.requests.length - requestCount },
+				{ state: close === 'transport' ? 'crashed' : 'stopped', newRequests: 0 },
+			);
 		});
 	}
 }
@@ -841,11 +1297,14 @@ test('replacing a connection before its bridge continuation does not initialize 
 	const replacement = client.connect();
 	await rejected;
 	await replacement;
-	assert.deepEqual({
-		state: client.state,
-		generation: client.generation,
-		initializations: transport.requests.filter(request => request.method === 'initialize').length,
-	}, { state: 'ready', generation: 2, initializations: 1 });
+	assert.deepEqual(
+		{
+			state: client.state,
+			generation: client.generation,
+			initializations: transport.requests.filter(request => request.method === 'initialize').length,
+		},
+		{ state: 'ready', generation: 2, initializations: 1 },
+	);
 });
 
 test('an old initialization rejection cannot close its replacement connection', async () => {
@@ -859,11 +1318,14 @@ test('an old initialization rejection cannot close its replacement connection', 
 	const replacement = client.connect();
 	await rejected;
 	await replacement;
-	assert.deepEqual({
-		state: client.state,
-		generation: client.generation,
-		disconnects: transport.sentEvents.filter(event => event === WEB_APP_SERVER_DISCONNECT_EVENT).length,
-	}, { state: 'ready', generation: 2, disconnects: 1 });
+	assert.deepEqual(
+		{
+			state: client.state,
+			generation: client.generation,
+			disconnects: transport.sentEvents.filter(event => event === WEB_APP_SERVER_DISCONNECT_EVENT).length,
+		},
+		{ state: 'ready', generation: 2, disconnects: 1 },
+	);
 });
 
 for (const state of ['starting', 'initializing', 'ready'] as const) {
@@ -871,24 +1333,31 @@ for (const state of ['starting', 'initializing', 'ready'] as const) {
 		const transport = new FakeTransport();
 		const client = new AppServerProtocolClient(transport, { connectTimeoutMs: 20 });
 		using cleanup = toDisposable(() => client.dispose());
-		using observer = client.onStateChange(value => { if (value === state) client.dispose(); });
+		using observer = client.onStateChange(value => {
+			if (value === state) client.dispose();
+		});
 		await assert.rejects(client.connect(), state === 'starting' ? /client disposed/ : isCancellationError);
-		assert.deepEqual({
-			state: client.state,
-			connects: transport.sentEvents.filter(event => event === WEB_APP_SERVER_CONNECT_EVENT).length,
-			requests: transport.requests.length,
-		}, { state: 'stopped', connects: state === 'starting' ? 0 : 1, requests: state === 'ready' ? 1 : 0 });
+		assert.deepEqual(
+			{
+				state: client.state,
+				connects: transport.sentEvents.filter(event => event === WEB_APP_SERVER_CONNECT_EVENT).length,
+				requests: transport.requests.length,
+			},
+			{ state: 'stopped', connects: state === 'starting' ? 0 : 1, requests: state === 'ready' ? 1 : 0 },
+		);
 	});
 }
 
 test('a synchronous bridge send failure settles its waiter and permits a new connection', async () => {
 	let failConnect = true;
-	const transport = new class extends FakeTransport {
+	const transport = new (class extends FakeTransport {
 		override send(event: string, payload?: unknown): void {
-			if (event === WEB_APP_SERVER_CONNECT_EVENT && failConnect) { throw new Error('Bridge unavailable'); }
+			if (event === WEB_APP_SERVER_CONNECT_EVENT && failConnect) {
+				throw new Error('Bridge unavailable');
+			}
 			super.send(event, payload);
 		}
-	}();
+	})();
 	const client = new AppServerProtocolClient(transport);
 	using cleanup = toDisposable(() => client.dispose());
 	await assert.rejects(client.connect(), /Bridge unavailable/);
@@ -899,10 +1368,7 @@ test('a synchronous bridge send failure settles its waiter and permits a new con
 });
 
 test('a matching schema initializes and decodes additive result fields', async () => {
-	const transport = new FakeTransport(value => ({
-		...value,
-		futureCapability: true,
-	}));
+	const transport = new FakeTransport(value => ({ ...value, futureCapability: true }));
 	const client = new AppServerProtocolClient(transport);
 	try {
 		await client.connect();
@@ -910,21 +1376,31 @@ test('a matching schema initializes and decodes additive result fields', async (
 		transport.respondAt(-1, { automations: [], futureResultField: 1 });
 		assert.deepEqual(await response, { automations: [], futureResultField: 1 });
 		assert.equal(client.state, 'ready');
-	} finally { client.dispose(); }
+	} finally {
+		client.dispose();
+	}
 });
 
 test('incompatible versions and missing required capabilities never make a connection ready', async () => {
 	for (const initialize of [
-		(value: InitializeResult) => ({ ...value, protocolVersion: { ...value.protocolVersion, major: value.protocolVersion.major + 1 } }),
+		(value: InitializeResult) => ({
+			...value,
+			protocolVersion: { ...value.protocolVersion, major: value.protocolVersion.major + 1 },
+		}),
 		(value: InitializeResult) => ({ ...value, capabilities: { ...value.capabilities, sessions: false } }),
 		(value: InitializeResult) => ({ ...value, schemaHash: `sha256:${'0'.repeat(64)}` }),
 	]) {
 		const client = new AppServerProtocolClient(new FakeTransport(initialize));
 		try {
-			await assert.rejects(client.connect(), /protocol major mismatch|protocol schema mismatch|capability sessions/);
+			await assert.rejects(
+				client.connect(),
+				/protocol major mismatch|protocol schema mismatch|capability sessions/,
+			);
 			assert.equal(client.state, 'crashed');
 			await assert.rejects(client.request(APP_SERVER_METHODS['session/list'], {}), /not ready/);
-		} finally { client.dispose(); }
+		} finally {
+			client.dispose();
+		}
 	}
 });
 
@@ -933,125 +1409,173 @@ test('a successful handshake does not authorize undeclared notifications', async
 	const client = new AppServerProtocolClient(transport);
 	try {
 		await client.connect();
-		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: 'future/changed', params: {} }) });
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, {
+			frame: JSON.stringify({ jsonrpc: '2.0', method: 'future/changed', params: {} }),
+		});
 		assert.equal(client.state, 'crashed');
-	} finally { client.dispose(); }
+	} finally {
+		client.dispose();
+	}
 });
 
-test("connects, initializes, maps renderer requests, and disposes the Web connection", async () => {
+test('connects, initializes, maps renderer requests, and disposes the Web connection', async () => {
 	const hot = new FakeTransport();
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
-	assert.deepEqual(connected.metadata, { workspaceId: "web-dev:test", workspaceRoot: "C:\\workspace" });
-	assert.equal(await connected.api.appServer.getConnectionState(), "ready");
+	assert.deepEqual(connected.metadata, { workspaceId: 'web-dev:test', workspaceRoot: 'C:\\workspace' });
+	assert.equal(await connected.api.appServer.getConnectionState(), 'ready');
 	assert.deepEqual(await connected.api.appServer.getSlashCommands(), []);
 	assert.deepEqual(await connected.api.session.list(), { sessions: [] });
-	assert.deepEqual(hot.requests.map((request) => request.method), ["initialize", "session/list"]);
-	assert.equal((hot.requests[0]?.params as { capabilities: { directoryGrantsHost?: unknown; }; }).capabilities.directoryGrantsHost, undefined);
+	assert.deepEqual(
+		hot.requests.map(request => request.method),
+		['initialize', 'session/list'],
+	);
+	assert.equal(
+		(hot.requests[0]?.params as { capabilities: { directoryGrantsHost?: unknown } }).capabilities
+			.directoryGrantsHost,
+		undefined,
+	);
 	connected.dispose();
 	assert.equal(hot.sentEvents.at(-1), WEB_APP_SERVER_DISCONNECT_EVENT);
 });
 
-test("delivers App Server notifications and reports bridge closure", async () => {
+test('delivers App Server notifications and reports bridge closure', async () => {
 	const hot = new FakeTransport();
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
 	const notifications: ServerNotification[] = [];
 	const states: string[] = [];
-	connected.api.events.subscribe((notification) => notifications.push(notification));
-	connected.api.appServer.onConnectionState((state) => states.push(state));
-	const notification: ServerNotification = { method: "fs/changed", params: { type: "pathsChanged", paths: ["README.md"] } };
+	connected.api.events.subscribe(notification => notifications.push(notification));
+	connected.api.appServer.onConnectionState(state => states.push(state));
+	const notification: ServerNotification = {
+		method: 'fs/changed',
+		params: { type: 'pathsChanged', paths: ['README.md'] },
+	};
 	hot.emitNotification(notification);
-	hot.close("test bridge closed");
+	hot.close('test bridge closed');
 	assert.deepEqual(notifications, [notification]);
-	assert.deepEqual(states, ["crashed"]);
-	assert.equal(await connected.api.appServer.getConnectionState(), "crashed");
+	assert.deepEqual(states, ['crashed']);
+	assert.equal(await connected.api.appServer.getConnectionState(), 'crashed');
 	connected.dispose();
 });
 
-test("routes bounded syntax analysis through the connected renderer host", async () => {
+test('routes bounded syntax analysis through the connected renderer host', async () => {
 	const hot = new FakeTransport();
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
 
-	await connected.api.syntax.open({ documentId: "model-1", language: "rust", revision: 4, text: "fn main() {}\n" });
-	assert.equal(hot.requests.at(-1)?.method, "syntax/open");
-	await connected.api.syntax.update({ documentId: "model-1", previousRevision: 4, revision: 5, edits: [{ startOffset: 3, endOffset: 7, text: "entry" }] });
-	assert.equal(hot.requests.at(-1)?.method, "syntax/update");
-	const result = await connected.api.syntax.analyze({
-		documentId: "model-1",
+	await connected.api.syntax.open({ documentId: 'model-1', language: 'rust', revision: 4, text: 'fn main() {}\n' });
+	assert.equal(hot.requests.at(-1)?.method, 'syntax/open');
+	await connected.api.syntax.update({
+		documentId: 'model-1',
+		previousRevision: 4,
+		revision: 5,
+		edits: [{ startOffset: 3, endOffset: 7, text: 'entry' }],
+	});
+	assert.equal(hot.requests.at(-1)?.method, 'syntax/update');
+	const result = await connected.api.syntax.analyze({ documentId: 'model-1', revision: 4 });
+
+	assert.deepEqual(result, {
 		revision: 4,
+		hasErrors: false,
+		tokens: [],
+		foldingRanges: [],
+		symbols: [],
+		diagnostics: [],
+	});
+	assert.equal(hot.requests.at(-1)?.method, 'syntax/analyze');
+
+	assert.deepEqual(
+		await connected.api.syntax.selectionRanges({
+			documentId: 'model-1',
+			revision: 4,
+			ranges: [{ start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }],
+		}),
+		{ revision: 4, ranges: [] },
+	);
+	assert.equal(hot.requests.at(-1)?.method, 'syntax/selectionRanges');
+	await connected.api.syntax.close({ documentId: 'model-1' });
+	assert.equal(hot.requests.at(-1)?.method, 'syntax/close');
+	connected.dispose();
+});
+
+for (const operation of ['hover', 'formatOnType'] as const)
+	test(`uses a stable operation ID to cancel language ${operation}`, async () => {
+		const hot = new FakeTransport();
+		const connected = await connectWebRendererApi(hot, connectorHostServices);
+		const cancellation = new AbortController();
+		const request = {
+			document: { path: 'src/main.rs', languageId: 'rust', revision: 1, text: 'fn main() {}' },
+			position: { lineIndex: 0, columnIndex: 3 },
+		};
+		const pending =
+			operation === 'hover'
+				? connected.api.language.hover(request, { signal: cancellation.signal })
+				: connected.api.language.formatOnType(
+						{
+							...request,
+							character: '\n',
+							options: { tabSize: 2, insertSpaces: true, trimTrailingWhitespace: null },
+						},
+						{ signal: cancellation.signal },
+					);
+
+		const languageRequest = hot.requests.at(-1);
+		assert.equal(languageRequest?.method, `language/${operation}`);
+		const languageParams = languageRequest?.params;
+		assert.ok(isRecord(languageParams));
+		assert.equal(typeof languageParams.operationId, 'string');
+		assert.ok(isRecord(languageParams.request));
+		assert.ok(isRecord(languageParams.request.document));
+		assert.equal(languageParams.request.document.path, 'src/main.rs');
+
+		cancellation.abort();
+		const cancelRequest = hot.requests.at(-1);
+		assert.equal(cancelRequest?.method, 'language/cancel');
+		assert.deepEqual(cancelRequest?.params, { operationId: languageParams.operationId });
+		hot.respondAt(-1, { status: 'requested' });
+
+		await assert.rejects(pending, isCancellationError);
+		connected.dispose();
 	});
 
-	assert.deepEqual(result, { revision: 4, hasErrors: false, tokens: [], foldingRanges: [], symbols: [], diagnostics: [] });
-	assert.equal(hot.requests.at(-1)?.method, "syntax/analyze");
-
-	assert.deepEqual(await connected.api.syntax.selectionRanges({ documentId: "model-1", revision: 4, ranges: [{ start: { lineIndex: 0, columnIndex: 3 }, end: { lineIndex: 0, columnIndex: 7 } }] }), { revision: 4, ranges: [] });
-	assert.equal(hot.requests.at(-1)?.method, "syntax/selectionRanges");
-	await connected.api.syntax.close({ documentId: "model-1" });
-	assert.equal(hot.requests.at(-1)?.method, "syntax/close");
-	connected.dispose();
-});
-
-for (const operation of ['hover', 'formatOnType'] as const) test(`uses a stable operation ID to cancel language ${operation}`, async () => {
+test('keeps the language result when completion wins the cancel race', async () => {
 	const hot = new FakeTransport();
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
 	const cancellation = new AbortController();
-	const request = {
-		document: { path: "src/main.rs", languageId: "rust", revision: 1, text: "fn main() {}" },
-		position: { lineIndex: 0, columnIndex: 3 },
-	};
-	const pending = operation === 'hover'
-		? connected.api.language.hover(request, { signal: cancellation.signal })
-		: connected.api.language.formatOnType({ ...request, character: '\n', options: { tabSize: 2, insertSpaces: true, trimTrailingWhitespace: null } }, { signal: cancellation.signal });
-
-	const languageRequest = hot.requests.at(-1);
-	assert.equal(languageRequest?.method, `language/${operation}`);
-	const languageParams = languageRequest?.params;
-	assert.ok(isRecord(languageParams));
-	assert.equal(typeof languageParams.operationId, "string");
-	assert.ok(isRecord(languageParams.request));
-	assert.ok(isRecord(languageParams.request.document));
-	assert.equal(languageParams.request.document.path, "src/main.rs");
+	const pending = connected.api.language.hover(
+		{
+			document: { path: 'src/main.rs', languageId: 'rust', revision: 1, text: 'fn main() {}' },
+			position: { lineIndex: 0, columnIndex: 3 },
+		},
+		{ signal: cancellation.signal },
+	);
 
 	cancellation.abort();
-	const cancelRequest = hot.requests.at(-1);
-	assert.equal(cancelRequest?.method, "language/cancel");
-	assert.deepEqual(cancelRequest?.params, { operationId: languageParams.operationId });
-	hot.respondAt(-1, { status: "requested" });
+	hot.respondAt(-2, { revision: 1, contents: 'main', range: null });
+	hot.respondAt(-1, { status: 'completed' });
 
-	await assert.rejects(pending, isCancellationError);
+	assert.deepEqual(await pending, { revision: 1, contents: 'main', range: null });
 	connected.dispose();
 });
 
-test("keeps the language result when completion wins the cancel race", async () => {
+test('keeps the language failure when completion wins the cancel race', async () => {
 	const hot = new FakeTransport();
 	const connected = await connectWebRendererApi(hot, connectorHostServices);
 	const cancellation = new AbortController();
-	const pending = connected.api.language.hover({
-		document: { path: "src/main.rs", languageId: "rust", revision: 1, text: "fn main() {}" },
-		position: { lineIndex: 0, columnIndex: 3 },
-	}, { signal: cancellation.signal });
+	const pending = connected.api.language.hover(
+		{
+			document: { path: 'src/main.rs', languageId: 'rust', revision: 1, text: 'fn main() {}' },
+			position: { lineIndex: 0, columnIndex: 3 },
+		},
+		{ signal: cancellation.signal },
+	);
 
 	cancellation.abort();
-	hot.respondAt(-2, { revision: 1, contents: "main", range: null });
-	hot.respondAt(-1, { status: "completed" });
+	hot.rejectAt(-2, { code: -32072, message: 'LanguageRequestFailed', data: { kind: 'LanguageRequestFailed' } });
+	hot.respondAt(-1, { status: 'completed' });
 
-	assert.deepEqual(await pending, { revision: 1, contents: "main", range: null });
-	connected.dispose();
-});
-
-test("keeps the language failure when completion wins the cancel race", async () => {
-	const hot = new FakeTransport();
-	const connected = await connectWebRendererApi(hot, connectorHostServices);
-	const cancellation = new AbortController();
-	const pending = connected.api.language.hover({
-		document: { path: "src/main.rs", languageId: "rust", revision: 1, text: "fn main() {}" },
-		position: { lineIndex: 0, columnIndex: 3 },
-	}, { signal: cancellation.signal });
-
-	cancellation.abort();
-	hot.rejectAt(-2, { code: -32072, message: "LanguageRequestFailed", data: { kind: "LanguageRequestFailed" } });
-	hot.respondAt(-1, { status: "completed" });
-
-	await assert.rejects(pending, (error: unknown) => error instanceof AppServerRemoteError && error.errorName === "LanguageRequestFailed");
+	await assert.rejects(
+		pending,
+		(error: unknown) => error instanceof AppServerRemoteError && error.errorName === 'LanguageRequestFailed',
+	);
 	connected.dispose();
 });
 
@@ -1060,21 +1584,31 @@ test('renderer dispatches host requests and rejects late results after disconnec
 	const client = new AppServerProtocolClient(hot);
 	using cleanup = toDisposable(() => client.dispose());
 	let signal: AbortSignal | undefined;
-	let finish!: (value: { targetId: string; }) => void;
+	let finish!: (value: { targetId: string }) => void;
 	const handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
 		signal = context.signal;
-		return new Promise(resolve => { finish = resolve; });
+		return new Promise(resolve => {
+			finish = resolve;
+		});
 	});
 	await client.connect();
-	const params: BrowserCreateParams = { threadId: '00000000-0000-4000-8000-000000000001', url: 'https://example.test' };
-	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'host-1', method: 'browser/create', params }) });
+	const params: BrowserCreateParams = {
+		threadId: '00000000-0000-4000-8000-000000000001',
+		url: 'https://example.test',
+	};
+	hot.emit(WEB_APP_SERVER_FRAME_EVENT, {
+		frame: JSON.stringify({ jsonrpc: '2.0', id: 'host-1', method: 'browser/create', params }),
+	});
 	await Promise.resolve();
 	assert.equal(signal?.aborted, false);
 	client.disconnect();
 	assert.equal(signal?.aborted, true);
 	finish({ targetId: 'retired-target' });
 	await new Promise(resolve => setTimeout(resolve, 0));
-	assert.equal(hot.requests.some(request => request.id === 'host-1'), false);
+	assert.equal(
+		hot.requests.some(request => request.id === 'host-1'),
+		false,
+	);
 	await client.connect();
 	assert.equal(client.generation, 2);
 	handler.dispose();
@@ -1090,10 +1624,23 @@ for (const cancelled of [false, true]) {
 			throw cancelled ? new CancellationError('host operation cancelled') : new Error('host operation failed');
 		});
 		await client.connect();
-		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'host-error', method: 'browser/create', params: { threadId: '00000000-0000-4000-8000-000000000001', url: 'https://example.test' } }) });
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, {
+			frame: JSON.stringify({
+				jsonrpc: '2.0',
+				id: 'host-error',
+				method: 'browser/create',
+				params: { threadId: '00000000-0000-4000-8000-000000000001', url: 'https://example.test' },
+			}),
+		});
 		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.deepEqual(decodeAppServerServerResponse('browser/create', transport.requests.at(-1)), {
-			jsonrpc: '2.0', id: 'host-error', error: { code: cancelled ? -32800 : -32000, message: cancelled ? 'host operation cancelled' : 'host operation failed', data: null },
+			jsonrpc: '2.0',
+			id: 'host-error',
+			error: {
+				code: cancelled ? -32800 : -32000,
+				message: cancelled ? 'host operation cancelled' : 'host operation failed',
+				data: null,
+			},
 		});
 		assert.equal(client.state, 'ready');
 		const next = client.request(APP_SERVER_METHODS['automation/list'], {});
@@ -1106,7 +1653,9 @@ test('invalid response rejects its pending request and unknown host methods rece
 	const hot = new FakeTransport();
 	const client = new AppServerProtocolClient(hot);
 	await client.connect();
-	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'unknown-1', method: 'host/unknown', params: {} }) });
+	hot.emit(WEB_APP_SERVER_FRAME_EVENT, {
+		frame: JSON.stringify({ jsonrpc: '2.0', id: 'unknown-1', method: 'host/unknown', params: {} }),
+	});
 	assert.deepEqual(hot.requests.at(-1)?.error, { code: -32601, message: 'Method not found', data: null });
 	assert.equal(client.state, 'ready');
 	const pending = client.request(APP_SERVER_METHODS['automation/list'], {});
@@ -1131,14 +1680,29 @@ test('extension client callbacks round-trip immutable JSON and release their req
 		return { result: 'command', value: Object.freeze({ paths: Object.freeze(['src/main.ts']) }) };
 	});
 	try {
-		const params = { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation: { operation: 'executeCommand', command: 'test.paths', arguments: [{ paths: ['src/main.ts'] }] } };
-		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-1', method: 'extensionClient/request', params }) });
+		const params = {
+			extensionId: 'test.editor',
+			activationGeneration: 7,
+			incarnation: 3,
+			operation: { operation: 'executeCommand', command: 'test.paths', arguments: [{ paths: ['src/main.ts'] }] },
+		};
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, {
+			frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-1', method: 'extensionClient/request', params }),
+		});
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual(transport.requests.at(-1), { jsonrpc: '2.0', id: 'extension-1', result: { result: 'command', hasValue: true, value: { paths: ['src/main.ts'] } } });
+		assert.deepEqual(transport.requests.at(-1), {
+			jsonrpc: '2.0',
+			id: 'extension-1',
+			result: { result: 'command', hasValue: true, value: { paths: ['src/main.ts'] } },
+		});
 		registration.dispose();
-		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-2', method: 'extensionClient/request', params }) });
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, {
+			frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-2', method: 'extensionClient/request', params }),
+		});
 		assert.deepEqual(transport.requests.at(-1)?.error, { code: -32601, message: 'Method not found', data: null });
-	} finally { registration.dispose(); }
+	} finally {
+		registration.dispose();
+	}
 });
 
 test('extension backend routes validate generated parameters before dispatch', async () => {
@@ -1146,10 +1710,16 @@ test('extension backend routes validate generated parameters before dispatch', a
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
 	const signal = new AbortController().signal;
-	assert.deepEqual(JSON.parse(JSON.stringify(await connected.api.extensionBackend.request('session/list', {}, signal))), { sessions: [] });
+	assert.deepEqual(
+		JSON.parse(JSON.stringify(await connected.api.extensionBackend.request('session/list', {}, signal))),
+		{ sessions: [] },
+	);
 	const count = transport.requests.length;
 	for (const params of [[], { unknown: true }]) {
-		await assert.rejects(connected.api.extensionBackend.request('session/list', params, signal), AppServerProtocolDecodeError);
+		await assert.rejects(
+			connected.api.extensionBackend.request('session/list', params, signal),
+			AppServerProtocolDecodeError,
+		);
 	}
 	for (const method of ['unknown/route', '__proto__']) {
 		await assert.rejects(connected.api.extensionBackend.request(method, {}, signal), TypeError);
@@ -1176,9 +1746,20 @@ for (const operation of [
 			return { result: 'value', value: Object.freeze({ paths }) };
 		});
 		using handlerCleanup = toDisposable(() => registration.dispose());
-		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-json', method: 'extensionClient/request', params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation } }) });
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, {
+			frame: JSON.stringify({
+				jsonrpc: '2.0',
+				id: 'extension-json',
+				method: 'extensionClient/request',
+				params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation },
+			}),
+		});
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual(transport.requests.at(-1), { jsonrpc: '2.0', id: 'extension-json', result: { result: 'value', value: { paths: ['file:///workspace/sample.txt'] } } });
+		assert.deepEqual(transport.requests.at(-1), {
+			jsonrpc: '2.0',
+			id: 'extension-json',
+			result: { result: 'value', value: { paths: ['file:///workspace/sample.txt'] } },
+		});
 		assert.equal(await connected.api.extensionHost.getConnectionState(), 'ready');
 	});
 }
@@ -1187,46 +1768,105 @@ test('browser-only extension results are rejected by the App Server adapter', as
 	const transport = new FakeTransport();
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	using cleanup = toDisposable(() => connected.dispose());
-	const registration = connected.api.extensionHost.registerClientHandler(async () => ({ result: 'value', value: null }));
+	const registration = connected.api.extensionHost.registerClientHandler(async () => ({
+		result: 'value',
+		value: null,
+	}));
 	try {
-		transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'browser-result', method: 'extensionClient/request', params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation: { operation: 'readConfiguration', section: 'editor', resource: null } } }) });
+		transport.emit(WEB_APP_SERVER_FRAME_EVENT, {
+			frame: JSON.stringify({
+				jsonrpc: '2.0',
+				id: 'browser-result',
+				method: 'extensionClient/request',
+				params: {
+					extensionId: 'test.editor',
+					activationGeneration: 7,
+					incarnation: 3,
+					operation: { operation: 'readConfiguration', section: 'editor', resource: null },
+				},
+			}),
+		});
 		await new Promise<void>(resolve => setImmediate(resolve));
-		assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message: 'Browser extension results cannot be returned over the App Server protocol', data: null });
+		assert.deepEqual(transport.requests.at(-1)?.error, {
+			code: -32000,
+			message: 'Browser extension results cannot be returned over the App Server protocol',
+			data: null,
+		});
 		assert.equal(await connected.api.extensionHost.getConnectionState(), 'ready');
-	} finally { registration.dispose(); }
+	} finally {
+		registration.dispose();
+	}
 });
 
 test('Call service is assembled from the negotiated contract and ignores stale or foreign updates', async () => {
-	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, calls: { version: 1 } } } }));
+	const transport = new FakeTransport(value => ({
+		...value,
+		capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, calls: { version: 1 } } },
+	}));
 	const connected = await connectWebRendererApi(transport, connectorHostServices);
 	try {
 		const calls = connected.api.calls;
 		assert.ok(calls);
 		const starting = calls.start({ type: 'local' });
-		const params = transport.requests.at(-1)?.params as { resourceId: string; };
+		const params = transport.requests.at(-1)?.params as { resourceId: string };
 		const status = {
-			resourceId: params.resourceId, sequence: 1, connection: 'connected' as const,
-			call: { id: 'call', revision: 1, mediaEpoch: 1, mediaRoom: 'room', mediaState: { state: 'ready' as const }, members: [{ id: 'owner', role: 'owner' as const }], documents: [] },
-			memberId: 'owner', participants: [], muted: true, deafened: false, microphoneAllowed: true, screenSharing: false, error: null,
+			resourceId: params.resourceId,
+			sequence: 1,
+			connection: 'connected' as const,
+			call: {
+				id: 'call',
+				revision: 1,
+				mediaEpoch: 1,
+				mediaRoom: 'room',
+				mediaState: { state: 'ready' as const },
+				members: [{ id: 'owner', role: 'owner' as const }],
+				documents: [],
+			},
+			memberId: 'owner',
+			participants: [],
+			muted: true,
+			deafened: false,
+			microphoneAllowed: true,
+			screenSharing: false,
+			error: null,
 		};
 		transport.respondAt(-1, status);
 		await starting;
 		transport.emitNotification({ method: 'call/changed', params: { ...status, sequence: 3, muted: false } });
 		transport.emitNotification({ method: 'call/changed', params: { ...status, sequence: 2 } });
-		transport.emitNotification({ method: 'call/changed', params: { ...status, sequence: 4, resourceId: 'another-window' } });
+		transport.emitNotification({
+			method: 'call/changed',
+			params: { ...status, sequence: 4, resourceId: 'another-window' },
+		});
 		assert.equal(calls.state?.muted, false);
 		const leaving = calls.leave();
 		transport.respondAt(-1, { ...status, sequence: 4, connection: 'ended', muted: true });
 		await leaving;
 		assert.equal(calls.state?.connection, 'ended');
-	} finally { connected.dispose(); }
+	} finally {
+		connected.dispose();
+	}
 });
-
 
 for (const [operation, message] of [
 	[{ operation: 'readWorkspaceFile', path: 'data.txt' }, 'Workspace file requests must be handled by App Server'],
-	[{ operation: 'coreService', request: { service: 'secretLoad', key: 'token' } }, 'Core service requests must be handled by App Server'],
-	[{ operation: 'coreService', request: { service: 'httpExecute', method: 'get', url: 'https://api.github.com/user', headers: [], body: [] } }, 'Core service requests must be handled by App Server'],
+	[
+		{ operation: 'coreService', request: { service: 'secretLoad', key: 'token' } },
+		'Core service requests must be handled by App Server',
+	],
+	[
+		{
+			operation: 'coreService',
+			request: {
+				service: 'httpExecute',
+				method: 'get',
+				url: 'https://api.github.com/user',
+				headers: [],
+				body: [],
+			},
+		},
+		'Core service requests must be handled by App Server',
+	],
 ] as const) {
 	test(`extension ${operation.operation}${'request' in operation ? ` ${operation.request.service}` : ''} requests are rejected before reaching a renderer service`, async () => {
 		const transport = new FakeTransport();
@@ -1238,18 +1878,30 @@ for (const [operation, message] of [
 			return { result: 'done' };
 		});
 		try {
-			transport.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'extension-backend', method: 'extensionClient/request', params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation } }) });
+			transport.emit(WEB_APP_SERVER_FRAME_EVENT, {
+				frame: JSON.stringify({
+					jsonrpc: '2.0',
+					id: 'extension-backend',
+					method: 'extensionClient/request',
+					params: { extensionId: 'test.editor', activationGeneration: 7, incarnation: 3, operation },
+				}),
+			});
 			await new Promise<void>(resolve => setImmediate(resolve));
 			assert.equal(calls, 0);
 			if (operation.operation === 'coreService') {
 				// Backend-only services have no renderer wire variant and fail protocol decoding.
-				assert.equal(transport.requests.some(request => request.id === 'extension-backend'), false);
+				assert.equal(
+					transport.requests.some(request => request.id === 'extension-backend'),
+					false,
+				);
 				assert.equal(await connected.api.extensionHost.getConnectionState(), 'crashed');
 			} else {
 				assert.deepEqual(transport.requests.at(-1)?.error, { code: -32000, message, data: null });
 				assert.equal(await connected.api.extensionHost.getConnectionState(), 'ready');
 			}
-		} finally { registration.dispose(); }
+		} finally {
+			registration.dispose();
+		}
 	});
 }
 
@@ -1287,7 +1939,9 @@ test('file glob cancellation waits for the original terminal reply and rejects l
 	assert.ok(isRecord(operation.params));
 	assert.deepEqual(cancel.params, { operationId: operation.params.operationId });
 	let settled = false;
-	const rejected = assert.rejects(pending, isCancellationError).then(() => { settled = true; });
+	const rejected = assert.rejects(pending, isCancellationError).then(() => {
+		settled = true;
+	});
 	transport.respondAt(-1, null);
 	await Promise.resolve();
 	assert.equal(settled, false);
@@ -1306,16 +1960,36 @@ test('file fuzzy search preserves backend rank and scopes Unicode resources to t
 	const query = { query: '中文 SRC', maxResults: 10 };
 	const pending = connected.api.fileSearch.fuzzy(directory, query);
 	let settled = false;
-	void pending.then(() => { settled = true; }, () => { settled = true; });
+	void pending.then(
+		() => {
+			settled = true;
+		},
+		() => {
+			settled = true;
+		},
+	);
 	const request = transport.requests.at(-1)!;
 	assert.equal(request.method, 'file/search/fuzzy');
 	assert.ok(isRecord(request.params));
 	assert.deepEqual(request.params, { operationId: request.params.operationId, target: directory.target, ...query });
 	await new Promise(resolve => setTimeout(resolve, 25));
 	assert.equal(settled, false, 'cold file search must outlive the ordinary RPC deadline');
-	transport.respondAt(-1, { matches: [{ path: 'src/中文.ts', score: 100 }, { path: 'src/中文-notes.ts', score: 90 }], totalMatches: 20, freshness: 'indexed' });
+	transport.respondAt(-1, {
+		matches: [
+			{ path: 'src/中文.ts', score: 100 },
+			{ path: 'src/中文-notes.ts', score: 90 },
+		],
+		totalMatches: 20,
+		freshness: 'indexed',
+	});
 	const result = await pending;
-	assert.deepEqual(result.matches.map(match => ({ path: match.resource.path, score: match.score })), [{ path: '/workspace/src/中文.ts', score: 100 }, { path: '/workspace/src/中文-notes.ts', score: 90 }]);
+	assert.deepEqual(
+		result.matches.map(match => ({ path: match.resource.path, score: match.score })),
+		[
+			{ path: '/workspace/src/中文.ts', score: 100 },
+			{ path: '/workspace/src/中文-notes.ts', score: 90 },
+		],
+	);
 	assert.equal(result.totalMatches, 20);
 });
 
@@ -1332,14 +2006,19 @@ test('file fuzzy cancellation keeps its request until the terminal reply and dis
 	assert.ok(isRecord(operation.params));
 	assert.deepEqual(transport.requests.at(-1)?.params, { operationId: operation.params.operationId });
 	let settled = false;
-	const rejected = assert.rejects(pending, isCancellationError).then(() => { settled = true; });
+	const rejected = assert.rejects(pending, isCancellationError).then(() => {
+		settled = true;
+	});
 	transport.respondAt(-1, null);
 	await Promise.resolve();
 	assert.equal(settled, false);
 	transport.respondAt(-2, { matches: [{ path: 'stale.txt', score: 50 }], totalMatches: 1, freshness: 'indexed' });
 	await rejected;
 	const count = transport.requests.length;
-	await assert.rejects(connected.api.fileSearch.fuzzy(directory, { query: 'stale', maxResults: 10 }, controller.signal), isCancellationError);
+	await assert.rejects(
+		connected.api.fileSearch.fuzzy(directory, { query: 'stale', maxResults: 10 }, controller.signal),
+		isCancellationError,
+	);
 	assert.equal(transport.requests.length, count);
 });
 
@@ -1348,25 +2027,41 @@ test('host cancellation retires only its request and ignores late completion', a
 	const client = new AppServerProtocolClient(hot);
 	using cleanup = toDisposable(() => client.dispose());
 	let signal: AbortSignal | undefined;
-	let finish!: (value: { targetId: string; }) => void;
+	let finish!: (value: { targetId: string }) => void;
 	using handler = client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['browser/create'], (_params, context) => {
 		signal = context.signal;
-		return new Promise(resolve => { finish = resolve; });
+		return new Promise(resolve => {
+			finish = resolve;
+		});
 	});
 	await client.connect();
-	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: 'cancel-host', method: 'browser/create', params: { threadId: '00000000-0000-4000-8000-000000000001', url: 'https://example.test' } }) });
+	hot.emit(WEB_APP_SERVER_FRAME_EVENT, {
+		frame: JSON.stringify({
+			jsonrpc: '2.0',
+			id: 'cancel-host',
+			method: 'browser/create',
+			params: { threadId: '00000000-0000-4000-8000-000000000001', url: 'https://example.test' },
+		}),
+	});
 	await Promise.resolve();
-	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 'cancel-host' } }) });
+	hot.emit(WEB_APP_SERVER_FRAME_EVENT, {
+		frame: JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 'cancel-host' } }),
+	});
 	assert.equal(signal?.aborted, true);
 	assert.equal(client.state, 'ready');
-	assert.deepEqual(hot.requests.find(request => request.id === 'cancel-host')?.error, { code: -32800, message: 'Host request cancelled', data: null });
+	assert.deepEqual(hot.requests.find(request => request.id === 'cancel-host')?.error, {
+		code: -32800,
+		message: 'Host request cancelled',
+		data: null,
+	});
 	finish({ targetId: 'cancelled-target' });
 	await new Promise(resolve => setTimeout(resolve, 0));
 	assert.equal(hot.requests.filter(request => request.id === 'cancel-host').length, 1);
-	hot.emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 'unknown-host' } }) });
+	hot.emit(WEB_APP_SERVER_FRAME_EVENT, {
+		frame: JSON.stringify({ jsonrpc: '2.0', method: '$/cancelRequest', params: { id: 'unknown-host' } }),
+	});
 	assert.equal(client.state, 'ready');
 });
-
 
 test('the generated protocol client decodes external catalog scopes and revocation without an account', async () => {
 	const transport = new FakeTransport();
@@ -1374,12 +2069,22 @@ test('the generated protocol client decodes external catalog scopes and revocati
 	using cleanup = toDisposable(() => client.dispose());
 	await client.connect();
 	const observed: ServerNotification[] = [];
-	using listener = client.onNotification(notification => { observed.push(notification); });
-	const expected: ServerNotification[] = ['scope-a', null].map(identity => ({ method: 'provider/models/updated', params: { connection: 'kimi-cli', catalogScope: { connection: 'kimi-cli', identity }, result: { type: 'empty' } } }));
-	for (const notification of expected) { transport.emitNotification(notification); }
+	using listener = client.onNotification(notification => {
+		observed.push(notification);
+	});
+	const expected: ServerNotification[] = ['scope-a', null].map(identity => ({
+		method: 'provider/models/updated',
+		params: {
+			connection: 'kimi-cli',
+			catalogScope: { connection: 'kimi-cli', identity },
+			result: { type: 'empty' },
+		},
+	}));
+	for (const notification of expected) {
+		transport.emitNotification(notification);
+	}
 	assert.deepEqual(observed, expected);
 });
-
 
 test('Agent Thread domain events cross the real decoder and release listeners across reconnects', async () => {
 	const transport = new FakeTransport();
@@ -1390,10 +2095,56 @@ test('Agent Thread domain events cross the real decoder and release listeners ac
 	const receiver = { transcripts: [] as ThreadTranscriptUpdateEnvelope[] };
 	using subscriptions = new DisposableStore();
 	service.onDidUpdateThread(update => updates.push(update), undefined, subscriptions);
-	service.onDidUpdateThreadTranscript(function (this: typeof receiver, update) { this.transcripts.push(update); }, receiver, subscriptions);
+	service.onDidUpdateThreadTranscript(
+		function (this: typeof receiver, update) {
+			this.transcripts.push(update);
+		},
+		receiver,
+		subscriptions,
+	);
 	await client.connect();
-	const call: ServerNotification = { method: 'session/thread/update', params: { sessionId: 'session', threadId: 'thread', durableSequence: 1, update: { type: 'itemStarted', turnId: 'turn', item: { type: 'toolCall', itemId: 'call', turnId: 'turn', toolCallId: 'tool', name: 'shell', argumentsJson: '{}' } } } };
-	const transcript: ServerNotification = { method: 'session/thread/transcript/update', params: { sessionId: 'session', threadId: 'thread', durableSequence: 1, revision: 2, changes: [{ type: 'upsert', entry: { type: 'toolOutput', entryId: 'output', turnId: 'turn', toolCallId: 'tool', stream: 'stdout', text: 'hello' } }] } };
+	const call: ServerNotification = {
+		method: 'session/thread/update',
+		params: {
+			sessionId: 'session',
+			threadId: 'thread',
+			durableSequence: 1,
+			update: {
+				type: 'itemStarted',
+				turnId: 'turn',
+				item: {
+					type: 'toolCall',
+					itemId: 'call',
+					turnId: 'turn',
+					toolCallId: 'tool',
+					name: 'shell',
+					argumentsJson: '{}',
+				},
+			},
+		},
+	};
+	const transcript: ServerNotification = {
+		method: 'session/thread/transcript/update',
+		params: {
+			sessionId: 'session',
+			threadId: 'thread',
+			durableSequence: 1,
+			revision: 2,
+			changes: [
+				{
+					type: 'upsert',
+					entry: {
+						type: 'toolOutput',
+						entryId: 'output',
+						turnId: 'turn',
+						toolCallId: 'tool',
+						stream: 'stdout',
+						text: 'hello',
+					},
+				},
+			],
+		},
+	};
 	transport.emitNotification(call);
 	transport.emitNotification(transcript);
 	transport.emitNotification({ method: 'queue/changed', params: {} });
@@ -1413,89 +2164,260 @@ test('Agent Thread domain events cross the real decoder and release listeners ac
 	assert.equal(receiver.transcripts.length, 1);
 });
 
-
 test('Voice adapter binds task requests to the original decoded media source and ignores stale epochs', async () => {
-	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, voiceConversation: { version: 2 } } } }));
+	const transport = new FakeTransport(value => ({
+		...value,
+		capabilities: {
+			...value.capabilities,
+			contracts: { ...value.capabilities.contracts, voiceConversation: { version: 2 } },
+		},
+	}));
 	const client = new AppServerProtocolClient(transport);
-	using cleanup = new DisposableStore(); cleanup.add(toDisposable(() => client.dispose())); await client.connect();
+	using cleanup = new DisposableStore();
+	cleanup.add(toDisposable(() => client.dispose()));
+	await client.connect();
 	const voice = cleanup.add(new AppServerAgentVoiceService(client));
-	const tasks: string[] = []; cleanup.add(voice.onDidRequestTask(task => tasks.push(task.commandId)));
-	const pending = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai', modelId: 'speech', voice: 'alloy' });
-	const params = transport.requests.at(-1)!.params as { resourceId: string; operationId: string; };
-	const status = { resourceId: params.resourceId, sessionId: 'source', threadId: 'thread', mediaEpoch: 1, sequence: 2, state: 'connected' as const, inputMode: 'openMic' as const, muted: false, listening: true, inputSequence: 0, usageMilliseconds: 0, error: null };
-	transport.respondAt(-1, status); await pending;
+	const tasks: string[] = [];
+	cleanup.add(voice.onDidRequestTask(task => tasks.push(task.commandId)));
+	const pending = voice.start(
+		{ sessionId: 'source', threadId: 'thread' },
+		{ connectionId: 'openai', modelId: 'speech', voice: 'alloy' },
+	);
+	const params = transport.requests.at(-1)!.params as { resourceId: string; operationId: string };
+	const status = {
+		resourceId: params.resourceId,
+		sessionId: 'source',
+		threadId: 'thread',
+		mediaEpoch: 1,
+		sequence: 2,
+		state: 'connected' as const,
+		inputMode: 'openMic' as const,
+		muted: false,
+		listening: true,
+		inputSequence: 0,
+		usageMilliseconds: 0,
+		error: null,
+	};
+	transport.respondAt(-1, status);
+	await pending;
 	const task = { ...status, delegationId: 'proposal', commandId: 'original-command', transcript: 'run tests' };
-	const { sequence: _sequence, state: _state, inputMode: _inputMode, muted: _muted, listening: _listening, inputSequence: _inputSequence, usageMilliseconds: _usage, error: _error, ...delegation } = task;
+	const {
+		sequence: _sequence,
+		state: _state,
+		inputMode: _inputMode,
+		muted: _muted,
+		listening: _listening,
+		inputSequence: _inputSequence,
+		usageMilliseconds: _usage,
+		error: _error,
+		...delegation
+	} = task;
 	transport.emitNotification({ method: 'voice/delegation', params: { ...delegation, threadId: 'other' } });
 	transport.emitNotification({ method: 'voice/delegation', params: delegation });
 	assert.deepEqual(tasks, ['original-command']);
 	const interrupt = voice.interrupt();
 	assert.equal(transport.requests.at(-1)?.method, 'voice/interrupt');
-	transport.respondAt(-1, { ...status, mediaEpoch: 2, sequence: 2 }); await interrupt;
+	transport.respondAt(-1, { ...status, mediaEpoch: 2, sequence: 2 });
+	await interrupt;
 	transport.emitNotification({ method: 'voice/changed', params: { ...status, sequence: 999, state: 'failed' } });
 	transport.emitNotification({ method: 'voice/delegation', params: delegation });
-	assert.equal(voice.state?.mediaEpoch, 2); assert.deepEqual(tasks, ['original-command']);
-	transport.close('closed'); assert.equal(voice.state, undefined); assert.equal(voice.isAvailable, false);
-	await client.connect(); assert.equal(voice.state, undefined);
+	assert.equal(voice.state?.mediaEpoch, 2);
+	assert.deepEqual(tasks, ['original-command']);
+	transport.close('closed');
+	assert.equal(voice.state, undefined);
+	assert.equal(voice.isAvailable, false);
+	await client.connect();
+	assert.equal(voice.state, undefined);
 	assert.equal(transport.requests.filter(request => request.method === 'voice/start').length, 1);
 });
 
 test('Voice start cancellation retires its original operation and stops an acknowledged late resource', async () => {
-	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, voiceConversation: { version: 2 } } } }));
-	const client = new AppServerProtocolClient(transport); using cleanup = new DisposableStore(); cleanup.add(toDisposable(() => client.dispose())); await client.connect();
-	const voice = cleanup.add(new AppServerAgentVoiceService(client)); const controller = new AbortController();
-	const pending = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai' }, controller.signal);
+	const transport = new FakeTransport(value => ({
+		...value,
+		capabilities: {
+			...value.capabilities,
+			contracts: { ...value.capabilities.contracts, voiceConversation: { version: 2 } },
+		},
+	}));
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = new DisposableStore();
+	cleanup.add(toDisposable(() => client.dispose()));
+	await client.connect();
+	const voice = cleanup.add(new AppServerAgentVoiceService(client));
+	const controller = new AbortController();
+	const pending = voice.start(
+		{ sessionId: 'source', threadId: 'thread' },
+		{ connectionId: 'openai' },
+		controller.signal,
+	);
 	const rejected = assert.rejects(pending, isCancellationError);
 	const requestIndex = transport.requests.length - 1;
-	const params = transport.requests.at(-1)!.params as { resourceId: string; operationId: string; };
-	controller.abort(); assert.deepEqual(transport.requests.at(-1)?.params, { operationId: params.operationId }); transport.respondAt(-1, null);
-	transport.respondAt(requestIndex, { resourceId: params.resourceId, sessionId: 'source', threadId: 'thread', mediaEpoch: 3, sequence: 2, state: 'connected', inputMode: 'openMic' as const, muted: false, listening: true, inputSequence: 0, usageMilliseconds: 0, error: null });
+	const params = transport.requests.at(-1)!.params as { resourceId: string; operationId: string };
+	controller.abort();
+	assert.deepEqual(transport.requests.at(-1)?.params, { operationId: params.operationId });
+	transport.respondAt(-1, null);
+	transport.respondAt(requestIndex, {
+		resourceId: params.resourceId,
+		sessionId: 'source',
+		threadId: 'thread',
+		mediaEpoch: 3,
+		sequence: 2,
+		state: 'connected',
+		inputMode: 'openMic' as const,
+		muted: false,
+		listening: true,
+		inputSequence: 0,
+		usageMilliseconds: 0,
+		error: null,
+	});
 	// The pending start promise has settled before cleanup issues stop.
 	for (let i = 0; i < 8 && transport.requests.at(-1)?.method !== 'voice/stop'; i++) await Promise.resolve();
 	assert.equal(transport.requests.at(-1)?.method, 'voice/stop');
-	transport.respondAt(-1, { resourceId: params.resourceId, sessionId: 'source', threadId: 'thread', mediaEpoch: 3, sequence: 3, state: 'ended', inputMode: 'openMic' as const, muted: false, listening: false, inputSequence: 0, usageMilliseconds: 0, error: null });
-	await rejected; assert.equal(voice.state?.state, 'ended');
+	transport.respondAt(-1, {
+		resourceId: params.resourceId,
+		sessionId: 'source',
+		threadId: 'thread',
+		mediaEpoch: 3,
+		sequence: 3,
+		state: 'ended',
+		inputMode: 'openMic' as const,
+		muted: false,
+		listening: false,
+		inputSequence: 0,
+		usageMilliseconds: 0,
+		error: null,
+	});
+	await rejected;
+	assert.equal(voice.state?.state, 'ended');
 });
 
 test('Voice cancellation preserves cancellation semantics when the original start returns a late failure', async () => {
-	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, voiceConversation: { version: 2 } } } }));
-	const client = new AppServerProtocolClient(transport); using cleanup = new DisposableStore(); cleanup.add(toDisposable(() => client.dispose())); await client.connect();
-	const voice = cleanup.add(new AppServerAgentVoiceService(client)); const controller = new AbortController();
-	const pending = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai' }, controller.signal); const rejected = assert.rejects(pending, isCancellationError);
-	const startIndex = transport.requests.length - 1; controller.abort(); transport.respondAt(-1, null);
+	const transport = new FakeTransport(value => ({
+		...value,
+		capabilities: {
+			...value.capabilities,
+			contracts: { ...value.capabilities.contracts, voiceConversation: { version: 2 } },
+		},
+	}));
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = new DisposableStore();
+	cleanup.add(toDisposable(() => client.dispose()));
+	await client.connect();
+	const voice = cleanup.add(new AppServerAgentVoiceService(client));
+	const controller = new AbortController();
+	const pending = voice.start(
+		{ sessionId: 'source', threadId: 'thread' },
+		{ connectionId: 'openai' },
+		controller.signal,
+	);
+	const rejected = assert.rejects(pending, isCancellationError);
+	const startIndex = transport.requests.length - 1;
+	controller.abort();
+	transport.respondAt(-1, null);
 	transport.rejectAt(startIndex, { code: -32000, message: 'InternalError', data: { kind: 'InternalError' } });
-	await rejected; assert.equal(voice.state, undefined);
+	await rejected;
+	assert.equal(voice.state, undefined);
 });
 
 test('Voice start cannot report connected after a newer terminal media notification', async () => {
-	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, voiceConversation: { version: 2 } } } }));
-	const client = new AppServerProtocolClient(transport); using cleanup = new DisposableStore(); cleanup.add(toDisposable(() => client.dispose())); await client.connect();
-	const voice = cleanup.add(new AppServerAgentVoiceService(client)); const pending = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai' }); const rejected = assert.rejects(pending, /Could not start/u);
-	const params = transport.requests.at(-1)!.params as { resourceId: string; };
-	const status = { resourceId: params.resourceId, sessionId: 'source', threadId: 'thread', mediaEpoch: 1, sequence: 3, state: 'ended' as const, inputMode: 'openMic' as const, muted: false, listening: false, inputSequence: 0, usageMilliseconds: 500, error: null };
-	transport.emitNotification({ method: 'voice/changed', params: status }); transport.respondAt(-1, { ...status, sequence: 2, state: 'connected' });
-	await rejected; assert.equal(voice.state?.state, 'ended'); assert.equal(voice.state?.usageMilliseconds, 500);
+	const transport = new FakeTransport(value => ({
+		...value,
+		capabilities: {
+			...value.capabilities,
+			contracts: { ...value.capabilities.contracts, voiceConversation: { version: 2 } },
+		},
+	}));
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = new DisposableStore();
+	cleanup.add(toDisposable(() => client.dispose()));
+	await client.connect();
+	const voice = cleanup.add(new AppServerAgentVoiceService(client));
+	const pending = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai' });
+	const rejected = assert.rejects(pending, /Could not start/u);
+	const params = transport.requests.at(-1)!.params as { resourceId: string };
+	const status = {
+		resourceId: params.resourceId,
+		sessionId: 'source',
+		threadId: 'thread',
+		mediaEpoch: 1,
+		sequence: 3,
+		state: 'ended' as const,
+		inputMode: 'openMic' as const,
+		muted: false,
+		listening: false,
+		inputSequence: 0,
+		usageMilliseconds: 500,
+		error: null,
+	};
+	transport.emitNotification({ method: 'voice/changed', params: status });
+	transport.respondAt(-1, { ...status, sequence: 2, state: 'connected' });
+	await rejected;
+	assert.equal(voice.state?.state, 'ended');
+	assert.equal(voice.state?.usageMilliseconds, 500);
 });
 
 test('Voice adapter serializes held input and release and retires queued controls on an epoch change', async () => {
-	const transport = new FakeTransport(value => ({ ...value, capabilities: { ...value.capabilities, contracts: { ...value.capabilities.contracts, voiceConversation: { version: 2 } } } }));
-	const client = new AppServerProtocolClient(transport); using cleanup = new DisposableStore(); cleanup.add(toDisposable(() => client.dispose())); await client.connect();
-	const voice = cleanup.add(new AppServerAgentVoiceService(client)); const started = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai' });
-	const start = transport.requests.at(-1)!.params as { resourceId: string; };
-	const status = { ...start, sessionId: 'source', threadId: 'thread', mediaEpoch: 1, sequence: 2, state: 'connected' as const, inputMode: 'pushToTalk' as const, muted: false, listening: false, inputSequence: 0, usageMilliseconds: 0, error: null };
-	transport.respondAt(-1, status); await started;
-	const held = voice.pttDown('tap'); const released = voice.pttUp('tap');
+	const transport = new FakeTransport(value => ({
+		...value,
+		capabilities: {
+			...value.capabilities,
+			contracts: { ...value.capabilities.contracts, voiceConversation: { version: 2 } },
+		},
+	}));
+	const client = new AppServerProtocolClient(transport);
+	using cleanup = new DisposableStore();
+	cleanup.add(toDisposable(() => client.dispose()));
+	await client.connect();
+	const voice = cleanup.add(new AppServerAgentVoiceService(client));
+	const started = voice.start({ sessionId: 'source', threadId: 'thread' }, { connectionId: 'openai' });
+	const start = transport.requests.at(-1)!.params as { resourceId: string };
+	const status = {
+		...start,
+		sessionId: 'source',
+		threadId: 'thread',
+		mediaEpoch: 1,
+		sequence: 2,
+		state: 'connected' as const,
+		inputMode: 'pushToTalk' as const,
+		muted: false,
+		listening: false,
+		inputSequence: 0,
+		usageMilliseconds: 0,
+		error: null,
+	};
+	transport.respondAt(-1, status);
+	await started;
+	const held = voice.pttDown('tap');
+	const released = voice.pttUp('tap');
 	for (let i = 0; i < 8; i++) await Promise.resolve();
-	assert.deepEqual(transport.requests.at(-1)?.params, { resourceId: start.resourceId, mediaEpoch: 1, inputSequence: 1, control: { type: 'hold', id: 'tap' } });
-	transport.respondAt(-1, { ...status, sequence: 3, inputSequence: 1, listening: true }); await held;
+	assert.deepEqual(transport.requests.at(-1)?.params, {
+		resourceId: start.resourceId,
+		mediaEpoch: 1,
+		inputSequence: 1,
+		control: { type: 'hold', id: 'tap' },
+	});
+	transport.respondAt(-1, { ...status, sequence: 3, inputSequence: 1, listening: true });
+	await held;
 	for (let i = 0; i < 8; i++) await Promise.resolve();
-	assert.deepEqual(transport.requests.at(-1)?.params, { resourceId: start.resourceId, mediaEpoch: 1, inputSequence: 2, control: { type: 'release', id: 'tap' } });
-	transport.respondAt(-1, { ...status, sequence: 4, inputSequence: 2 }); await released;
+	assert.deepEqual(transport.requests.at(-1)?.params, {
+		resourceId: start.resourceId,
+		mediaEpoch: 1,
+		inputSequence: 2,
+		control: { type: 'release', id: 'tap' },
+	});
+	transport.respondAt(-1, { ...status, sequence: 4, inputSequence: 2 });
+	await released;
 	assert.equal(voice.state?.listening, false);
-	const muted = voice.setMuted(true); const queued = voice.setInputMode('openMic'); const rejected = assert.rejects(queued, isCancellationError);
-	for (let i = 0; i < 8; i++) await Promise.resolve(); const pendingIndex = transport.requests.length - 1;
+	const muted = voice.setMuted(true);
+	const queued = voice.setInputMode('openMic');
+	const rejected = assert.rejects(queued, isCancellationError);
+	for (let i = 0; i < 8; i++) await Promise.resolve();
+	const pendingIndex = transport.requests.length - 1;
 	transport.emitNotification({ method: 'voice/changed', params: { ...status, mediaEpoch: 2, sequence: 1 } });
-	transport.respondAt(pendingIndex, { ...status, sequence: 5, inputSequence: 3, muted: true }); await muted; await rejected;
-	assert.equal(voice.state?.mediaEpoch, 2); assert.equal(voice.state?.muted, false);
+	transport.respondAt(pendingIndex, { ...status, sequence: 5, inputSequence: 3, muted: true });
+	await muted;
+	await rejected;
+	assert.equal(voice.state?.mediaEpoch, 2);
+	assert.equal(voice.state?.muted, false);
 	transport.close('finished');
 });

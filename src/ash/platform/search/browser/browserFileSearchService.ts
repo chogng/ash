@@ -3,27 +3,56 @@ import { scoreFuzzy } from '../../../base/common/fuzzyScorer.js';
 import { CancellationError, illegalArgument } from '../../../base/common/errors.js';
 import type { URI } from '../../../base/common/uri.js';
 import { FileKind, IFileService } from '../../files/common/files.js';
-import type { FileFuzzyQuery, FileSearchDirectory, FileSearchQuery, FileSearchResult, IFileSearchService } from '../common/fileSearch.js';
+import type {
+	FileFuzzyQuery,
+	FileSearchDirectory,
+	FileSearchQuery,
+	FileSearchResult,
+	IFileSearchService,
+} from '../common/fileSearch.js';
 
 /** Discovers only browser-granted resources when this runtime has no App Server. */
 export class BrowserFileSearchService implements IFileSearchService {
-	constructor(@IFileService private readonly files: Pick<IFileService, 'readDirectory'>) { }
+	constructor(@IFileService private readonly files: Pick<IFileService, 'readDirectory'>) {}
 
-	public async glob(directory: FileSearchDirectory, query: FileSearchQuery, signal?: AbortSignal): Promise<FileSearchResult> {
-		const matches: { path: string; resource: URI; }[] = [];
+	public async glob(
+		directory: FileSearchDirectory,
+		query: FileSearchQuery,
+		signal?: AbortSignal,
+	): Promise<FileSearchResult> {
+		const matches: { path: string; resource: URI }[] = [];
 		let totalMatches = 0;
-		const checkCancellation = (): void => { if (signal?.aborted) { throw new CancellationError(); } };
-		const matchesPattern = (pattern: string, path: string): boolean => match(pattern, path) || (pattern.startsWith('**/') && match(pattern.slice(3), path));
+		const checkCancellation = (): void => {
+			if (signal?.aborted) {
+				throw new CancellationError();
+			}
+		};
+		const matchesPattern = (pattern: string, path: string): boolean =>
+			match(pattern, path) || (pattern.startsWith('**/') && match(pattern.slice(3), path));
 		const visit = async (directory: URI, prefix: string): Promise<void> => {
 			checkCancellation();
 			for (const entry of await this.files.readDirectory(directory)) {
 				checkCancellation();
 				const path = prefix + entry.name;
-				if (query.excludePatterns.some(pattern => matchesPattern(pattern, path) || matchesPattern(pattern, path + '/'))) { continue; }
-				if (entry.kind === FileKind.Directory) { await visit(entry.resource, path + '/'); }
-				else if (entry.kind === FileKind.File && (!query.includePatterns.length || query.includePatterns.some(pattern => matchesPattern(pattern, path))) && (!query.requiredPattern || matchesPattern(query.requiredPattern, path))) {
+				if (
+					query.excludePatterns.some(
+						pattern => matchesPattern(pattern, path) || matchesPattern(pattern, path + '/'),
+					)
+				) {
+					continue;
+				}
+				if (entry.kind === FileKind.Directory) {
+					await visit(entry.resource, path + '/');
+				} else if (
+					entry.kind === FileKind.File &&
+					(!query.includePatterns.length ||
+						query.includePatterns.some(pattern => matchesPattern(pattern, path))) &&
+					(!query.requiredPattern || matchesPattern(query.requiredPattern, path))
+				) {
 					totalMatches++;
-					if (matches.length < query.maxResults) { matches.push({ path, resource: entry.resource }); }
+					if (matches.length < query.maxResults) {
+						matches.push({ path, resource: entry.resource });
+					}
 				}
 			}
 		};
@@ -32,27 +61,57 @@ export class BrowserFileSearchService implements IFileSearchService {
 		return { matches, totalMatches };
 	}
 
-	public async fuzzy(directory: FileSearchDirectory, query: FileFuzzyQuery, signal?: AbortSignal): Promise<FileSearchResult> {
-		if (new TextEncoder().encode(query.query).length > 1024 || query.query.includes('\0') || !Number.isInteger(query.maxResults) || query.maxResults < 1 || query.maxResults > 5000) {
+	public async fuzzy(
+		directory: FileSearchDirectory,
+		query: FileFuzzyQuery,
+		signal?: AbortSignal,
+	): Promise<FileSearchResult> {
+		if (
+			new TextEncoder().encode(query.query).length > 1024 ||
+			query.query.includes('\0') ||
+			!Number.isInteger(query.maxResults) ||
+			query.maxResults < 1 ||
+			query.maxResults > 5000
+		) {
 			throw illegalArgument('query');
 		}
 		const tokens = query.query.toLocaleLowerCase('en-US').split(/\s+/).filter(Boolean);
-		const matchesPattern = (pattern: string, path: string): boolean => match(pattern, path) || (pattern.startsWith('**/') && match(pattern.slice(3), path));
-		const matches: { path: string; resource: URI; score: number; }[] = [];
+		const matchesPattern = (pattern: string, path: string): boolean =>
+			match(pattern, path) || (pattern.startsWith('**/') && match(pattern.slice(3), path));
+		const matches: { path: string; resource: URI; score: number }[] = [];
 		let totalMatches = 0;
-		const checkCancellation = (): void => { if (signal?.aborted) { throw new CancellationError(); } };
+		const checkCancellation = (): void => {
+			if (signal?.aborted) {
+				throw new CancellationError();
+			}
+		};
 		const visit = async (directory: URI, prefix: string): Promise<void> => {
 			checkCancellation();
 			for (const entry of await this.files.readDirectory(directory)) {
 				checkCancellation();
 				const path = prefix + entry.name;
-				if (query.excludePatterns?.some(pattern => matchesPattern(pattern, path) || matchesPattern(pattern, path + '/'))) { continue; }
+				if (
+					query.excludePatterns?.some(
+						pattern => matchesPattern(pattern, path) || matchesPattern(pattern, path + '/'),
+					)
+				) {
+					continue;
+				}
 				if (entry.kind === FileKind.Directory) {
-					if (!['.git', '.ash', 'node_modules', 'target'].includes(entry.name)) { await visit(entry.resource, path + '/'); }
+					if (!['.git', '.ash', 'node_modules', 'target'].includes(entry.name)) {
+						await visit(entry.resource, path + '/');
+					}
 				} else if (entry.kind === FileKind.File) {
-					if (query.includePatterns?.length && !query.includePatterns.some(pattern => matchesPattern(pattern, path))) { continue; }
+					if (
+						query.includePatterns?.length &&
+						!query.includePatterns.some(pattern => matchesPattern(pattern, path))
+					) {
+						continue;
+					}
 					const score = scorePath(path, tokens);
-					if (score === undefined) { continue; }
+					if (score === undefined) {
+						continue;
+					}
 					totalMatches++;
 					const candidate = { path, resource: entry.resource, score };
 					let lower = 0;
@@ -60,11 +119,18 @@ export class BrowserFileSearchService implements IFileSearchService {
 					while (lower < upper) {
 						const middle = (lower + upper) >>> 1;
 						const previous = matches[middle];
-						if (previous.score > score || (previous.score === score && previous.path < path)) { lower = middle + 1; }
-						else { upper = middle; }
+						if (previous.score > score || (previous.score === score && previous.path < path)) {
+							lower = middle + 1;
+						} else {
+							upper = middle;
+						}
 					}
-					if (lower < query.maxResults) { matches.splice(lower, 0, candidate); }
-					if (matches.length > query.maxResults) { matches.pop(); }
+					if (lower < query.maxResults) {
+						matches.splice(lower, 0, candidate);
+					}
+					if (matches.length > query.maxResults) {
+						matches.pop();
+					}
 				}
 			}
 		};

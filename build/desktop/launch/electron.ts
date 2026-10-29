@@ -7,7 +7,12 @@ import { resolveDevelopmentElectronExecutable } from '../electron.ts';
 
 if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	await withProcessRun(resolve(import.meta.dirname, '../../..'), async (run, environment) => {
-		process.exitCode = (await run.command(process.execPath, [process.argv[1], ...process.argv.slice(2)], { ...environment, ASH_ELECTRON_LAUNCH_WORKER: '1' })).code;
+		process.exitCode = (
+			await run.command(process.execPath, [process.argv[1], ...process.argv.slice(2)], {
+				...environment,
+				ASH_ELECTRON_LAUNCH_WORKER: '1',
+			})
+		).code;
 	});
 } else {
 	const sourceRoot = resolve(import.meta.dirname, '../../..');
@@ -23,7 +28,8 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	if (watch) {
 		environment.ASH_DEV_LAUNCHER = '1';
 		environment.ASH_HOME ??= resolve(sourceRoot, '.build/desktop/dev/profile');
-		if (!args.some(argument => argument === '--user-data-dir' || argument.startsWith('--user-data-dir='))) args.push(`--user-data-dir=${resolve(sourceRoot, '.build/desktop/dev/user-data')}`);
+		if (!args.some(argument => argument === '--user-data-dir' || argument.startsWith('--user-data-dir=')))
+			args.push(`--user-data-dir=${resolve(sourceRoot, '.build/desktop/dev/user-data')}`);
 	} else {
 		delete environment.ASH_DEV_LAUNCHER;
 	}
@@ -46,15 +52,25 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 		let ready = false;
 		let relaunch = false;
 		let busy = false;
-		const child = spawn(executable, [sourceRoot, ...args], { cwd: sourceRoot, env: environment, stdio: watch ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit', detached: process.platform !== 'win32' });
+		const child = spawn(executable, [sourceRoot, ...args], {
+			cwd: sourceRoot,
+			env: environment,
+			stdio: watch ? ['inherit', 'inherit', 'inherit', 'ipc'] : 'inherit',
+			detached: process.platform !== 'win32',
+		});
 		const inspector = args.find(argument => /^--inspect(?:-brk)?=/u.test(argument));
 		if (inspector) {
 			// js-debug can suppress the runtime's Inspector stderr. Publish from the
 			// launcher instead; attach owns waiting for the new process to listen.
-			child.once('spawn', () => console.log(`Ash Electron debug target: ${inspector.slice(inspector.indexOf('=') + 1)}`));
+			child.once('spawn', () =>
+				console.log(`Ash Electron debug target: ${inspector.slice(inspector.indexOf('=') + 1)}`),
+			);
 		}
 		child.on('message', message => {
-			if (message === 'ash:dev:ready') { ready = true; busySince = undefined; }
+			if (message === 'ash:dev:ready') {
+				ready = true;
+				busySince = undefined;
+			}
 			if (message === 'ash:dev:relaunch') relaunch = true;
 			if (message === 'ash:dev:busy') busy = true;
 		});
@@ -84,8 +100,11 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 					await restart();
 					return;
 				}
-				process.exitCode = watch && !ready ? 1 : code ?? 1;
-				if (watch && !ready) console.error('[host] Electron exited before startup completed. Check the startup errors and whether this development profile is already running.');
+				process.exitCode = watch && !ready ? 1 : (code ?? 1);
+				if (watch && !ready)
+					console.error(
+						'[host] Electron exited before startup completed. Check the startup errors and whether this development profile is already running.',
+					);
 				await stop();
 			})().catch(fail);
 		});
@@ -119,14 +138,23 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	function fail(error: unknown): void {
 		console.error(error);
 		process.exitCode = 1;
-		void stop().catch(error => { console.error(error); });
+		void stop().catch(error => {
+			console.error(error);
+		});
 	}
 
-	process.once('SIGINT', () => { void stop().catch(fail); });
-	process.once('SIGTERM', () => { void stop().catch(fail); });
+	process.once('SIGINT', () => {
+		void stop().catch(fail);
+	});
+	process.once('SIGTERM', () => {
+		void stop().catch(fail);
+	});
 	if (environment.ASH_DESKTOP_UI_ONLY !== '1') {
-		try { await prepareAppServer('host-provided-node', cancellation.signal); }
-		catch (error) { if (!stopped) throw error; }
+		try {
+			await prepareAppServer('host-provided-node', cancellation.signal);
+		} catch (error) {
+			if (!stopped) throw error;
+		}
 	}
 	if (stopped) process.exit(1);
 	if (watch) {
@@ -145,5 +173,4 @@ if (process.env.ASH_ELECTRON_LAUNCH_WORKER !== '1') {
 	} else {
 		await launch();
 	}
-
 }

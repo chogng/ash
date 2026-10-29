@@ -1,10 +1,10 @@
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
-import { getWindow } from "../../../base/browser/dom.js";
-import { Dimension, getClientArea, type IDimension } from "../../../base/browser/dom.js";
-import { observeElementSize } from "../../../base/browser/observer.js";
-import type { BrowserWindow } from "../../../base/browser/window.js";
-import { type Event, Emitter } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
+import { getWindow } from '../../../base/browser/dom.js';
+import { Dimension, getClientArea, type IDimension } from '../../../base/browser/dom.js';
+import { observeElementSize } from '../../../base/browser/observer.js';
+import type { BrowserWindow } from '../../../base/browser/window.js';
+import { type Event, Emitter } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
 
 /** The offsets required when positioning overlays inside a Workbench container. */
 export interface ILayoutOffsetInfo {
@@ -47,14 +47,9 @@ export interface ILayoutService {
 	focus(): void;
 }
 
-export const ILayoutService = createServiceIdentifier<ILayoutService>(
-	"layoutService",
-);
+export const ILayoutService = createServiceIdentifier<ILayoutService>('layoutService');
 
-const NoLayoutOffset: ILayoutOffsetInfo = Object.freeze({
-	top: 0,
-	quickInputTop: 0,
-});
+const NoLayoutOffset: ILayoutOffsetInfo = Object.freeze({ top: 0, quickInputTop: 0 });
 
 export interface BrowserLayoutServiceOptions {
 	readonly root: HTMLElement;
@@ -68,9 +63,7 @@ export interface BrowserLayoutServiceOptions {
  * The service owns the root container's ResizeObserver and geometry events. It
  * deliberately does not know about Sidebar, Panel, Editor, or Grid topology.
  */
-export class BrowserLayoutService
-	extends Disposable
-	implements ILayoutService {
+export class BrowserLayoutService extends Disposable implements ILayoutService {
 	private readonly root: HTMLElement;
 	private readonly targetWindow: BrowserWindow;
 	private readonly getOffset: () => ILayoutOffsetInfo;
@@ -81,14 +74,10 @@ export class BrowserLayoutService
 	protected readonly _onDidChangeActiveContainer = this._register(new Emitter<void>());
 	private dimension: Dimension;
 
-	readonly onDidLayoutMainContainer: Event<IDimension> =
-		this._onDidLayoutMainContainer.event;
-	readonly onDidLayoutContainer: Event<ILayoutContainerEvent> =
-		this._onDidLayoutContainer.event;
-	readonly onDidLayoutActiveContainer: Event<IDimension> =
-		this._onDidLayoutActiveContainer.event;
-	readonly onDidChangeActiveContainer: Event<void> =
-		this._onDidChangeActiveContainer.event;
+	readonly onDidLayoutMainContainer: Event<IDimension> = this._onDidLayoutMainContainer.event;
+	readonly onDidLayoutContainer: Event<ILayoutContainerEvent> = this._onDidLayoutContainer.event;
+	readonly onDidLayoutActiveContainer: Event<IDimension> = this._onDidLayoutActiveContainer.event;
+	readonly onDidChangeActiveContainer: Event<void> = this._onDidChangeActiveContainer.event;
 
 	constructor(options: BrowserLayoutServiceOptions) {
 		super();
@@ -131,14 +120,14 @@ export class BrowserLayoutService
 
 	getContainer(targetWindow: Window): HTMLElement {
 		if (targetWindow !== this.targetWindow) {
-			throw new Error("Layout container is not registered");
+			throw new Error('Layout container is not registered');
 		}
 		return this.root;
 	}
 
 	whenContainerStylesLoaded(targetWindow: Window): Promise<void> | undefined {
 		if (targetWindow !== this.targetWindow) {
-			throw new Error("Layout container is not registered");
+			throw new Error('Layout container is not registered');
 		}
 		return undefined;
 	}
@@ -147,10 +136,7 @@ export class BrowserLayoutService
 	layout(dimension: IDimension = getClientArea(this.root)): void {
 		assertDimension(dimension);
 		this.dimension = new Dimension(dimension.width, dimension.height);
-		this._onDidLayoutContainer.fire({
-			container: this.root,
-			dimension: this.dimension,
-		});
+		this._onDidLayoutContainer.fire({ container: this.root, dimension: this.dimension });
 		this._onDidLayoutMainContainer.fire(this.dimension);
 		if (this.activeContainer === this.root) this._onDidLayoutActiveContainer.fire(this.dimension);
 	}
@@ -167,8 +153,6 @@ function assertDimension(dimension: IDimension): void {
 		!Number.isFinite(dimension.height) ||
 		dimension.height < 0
 	) {
-		throw new RangeError(
-			"Layout container dimensions must be non-negative and finite",
-		);
+		throw new RangeError('Layout container dimensions must be non-negative and finite');
 	}
 }

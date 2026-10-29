@@ -16,7 +16,14 @@ export class IntegrityService implements IIntegrityService {
 
 	public async isPure(): Promise<IntegrityTestResult> {
 		const value = await this.channel.call<unknown>('getApplicationChecksums');
-		if (!value || typeof value !== 'object' || !('isBuilt' in value) || typeof value.isBuilt !== 'boolean' || !('proof' in value) || !Array.isArray(value.proof)) {
+		if (
+			!value ||
+			typeof value !== 'object' ||
+			!('isBuilt' in value) ||
+			typeof value.isBuilt !== 'boolean' ||
+			!('proof' in value) ||
+			!Array.isArray(value.proof)
+		) {
 			throw new TypeError('Invalid application checksum result');
 		}
 		const proof = value.proof.map((entry: unknown) => {
@@ -25,14 +32,21 @@ export class IntegrityService implements IIntegrityService {
 			}
 			const fields = entry as Record<string, unknown>;
 			const uri = fields.uri as Record<string, unknown> | undefined;
-			const validUri = uri && typeof uri === 'object' && uri.scheme === Schemas.file && typeof uri.path === 'string';
+			const validUri =
+				uri && typeof uri === 'object' && uri.scheme === Schemas.file && typeof uri.path === 'string';
 			const validExpected = typeof fields.expected === 'string' && /^[a-f0-9]{64}$/u.test(fields.expected);
-			const validActual = fields.actual === null || typeof fields.actual === 'string' && /^[a-f0-9]{64}$/u.test(fields.actual);
+			const validActual =
+				fields.actual === null || (typeof fields.actual === 'string' && /^[a-f0-9]{64}$/u.test(fields.actual));
 			if (!validUri || !validExpected || !validActual) {
 				throw new TypeError('Invalid application checksum proof');
 			}
 			const pair = entry as ApplicationChecksums['proof'][number];
-			return { uri: URI.revive(pair.uri), actual: pair.actual ?? undefined, expected: pair.expected, isPure: pair.actual === pair.expected };
+			return {
+				uri: URI.revive(pair.uri),
+				actual: pair.actual ?? undefined,
+				expected: pair.expected,
+				isPure: pair.actual === pair.expected,
+			};
 		});
 		if ((value.isBuilt && proof.length === 0) || (!value.isBuilt && proof.length !== 0)) {
 			throw new TypeError('Application checksum result does not match its build mode');

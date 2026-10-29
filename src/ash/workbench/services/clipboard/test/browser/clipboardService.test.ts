@@ -17,25 +17,39 @@ import { BrowserClipboardService } from '../../browser/clipboardService.js';
 
 suite('Workbench browser clipboard', () => {
 	test('typed text bypasses system permission prompts and is retained independently', async () => {
-		using fixture = new ClipboardFixture({ readText: async () => { throw new Error('Denied'); } });
+		using fixture = new ClipboardFixture({
+			readText: async () => {
+				throw new Error('Denied');
+			},
+		});
 		await fixture.clipboard.writeText('selected', 'selection');
 		assert.equal(await fixture.clipboard.readText('selection'), 'selected');
 		assert.deepEqual(fixture.notifications.model.getNotifications(), []);
 	});
 	test('reads and writes through the owning window without prompting', async () => {
 		let text = 'initial';
-		using fixture = new ClipboardFixture({ readText: async () => text, writeText: async value => { text = value; } });
+		using fixture = new ClipboardFixture({
+			readText: async () => text,
+			writeText: async value => {
+				text = value;
+			},
+		});
 		await fixture.clipboard.writeText('updated');
-		assert.deepEqual([await fixture.clipboard.readText(), fixture.notifications.model.getNotifications()], ['updated', []]);
+		assert.deepEqual(
+			[await fixture.clipboard.readText(), fixture.notifications.model.getNotifications()],
+			['updated', []],
+		);
 	});
 
 	test('retries denied reads and keeps permission help separate from the pending read', async () => {
 		let attempts = 0;
 		using fixture = new ClipboardFixture({
 			readText: async () => {
-				if (++attempts === 1) { throw new Error('denied'); }
+				if (++attempts === 1) {
+					throw new Error('denied');
+				}
 				return 'recovered';
-			}
+			},
 		});
 		const added = fixture.nextNotification();
 		const reading = fixture.clipboard.readText();
@@ -44,11 +58,18 @@ suite('Workbench browser clipboard', () => {
 		assert.deepEqual(fixture.opened, [['https://support.google.com/chrome/answer/114662', { openExternal: true }]]);
 		assert.equal(attempts, 1);
 		await prompt.actions!.primary![0]!.run();
-		assert.deepEqual([await reading, attempts, fixture.notifications.model.getNotifications()], ['recovered', 2, []]);
+		assert.deepEqual(
+			[await reading, attempts, fixture.notifications.model.getNotifications()],
+			['recovered', 2, []],
+		);
 	});
 
 	test('a failed retry prompts again and dismissal completes with empty text', async () => {
-		using fixture = new ClipboardFixture({ readText: async () => { throw new Error('denied'); } });
+		using fixture = new ClipboardFixture({
+			readText: async () => {
+				throw new Error('denied');
+			},
+		});
 		const firstAdded = fixture.nextNotification();
 		const reading = fixture.clipboard.readText();
 		const first = await firstAdded;
@@ -61,7 +82,11 @@ suite('Workbench browser clipboard', () => {
 	});
 
 	test('disposing the service scope closes all outstanding reads and prompts', async () => {
-		using fixture = new ClipboardFixture({ readText: async () => { throw new Error('denied'); } });
+		using fixture = new ClipboardFixture({
+			readText: async () => {
+				throw new Error('denied');
+			},
+		});
 		const added = fixture.nextNotification();
 		const first = fixture.clipboard.readText();
 		const second = fixture.clipboard.readText();
@@ -73,7 +98,12 @@ suite('Workbench browser clipboard', () => {
 
 	test('a late read failure after scope disposal does not create a prompt', async () => {
 		let reject!: (error: Error) => void;
-		using fixture = new ClipboardFixture({ readText: () => new Promise<string>((_resolve, rejectRead) => { reject = rejectRead; }) });
+		using fixture = new ClipboardFixture({
+			readText: () =>
+				new Promise<string>((_resolve, rejectRead) => {
+					reject = rejectRead;
+				}),
+		});
 		const reading = fixture.clipboard.readText();
 		fixture.services.dispose();
 		reject(new Error('late denial'));
@@ -83,11 +113,18 @@ suite('Workbench browser clipboard', () => {
 	test('permission recovery uses the Chinese catalog', async () => {
 		initializeTestLocalization('zh-CN');
 		try {
-			using fixture = new ClipboardFixture({ readText: async () => { throw new Error('denied'); } });
+			using fixture = new ClipboardFixture({
+				readText: async () => {
+					throw new Error('denied');
+				},
+			});
 			const added = fixture.nextNotification();
 			const reading = fixture.clipboard.readText();
 			const prompt = await added;
-			assert.deepEqual([prompt.message, prompt.actions!.primary!.map(action => action.label)], ['无法读取剪贴板。请允许此网站访问剪贴板，然后重试。', ['重试', '了解详情']]);
+			assert.deepEqual(
+				[prompt.message, prompt.actions!.primary!.map(action => action.label)],
+				['无法读取剪贴板。请允许此网站访问剪贴板，然后重试。', ['重试', '了解详情']],
+			);
 			fixture.notifications.model.remove(prompt.id);
 			assert.equal(await reading, '');
 		} finally {
@@ -100,22 +137,34 @@ suite('Workbench browser clipboard', () => {
 		using fixture = new ClipboardFixture({
 			read: async () => {
 				if (++attempts === 1) throw new DOMException('denied', 'NotAllowedError');
-				return [{ types: ['text/html'], getType: async () => new Blob(['<b>recovered</b>']) } as unknown as ClipboardItem];
+				return [
+					{
+						types: ['text/html'],
+						getType: async () => new Blob(['<b>recovered</b>']),
+					} as unknown as ClipboardItem,
+				];
 			},
-			readText: async () => { throw new Error('Must not downgrade'); },
+			readText: async () => {
+				throw new Error('Must not downgrade');
+			},
 		});
 		const added = fixture.nextNotification();
 		const reading = fixture.clipboard.read();
 		const prompt = await added;
 		await prompt.actions!.primary![0]!.run();
-		assert.deepEqual([await reading, attempts, fixture.notifications.model.getNotifications()], [
-			[{ type: 'text/html', data: new TextEncoder().encode('<b>recovered</b>') }], 2, [],
-		]);
+		assert.deepEqual(
+			[await reading, attempts, fixture.notifications.model.getNotifications()],
+			[[{ type: 'text/html', data: new TextEncoder().encode('<b>recovered</b>') }], 2, []],
+		);
 	});
 
 	for (const close of ['dismiss', 'dispose']) {
 		test(`rich read ends empty on ${close} and releases its permission prompt`, async () => {
-			using fixture = new ClipboardFixture({ read: async () => { throw new Error('denied'); } });
+			using fixture = new ClipboardFixture({
+				read: async () => {
+					throw new Error('denied');
+				},
+			});
 			const added = fixture.nextNotification();
 			const reading = fixture.clipboard.read();
 			const prompt = await added;
@@ -142,25 +191,33 @@ class ClipboardFixture extends Disposable {
 		const browser = new JSDOM('<!doctype html><body></body>');
 		this._register(toDisposable(() => browser.window.close()));
 		Object.defineProperty(browser.window.navigator, 'clipboard', { value: clipboard });
-		this.services.registerSingleton(IClipboardService, () => this.services.createInstance(BrowserClipboardService), { instantiation: InstantiationType.Delayed });
+		this.services.registerSingleton(
+			IClipboardService,
+			() => this.services.createInstance(BrowserClipboardService),
+			{ instantiation: InstantiationType.Delayed },
+		);
 		this.clipboard = this.services.get(IClipboardService);
-		this.services.registerInstance(ILayoutService, { mainContainer: browser.window.document.body } as ILayoutService);
+		this.services.registerInstance(ILayoutService, {
+			mainContainer: browser.window.document.body,
+		} as ILayoutService);
 		this.services.registerInstance(INotificationService, this.notifications);
 		this.services.registerInstance(ILogService, new NullLoggerService());
 		this.services.registerInstance(IOpenerService, {
 			open: async (target: string, options?: OpenOptions) => {
 				this.opened.push([target, options]);
 				return true;
-			}
+			},
 		} as IOpenerService);
 	}
 
 	public nextNotification(): Promise<NotificationItem> {
 		return new Promise(resolve => {
-			const listener = this._register(this.notifications.model.onDidAdd(item => {
-				listener.dispose();
-				resolve(item);
-			}));
+			const listener = this._register(
+				this.notifications.model.onDidAdd(item => {
+					listener.dispose();
+					resolve(item);
+				}),
+			);
 		});
 	}
 }

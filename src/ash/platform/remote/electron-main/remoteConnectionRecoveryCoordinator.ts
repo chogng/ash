@@ -1,6 +1,6 @@
-import type { AppServerConnectionState } from "../../agentHost/common/appServerApi.js";
-import type { RemoteAgentReconnectResult } from "../common/remoteAgentApi.js";
-import type { RemoteAppServerProcessLauncher } from "./remoteAppServerProcessLauncher.js";
+import type { AppServerConnectionState } from '../../agentHost/common/appServerApi.js';
+import type { RemoteAgentReconnectResult } from '../common/remoteAgentApi.js';
+import type { RemoteAppServerProcessLauncher } from './remoteAppServerProcessLauncher.js';
 
 export interface RemoteConnectionRecoveryHost {
 	readonly state: AppServerConnectionState;
@@ -15,8 +15,8 @@ export class RemoteConnectionRecoveryCoordinator {
 	constructor(
 		private readonly host: RemoteConnectionRecoveryHost,
 		private readonly launcher: RemoteAppServerProcessLauncher,
-		private readonly prepareForConnectionReplacement: () => void = () => { },
-	) { }
+		private readonly prepareForConnectionReplacement: () => void = () => {},
+	) {}
 
 	reconnect(): Promise<RemoteAgentReconnectResult> {
 		return this.runExclusive(() => this.performReconnect());
@@ -27,38 +27,41 @@ export class RemoteConnectionRecoveryCoordinator {
 	}
 
 	private runExclusive<T>(operationFactory: () => Promise<T>): Promise<T> {
-		if (this.operation) return Promise.reject(new Error("Remote connection recovery is already in progress"));
+		if (this.operation) return Promise.reject(new Error('Remote connection recovery is already in progress'));
 		const operation = operationFactory();
 		this.operation = operation;
-		void operation.finally(() => {
-			if (this.operation === operation) this.operation = undefined;
-		}).catch(() => {
-			// The caller observes the original operation; this branch only settles finally().
-		});
+		void operation
+			.finally(() => {
+				if (this.operation === operation) this.operation = undefined;
+			})
+			.catch(() => {
+				// The caller observes the original operation; this branch only settles finally().
+			});
 		return operation;
 	}
 
 	private async performReconnect(): Promise<RemoteAgentReconnectResult> {
 		switch (this.host.state) {
-			case "ready":
-				return { kind: "alreadyConnected" };
-			case "crashed":
+			case 'ready':
+				return { kind: 'alreadyConnected' };
+			case 'crashed':
 				await this.host.stop();
 				break;
-			case "stopped":
+			case 'stopped':
 				break;
-			case "starting":
-			case "initializing":
-			case "stopping":
-			case "restarting":
+			case 'starting':
+			case 'initializing':
+			case 'stopping':
+			case 'restarting':
 				throw new Error(`Remote connection is already transitioning: ${this.host.state}`);
 		}
 		await this.host.start();
-		return { kind: "reconnected" };
+		return { kind: 'reconnected' };
 	}
 
 	private async performRollback(): Promise<void> {
-		if (!this.launcher.runtimeRollbackAvailable) throw new Error("Remote runtime rollback is not available for this connection");
+		if (!this.launcher.runtimeRollbackAvailable)
+			throw new Error('Remote runtime rollback is not available for this connection');
 		await this.launcher.rollbackRuntime();
 		this.prepareForConnectionReplacement();
 		await this.host.stop();

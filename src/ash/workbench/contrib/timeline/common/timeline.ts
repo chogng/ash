@@ -21,7 +21,7 @@ export interface TimelineItem {
 	readonly command?: Command;
 	readonly contextValue?: string;
 	/** Prepared SCM items carry the same complete tooltip used by the history graph. */
-	readonly sourceControl?: { readonly repositoryId: string; readonly historyItem: ISCMHistoryItem; };
+	readonly sourceControl?: { readonly repositoryId: string; readonly historyItem: ISCMHistoryItem };
 }
 
 export interface TimelineChangeEvent {
@@ -32,7 +32,7 @@ export interface TimelineChangeEvent {
 
 export interface TimelineOptions {
 	readonly cursor?: string;
-	readonly limit?: number | { readonly timestamp: number; readonly id?: string; };
+	readonly limit?: number | { readonly timestamp: number; readonly id?: string };
 	readonly resetCache?: boolean;
 	readonly cacheResults?: boolean;
 }
@@ -40,7 +40,7 @@ export interface TimelineOptions {
 export interface Timeline {
 	readonly source: string;
 	readonly items: readonly TimelineItem[];
-	readonly paging?: { readonly cursor: string | undefined; };
+	readonly paging?: { readonly cursor: string | undefined };
 }
 
 export interface TimelineSource {
@@ -79,7 +79,12 @@ export interface ITimelineService {
 	registerTimelineProvider(provider: TimelineProvider): IDisposable;
 	unregisterTimelineProvider(id: string): void;
 	getSources(): TimelineSource[];
-	getTimeline(id: string, uri: URI, options: TimelineOptions, tokenSource: CancellationTokenSource): TimelineRequest | undefined;
+	getTimeline(
+		id: string,
+		uri: URI,
+		options: TimelineOptions,
+		tokenSource: CancellationTokenSource,
+	): TimelineRequest | undefined;
 	setUri(uri: URI): void;
 }
 

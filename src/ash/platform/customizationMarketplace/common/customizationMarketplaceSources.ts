@@ -6,7 +6,11 @@ export const enum CustomizationMarketplaceConfiguration {
 }
 
 /** UI visibility and backend registry enablement remain separate authorities. */
-export function getEnabledCustomizationMarketplaceSources(configuration: IConfigurationService, sources: readonly ICustomizationMarketplaceSourceInfo[]): readonly ICustomizationMarketplaceSourceInfo[] {
+export function getEnabledCustomizationMarketplaceSources(
+	configuration: IConfigurationService,
+	sources: readonly ICustomizationMarketplaceSourceInfo[],
+): readonly ICustomizationMarketplaceSourceInfo[] {
 	return configuration.getValue<boolean>(CustomizationMarketplaceConfiguration.MarketplaceEnabled)
-		? sources.filter(source => source.enabled !== false) : [];
+		? sources.filter(source => source.enabled !== false)
+		: [];
 }

@@ -1,6 +1,6 @@
 interface PrefixBranch<T> {
 	readonly branches: Map<string, PrefixBranch<T>>;
-	entry?: { readonly value: T; };
+	entry?: { readonly value: T };
 }
 
 /** Stores values at exact segment paths, keeping adjacent text prefixes distinct. */

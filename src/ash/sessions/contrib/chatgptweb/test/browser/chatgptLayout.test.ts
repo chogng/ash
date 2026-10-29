@@ -23,7 +23,11 @@ suite('chatgptweb browser component', () => {
 	async function mockChatGPTRequests(page: Page, answer = 'Synthetic answer'): Promise<void> {
 		await page.route('**/service/**', async route => {
 			const path = new URL(route.request().url()).pathname;
-			const message = (id: string, role: string, text: string): object => ({ id, author: { role }, content: { content_type: 'text', parts: [text] } });
+			const message = (id: string, role: string, text: string): object => ({
+				id,
+				author: { role },
+				content: { content_type: 'text', parts: [text] },
+			});
 			if (path.endsWith('/models')) {
 				await route.fulfill({ json: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]) });
 			} else if (path.endsWith('/pins')) {
@@ -31,18 +35,32 @@ suite('chatgptweb browser component', () => {
 			} else if (path.endsWith('/gizmos/snorlax/sidebar')) {
 				await route.fulfill({ json: { items: [], cursor: null } });
 			} else if (path.endsWith('/conversations')) {
-				await route.fulfill({ json: { items: [{ id: 'fixture-chat', title: 'Synthetic conversation' }], total: 1 } });
+				await route.fulfill({
+					json: { items: [{ id: 'fixture-chat', title: 'Synthetic conversation' }], total: 1 },
+				});
 			} else if (path.endsWith('/conversation/fixture-chat')) {
 				await route.fulfill({
 					json: {
-						title: 'Synthetic conversation', current_node: 'previous-reply', mapping: {
+						title: 'Synthetic conversation',
+						current_node: 'previous-reply',
+						mapping: {
 							question: { parent: null, message: message('question', 'user', 'Synthetic question') },
 							empty: { parent: 'question', message: message('empty', 'assistant', '') },
-							recap: { parent: 'empty', message: { id: 'recap', author: { role: 'assistant' }, content: { content_type: 'reasoning_recap', content: 'Thought for a few seconds' } } },
+							recap: {
+								parent: 'empty',
+								message: {
+									id: 'recap',
+									author: { role: 'assistant' },
+									content: { content_type: 'reasoning_recap', content: 'Thought for a few seconds' },
+								},
+							},
 							whitespace: { parent: 'recap', message: message('whitespace', 'assistant', ' \n\t ') },
-							'previous-reply': { parent: 'whitespace', message: message('previous-reply', 'assistant', answer) },
-						}
-					}
+							'previous-reply': {
+								parent: 'whitespace',
+								message: message('previous-reply', 'assistant', answer),
+							},
+						},
+					},
 				});
 			} else if (path.endsWith('/prepare')) {
 				await route.fulfill({ json: { conduit_token: 'fixture-conduit' } });
@@ -63,14 +81,20 @@ suite('chatgptweb browser component', () => {
 			const header = list.locator('.ash-pane-view-header').first();
 			await expect(header).toBeVisible();
 			const expectInsets = async (inset: number): Promise<void> => {
-				await expect.poll(() => header.evaluate(node => {
-					const bounds = node.getBoundingClientRect();
-					const list = node.closest('.ash-chatgpt-navigation-list')!.getBoundingClientRect();
-					return { left: bounds.left - list.left, right: list.right - bounds.right };
-				})).toEqual({ left: inset, right: inset });
+				await expect
+					.poll(() =>
+						header.evaluate(node => {
+							const bounds = node.getBoundingClientRect();
+							const list = node.closest('.ash-chatgpt-navigation-list')!.getBoundingClientRect();
+							return { left: bounds.left - list.left, right: list.right - bounds.right };
+						}),
+					)
+					.toEqual({ left: inset, right: inset });
 			};
 			await expectInsets(8);
-			await list.evaluate(node => { node.style.paddingInline = '12px'; });
+			await list.evaluate(node => {
+				node.style.paddingInline = '12px';
+			});
 			await expectInsets(12);
 			await list.evaluate(node => node.style.removeProperty('padding-inline'));
 			await expectInsets(8);
@@ -82,8 +106,13 @@ suite('chatgptweb browser component', () => {
 			const { page } = browserTests;
 			await mockChatGPTRequests(page);
 			let releaseHistory!: () => void;
-			const history = new Promise<void>(resolve => { releaseHistory = resolve; });
-			await page.route('**/service/backend-api/conversations?*', async route => { await history; await route.fallback(); });
+			const history = new Promise<void>(resolve => {
+				releaseHistory = resolve;
+			});
+			await page.route('**/service/backend-api/conversations?*', async route => {
+				await history;
+				await route.fallback();
+			});
 			await page.goto(`/chatgptNavigation.html?locale=${locale}`);
 			const navigation = page.locator('.ash-chatgpt-navigation');
 			const editor = page.locator('.ash-chatgpt-widget');
@@ -91,13 +120,20 @@ suite('chatgptweb browser component', () => {
 				await expect(navigation.locator('.ash-sessions-loading')).toBeVisible();
 				await expect(editor.locator('.ash-sessions-loading')).toBeHidden();
 				await expect(editor.locator('.ash-chatgpt-welcome')).toBeVisible();
-			} finally { releaseHistory(); }
+			} finally {
+				releaseHistory();
+			}
 			const conversation = navigation.getByRole('button', { name: 'Synthetic conversation', exact: true });
 			await expect(conversation).toBeVisible();
 			await expect(navigation.locator('.ash-sessions-loading')).toBeHidden();
 			let releaseConversation!: () => void;
-			const pending = new Promise<void>(resolve => { releaseConversation = resolve; });
-			await page.route('**/service/backend-api/conversation/fixture-chat', async route => { await pending; await route.fallback(); });
+			const pending = new Promise<void>(resolve => {
+				releaseConversation = resolve;
+			});
+			await page.route('**/service/backend-api/conversation/fixture-chat', async route => {
+				await pending;
+				await route.fallback();
+			});
 			try {
 				await conversation.click();
 				await expect(editor.locator('.ash-sessions-loading')).toBeVisible();
@@ -105,7 +141,9 @@ suite('chatgptweb browser component', () => {
 				await expect(conversation).toBeEnabled();
 				await expect(editor.locator('.ash-chatgpt-welcome')).toBeHidden();
 				await page.screenshot({ path: browserTests.info.outputPath(`chat-independent-loading-${locale}.png`) });
-			} finally { releaseConversation(); }
+			} finally {
+				releaseConversation();
+			}
 			await expect(editor.locator('.ash-chatgpt-messages')).toContainText('Synthetic answer');
 			await expect(editor.locator('.ash-sessions-loading')).toBeHidden();
 		});
@@ -121,9 +159,21 @@ suite('chatgptweb browser component', () => {
 			await page.route('**/service/backend-api/conversations?*', async route => {
 				const offset = Number(new URL(route.request().url()).searchParams.get('offset'));
 				offsets.push(offset);
-				const fulfill = () => route.fulfill({ json: { items: Array.from({ length: 20 }, (_, index) => ({ id: `chat-${offset + index}`, title: `Conversation ${offset + index}` })), total: 60 } });
-				if (offset === 20) { releasePage = fulfill; }
-				else { await fulfill(); }
+				const fulfill = () =>
+					route.fulfill({
+						json: {
+							items: Array.from({ length: 20 }, (_, index) => ({
+								id: `chat-${offset + index}`,
+								title: `Conversation ${offset + index}`,
+							})),
+							total: 60,
+						},
+					});
+				if (offset === 20) {
+					releasePage = fulfill;
+				} else {
+					await fulfill();
+				}
 			});
 			await page.goto(`/chatgptNavigation.html?locale=${locale}`);
 			const list = page.locator('.ash-chatgpt-navigation-list');
@@ -136,7 +186,11 @@ suite('chatgptweb browser component', () => {
 			await expect(list).toHaveAttribute('aria-busy', 'true');
 			await list.hover();
 			await page.mouse.wheel(0, 1000);
-			await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBe(0);
+			await expect
+				.poll(() =>
+					viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop),
+				)
+				.toBe(0);
 			const scrollTop = await viewport.evaluate(element => element.scrollTop);
 			expect(offsets).toEqual([0, 20]);
 			await releasePage!();
@@ -165,12 +219,17 @@ suite('chatgptweb browser component', () => {
 			const title = row.locator('.ash-chatgpt-conversation');
 			await expect(title).toBeVisible();
 			for (const direction of ['ltr', 'rtl']) {
-				await page.locator('#navigation').evaluate((element, dir) => { element.setAttribute('dir', dir); }, direction);
+				await page.locator('#navigation').evaluate((element, dir) => {
+					element.setAttribute('dir', dir);
+				}, direction);
 				await page.keyboard.press('Tab');
 				await title.focus();
 				await title.hover();
 				await expect(row.getByRole('toolbar')).toHaveCSS('opacity', '1');
-				await testInfo.attach(`conversation-focused-${theme}-${direction}`, { body: await row.screenshot(), contentType: 'image/png' });
+				await testInfo.attach(`conversation-focused-${theme}-${direction}`, {
+					body: await row.screenshot(),
+					contentType: 'image/png',
+				});
 				await expectVisibleFocusOutline(title);
 				await row.getByRole('toolbar').getByRole('button').first().click({ trial: true });
 				await page.keyboard.press('Tab');
@@ -186,11 +245,17 @@ suite('chatgptweb browser component', () => {
 
 			await page.setViewportSize({ width: 1000, height: 600 });
 			await mockChatGPTRequests(page);
-			await page.route('**/service/backend-api/conversations?*', route => route.fulfill({
-				json: {
-					items: Array.from({ length: 40 }, (_, index) => ({ id: `chat-${index}`, title: `Conversation ${index} ${'long title '.repeat(8)}` })), total: 40,
-				}
-			}));
+			await page.route('**/service/backend-api/conversations?*', route =>
+				route.fulfill({
+					json: {
+						items: Array.from({ length: 40 }, (_, index) => ({
+							id: `chat-${index}`,
+							title: `Conversation ${index} ${'long title '.repeat(8)}`,
+						})),
+						total: 40,
+					},
+				}),
+			);
 			await page.goto(`/chatgptNavigation.html?locale=zh-CN&theme=${theme}`);
 			const list = page.locator('.ash-chatgpt-navigation-list');
 			await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveCount(40);
@@ -206,13 +271,25 @@ suite('chatgptweb browser component', () => {
 			await expect.poll(() => viewport.evaluate(element => element.scrollTop)).toBeGreaterThan(0);
 			await expect(scrollbar).toHaveCSS('opacity', '1');
 			const thumb = scrollbar.locator('.ash-scrollbar-thumb');
-			expect(await thumb.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)');
-			const geometry = await viewport.evaluate(element => ({ width: element.clientWidth, contentWidth: element.scrollWidth }));
+			expect(await thumb.evaluate(element => getComputedStyle(element).backgroundColor)).not.toBe(
+				'rgba(0, 0, 0, 0)',
+			);
+			const geometry = await viewport.evaluate(element => ({
+				width: element.clientWidth,
+				contentWidth: element.scrollWidth,
+			}));
 			expect(geometry.contentWidth).toBe(geometry.width);
 			await scrollbar.focus();
 			await scrollbar.press('End');
-			await expect.poll(() => viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop)).toBe(0);
-			await testInfo.attach(`chatgpt-sidebar-scrollbar-${theme}`, { body: await page.locator('#navigation').screenshot(), contentType: 'image/png' });
+			await expect
+				.poll(() =>
+					viewport.evaluate(element => element.scrollHeight - element.clientHeight - element.scrollTop),
+				)
+				.toBe(0);
+			await testInfo.attach(`chatgpt-sidebar-scrollbar-${theme}`, {
+				body: await page.locator('#navigation').screenshot(),
+				contentType: 'image/png',
+			});
 		});
 	}
 
@@ -226,7 +303,15 @@ suite('chatgptweb browser component', () => {
 			const offset = Number(new URL(route.request().url()).searchParams.get('offset'));
 			offsets.push(offset);
 			const count = offset === 0 ? 2 : 20;
-			await route.fulfill({ json: { items: Array.from({ length: count }, (_, index) => ({ id: `chat-${offset + index}`, title: `Conversation ${offset + index}` })), total: 42 } });
+			await route.fulfill({
+				json: {
+					items: Array.from({ length: count }, (_, index) => ({
+						id: `chat-${offset + index}`,
+						title: `Conversation ${offset + index}`,
+					})),
+					total: 42,
+				},
+			});
 		});
 		await page.goto('/chatgptNavigation.html?locale=zh-CN');
 		const list = page.locator('.ash-chatgpt-navigation-list');
@@ -235,7 +320,9 @@ suite('chatgptweb browser component', () => {
 		const recent = list.getByRole('button', { name: '最近', exact: true });
 		await recent.click();
 		await page.setViewportSize({ width: 1000, height: 1600 });
-		await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+		await page.evaluate(
+			() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+		);
 		await expect(recent).toHaveAttribute('aria-expanded', 'false');
 		await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveCount(0);
 		expect(offsets).toEqual([0, 2]);
@@ -259,7 +346,15 @@ suite('chatgptweb browser component', () => {
 				await route.fulfill({ status: 500, json: {} });
 				return;
 			}
-			await route.fulfill({ json: { items: Array.from({ length: 20 }, (_, index) => ({ id: `chat-${offset + index}`, title: `Conversation ${offset + index}` })), total: 40 } });
+			await route.fulfill({
+				json: {
+					items: Array.from({ length: 20 }, (_, index) => ({
+						id: `chat-${offset + index}`,
+						title: `Conversation ${offset + index}`,
+					})),
+					total: 40,
+				},
+			});
 		});
 		await page.goto('/chatgptNavigation.html?locale=en');
 		const list = page.locator('.ash-chatgpt-navigation-list');
@@ -290,56 +385,99 @@ suite('chatgptweb browser component', () => {
 
 			await mockChatGPTRequests(page);
 			const catalog = chatGPTModelCatalog(locale);
-			const labels = locale === 'en' ? ['Instant', 'Medium', 'High', 'Extra High', 'Pro'] : ['即时', '中', '高', '极高', 'Pro'];
+			const labels =
+				locale === 'en'
+					? ['Instant', 'Medium', 'High', 'Extra High', 'Pro']
+					: ['即时', '中', '高', '极高', 'Pro'];
 			await page.route('**/service/backend-api/models?*', route => route.fulfill({ json: catalog }));
-			const submitted: { model: string; thinking_effort?: string; }[] = [];
+			const submitted: { model: string; thinking_effort?: string }[] = [];
 			await page.route('**/service/backend-api/f/conversation/prepare', async route => {
 				submitted.push(route.request().postDataJSON());
 				await route.fulfill({ json: { conduit_token: 'fixture' } });
 			});
 			await page.route('**/service/backend-api/f/conversation', async route => {
 				submitted.push(route.request().postDataJSON());
-				await route.fulfill({ contentType: 'text/event-stream', body: 'data: {"message":{"id":"reply","author":{"role":"assistant"},"content":{"parts":["Reply"]}}}\n\ndata: [DONE]\n\n' });
+				await route.fulfill({
+					contentType: 'text/event-stream',
+					body: 'data: {"message":{"id":"reply","author":{"role":"assistant"},"content":{"parts":["Reply"]}}}\n\ndata: [DONE]\n\n',
+				});
 			});
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=light`);
 			const picker = page.locator('.ash-sessions-model-picker');
 			const openModels = async (): Promise<void> => {
 				await picker.click();
-				await page.getByRole('button', { name: locale === 'en' ? 'Choose model' : '选择模型', exact: true }).click();
+				await page
+					.getByRole('button', { name: locale === 'en' ? 'Choose model' : '选择模型', exact: true })
+					.click();
 			};
 			await expect(picker).toHaveText(labels[0]!);
 			await openModels();
 			await expect(page.getByRole('menuitemradio')).toHaveText(['GPT-6', 'GPT-5.6 Sol']);
-			await testInfo.attach('chatgpt-model-families', { body: await page.getByRole('menu').screenshot(), contentType: 'image/png' });
+			await testInfo.attach('chatgpt-model-families', {
+				body: await page.getByRole('menu').screenshot(),
+				contentType: 'image/png',
+			});
 			const popupId = await page.getByRole('menu').getAttribute('id');
 			await page.getByRole('menuitemradio', { name: 'GPT-6', exact: true }).click();
 			await expect(page.getByRole('dialog')).toHaveAttribute('id', popupId!);
 			await page.keyboard.press('Escape');
 			const expected = [
-				['gpt-6-instant', undefined], ['gpt-6-thinking', 'standard'], ['gpt-6-thinking', 'extended'],
-				['gpt-6-thinking', 'max'], ['gpt-6-pro', undefined],
+				['gpt-6-instant', undefined],
+				['gpt-6-thinking', 'standard'],
+				['gpt-6-thinking', 'extended'],
+				['gpt-6-thinking', 'max'],
+				['gpt-6-pro', undefined],
 			] as const;
 			for (let index = 0; index < labels.length; index++) {
 				await picker.click();
 				const slider = page.getByRole('slider');
 				await expect(slider).toHaveAttribute('max', '4');
 				await slider.press('Home');
-				for (let step = 0; step < index; step++) { await slider.press('ArrowRight'); }
+				for (let step = 0; step < index; step++) {
+					await slider.press('ArrowRight');
+				}
 				await expect(slider).toHaveAttribute('aria-valuetext', labels[index]!);
 				await expect(picker).toHaveText(labels[index]!);
-				await expect(page.locator('.ash-sessions-model-picker-track')).toHaveAttribute('data-emphasized', String(index === 4));
+				await expect(page.locator('.ash-sessions-model-picker-track')).toHaveAttribute(
+					'data-emphasized',
+					String(index === 4),
+				);
 				if (index === 4) {
 					await expect(page.locator('.ash-sessions-model-picker-maximum-effects')).toHaveCSS('opacity', '1');
-					await expect.poll(() => page.locator('.ash-sessions-model-picker-maximum-effects').evaluate(element => element.getAnimations({ subtree: true }).filter(animation => animation.playState === 'running').length)).toBeGreaterThan(1);
-					await testInfo.attach('chatgpt-pro', { body: await page.getByRole('dialog').screenshot(), contentType: 'image/png' });
+					await expect
+						.poll(() =>
+							page
+								.locator('.ash-sessions-model-picker-maximum-effects')
+								.evaluate(
+									element =>
+										element
+											.getAnimations({ subtree: true })
+											.filter(animation => animation.playState === 'running').length,
+								),
+						)
+						.toBeGreaterThan(1);
+					await testInfo.attach('chatgpt-pro', {
+						body: await page.getByRole('dialog').screenshot(),
+						contentType: 'image/png',
+					});
 				}
-				if (index === 3) { await testInfo.attach('chatgpt-extra-high', { body: await page.getByRole('dialog').screenshot(), contentType: 'image/png' }); }
+				if (index === 3) {
+					await testInfo.attach('chatgpt-extra-high', {
+						body: await page.getByRole('dialog').screenshot(),
+						contentType: 'image/png',
+					});
+				}
 				await page.keyboard.press('Escape');
 				await fillMessage(page, `Use ${labels[index]}`);
 				await page.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
 				await expect.poll(() => submitted.length).toBe((index + 1) * 2);
-				expect(submitted.slice(-2).map(body => [body.model, body.thinking_effort])).toEqual([expected[index], expected[index]]);
-				if (expected[index]![1] === undefined) { expect(submitted.slice(-2).every(body => !('thinking_effort' in body))).toBe(true); }
+				expect(submitted.slice(-2).map(body => [body.model, body.thinking_effort])).toEqual([
+					expected[index],
+					expected[index],
+				]);
+				if (expected[index]![1] === undefined) {
+					expect(submitted.slice(-2).every(body => !('thinking_effort' in body))).toBe(true);
+				}
 				await expect(picker).toBeEnabled();
 			}
 			await openModels();
@@ -352,16 +490,24 @@ suite('chatgptweb browser component', () => {
 			await fillMessage(page, 'Use GPT-5.6 Sol Extra High');
 			await page.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
 			await expect.poll(() => submitted.length).toBe(12);
-			expect(submitted.slice(-2).map(body => [body.model, body.thinking_effort])).toEqual([['gpt-5-6-thinking', 'max'], ['gpt-5-6-thinking', 'max']]);
+			expect(submitted.slice(-2).map(body => [body.model, body.thinking_effort])).toEqual([
+				['gpt-5-6-thinking', 'max'],
+				['gpt-5-6-thinking', 'max'],
+			]);
 		});
 
 		test(`ChatGPT model picker submits the selected catalog model and hides unknown thinking capabilities in ${locale}`, async function () {
 			const { page } = browserTests;
 
 			await mockChatGPTRequests(page);
-			await page.route('**/service/backend-api/models?*', route => route.fulfill({
-				json: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }, { slug: 'second', title: 'Second model' }])
-			}));
+			await page.route('**/service/backend-api/models?*', route =>
+				route.fulfill({
+					json: simpleChatGPTModelCatalog([
+						{ slug: 'fixture', title: 'Fixture model' },
+						{ slug: 'second', title: 'Second model' },
+					]),
+				}),
+			);
 			let submitted: string | undefined;
 			await page.route('**/service/backend-api/f/conversation/prepare', async route => {
 				submitted = route.request().postDataJSON().model;
@@ -372,14 +518,20 @@ suite('chatgptweb browser component', () => {
 			await expect(picker).toBeEnabled();
 			await picker.click();
 			await expect(page.getByRole('slider')).toHaveCount(0);
-			await expect(page.getByRole('menuitemradio', { name: 'Fixture model' })).toHaveAttribute('aria-checked', 'true');
+			await expect(page.getByRole('menuitemradio', { name: 'Fixture model' })).toHaveAttribute(
+				'aria-checked',
+				'true',
+			);
 			await expect(page.getByRole('menu')).toBeFocused();
 			await page.keyboard.press('End');
 			await page.keyboard.press('Enter');
 			await expect(picker).toHaveText('Second model');
 			await expect(picker).toBeFocused();
 			await picker.click();
-			await expect(page.getByRole('menuitemradio', { name: 'Second model' })).toHaveAttribute('aria-checked', 'true');
+			await expect(page.getByRole('menuitemradio', { name: 'Second model' })).toHaveAttribute(
+				'aria-checked',
+				'true',
+			);
 			await page.keyboard.press('Escape');
 			await fillMessage(page, 'Use the selected model');
 			await page.getByRole('button', { name: locale === 'en' ? 'Send' : '发送', exact: true }).click();
@@ -394,7 +546,10 @@ suite('chatgptweb browser component', () => {
 				await mockChatGPTRequests(page);
 				let releaseCatalog!: () => Promise<void>;
 				await page.route('**/service/backend-api/models?*', route => {
-					releaseCatalog = () => route.fulfill({ json: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]) });
+					releaseCatalog = () =>
+						route.fulfill({
+							json: simpleChatGPTModelCatalog([{ slug: 'fixture', title: 'Fixture model' }]),
+						});
 				});
 				await page.goto(`/chatgptNavigation.html?focus=1&locale=${locale}&theme=${theme}`);
 				const composer = page.locator('.ash-chatgpt-composer');
@@ -420,7 +575,10 @@ suite('chatgptweb browser component', () => {
 				await expect(model).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
 				await page.keyboard.press('Shift+Tab');
 				await expect(input).toBeFocused();
-				await testInfo.attach('composer-ready-focus', { body: await page.screenshot(), contentType: 'image/png' });
+				await testInfo.attach('composer-ready-focus', {
+					body: await page.screenshot(),
+					contentType: 'image/png',
+				});
 			});
 
 			test(`ChatGPT composer grows from one line and retains inline controls in ${locale} ${theme}`, async function () {
@@ -432,7 +590,9 @@ suite('chatgptweb browser component', () => {
 				const composer = page.locator('.ash-chatgpt-composer');
 				const input = composer.getByRole('textbox', { name: locale === 'en' ? 'Ask ChatGPT' : '询问 ChatGPT' });
 				const editor = composer.locator('.ash-chat-input-editor');
-				const model = composer.getByRole('button', { name: locale === 'en' ? 'Choose model: Fixture model' : '选择模型：Fixture model' });
+				const model = composer.getByRole('button', {
+					name: locale === 'en' ? 'Choose model: Fixture model' : '选择模型：Fixture model',
+				});
 				const send = composer.locator('.ash-chatgpt-send');
 				await expect(input).toBeEnabled();
 				await expect(editor).toHaveCSS('height', '20px');
@@ -478,7 +638,9 @@ suite('chatgptweb browser component', () => {
 					const controlBounds = await control.boundingBox();
 					const composerBounds = await composer.boundingBox();
 					expect(controlBounds!.x).toBeGreaterThanOrEqual(composerBounds!.x);
-					expect(controlBounds!.x + controlBounds!.width).toBeLessThanOrEqual(composerBounds!.x + composerBounds!.width);
+					expect(controlBounds!.x + controlBounds!.width).toBeLessThanOrEqual(
+						composerBounds!.x + composerBounds!.width,
+					);
 				}
 				await expect(input).toBeFocused();
 				await fillMessage(page, Array.from({ length: 30 }, (_, index) => `Line ${index}`).join('\n'));
@@ -487,7 +649,9 @@ suite('chatgptweb browser component', () => {
 				await expect(editor).toHaveCSS('height', '20px');
 				await page.mouse.move(1, 1);
 				await page.locator('.ash-chatgpt-navigation .ash-pane-view-header-button').first().focus();
-				await expect.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow)).toBe(restingShadow);
+				await expect
+					.poll(() => composer.evaluate(element => getComputedStyle(element).boxShadow))
+					.toBe(restingShadow);
 				await composer.hover();
 				if (!theme.startsWith('hc')) {
 					await expect(composer).toHaveCSS('box-shadow', activeShadow);
@@ -503,7 +667,10 @@ suite('chatgptweb browser component', () => {
 					await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 					await expect(page.locator('.ash-chatgpt-turn.assistant')).toHaveCount(1);
 					await input.focus();
-					await testInfo.attach('chatgpt-single-line-composer', { body: await page.screenshot(), contentType: 'image/png' });
+					await testInfo.attach('chatgpt-single-line-composer', {
+						body: await page.screenshot(),
+						contentType: 'image/png',
+					});
 				}
 			});
 		}
@@ -514,12 +681,20 @@ suite('chatgptweb browser component', () => {
 		const testInfo = browserTests.info;
 
 		await mockChatGPTRequests(page);
-		await page.route('**/service/backend-api/conversations?**', route => route.fulfill({
-			json: {
-				items: [{ id: 'fixture-chat', title: 'Synthetic conversation' }, ...Array.from({ length: 30 }, (_, index) => ({ id: `recent-${index}`, title: `Recent conversation ${index + 1} with a long title that stays inside the sidebar` }))],
-				total: 31,
-			}
-		}));
+		await page.route('**/service/backend-api/conversations?**', route =>
+			route.fulfill({
+				json: {
+					items: [
+						{ id: 'fixture-chat', title: 'Synthetic conversation' },
+						...Array.from({ length: 30 }, (_, index) => ({
+							id: `recent-${index}`,
+							title: `Recent conversation ${index + 1} with a long title that stays inside the sidebar`,
+						})),
+					],
+					total: 31,
+				},
+			}),
+		);
 		await page.goto('/chatgptNavigation.html');
 		const sidebar = page.locator('.ash-chatgpt-navigation');
 		const list = sidebar.getByRole('navigation', { name: '会话', exact: true });
@@ -543,15 +718,24 @@ suite('chatgptweb browser component', () => {
 		await expectDraft(page, 'Sidebar switch keeps this draft');
 		await expect(sidebar.getByRole('searchbox')).toHaveCount(0);
 		await expect(sidebar.locator('details')).toHaveCount(0);
-		await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
+		await viewport.evaluate(element => {
+			element.scrollTop = element.scrollHeight;
+		});
 		await expect(sidebar.locator('.ash-chatgpt-conversation').last()).toBeInViewport();
-		await viewport.evaluate(element => { element.scrollTop = 0; });
+		await viewport.evaluate(element => {
+			element.scrollTop = 0;
+		});
 		await testInfo.attach('chatgpt-restored-web-ui', { body: await page.screenshot(), contentType: 'image/png' });
 		const before = await page.locator('#editor').boundingBox();
-		await page.locator('#navigation').evaluate(element => { element.style.width = '400px'; });
+		await page.locator('#navigation').evaluate(element => {
+			element.style.width = '400px';
+		});
 		await expect.poll(async () => (await page.locator('#editor').boundingBox())!.width).toBe(before!.width - 100);
 		await expectDraft(page, 'Sidebar switch keeps this draft');
-		await testInfo.attach('chatgpt-sidebar-and-editor', { body: await page.screenshot(), contentType: 'image/png' });
+		await testInfo.attach('chatgpt-sidebar-and-editor', {
+			body: await page.screenshot(),
+			contentType: 'image/png',
+		});
 	});
 
 	for (const locale of ['en', 'zh-CN']) {
@@ -559,7 +743,12 @@ suite('chatgptweb browser component', () => {
 			const { page } = browserTests;
 
 			await mockChatGPTRequests(page);
-			const message = (id: string, role: string, text: string, extra = {}) => ({ id, author: { role, name: role === 'tool' ? 'GitHub.fetch_file' : undefined }, content: { parts: [text] }, ...extra });
+			const message = (id: string, role: string, text: string, extra = {}) => ({
+				id,
+				author: { role, name: role === 'tool' ? 'GitHub.fetch_file' : undefined },
+				content: { parts: [text] },
+				...extra,
+			});
 			const messages = [
 				message('user-one', 'user', 'First question'),
 				message('call-one', 'assistant', '{"path":"README.md"}', { recipient: 'GitHub.fetch_file' }),
@@ -569,19 +758,36 @@ suite('chatgptweb browser component', () => {
 				message('call-two', 'assistant', '{"path":"package.json"}', { recipient: 'GitHub.fetch_file' }),
 				message('answer-two', 'assistant', 'Package answer'),
 			];
-			await page.route('**/service/backend-api/conversation/fixture-chat', route => route.fulfill({
-				json: {
-					title: 'Synthetic conversation', current_node: 'answer-two',
-					mapping: Object.fromEntries(messages.map((message, index) => [message.id, { parent: messages[index - 1]?.id, message }])),
-				}
-			}));
+			await page.route('**/service/backend-api/conversation/fixture-chat', route =>
+				route.fulfill({
+					json: {
+						title: 'Synthetic conversation',
+						current_node: 'answer-two',
+						mapping: Object.fromEntries(
+							messages.map((message, index) => [
+								message.id,
+								{ parent: messages[index - 1]?.id, message },
+							]),
+						),
+					},
+				}),
+			);
 			await page.goto(`/chatgptNavigation.html?locale=${locale}`);
 			await page.getByRole('button', { name: 'Synthetic conversation', exact: true }).click();
 			const activities = page.locator('.ash-chatgpt-activity');
 			await expect(activities).toHaveCount(2);
-			await expect(activities.locator(':scope > summary').first()).toHaveText(locale === 'en' ? 'Execution process · Some steps failed' : '执行过程 · 部分步骤失败');
-			await expect(activities.locator(':scope > summary').last()).toHaveText(locale === 'en' ? 'Execution process · 1 step' : '执行过程 · 1 个步骤');
-			await expect(page.locator('.ash-chatgpt-message-body')).toHaveText(['First question', 'The file was unavailable', 'Second question', 'Package answer']);
+			await expect(activities.locator(':scope > summary').first()).toHaveText(
+				locale === 'en' ? 'Execution process · Some steps failed' : '执行过程 · 部分步骤失败',
+			);
+			await expect(activities.locator(':scope > summary').last()).toHaveText(
+				locale === 'en' ? 'Execution process · 1 step' : '执行过程 · 1 个步骤',
+			);
+			await expect(page.locator('.ash-chatgpt-message-body')).toHaveText([
+				'First question',
+				'The file was unavailable',
+				'Second question',
+				'Package answer',
+			]);
 			await expect(page.locator('.ash-chatgpt-activity[open]')).toHaveCount(0);
 			await activities.first().locator(':scope > summary').click();
 			const result = activities.first().locator('.ash-chatgpt-activity-entry').last();
@@ -599,13 +805,27 @@ suite('chatgptweb browser component', () => {
 				await page.addInitScript(() => {
 					const fetcher = globalThis.fetch.bind(globalThis);
 					globalThis.fetch = async (input, init) => {
-						if (String(input) !== '/service/backend-api/f/conversation') { return fetcher(input, init); }
-						return new Response(new ReadableStream({
-							start(controller) {
-								Reflect.set(globalThis, 'pushExecution', (message: unknown) => controller.enqueue(new TextEncoder().encode(`data: ${JSON.stringify({ conversation_id: 'fixture-chat', message })}\n\n`)));
-								Reflect.set(globalThis, 'endExecution', () => { controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n')); controller.close(); });
-							}
-						}), { headers: { 'Content-Type': 'text/event-stream' } });
+						if (String(input) !== '/service/backend-api/f/conversation') {
+							return fetcher(input, init);
+						}
+						return new Response(
+							new ReadableStream({
+								start(controller) {
+									Reflect.set(globalThis, 'pushExecution', (message: unknown) =>
+										controller.enqueue(
+											new TextEncoder().encode(
+												`data: ${JSON.stringify({ conversation_id: 'fixture-chat', message })}\n\n`,
+											),
+										),
+									);
+									Reflect.set(globalThis, 'endExecution', () => {
+										controller.enqueue(new TextEncoder().encode('data: [DONE]\n\n'));
+										controller.close();
+									});
+								},
+							}),
+							{ headers: { 'Content-Type': 'text/event-stream' } },
+						);
 					};
 				});
 				await mockChatGPTRequests(page);
@@ -614,17 +834,29 @@ suite('chatgptweb browser component', () => {
 				await expect(page.locator('.ash-chatgpt-message-body').last()).toHaveText('Synthetic answer');
 				await fillMessage(page, 'Read the repository');
 				await page.getByRole('button', { name: /^(Send|发送)$/, exact: true }).click();
-				await expect.poll(() => page.evaluate(() => typeof Reflect.get(globalThis, 'pushExecution'))).toBe('function');
-				const push = (value: unknown) => page.evaluate(message => Reflect.get(globalThis, 'pushExecution')(message), value);
-				const call = (id: string, text: string) => ({ id, author: { role: 'assistant' }, recipient: 'GitHub.fetch_file', content: { content_type: 'code', text } });
+				await expect
+					.poll(() => page.evaluate(() => typeof Reflect.get(globalThis, 'pushExecution')))
+					.toBe('function');
+				const push = (value: unknown) =>
+					page.evaluate(message => Reflect.get(globalThis, 'pushExecution')(message), value);
+				const call = (id: string, text: string) => ({
+					id,
+					author: { role: 'assistant' },
+					recipient: 'GitHub.fetch_file',
+					content: { content_type: 'code', text },
+				});
 				const raw = '{"path":"README.md","args":{"text":"<img src=x onerror=alert(1)>"}}';
 				await push(call('call-one', raw));
 				const activity = page.locator('.ash-chatgpt-activity');
 				const summary = activity.locator(':scope > summary');
 				await expect(activity).toHaveCount(1);
-				await expect(summary).toContainText(locale === 'en' ? 'Using GitHub.fetch_file' : '正在使用 GitHub.fetch_file');
+				await expect(summary).toContainText(
+					locale === 'en' ? 'Using GitHub.fetch_file' : '正在使用 GitHub.fetch_file',
+				);
 				await expect(activity).not.toHaveAttribute('open');
-				await summary.evaluate(element => { Reflect.set(element, 'retainedExecutionSummary', true); });
+				await summary.evaluate(element => {
+					Reflect.set(element, 'retainedExecutionSummary', true);
+				});
 				await summary.focus();
 				await summary.press('Enter');
 				await expect(activity).toHaveAttribute('open');
@@ -638,18 +870,36 @@ suite('chatgptweb browser component', () => {
 				await push(call('call-two', '{"path":"src/index.ts"}'));
 				await expect(activity).toHaveCount(1);
 				await expect(summary).toContainText(locale === 'en' ? '2 steps' : '2 个步骤');
-				await expect.poll(() => summary.evaluate(element => Reflect.get(element, 'retainedExecutionSummary'))).toBe(true);
-				await push({ id: 'answer', author: { role: 'assistant' }, channel: 'final', recipient: 'all', content: { parts: ['Repository answer'] } });
+				await expect
+					.poll(() => summary.evaluate(element => Reflect.get(element, 'retainedExecutionSummary')))
+					.toBe(true);
+				await push({
+					id: 'answer',
+					author: { role: 'assistant' },
+					channel: 'final',
+					recipient: 'all',
+					content: { parts: ['Repository answer'] },
+				});
 				await expect(activity).not.toHaveAttribute('open');
 				await expect(summary).toBeFocused();
-				await expect(summary).toHaveText(locale === 'en' ? 'Execution process · 2 steps' : '执行过程 · 2 个步骤');
+				await expect(summary).toHaveText(
+					locale === 'en' ? 'Execution process · 2 steps' : '执行过程 · 2 个步骤',
+				);
 				await expect(page.locator('.ash-chatgpt-message-body').last()).toHaveText('Repository answer');
 				await summary.press('Enter');
-				await push({ id: 'answer', author: { role: 'assistant' }, channel: 'final', content: { parts: ['Repository answer continues'] } });
+				await push({
+					id: 'answer',
+					author: { role: 'assistant' },
+					channel: 'final',
+					content: { parts: ['Repository answer continues'] },
+				});
 				await expect(activity).toHaveAttribute('open');
 				await expect(summary).toBeFocused();
 				await expectVisibleFocusOutline(summary);
-				await testInfo.attach(`execution-${locale}-${theme}`, { body: await page.screenshot(), contentType: 'image/png' });
+				await testInfo.attach(`execution-${locale}-${theme}`, {
+					body: await page.screenshot(),
+					contentType: 'image/png',
+				});
 				await page.evaluate(() => Reflect.get(globalThis, 'endExecution')());
 				await expect(page.getByRole('button', { name: /^(Stop|停止)$/, exact: true })).toHaveCount(0);
 			});
@@ -663,11 +913,24 @@ suite('chatgptweb browser component', () => {
 			const fetcher = globalThis.fetch.bind(globalThis);
 			Object.assign(globalThis, { auditStreamCancelled: false });
 			globalThis.fetch = async (input, init) => {
-				if (String(input) !== '/service/backend-api/f/conversation') { return fetcher(input, init); }
-				return new Response(new ReadableStream({
-					start(controller) { controller.enqueue(new TextEncoder().encode('data: {"conversation_id":"fixture-chat","message":{"id":"current-reply","author":{"role":"assistant"},"content":{"parts":["Synthetic live reply"]}}}\n\n')); },
-					cancel() { Reflect.set(globalThis, 'auditStreamCancelled', true); },
-				}), { headers: { 'Content-Type': 'text/event-stream' } });
+				if (String(input) !== '/service/backend-api/f/conversation') {
+					return fetcher(input, init);
+				}
+				return new Response(
+					new ReadableStream({
+						start(controller) {
+							controller.enqueue(
+								new TextEncoder().encode(
+									'data: {"conversation_id":"fixture-chat","message":{"id":"current-reply","author":{"role":"assistant"},"content":{"parts":["Synthetic live reply"]}}}\n\n',
+								),
+							);
+						},
+						cancel() {
+							Reflect.set(globalThis, 'auditStreamCancelled', true);
+						},
+					}),
+					{ headers: { 'Content-Type': 'text/event-stream' } },
+				);
 			};
 		});
 		await chatPage(page);
@@ -675,7 +938,9 @@ suite('chatgptweb browser component', () => {
 		let messageId: string | undefined;
 		await page.route('**/service/backend-api/stop_conversation', route => {
 			messageId = route.request().postDataJSON().message_id;
-			stop = async () => { await route.fulfill({ json: {} }); };
+			stop = async () => {
+				await route.fulfill({ json: {} });
+			};
 		});
 		await fillMessage(page, 'Synthetic streaming probe');
 		await page.getByRole('button', { name: '发送', exact: true }).click();
@@ -699,9 +964,12 @@ suite('chatgptweb browser component', () => {
 		const heading = recent.locator('.ash-pane-view-header-button');
 		await expect(heading).toHaveAttribute('aria-expanded', 'false');
 		const storageKeys = () => page.evaluate(() => window.ashChatGPTIntegration.storageKeys());
-		const previousKeys = (keys: readonly string[]) => keys.filter(key => key.startsWith('sessions.chatgpt.navigation.collapsed.'));
+		const previousKeys = (keys: readonly string[]) =>
+			keys.filter(key => key.startsWith('sessions.chatgpt.navigation.collapsed.'));
 		expect(previousKeys(await storageKeys())).toEqual([]);
-		expect(await storageKeys()).toContain('workbench.viewContainer.sessions.chatgpt.navigation.sessions.chatgpt.navigation.g-p-unloaded.collapsed');
+		expect(await storageKeys()).toContain(
+			'workbench.viewContainer.sessions.chatgpt.navigation.sessions.chatgpt.navigation.g-p-unloaded.collapsed',
+		);
 		expect((await storageKeys()).some(key => key.endsWith('.projects.collapsed'))).toBe(false);
 		await expect(recent.getByRole('button', { name: 'Synthetic conversation', exact: true })).toBeHidden();
 		await heading.click();
@@ -729,50 +997,85 @@ suite('chatgptweb browser component', () => {
 			const zh = locale === 'zh-CN';
 			let projectTitle = 'Project One';
 			await mockChatGPTRequests(page);
-			await page.route('**/service/backend-api/conversations?*', route => route.fulfill({
-				json: {
-					items: [{ id: 'recent', title: 'Recent chat' }, { id: 'one', title: 'First project chat', gizmo_id: 'g-p-one' }, { id: 'two', title: 'Second project chat', gizmo_id: 'g-p-two' }], total: 3,
-				}
-			}));
-			await page.route('**/service/backend-api/pins?*', route => route.fulfill({ json: [{ item: { id: 'pin', title: 'Pinned chat' } }] }));
-			await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
-				json: {
-					items: [{ gizmo: { id: 'g-p-one', display: { name: projectTitle } } }, { gizmo: { id: 'g-p-two', display: { name: 'Project Two' } } }], cursor: null,
-				}
-			}));
-			await page.route('**/service/backend-api/conversation/two', route => route.fulfill({ json: { success: true } }));
+			await page.route('**/service/backend-api/conversations?*', route =>
+				route.fulfill({
+					json: {
+						items: [
+							{ id: 'recent', title: 'Recent chat' },
+							{ id: 'one', title: 'First project chat', gizmo_id: 'g-p-one' },
+							{ id: 'two', title: 'Second project chat', gizmo_id: 'g-p-two' },
+						],
+						total: 3,
+					},
+				}),
+			);
+			await page.route('**/service/backend-api/pins?*', route =>
+				route.fulfill({ json: [{ item: { id: 'pin', title: 'Pinned chat' } }] }),
+			);
+			await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route =>
+				route.fulfill({
+					json: {
+						items: [
+							{ gizmo: { id: 'g-p-one', display: { name: projectTitle } } },
+							{ gizmo: { id: 'g-p-two', display: { name: 'Project Two' } } },
+						],
+						cursor: null,
+					},
+				}),
+			);
+			await page.route('**/service/backend-api/conversation/two', route =>
+				route.fulfill({ json: { success: true } }),
+			);
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${zh ? 'hcDark' : 'light'}`);
 			const list = page.locator('.ash-chatgpt-navigation-list');
 			const pinned = list.getByRole('group', { name: zh ? '置顶' : 'Pinned', exact: true });
 			const recent = list.getByRole('group', { name: zh ? '最近' : 'Recent', exact: true });
 			const first = list.locator('[data-group="g-p-one"]');
 			const second = list.locator('[data-group="g-p-two"]');
-			const toggle = (group: typeof first) => group.locator(':scope > .ash-pane-view-header > .ash-pane-view-header-button');
+			const toggle = (group: typeof first) =>
+				group.locator(':scope > .ash-pane-view-header > .ash-pane-view-header-button');
 			await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveCount(4);
-			for (const group of [pinned, first, second, recent]) { await expect(toggle(group)).toHaveCSS('height', '32px'); }
+			for (const group of [pinned, first, second, recent]) {
+				await expect(toggle(group)).toHaveCSS('height', '32px');
+			}
 			await toggle(pinned).focus();
-			await page.keyboard.press('ArrowDown'); await expect(toggle(first)).toBeFocused();
-			await page.keyboard.press('ArrowDown'); await expect(toggle(second)).toBeFocused();
-			await page.keyboard.press('End'); await expect(toggle(recent)).toBeFocused();
-			await page.keyboard.press('Home'); await expect(toggle(pinned)).toBeFocused();
+			await page.keyboard.press('ArrowDown');
+			await expect(toggle(first)).toBeFocused();
+			await page.keyboard.press('ArrowDown');
+			await expect(toggle(second)).toBeFocused();
+			await page.keyboard.press('End');
+			await expect(toggle(recent)).toBeFocused();
+			await page.keyboard.press('Home');
+			await expect(toggle(pinned)).toBeFocused();
 			await toggle(first).click();
 			await expect(toggle(first)).toHaveAttribute('aria-expanded', 'false');
 			await expect(toggle(second)).toHaveAttribute('aria-expanded', 'true');
-			await toggle(pinned).focus(); await page.keyboard.press('ArrowLeft');
-			await toggle(recent).focus(); await page.keyboard.press('Space');
+			await toggle(pinned).focus();
+			await page.keyboard.press('ArrowLeft');
+			await toggle(recent).focus();
+			await page.keyboard.press('Space');
 			await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveText(['Second project chat']);
-			await testInfo.attach('collapsed-sidebar-groups', { body: await page.screenshot(), contentType: 'image/png' });
+			await testInfo.attach('collapsed-sidebar-groups', {
+				body: await page.screenshot(),
+				contentType: 'image/png',
+			});
 			projectTitle = 'Renamed project';
-			await page.goto(`/chatgptNavigation.html?locale=${locale}&workspace=second-workspace&theme=${zh ? 'hcDark' : 'light'}`);
+			await page.goto(
+				`/chatgptNavigation.html?locale=${locale}&workspace=second-workspace&theme=${zh ? 'hcDark' : 'light'}`,
+			);
 			await expect(toggle(first)).toHaveText('Renamed project');
-			for (const group of [pinned, first, recent]) { await expect(toggle(group)).toHaveAttribute('aria-expanded', 'false'); }
+			for (const group of [pinned, first, recent]) {
+				await expect(toggle(group)).toHaveAttribute('aria-expanded', 'false');
+			}
 			await expect(toggle(second)).toHaveAttribute('aria-expanded', 'true');
 			await expect(list.locator('.ash-chatgpt-conversation:visible')).toHaveText(['Second project chat']);
-			await toggle(recent).focus(); await page.keyboard.press('ArrowRight');
+			await toggle(recent).focus();
+			await page.keyboard.press('ArrowRight');
 			await expect(toggle(recent)).toHaveAttribute('aria-expanded', 'true');
 			await page.keyboard.press('Tab');
 			await expect(recent.getByRole('button', { name: 'Recent chat', exact: true })).toBeFocused();
-			await toggle(first).focus(); await page.keyboard.press('Enter');
+			await toggle(first).focus();
+			await page.keyboard.press('Enter');
 			await expect(first.getByRole('button', { name: 'First project chat', exact: true })).toBeVisible();
 			await toggle(first).click();
 
@@ -793,37 +1096,52 @@ suite('chatgptweb browser component', () => {
 
 			const zh = locale === 'zh-CN';
 			await mockChatGPTRequests(page);
-			await page.route('**/service/backend-api/conversations?*', route => route.fulfill({
-				json: {
-					items: [
-						{ id: 'recent', title: 'Recent chat' }, { id: 'project-chat', title: 'Project chat', gizmo_id: 'g-p-one' },
-						{ id: 'pinned-project', title: 'Pinned project chat', gizmo_id: 'g-p-one' },
-						{ id: 'custom-gpt', title: 'Custom GPT chat', gizmo_id: 'g-custom' },
-					], total: 4
-				}
-			}));
-			await page.route('**/service/backend-api/pins?*', route => route.fulfill({
-				json: [
-					{ item: { id: 'old-pin', title: 'Old pinned chat' } },
-					{ item: { id: 'pinned-project', title: 'Pinned project chat', gizmo_id: 'g-p-one' } },
-				]
-			}));
-			await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route => route.fulfill({
-				json: {
-					items: [{ gizmo: { id: 'g-p-one', display: { name: 'Project One' } } }], cursor: null,
-				}
-			}));
-			await page.route('**/service/backend-api/conversation/pinned-project', route => route.fulfill({ json: { success: true } }));
+			await page.route('**/service/backend-api/conversations?*', route =>
+				route.fulfill({
+					json: {
+						items: [
+							{ id: 'recent', title: 'Recent chat' },
+							{ id: 'project-chat', title: 'Project chat', gizmo_id: 'g-p-one' },
+							{ id: 'pinned-project', title: 'Pinned project chat', gizmo_id: 'g-p-one' },
+							{ id: 'custom-gpt', title: 'Custom GPT chat', gizmo_id: 'g-custom' },
+						],
+						total: 4,
+					},
+				}),
+			);
+			await page.route('**/service/backend-api/pins?*', route =>
+				route.fulfill({
+					json: [
+						{ item: { id: 'old-pin', title: 'Old pinned chat' } },
+						{ item: { id: 'pinned-project', title: 'Pinned project chat', gizmo_id: 'g-p-one' } },
+					],
+				}),
+			);
+			await page.route('**/service/backend-api/gizmos/snorlax/sidebar?*', route =>
+				route.fulfill({
+					json: { items: [{ gizmo: { id: 'g-p-one', display: { name: 'Project One' } } }], cursor: null },
+				}),
+			);
+			await page.route('**/service/backend-api/conversation/pinned-project', route =>
+				route.fulfill({ json: { success: true } }),
+			);
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${zh ? 'hcDark' : 'light'}`);
 			const list = page.locator('.ash-chatgpt-navigation-list');
 			const pinned = list.getByRole('group', { name: zh ? '置顶' : 'Pinned', exact: true });
 			const project = list.getByRole('group', { name: 'Project One', exact: true });
 			const projectInstance = await project.elementHandle();
 			const recent = list.getByRole('group', { name: zh ? '最近' : 'Recent', exact: true });
-			await expect(pinned.locator('.ash-chatgpt-conversation')).toHaveText(['Pinned project chat', 'Old pinned chat']);
+			await expect(pinned.locator('.ash-chatgpt-conversation')).toHaveText([
+				'Pinned project chat',
+				'Old pinned chat',
+			]);
 			await expect(project.locator('.ash-chatgpt-conversation')).toHaveText(['Project chat']);
 			await expect(recent.locator('.ash-chatgpt-conversation')).toHaveText(['Recent chat', 'Custom GPT chat']);
-			expect(await list.locator('.ash-chatgpt-navigation-group').evaluateAll(sections => sections.map(section => (section as HTMLElement).dataset.group))).toEqual(['pinned', 'g-p-one', 'recent']);
+			expect(
+				await list
+					.locator('.ash-chatgpt-navigation-group')
+					.evaluateAll(sections => sections.map(section => (section as HTMLElement).dataset.group)),
+			).toEqual(['pinned', 'g-p-one', 'recent']);
 			await expect(list.locator('.ash-chatgpt-navigation-group:not(.ash-view-pane)')).toHaveCount(0);
 			await expect(list.locator('[data-group="projects"]')).toHaveCount(0);
 			await expect(list.locator('.ash-chatgpt-conversation')).toHaveCount(5);
@@ -832,14 +1150,19 @@ suite('chatgptweb browser component', () => {
 			const row = list.locator('.ash-chatgpt-navigation-row[data-conversation="pinned-project"]');
 			await row.hover();
 			await row.getByRole('button', { name: zh ? '取消置顶聊天' : 'Unpin chat', exact: true }).click();
-			await expect(project.locator('.ash-chatgpt-conversation')).toHaveText(['Project chat', 'Pinned project chat']);
+			await expect(project.locator('.ash-chatgpt-conversation')).toHaveText([
+				'Project chat',
+				'Pinned project chat',
+			]);
 			await expect(project.getByRole('button', { name: 'Pinned project chat', exact: true })).toBeFocused();
 			await expect(pinned.locator('.ash-chatgpt-conversation')).toHaveText(['Old pinned chat']);
 
 			const first = project.getByRole('button', { name: 'Project chat', exact: true });
-			await first.focus(); await page.keyboard.press('ArrowDown');
+			await first.focus();
+			await page.keyboard.press('ArrowDown');
 			await expect(project.getByRole('button', { name: 'Pinned project chat', exact: true })).toBeFocused();
-			await page.keyboard.press('ArrowUp'); await expect(first).toBeFocused();
+			await page.keyboard.press('ArrowUp');
+			await expect(first).toBeFocused();
 
 			expect(await project.evaluate((element, previous) => element === previous, projectInstance)).toBe(true);
 			await expect(list.locator('.ash-chatgpt-conversation')).toHaveCount(5);
@@ -851,34 +1174,84 @@ suite('chatgptweb browser component', () => {
 
 			const zh = locale === 'zh-CN';
 			const labels = zh
-				? { more: '更多操作', pin: '置顶聊天', unpin: '取消置顶聊天', rename: '重命名', share: '分享', archive: '归档', delete: '删除', move: '移至项目', cancel: '取消' }
-				: { more: 'More actions', pin: 'Pin chat', unpin: 'Unpin chat', rename: 'Rename', share: 'Share', archive: 'Archive', delete: 'Delete', move: 'Move to project', cancel: 'Cancel' };
+				? {
+						more: '更多操作',
+						pin: '置顶聊天',
+						unpin: '取消置顶聊天',
+						rename: '重命名',
+						share: '分享',
+						archive: '归档',
+						delete: '删除',
+						move: '移至项目',
+						cancel: '取消',
+					}
+				: {
+						more: 'More actions',
+						pin: 'Pin chat',
+						unpin: 'Unpin chat',
+						rename: 'Rename',
+						share: 'Share',
+						archive: 'Archive',
+						delete: 'Delete',
+						move: 'Move to project',
+						cancel: 'Cancel',
+					};
 			await mockChatGPTRequests(page);
-			await page.route('**/service/backend-api/conversations?*', route => route.fulfill({
-				json: {
-					items: [
-						{ id: 'other', title: 'Other chat' }, { id: 'fixture-chat', title: 'Synthetic conversation' }, { id: 'third', title: 'Third chat' },
-					], total: 3
-				}
-			}));
-			const writes: { method: string; path: string; body?: Record<string, unknown>; }[] = [];
+			await page.route('**/service/backend-api/conversations?*', route =>
+				route.fulfill({
+					json: {
+						items: [
+							{ id: 'other', title: 'Other chat' },
+							{ id: 'fixture-chat', title: 'Synthetic conversation' },
+							{ id: 'third', title: 'Third chat' },
+						],
+						total: 3,
+					},
+				}),
+			);
+			const writes: { method: string; path: string; body?: Record<string, unknown> }[] = [];
 			await page.route('**/service/backend-api/**', async route => {
 				const request = route.request();
 				const url = new URL(request.url());
 				if (url.pathname.endsWith('/gizmos/snorlax/sidebar')) {
 					const next = url.searchParams.has('cursor');
-					await route.fulfill({ json: { items: [{ gizmo: { id: next ? 'g-p-two' : 'g-p-one', display: { name: next ? 'Project Two' : 'Project One' } } }], cursor: next ? null : 'next' } });
+					await route.fulfill({
+						json: {
+							items: [
+								{
+									gizmo: {
+										id: next ? 'g-p-two' : 'g-p-one',
+										display: { name: next ? 'Project Two' : 'Project One' },
+									},
+								},
+							],
+							cursor: next ? null : 'next',
+						},
+					});
 				} else if (request.method() !== 'GET') {
-					writes.push({ method: request.method(), path: url.pathname, ...(request.postData() ? { body: request.postDataJSON() } : {}) });
-					await route.fulfill({ json: url.pathname.endsWith('/share/v2/create') ? { share_url: 'https://chatgpt.com/share/fixture-link' } : { success: true } });
-				} else { await route.fallback(); }
+					writes.push({
+						method: request.method(),
+						path: url.pathname,
+						...(request.postData() ? { body: request.postDataJSON() } : {}),
+					});
+					await route.fulfill({
+						json: url.pathname.endsWith('/share/v2/create')
+							? { share_url: 'https://chatgpt.com/share/fixture-link' }
+							: { success: true },
+					});
+				} else {
+					await route.fallback();
+				}
 			});
 			await page.goto(`/chatgptNavigation.html?locale=${locale}&theme=${zh ? 'hcDark' : 'light'}`);
 			const row = page.locator('.ash-chatgpt-navigation-row[data-conversation="fixture-chat"]');
 			const title = row.locator('.ash-chatgpt-conversation');
 			const toolbar = row.getByRole('toolbar');
 			const more = row.getByRole('button', { name: labels.more, exact: true });
-			const openMore = async () => { await row.hover(); await more.click(); };
+			const openMore = async () => {
+				await row.hover();
+				await more.click();
+			};
 			await expect(title).toBeVisible();
 			for (const forcedColors of ['none', 'active'] as const) {
 				await page.emulateMedia({ forcedColors });
@@ -903,7 +1276,10 @@ suite('chatgptweb browser component', () => {
 			await page.keyboard.press('ArrowRight');
 			await expect(row.getByRole('button', { name: labels.pin, exact: true })).toBeFocused();
 			await page.keyboard.press('Enter');
-			await expect(row.getByRole('button', { name: labels.unpin, exact: true })).toHaveAttribute('aria-pressed', 'true');
+			await expect(row.getByRole('button', { name: labels.unpin, exact: true })).toHaveAttribute(
+				'aria-pressed',
+				'true',
+			);
 			await expect(page.locator('.ash-chatgpt-conversation').first()).toHaveText('Synthetic conversation');
 			await expect(page.locator('.ash-chatgpt-turn')).toHaveCount(0);
 			await openMore();
@@ -916,7 +1292,10 @@ suite('chatgptweb browser component', () => {
 			await page.getByRole('menuitem', { name: labels.move, exact: true }).focus();
 			await page.keyboard.press('ArrowRight');
 			await expect(page.getByRole('menuitemcheckbox', { name: 'Project One', exact: true })).toBeVisible();
-			await testInfo.attach('conversation-project-submenu', { body: await page.screenshot(), contentType: 'image/png' });
+			await testInfo.attach('conversation-project-submenu', {
+				body: await page.screenshot(),
+				contentType: 'image/png',
+			});
 			await page.getByRole('menuitemcheckbox', { name: 'Project Two', exact: true }).click();
 			await expect.poll(() => writes.some(write => write.body?.gizmo_id === 'g-p-two')).toBe(true);
 			await openMore();
@@ -930,7 +1309,10 @@ suite('chatgptweb browser component', () => {
 			const dialog = page.getByRole('dialog');
 			await expect(dialog).toBeVisible();
 			await dialog.getByRole('button', { name: labels.share, exact: true }).click();
-			await expect(page.locator('body')).toHaveAttribute('data-copied-link', 'https://chatgpt.com/share/fixture-link');
+			await expect(page.locator('body')).toHaveAttribute(
+				'data-copied-link',
+				'https://chatgpt.com/share/fixture-link',
+			);
 			await openMore();
 			await page.getByRole('menuitem', { name: labels.delete, exact: true }).click();
 			await dialog.getByRole('button', { name: labels.cancel, exact: true }).click();
@@ -947,9 +1329,12 @@ suite('chatgptweb browser component', () => {
 			await expect(third).toHaveCount(0);
 			await expect(page.locator('.ash-chatgpt-conversation')).toHaveText(['Other chat']);
 			expect(writes.map(write => [write.method, write.path])).toEqual([
-				['PATCH', '/service/backend-api/conversation/fixture-chat'], ['PATCH', '/service/backend-api/conversation/fixture-chat'],
-				['POST', '/service/backend-api/conversation/id/fixture-chat/rename'], ['POST', '/service/backend-api/share/v2/create'],
-				['PATCH', '/service/backend-api/conversation/fixture-chat'], ['DELETE', '/service/backend-api/conversation/id/third'],
+				['PATCH', '/service/backend-api/conversation/fixture-chat'],
+				['PATCH', '/service/backend-api/conversation/fixture-chat'],
+				['POST', '/service/backend-api/conversation/id/fixture-chat/rename'],
+				['POST', '/service/backend-api/share/v2/create'],
+				['PATCH', '/service/backend-api/conversation/fixture-chat'],
+				['DELETE', '/service/backend-api/conversation/id/third'],
 			]);
 		});
 	}

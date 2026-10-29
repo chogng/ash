@@ -15,7 +15,10 @@ suite('Chat Debug structured filters', () => {
 		assert.equal(state.matches(event('modelAttemptStarted'), 'TurnID', false, 'hello'), true);
 		assert.equal(state.matches(event('modelInvocationRecorded'), 'TurnID', false, 'world private'), false);
 		assert.equal(state.matches(event('modelInvocationRecorded'), 'turnid', false, 'hello'), false);
-		assert.equal(state.matches(event('modelInvocationRecorded', '2026-10-19T00:00:00Z'), 'TurnID', false, 'hello'), false);
+		assert.equal(
+			state.matches(event('modelInvocationRecorded', '2026-10-19T00:00:00Z'), 'TurnID', false, 'hello'),
+			false,
+		);
 		state.setKindVisible('modelTurn', false);
 		assert.equal(state.matches(event('modelAttemptStarted'), 'TurnID', false, 'hello'), false);
 		state.reset();
@@ -25,7 +28,12 @@ suite('Chat Debug structured filters', () => {
 
 	test('rejects impossible, reversed and zone-less time filters without showing unrelated events', () => {
 		using state = new ChatDebugFilterState();
-		for (const query of ['after:2026-02-30', 'before:2026-10-18T12:00:00', 'after:2026-10-19 before:2026-10-18', 'thread:']) {
+		for (const query of [
+			'after:2026-02-30',
+			'before:2026-10-18T12:00:00',
+			'after:2026-10-19 before:2026-10-18',
+			'thread:',
+		]) {
 			state.setTextFilter(query);
 			assert.match(state.error!, /Invalid trace filter/);
 			assert.equal(state.matches(event('modelAttemptStarted'), undefined, false, ''), false);

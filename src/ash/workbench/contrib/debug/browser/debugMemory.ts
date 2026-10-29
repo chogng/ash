@@ -1,5 +1,11 @@
 import { Event, Emitter } from '../../../../base/common/event.js';
-import { Disposable, DisposableStore, DisposableMap, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import {
+	Disposable,
+	DisposableStore,
+	DisposableMap,
+	toDisposable,
+	type IDisposable,
+} from '../../../../base/common/lifecycle.js';
 import { encodeBase64, VSBuffer } from '../../../../base/common/buffer.js';
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
@@ -39,7 +45,7 @@ export class DebugMemoryFileSystemProvider extends Disposable implements IFileSy
 	readonly capabilities =
 		FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.PathCaseSensitive;
 	readonly onDidChangeCapabilities = Event.None;
-	private readonly changes = this._register(new Emitter<{ resources: readonly URI[]; }>());
+	private readonly changes = this._register(new Emitter<{ resources: readonly URI[] }>());
 	readonly onDidChangeFiles = this.changes.event;
 	private readonly watches = this._register(new DisposableMap<object, DisposableStore>());
 
@@ -55,9 +61,16 @@ export class DebugMemoryFileSystemProvider extends Disposable implements IFileSy
 		const address = this.address(resource);
 		const key = {};
 		const lifetime = this.watches.set(key, new DisposableStore());
-		lifetime.add(address.session.onDidInvalidateMemory(event => {
-			if (event.memoryReference === address.reference && event.offset < address.offset + address.count && event.offset + event.count > address.offset) this.changes.fire({ resources: [resource] });
-		}));
+		lifetime.add(
+			address.session.onDidInvalidateMemory(event => {
+				if (
+					event.memoryReference === address.reference &&
+					event.offset < address.offset + address.count &&
+					event.offset + event.count > address.offset
+				)
+					this.changes.fire({ resources: [resource] });
+			}),
+		);
 		lifetime.add(address.session.onDidChangeState(() => this.changes.fire({ resources: [resource] })));
 		return toDisposable(() => this.watches.deleteAndDispose(key));
 	}
@@ -121,7 +134,7 @@ export class DebugMemoryFileSystemProvider extends Disposable implements IFileSy
 		const lines: string[] = [];
 		for (let start = 0; start < result.bytes.length; start += 16)
 			lines.push(
-				[...result.bytes.slice(start, start + 16)].map((byte) => byte.toString(16).padStart(2, '0')).join(' '),
+				[...result.bytes.slice(start, start + 16)].map(byte => byte.toString(16).padStart(2, '0')).join(' '),
 			);
 		return { resource, content: lines.join('\n'), revision: result.revision, encoding: 'utf8' };
 	}
@@ -145,9 +158,9 @@ export class DebugMemoryFileSystemProvider extends Disposable implements IFileSy
 			Uint8Array.from(
 				content.trim()
 					? content
-						.trim()
-						.split(/\s+/)
-						.map((byte) => parseInt(byte, 16))
+							.trim()
+							.split(/\s+/)
+							.map(byte => parseInt(byte, 16))
 					: [],
 			),
 			options,

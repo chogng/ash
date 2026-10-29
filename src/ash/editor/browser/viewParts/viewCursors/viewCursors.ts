@@ -3,7 +3,11 @@ import { h, WindowIntervalTimer } from '../../../../base/browser/dom.js';
 import { FastDomNode, createFastDomNode } from '../../../../base/browser/fastDomNode.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { TimeoutTimer } from '../../../../base/common/async.js';
-import { EditorOption, TextEditorCursorBlinkingStyle, TextEditorCursorStyle } from '../../../common/config/editorOptions.js';
+import {
+	EditorOption,
+	TextEditorCursorBlinkingStyle,
+	TextEditorCursorStyle,
+} from '../../../common/config/editorOptions.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
 import { type Selection } from '../../../common/core/selection.js';
 import { type TextModel } from '../../../common/model/textModel.js';
@@ -71,9 +75,11 @@ export class ViewCursors extends ViewPart {
 		this.reconcileCursors(selections, true);
 		this.updateDomClassName();
 		this.updateBlinking();
-		this._register(toDisposable(() => {
-			this.cursors.splice(0);
-		}));
+		this._register(
+			toDisposable(() => {
+				this.cursors.splice(0);
+			}),
+		);
 	}
 
 	public override dispose(): void {
@@ -112,15 +118,17 @@ export class ViewCursors extends ViewPart {
 		const selectionCount = selections.length;
 		while (this.cursors.length < selectionCount) {
 			const selectionIndex = this.cursors.length;
-			this.cursors.push(new ViewCursor(
-				this._context,
-				this.domNode,
-				selectionIndex,
-				this.cursorOptions,
-				this.model,
-				this.semanticTokenSource,
-				cursorPlurality(selectionIndex, selectionCount, 0),
-			));
+			this.cursors.push(
+				new ViewCursor(
+					this._context,
+					this.domNode,
+					selectionIndex,
+					this.cursorOptions,
+					this.model,
+					this.semanticTokenSource,
+					cursorPlurality(selectionIndex, selectionCount, 0),
+				),
+			);
 		}
 		while (this.cursors.length > selectionCount) this.cursors.pop()!.getDomNode().domNode.remove();
 		this.updateCursorPositions(selections, pauseMovementAnimation);
@@ -176,21 +184,41 @@ export class ViewCursors extends ViewPart {
 		return true;
 	}
 
-	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean { return true; }
-	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean { return true; }
+	public override onDecorationsChanged(_event: viewEvents.ViewDecorationsChangedEvent): boolean {
+		return true;
+	}
+	public override onFlushed(_event: viewEvents.ViewFlushedEvent): boolean {
+		return true;
+	}
 	public override onFocusChanged(event: viewEvents.ViewFocusChangedEvent): boolean {
 		this.editorHasFocus = event.isFocused;
 		this.updateBlinking();
 		return false;
 	}
-	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean { return true; }
-	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean { return true; }
-	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean { return true; }
-	public override onScrollChanged(_event: viewEvents.ViewScrollChangedEvent): boolean { return true; }
-	public override onTokensChanged(event: viewEvents.ViewTokensChangedEvent): boolean {
-		return this.cursors.some(cursor => event.ranges.some(range => range.fromLineNumber <= cursor.getPosition().lineNumber && cursor.getPosition().lineNumber <= range.toLineNumber));
+	public override onLinesChanged(_event: viewEvents.ViewLinesChangedEvent): boolean {
+		return true;
 	}
-	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean { return true; }
+	public override onLinesDeleted(_event: viewEvents.ViewLinesDeletedEvent): boolean {
+		return true;
+	}
+	public override onLinesInserted(_event: viewEvents.ViewLinesInsertedEvent): boolean {
+		return true;
+	}
+	public override onScrollChanged(_event: viewEvents.ViewScrollChangedEvent): boolean {
+		return true;
+	}
+	public override onTokensChanged(event: viewEvents.ViewTokensChangedEvent): boolean {
+		return this.cursors.some(cursor =>
+			event.ranges.some(
+				range =>
+					range.fromLineNumber <= cursor.getPosition().lineNumber &&
+					cursor.getPosition().lineNumber <= range.toLineNumber,
+			),
+		);
+	}
+	public override onZonesChanged(_event: viewEvents.ViewZonesChangedEvent): boolean {
+		return true;
+	}
 
 	private getCursorBlinking(): TextEditorCursorBlinkingStyle {
 		if (this.isComposingInput && !this.editContextEnabled) return TextEditorCursorBlinkingStyle.Hidden;
@@ -211,7 +239,10 @@ export class ViewCursors extends ViewPart {
 		this.updateDomClassName();
 		if (hidden || solid) return;
 		if (blinking === TextEditorCursorBlinkingStyle.Blink) {
-			this.cursorFlatBlinkInterval.cancelAndSet(() => this.isVisible ? this.hide() : this.show(), ViewCursors.BLINK_INTERVAL);
+			this.cursorFlatBlinkInterval.cancelAndSet(
+				() => (this.isVisible ? this.hide() : this.show()),
+				ViewCursors.BLINK_INTERVAL,
+			);
 			return;
 		}
 		this.startCursorBlinkAnimation.setIfNotSet(() => {
@@ -247,21 +278,32 @@ function cursorPlurality(selectionIndex: number, selectionCount: number, primary
 
 function cursorBlinkingClass(blinking: TextEditorCursorBlinkingStyle): string {
 	switch (blinking) {
-		case TextEditorCursorBlinkingStyle.Smooth: return 'cursor-smooth';
-		case TextEditorCursorBlinkingStyle.Phase: return 'cursor-phase';
-		case TextEditorCursorBlinkingStyle.Expand: return 'cursor-expand';
-		case TextEditorCursorBlinkingStyle.Blink: return 'cursor-blink';
-		default: return 'cursor-solid';
+		case TextEditorCursorBlinkingStyle.Smooth:
+			return 'cursor-smooth';
+		case TextEditorCursorBlinkingStyle.Phase:
+			return 'cursor-phase';
+		case TextEditorCursorBlinkingStyle.Expand:
+			return 'cursor-expand';
+		case TextEditorCursorBlinkingStyle.Blink:
+			return 'cursor-blink';
+		default:
+			return 'cursor-solid';
 	}
 }
 
 function cursorStyleClass(style: TextEditorCursorStyle): string {
 	switch (style) {
-		case TextEditorCursorStyle.Block: return 'cursor-block-style';
-		case TextEditorCursorStyle.Underline: return 'cursor-underline-style';
-		case TextEditorCursorStyle.LineThin: return 'cursor-line-thin-style';
-		case TextEditorCursorStyle.BlockOutline: return 'cursor-block-outline-style';
-		case TextEditorCursorStyle.UnderlineThin: return 'cursor-underline-thin-style';
-		default: return 'cursor-line-style';
+		case TextEditorCursorStyle.Block:
+			return 'cursor-block-style';
+		case TextEditorCursorStyle.Underline:
+			return 'cursor-underline-style';
+		case TextEditorCursorStyle.LineThin:
+			return 'cursor-line-thin-style';
+		case TextEditorCursorStyle.BlockOutline:
+			return 'cursor-block-outline-style';
+		case TextEditorCursorStyle.UnderlineThin:
+			return 'cursor-underline-thin-style';
+		default:
+			return 'cursor-line-style';
 	}
 }

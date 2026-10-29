@@ -17,7 +17,8 @@ export function computeUnicodeHighlights(snapshot: TextSnapshot, signal?: AbortS
 	const text = snapshot.getText();
 	// Most source text cannot produce a warning. Let the regexp engine skip it
 	// without allocating one string per line or visiting every code point in JS.
-	const candidates = /[\x00-\x08\x0b\x0c\x0e-\x1f\u00ad\u061c\u200b-\u200d\u202a-\u202e\u2060\u2066-\u2069\ufeff\u0370-\u03ff\u0400-\u04ff]/gu;
+	const candidates =
+		/[\x00-\x08\x0b\x0c\x0e-\x1f\u00ad\u061c\u200b-\u200d\u202a-\u202e\u2060\u2066-\u2069\ufeff\u0370-\u03ff\u0400-\u04ff]/gu;
 	const separators = /\r\n|\r|\n/g;
 	let nextSeparator = separators.exec(text);
 	let lineNumber = 1;
@@ -45,11 +46,16 @@ export function computeUnicodeHighlights(snapshot: TextSnapshot, signal?: AbortS
 		}
 		if (kind) {
 			const column = match.index - lineStart + 1;
-			result.push(Object.freeze({
-				range: Range.fromPositions(new Position(lineNumber, column), new Position(lineNumber, column + character.length)),
-				kind,
-				character,
-			}));
+			result.push(
+				Object.freeze({
+					range: Range.fromPositions(
+						new Position(lineNumber, column),
+						new Position(lineNumber, column + character.length),
+					),
+					kind,
+					character,
+				}),
+			);
 		}
 	}
 	return Object.freeze(result);
@@ -60,12 +66,14 @@ function isBidiControl(codePoint: number): boolean {
 }
 
 function isInvisible(codePoint: number): boolean {
-	return codePoint === 0x00ad
-		|| codePoint === 0x061c
-		|| codePoint === 0x200b
-		|| codePoint === 0x200c
-		|| codePoint === 0x200d
-		|| codePoint === 0x2060
-		|| codePoint === 0xfeff
-		|| (codePoint >= 0 && codePoint < 0x20 && codePoint !== 0x09);
+	return (
+		codePoint === 0x00ad ||
+		codePoint === 0x061c ||
+		codePoint === 0x200b ||
+		codePoint === 0x200c ||
+		codePoint === 0x200d ||
+		codePoint === 0x2060 ||
+		codePoint === 0xfeff ||
+		(codePoint >= 0 && codePoint < 0x20 && codePoint !== 0x09)
+	);
 }

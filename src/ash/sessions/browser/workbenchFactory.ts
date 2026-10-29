@@ -1,5 +1,9 @@
 import { IWorkbenchEnvironmentService } from '../../workbench/services/environment/common/environmentService.js';
-import { IDefaultLogLevelsService, DefaultLogLevelsService, readDefaultLogLevels } from '../../workbench/services/log/common/defaultLogLevels.js';
+import {
+	IDefaultLogLevelsService,
+	DefaultLogLevelsService,
+	readDefaultLogLevels,
+} from '../../workbench/services/log/common/defaultLogLevels.js';
 import { InstantiationService } from '../../platform/instantiation/common/instantiationService.js';
 import { ServiceCollection } from '../../platform/instantiation/common/serviceCollection.js';
 import { SyncDescriptor } from '../../platform/instantiation/common/descriptors.js';
@@ -20,13 +24,19 @@ import { DesktopWorkbench } from './desktopWorkbench.js';
 export async function createSessionsWorkbench(options: IWorkbenchOptions): Promise<Workbench> {
 	const themes = new ExtensionColorThemeService(options.api.extensions, options.api.events);
 	const logger = options.createLogService();
-	let storage: IStorageService & IDisposable | undefined;
-	let userDataFiles: IFileSystemProvider & IDisposable | undefined;
+	let storage: (IStorageService & IDisposable) | undefined;
+	let userDataFiles: (IFileSystemProvider & IDisposable) | undefined;
 	try {
 		await themes.start();
 		const ownerWindow = options.container.ownerDocument.defaultView;
-		if (!ownerWindow) { throw new Error('Sessions renderer requires an owner window'); }
-		storage = await options.createStorageService({ ownerWindow, workspaceId: 'sessions', profileId: options.profile.id });
+		if (!ownerWindow) {
+			throw new Error('Sessions renderer requires an owner window');
+		}
+		storage = await options.createStorageService({
+			ownerWindow,
+			workspaceId: 'sessions',
+			profileId: options.profile.id,
+		});
 		userDataFiles = await options.createUserDataFileSystemProvider();
 		{
 			using startupFiles = new FileService();
@@ -43,7 +53,13 @@ export async function createSessionsWorkbench(options: IWorkbenchOptions): Promi
 		if (!options.initialConfiguration) {
 			using files = new FileService();
 			using registration = files.registerProvider(Schemas.vscodeUserData, userDataFiles);
-			using settings = new UserSettings(URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }), {}, extUriBiasedIgnorePathCase, files, logger);
+			using settings = new UserSettings(
+				URI.from({ scheme: Schemas.vscodeUserData, path: '/user/settings.json' }),
+				{},
+				extUriBiasedIgnorePathCase,
+				files,
+				logger,
+			);
 			options = { ...options, initialConfiguration: (await settings.loadConfiguration()).toJSON() };
 		}
 		return new DesktopWorkbench(options, themes, storage, logger, userDataFiles);
@@ -56,4 +72,3 @@ export async function createSessionsWorkbench(options: IWorkbenchOptions): Promi
 		throw error;
 	}
 }
-

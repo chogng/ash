@@ -15,7 +15,7 @@ export class Search {
 	}
 
 	async open(): Promise<void> {
-		if (!await this.page.getByRole('region', { name: 'Primary sidebar' }).isVisible()) {
+		if (!(await this.page.getByRole('region', { name: 'Primary sidebar' }).isVisible())) {
 			await this.page.getByRole('button', { name: 'Show Primary Side Bar', exact: true }).click();
 		}
 		await this.page.getByRole('tab', { name: 'Search', exact: true }).click();

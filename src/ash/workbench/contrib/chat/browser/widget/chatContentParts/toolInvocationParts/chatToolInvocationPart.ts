@@ -37,7 +37,13 @@ export class ChatToolInvocationPart extends Disposable {
 	private readonly _onDidChangeHeight = this._register(new Emitter<void>());
 	public readonly onDidChangeHeight = this._onDidChangeHeight.event;
 
-	constructor(document: Document, invocation: NonNullable<IChatListItem['toolInvocation']>, source: IChatListItem['attachmentSource'], private readonly appDelegate: IChatMcpAppDelegate | undefined, @IInstantiationService private readonly instantiation: IInstantiationService) {
+	constructor(
+		document: Document,
+		invocation: NonNullable<IChatListItem['toolInvocation']>,
+		source: IChatListItem['attachmentSource'],
+		private readonly appDelegate: IChatMcpAppDelegate | undefined,
+		@IInstantiationService private readonly instantiation: IInstantiationService,
+	) {
 		super();
 		this.toolCallId = invocation.call.toolCallId;
 		this.domNode = h(document, 'div');
@@ -53,7 +59,15 @@ export class ChatToolInvocationPart extends Disposable {
 		this.stderr = h(document, 'pre');
 		this.stderr.className = 'ash-chat-tool-stderr';
 		this.result = h(document, 'pre');
-		this.details.append(this.summary, this.source, this.activity, this.parameters, this.stdout, this.stderr, this.result);
+		this.details.append(
+			this.summary,
+			this.source,
+			this.activity,
+			this.parameters,
+			this.stdout,
+			this.stderr,
+			this.result,
+		);
 		this.domNode.append(this.details);
 		this._register(addDisposableListener(this.details, 'toggle', () => this._onDidChangeHeight.fire()));
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -61,21 +75,43 @@ export class ChatToolInvocationPart extends Disposable {
 	}
 
 	/** Updates text in place so a streaming result retains its disclosure and keyboard focus. */
-	public render(invocation: NonNullable<IChatListItem['toolInvocation']>, source?: IChatListItem['attachmentSource']): void {
+	public render(
+		invocation: NonNullable<IChatListItem['toolInvocation']>,
+		source?: IChatListItem['attachmentSource'],
+	): void {
 		const { call, result, output, stopped } = invocation;
-		const imageGeneration = call.name === 'imagegen' || call.binding?.sourceChain.some(source => source.type === 'mcp' && source.remoteName === 'imagegen') === true;
+		const imageGeneration =
+			call.name === 'imagegen' ||
+			call.binding?.sourceChain.some(source => source.type === 'mcp' && source.remoteName === 'imagegen') ===
+				true;
 		const content = result?.content ?? [];
-		const generated = imageGeneration && result && !result.isError && content.some(part => part.type === 'imageUrl' || part.type === 'imageAttachment');
+		const generated =
+			imageGeneration &&
+			result &&
+			!result.isError &&
+			content.some(part => part.type === 'imageUrl' || part.type === 'imageAttachment');
 		this.summary.textContent = imageGeneration
-			? result ? result.isError ? localize('chat.imageGeneration.failed', 'Image generation failed') : localize('chat.imageGeneration.completed', 'Generated image')
-				: stopped ? localize('chat.imageGeneration.stopped', 'Image generation stopped') : localize('chat.imageGeneration.placeholder', 'Generating image')
+			? result
+				? result.isError
+					? localize('chat.imageGeneration.failed', 'Image generation failed')
+					: localize('chat.imageGeneration.completed', 'Generated image')
+				: stopped
+					? localize('chat.imageGeneration.stopped', 'Image generation stopped')
+					: localize('chat.imageGeneration.placeholder', 'Generating image')
 			: result
-				? result.isError ? localize('chat.tool.failed', '{0} · Failed', call.name) : localize('chat.tool.completed', '{0} · Completed', call.name)
-				: stopped ? localize('chat.tool.stopped', '{0} · No result', call.name) : localize('chat.tool.pending', '{0} · Awaiting result', call.name);
+				? result.isError
+					? localize('chat.tool.failed', '{0} · Failed', call.name)
+					: localize('chat.tool.completed', '{0} · Completed', call.name)
+				: stopped
+					? localize('chat.tool.stopped', '{0} · No result', call.name)
+					: localize('chat.tool.pending', '{0} · Awaiting result', call.name);
 		this.details.classList.toggle('error', result?.isError === true);
 		if (imageGeneration && !result && !stopped) {
 			if (!this.imageProgress.value) {
-				const progress = this.imageProgress.value = this.instantiation.createInstance(ChatImageGenerationProgressPart, this.domNode.ownerDocument);
+				const progress = (this.imageProgress.value = this.instantiation.createInstance(
+					ChatImageGenerationProgressPart,
+					this.domNode.ownerDocument,
+				));
 				this.domNode.append(progress.domNode);
 				progress.setVisible(this.visible);
 			}
@@ -83,9 +119,22 @@ export class ChatToolInvocationPart extends Disposable {
 		if (generated) {
 			if (!this.generatedImages.value) {
 				const progress = this.imageProgress.value;
-				const origin = progress && this.visible ? { container: progress.domNode, size: progress.size, takeSurface: () => progress.takeSurface() } : undefined;
+				const origin =
+					progress && this.visible
+						? {
+								container: progress.domNode,
+								size: progress.size,
+								takeSurface: () => progress.takeSurface(),
+							}
+						: undefined;
 				if (!origin) this.imageProgress.clear();
-				const images = this.generatedImages.value = this.instantiation.createInstance(ChatGeneratedImageResultSubPart, this.domNode.ownerDocument, content, source, origin);
+				const images = (this.generatedImages.value = this.instantiation.createInstance(
+					ChatGeneratedImageResultSubPart,
+					this.domNode.ownerDocument,
+					content,
+					source,
+					origin,
+				));
 				this.domNode.append(images.domNode);
 				if (progress?.domNode.hidden) this.imageProgress.clear();
 				this.imageChanges.value = images.onDidChangeHeight(() => {
@@ -94,55 +143,132 @@ export class ChatToolInvocationPart extends Disposable {
 				});
 				images.setVisible(this.visible);
 			} else this.generatedImages.value.render(content, source);
-		} else { this.imageChanges.clear(); this.generatedImages.clear(); }
-		const sources = call.binding?.sourceChain.map(source => {
-			switch (source.type) {
-				case 'product': return localize('chat.tool.product', 'Product: {0}', source.component);
-				case 'plugin': return localize('chat.tool.plugin', 'Plugin: {0} ({1})', source.pluginId, source.version);
-				case 'mcp': return localize('chat.tool.mcp', 'MCP: {0} / {1}', source.serverId, source.remoteName);
-				case 'dynamic': return localize('chat.tool.dynamic', 'Dynamic tool: {0}', source.name);
-				case 'extension': return localize('chat.tool.extension', 'Extension: {0}', source.id);
-				case 'system': return localize('chat.tool.system', 'System: {0}', source.id);
-			}
-		}) ?? [];
-		if (call.binding?.caller.type === 'codeMode') sources.push(localize('chat.tool.parent', 'Parent call: {0}', call.binding.caller.parentToolCallId));
+		} else {
+			this.imageChanges.clear();
+			this.generatedImages.clear();
+		}
+		const sources =
+			call.binding?.sourceChain.map(source => {
+				switch (source.type) {
+					case 'product':
+						return localize('chat.tool.product', 'Product: {0}', source.component);
+					case 'plugin':
+						return localize('chat.tool.plugin', 'Plugin: {0} ({1})', source.pluginId, source.version);
+					case 'mcp':
+						return localize('chat.tool.mcp', 'MCP: {0} / {1}', source.serverId, source.remoteName);
+					case 'dynamic':
+						return localize('chat.tool.dynamic', 'Dynamic tool: {0}', source.name);
+					case 'extension':
+						return localize('chat.tool.extension', 'Extension: {0}', source.id);
+					case 'system':
+						return localize('chat.tool.system', 'System: {0}', source.id);
+				}
+			}) ?? [];
+		if (call.binding?.caller.type === 'codeMode')
+			sources.push(localize('chat.tool.parent', 'Parent call: {0}', call.binding.caller.parentToolCallId));
 		this.setText(this.source, sources.join(' · '));
 		this.setText(this.activity, activityText(call.binding?.activity));
 		this.setText(this.parameters, call.argumentsJson, localize('chat.tool.input', 'Input'));
-		this.setText(this.stdout, output.filter(value => value.stream === 'stdout').map(value => value.text).join('\n'), localize('chat.tool.stdout', 'Standard output'));
-		this.setText(this.stderr, output.filter(value => value.stream === 'stderr').map(value => value.text).join('\n'), localize('chat.tool.stderr', 'Standard error'));
-		const resultText = result?.content ? result.content.flatMap(part => part.type === 'text' ? [part.text] : []).join('\n') : result?.text ?? '';
-		this.setText(this.result, resultText, result?.isError ? localize('chat.tool.error', 'Error') : localize('chat.tool.result', 'Result'));
-		const mediaContent = generated ? content.map(part => part.type === 'imageUrl' || part.type === 'imageAttachment' ? { type: 'text' as const, text: '' } : part) : content;
+		this.setText(
+			this.stdout,
+			output
+				.filter(value => value.stream === 'stdout')
+				.map(value => value.text)
+				.join('\n'),
+			localize('chat.tool.stdout', 'Standard output'),
+		);
+		this.setText(
+			this.stderr,
+			output
+				.filter(value => value.stream === 'stderr')
+				.map(value => value.text)
+				.join('\n'),
+			localize('chat.tool.stderr', 'Standard error'),
+		);
+		const resultText = result?.content
+			? result.content.flatMap(part => (part.type === 'text' ? [part.text] : [])).join('\n')
+			: (result?.text ?? '');
+		this.setText(
+			this.result,
+			resultText,
+			result?.isError ? localize('chat.tool.error', 'Error') : localize('chat.tool.result', 'Result'),
+		);
+		const mediaContent = generated
+			? content.map(part =>
+					part.type === 'imageUrl' || part.type === 'imageAttachment'
+						? { type: 'text' as const, text: '' }
+						: part,
+				)
+			: content;
 		if (mediaContent.some(part => part.type !== 'text' && part.type !== 'artifact')) {
 			if (!this.media.value) {
-				const media = this.instantiation.createInstance(ChatAttachmentsContentPart, { ownerDocument: this.domNode.ownerDocument, variables: mediaContent, source });
+				const media = this.instantiation.createInstance(ChatAttachmentsContentPart, {
+					ownerDocument: this.domNode.ownerDocument,
+					variables: mediaContent,
+					source,
+				});
 				this.media.value = media;
 				this.details.append(media.domNode);
 				this.mediaChanges.value = media.onDidChangeHeight(() => this._onDidChangeHeight.fire());
 			} else this.media.value.updateVariables(mediaContent, source);
-		} else { this.mediaChanges.clear(); this.media.clear(); }
-		if (content.some(part => part.type === 'artifact' && part.artifact.source.type !== 'mcpApp' && part.artifact.source.type !== 'viewMetadata')) {
+		} else {
+			this.mediaChanges.clear();
+			this.media.clear();
+		}
+		if (
+			content.some(
+				part =>
+					part.type === 'artifact' &&
+					part.artifact.source.type !== 'mcpApp' &&
+					part.artifact.source.type !== 'viewMetadata',
+			)
+		) {
 			if (!this.resources.value) {
-				const resources = this.instantiation.createInstance(ChatResourceGroupWidget, this.domNode.ownerDocument);
+				const resources = this.instantiation.createInstance(
+					ChatResourceGroupWidget,
+					this.domNode.ownerDocument,
+				);
 				this.resources.value = resources;
 				this.details.append(resources.domNode);
 				this.resourceChanges.value = resources.onDidChangeHeight(() => this._onDidChangeHeight.fire());
 			}
-			this.resources.value.render(content, JSON.stringify([source?.sessionId, source?.threadId, result?.itemId]), source);
-		} else { this.resourceChanges.clear(); this.resources.clear(); }
+			this.resources.value.render(
+				content,
+				JSON.stringify([source?.sessionId, source?.threadId, result?.itemId]),
+				source,
+			);
+		} else {
+			this.resourceChanges.clear();
+			this.resources.clear();
+		}
 		const appIndex = content.findIndex(part => part.type === 'artifact' && part.artifact.source.type === 'mcpApp');
 		const artifact = content[appIndex];
 		if (source && result && artifact?.type === 'artifact' && artifact.artifact.source.type === 'mcpApp') {
-			const coordinate = { sessionId: source.sessionId, threadId: source.threadId, itemId: result.itemId, contentIndex: appIndex };
+			const coordinate = {
+				sessionId: source.sessionId,
+				threadId: source.threadId,
+				itemId: result.itemId,
+				contentIndex: appIndex,
+			};
 			const identity = JSON.stringify([coordinate, artifact.artifact.source, artifact.artifact.contentDigest]);
 			if (this.app.value?.identity !== identity) {
-				const app = this.instantiation.createInstance(ChatMcpAppSubPart, this.domNode.ownerDocument, coordinate, artifact.artifact, call.argumentsJson, result, this.appDelegate);
+				const app = this.instantiation.createInstance(
+					ChatMcpAppSubPart,
+					this.domNode.ownerDocument,
+					coordinate,
+					artifact.artifact,
+					call.argumentsJson,
+					result,
+					this.appDelegate,
+				);
 				this.app.value = app;
 				this.appChanges.value = app.onDidChangeHeight(() => this._onDidChangeHeight.fire());
 				this.details.append(app.domNode);
 			} else this.app.value.update(call.argumentsJson, result);
-		} else { this.appChanges.clear(); this.app.clear(); }
+		} else {
+			this.appChanges.clear();
+			this.app.clear();
+		}
 	}
 
 	public setVisible(visible: boolean): void {
@@ -162,15 +288,31 @@ export class ChatToolInvocationPart extends Disposable {
 function activityText(activity: ChatToolCallBinding['activity']): string {
 	if (!activity) return '';
 	switch (activity.type) {
-		case 'command': return localize('chat.tool.command', 'Command: {0}\nArguments: {1}\nDirectory: {2}', activity.program, JSON.stringify(activity.arguments), activity.workingDirectory);
-		case 'fileRead': return localize('chat.tool.read', 'Read: {0}', activity.path);
-		case 'fileSearch': return localize('chat.tool.search', 'Search: {0}\nDirectory: {1}', activity.pattern, activity.path);
-		case 'fileList': return localize('chat.tool.list', 'List: {0}\nDirectory: {1}', activity.pattern, activity.path);
-		case 'fileEdit': return localize('chat.tool.edit', 'Edit: {0}', activity.path);
-		case 'read': return localize('chat.tool.read', 'Read: {0}', activity.target);
-		case 'search': return localize('chat.tool.searchTarget', 'Search: {0}', activity.target);
-		case 'list': return localize('chat.tool.listTarget', 'List: {0}', activity.target);
-		case 'edit': return localize('chat.tool.edit', 'Edit: {0}', activity.target);
-		case 'run': return localize('chat.tool.run', 'Run');
+		case 'command':
+			return localize(
+				'chat.tool.command',
+				'Command: {0}\nArguments: {1}\nDirectory: {2}',
+				activity.program,
+				JSON.stringify(activity.arguments),
+				activity.workingDirectory,
+			);
+		case 'fileRead':
+			return localize('chat.tool.read', 'Read: {0}', activity.path);
+		case 'fileSearch':
+			return localize('chat.tool.search', 'Search: {0}\nDirectory: {1}', activity.pattern, activity.path);
+		case 'fileList':
+			return localize('chat.tool.list', 'List: {0}\nDirectory: {1}', activity.pattern, activity.path);
+		case 'fileEdit':
+			return localize('chat.tool.edit', 'Edit: {0}', activity.path);
+		case 'read':
+			return localize('chat.tool.read', 'Read: {0}', activity.target);
+		case 'search':
+			return localize('chat.tool.searchTarget', 'Search: {0}', activity.target);
+		case 'list':
+			return localize('chat.tool.listTarget', 'List: {0}', activity.target);
+		case 'edit':
+			return localize('chat.tool.edit', 'Edit: {0}', activity.target);
+		case 'run':
+			return localize('chat.tool.run', 'Run');
 	}
 }

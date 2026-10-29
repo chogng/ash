@@ -14,7 +14,7 @@ export class OpenWithEditorPicker {
 	constructor(
 		@IQuickInputService private readonly quickInputService: IQuickInputService,
 		@IEditorPart private readonly editorPart: IEditorPart,
-	) { }
+	) {}
 
 	/** Returns Ash's editor opening options, or undefined when selection is unnecessary or cancelled. */
 	async pick(editor: IResourceEditorInput): Promise<EditorOpenOptions | undefined> {
@@ -30,13 +30,15 @@ export class OpenWithEditorPicker {
 
 		return await new Promise<EditorOpenOptions | undefined>(resolve => {
 			lifetime.add(picker.onDidHide(() => resolve(undefined)));
-			lifetime.add(picker.onDidAccept(event => {
-				const selected = picker.selectedItems[0];
-				if (!selected) return;
-				// Settle before hiding: onDidHide also settles cancellation synchronously.
-				resolve({ preferredEditorId: selected.id, preserveFocus: event.inBackground });
-				picker.hide();
-			}));
+			lifetime.add(
+				picker.onDidAccept(event => {
+					const selected = picker.selectedItems[0];
+					if (!selected) return;
+					// Settle before hiding: onDidHide also settles cancellation synchronously.
+					resolve({ preferredEditorId: selected.id, preserveFocus: event.inBackground });
+					picker.hide();
+				}),
+			);
 			picker.show();
 		});
 	}

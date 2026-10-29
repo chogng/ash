@@ -32,10 +32,12 @@ export function getReindentEditOperations(
 		if (rules.shouldDecrease(line)) currentColumns = Math.max(0, currentColumns - options.indentSize);
 		const before = leadingWhitespace(line);
 		const after = generateIndent(currentColumns, options.tabSize, options.insertSpaces);
-		if (before !== after) edits.push({ range: new Range(lineNumber, 1, lineNumber, before.length + 1), text: after });
-		nextColumns = rules.shouldIncrease(line) || rules.shouldIndentNextLine(line)
-			? currentColumns + options.indentSize
-			: currentColumns;
+		if (before !== after)
+			edits.push({ range: new Range(lineNumber, 1, lineNumber, before.length + 1), text: after });
+		nextColumns =
+			rules.shouldIncrease(line) || rules.shouldIndentNextLine(line)
+				? currentColumns + options.indentSize
+				: currentColumns;
 	}
 	return edits;
 }

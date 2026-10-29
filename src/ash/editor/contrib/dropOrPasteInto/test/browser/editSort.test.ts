@@ -7,7 +7,7 @@ interface Edit {
 	readonly title: string;
 	readonly kind: HierarchicalKind;
 	readonly handledMimeType?: string;
-	readonly yieldTo?: readonly ({ readonly kind: HierarchicalKind; } | { readonly mimeType: string; })[];
+	readonly yieldTo?: readonly ({ readonly kind: HierarchicalKind } | { readonly mimeType: string })[];
 }
 
 function edit(title: string, kind: string, yieldTo?: Edit['yieldTo'], handledMimeType?: string): Edit {
@@ -21,8 +21,14 @@ test('yield preferences order a chain without changing unrelated candidates', ()
 		edit('second', 'b', [{ kind: new HierarchicalKind('a') }]),
 		edit('first', 'a'),
 	];
-	assert.deepEqual(sortEditsByYieldTo(edits).map(item => item.title), ['first', 'second', 'third', 'unrelated']);
-	assert.deepEqual(edits.map(item => item.title), ['third', 'unrelated', 'second', 'first']);
+	assert.deepEqual(
+		sortEditsByYieldTo(edits).map(item => item.title),
+		['first', 'second', 'third', 'unrelated'],
+	);
+	assert.deepEqual(
+		edits.map(item => item.title),
+		['third', 'unrelated', 'second', 'first'],
+	);
 });
 
 test('mime preferences and parent kinds target matching edits', () => {
@@ -31,7 +37,10 @@ test('mime preferences and parent kinds target matching edits', () => {
 		edit('plain', 'text.plain', undefined, 'text/plain'),
 		edit('path', 'uri.path.absolute', undefined, 'text/uri-list'),
 	];
-	assert.deepEqual(sortEditsByYieldTo(edits).map(item => item.title), ['plain', 'path', 'deferred']);
+	assert.deepEqual(
+		sortEditsByYieldTo(edits).map(item => item.title),
+		['plain', 'path', 'deferred'],
+	);
 });
 
 test('empty and cyclic preferences remain finite', () => {
@@ -40,5 +49,8 @@ test('empty and cyclic preferences remain finite', () => {
 		edit('a', 'a', [{ kind: new HierarchicalKind('b') }]),
 		edit('b', 'b', [{ kind: new HierarchicalKind('a') }]),
 	];
-	assert.deepEqual(sortEditsByYieldTo(edits).map(item => item.title), ['a', 'b']);
+	assert.deepEqual(
+		sortEditsByYieldTo(edits).map(item => item.title),
+		['a', 'b'],
+	);
 });

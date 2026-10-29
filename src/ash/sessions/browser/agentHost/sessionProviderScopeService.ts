@@ -31,9 +31,11 @@ export class SessionProviderServices {
 		@IAgentExecutionSettingsService readonly execution: IAgentExecutionSettingsService,
 		@IRendererHostService readonly host: IRendererHost,
 		@ILanguageModelToolsService readonly tools: ILanguageModelToolsService,
-	) { }
+	) {}
 }
-export const ISessionPrimaryProviderServices = createServiceIdentifier<SessionProviderServices>('sessionPrimaryProviderServices');
+export const ISessionPrimaryProviderServices = createServiceIdentifier<SessionProviderServices>(
+	'sessionPrimaryProviderServices',
+);
 
 export interface ISessionProviderScope {
 	readonly providerId: string;
@@ -52,11 +54,15 @@ export interface ISessionProviderScopeService {
 	getScope(sessionId?: string): ISessionProviderScope;
 	getProviderScope(providerId: string): ISessionProviderScope;
 }
-export const ISessionProviderScopeService = createServiceIdentifier<ISessionProviderScopeService>('sessionProviderScopeService');
+export const ISessionProviderScopeService =
+	createServiceIdentifier<ISessionProviderScopeService>('sessionProviderScopeService');
 
 /** Owns service bindings only; the registry and host retain provider and connection ownership. */
 export class SessionProviderScopeService extends Disposable implements ISessionProviderScopeService {
-	private readonly bindings = new Map<ISessionsProvider, { scope: ISessionProviderScope; lifetime: DisposableStore; }>();
+	private readonly bindings = new Map<
+		ISessionsProvider,
+		{ scope: ISessionProviderScope; lifetime: DisposableStore }
+	>();
 	private readonly changed = this._register(new Emitter<void>());
 	readonly onDidChange = this.changed.event;
 	private readonly scopesChanged = this._register(new Emitter<void>());
@@ -70,12 +76,22 @@ export class SessionProviderScopeService extends Disposable implements ISessionP
 	) {
 		super();
 		this._register(management.onDidChange(() => this.changed.fire()));
-		this._register(providers.onDidChangeProviders(({ removed }) => {
-			for (const provider of removed) { this.bindings.get(provider)?.lifetime.dispose(); this.bindings.delete(provider); }
-			this.scopesChanged.fire();
-			this.changed.fire();
-		}));
-		this._register(toDisposable(() => { for (const binding of this.bindings.values()) binding.lifetime.dispose(); this.bindings.clear(); }));
+		this._register(
+			providers.onDidChangeProviders(({ removed }) => {
+				for (const provider of removed) {
+					this.bindings.get(provider)?.lifetime.dispose();
+					this.bindings.delete(provider);
+				}
+				this.scopesChanged.fire();
+				this.changed.fire();
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				for (const binding of this.bindings.values()) binding.lifetime.dispose();
+				this.bindings.clear();
+			}),
+		);
 	}
 	createScope(sessionId?: string, providerId?: string): InstantiationService {
 		const scope = providerId ? this.forProvider(providerId) : this.getScope(sessionId);
@@ -86,15 +102,33 @@ export class SessionProviderScopeService extends Disposable implements ISessionP
 		child.registerInstance(IAgentVoiceService, createSessionVoiceService(scope));
 		const instructions = scope.services.host.instructions;
 		const workspace = this.providers.getProvider(scope.providerId)!.currentWorkspace();
-		const resourceWorkspace = workspace.type === 'local' || workspace.type === 'ssh' || workspace.type === 'provider'
-			? buildAgentHostSessionWorkspace(workspace) : undefined;
+		const resourceWorkspace =
+			workspace.type === 'local' || workspace.type === 'ssh' || workspace.type === 'provider'
+				? buildAgentHostSessionWorkspace(workspace)
+				: undefined;
 		child.registerInstance(IInstructionService, {
-			get isAvailable() { try { scope.assertCurrent(); return instructions.isAvailable; } catch { return false; } },
+			get isAvailable() {
+				try {
+					scope.assertCurrent();
+					return instructions.isAvailable;
+				} catch {
+					return false;
+				}
+			},
 			list: async sessionId => {
 				scope.assertCurrent();
-				const catalog = await instructions.list(sessionId === undefined ? undefined : scope.backendIdentity(sessionId));
+				const catalog = await instructions.list(
+					sessionId === undefined ? undefined : scope.backendIdentity(sessionId),
+				);
 				scope.assertCurrent();
-				return catalog.map(instruction => ({ ...instruction, resource: instruction.resource ?? (resourceWorkspace ? sessionWorkspaceUri({ ...resourceWorkspace, root: instruction.path }) : undefined) }));
+				return catalog.map(instruction => ({
+					...instruction,
+					resource:
+						instruction.resource ??
+						(resourceWorkspace
+							? sessionWorkspaceUri({ ...resourceWorkspace, root: instruction.path })
+							: undefined),
+				}));
 			},
 		});
 		child.registerInstance(ILanguageModelToolsService, scope.services.tools);
@@ -104,33 +138,51 @@ export class SessionProviderScopeService extends Disposable implements ISessionP
 		return child;
 	}
 	getScopes(): readonly ISessionProviderScope[] {
-		return this.providers.getProviders().filter(provider => provider.id === this.defaultProviderId || provider.instantiationService !== undefined).map(provider => this.forProvider(provider.id));
+		return this.providers
+			.getProviders()
+			.filter(provider => provider.id === this.defaultProviderId || provider.instantiationService !== undefined)
+			.map(provider => this.forProvider(provider.id));
 	}
 	getScope(sessionId?: string): ISessionProviderScope {
-		const providerId = sessionId !== undefined ? parseSessionIdentity(sessionId, this.defaultProviderId).providerId
-			: this.management.activeUntitledSession?.providerId ?? this.management.active?.session.providerId ?? this.defaultProviderId;
+		const providerId =
+			sessionId !== undefined
+				? parseSessionIdentity(sessionId, this.defaultProviderId).providerId
+				: (this.management.activeUntitledSession?.providerId ??
+					this.management.active?.session.providerId ??
+					this.defaultProviderId);
 		return this.forProvider(providerId);
 	}
-	getProviderScope(providerId: string): ISessionProviderScope { return this.forProvider(providerId); }
+	getProviderScope(providerId: string): ISessionProviderScope {
+		return this.forProvider(providerId);
+	}
 	private forProvider(providerId: string): ISessionProviderScope {
 		const provider = this.providers.getProvider(providerId);
 		if (!provider) throw canceled();
 		const existing = this.bindings.get(provider);
 		if (existing) return existing.scope;
 		if (providerId !== this.defaultProviderId && !provider.instantiationService) throw canceled();
-		const services = providerId === this.defaultProviderId ? this.primary : provider.instantiationService!.createInstance(SessionProviderServices);
+		const services =
+			providerId === this.defaultProviderId
+				? this.primary
+				: provider.instantiationService!.createInstance(SessionProviderServices);
 		const lifetime = new DisposableStore();
 		let thread: IAgentThreadService | undefined;
 		const scope: ISessionProviderScope = {
-			providerId, services,
-			get thread() { return thread ??= createSessionThreadService(scope); },
+			providerId,
+			services,
+			get thread() {
+				return (thread ??= createSessionThreadService(scope));
+			},
 			identity: value => sessionIdentity(providerId, value, this.defaultProviderId),
 			backendIdentity: value => {
 				const parsed = parseSessionIdentity(value, this.defaultProviderId);
 				if (parsed.providerId !== providerId) throw canceled();
 				return parsed.backendSessionId;
 			},
-			assertCurrent: () => { if (this.isDisposed || lifetime.isDisposed || this.providers.getProvider(providerId) !== provider) throw canceled(); },
+			assertCurrent: () => {
+				if (this.isDisposed || lifetime.isDisposed || this.providers.getProvider(providerId) !== provider)
+					throw canceled();
+			},
 		};
 		this.bindings.set(provider, { scope, lifetime });
 		return scope;

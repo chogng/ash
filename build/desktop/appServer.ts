@@ -7,7 +7,9 @@ import { LiveBuilder } from './liveBuild.ts';
 import { watchNativeFile } from '../lib/watchNativeFile.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
-const terminalCrates = new Set<string>(JSON.parse(readFileSync(resolve(repositoryRoot, 'build/source-layout.json'), 'utf8')).terminalCrates);
+const terminalCrates = new Set<string>(
+	JSON.parse(readFileSync(resolve(repositoryRoot, 'build/source-layout.json'), 'utf8')).terminalCrates,
+);
 const sharedRustSource = resolve(repositoryRoot, 'crates');
 const rustSdkSource = resolve(repositoryRoot, 'sdk/rust');
 const configuredTargetDirectory = process.env.CARGO_TARGET_DIR?.trim();
@@ -15,9 +17,13 @@ const targetDirectory = resolve(repositoryRoot, configuredTargetDirectory || '.b
 const debounceMs = 250;
 
 /** Prepare before selecting a runtime: file watchers only observe changes after startup. */
-export async function prepareAppServer(javascriptRuntime: 'host-provided-node' | 'packaged-node', signal?: AbortSignal): Promise<void> {
+export async function prepareAppServer(
+	javascriptRuntime: 'host-provided-node' | 'packaged-node',
+	signal?: AbortSignal,
+): Promise<void> {
 	const commands = [['-B', 'build/prepare.py', '--javascript-runtime', javascriptRuntime]];
-	if (javascriptRuntime === 'host-provided-node') commands.push(['-B', 'build/desktop/develop.py', '--select-prepared']);
+	if (javascriptRuntime === 'host-provided-node')
+		commands.push(['-B', 'build/desktop/develop.py', '--select-prepared']);
 	for (const arguments_ of commands) {
 		await runPython(arguments_, { cwd: repositoryRoot, operation: 'backend preparation', signal });
 	}
@@ -29,9 +35,16 @@ export function shouldRebuildAppServer(file: string | null, ignoredDirectory?: s
 	if (terminalCrates.has(normalized.split('/')[0])) return false;
 	if (/(?:^|\/)target(?:\/|$)/u.test(normalized)) return false;
 	const ignored = ignoredDirectory?.replaceAll('\\', '/').replace(/\/+$/u, '');
-	if (ignored !== undefined && (ignored === '' || normalized === ignored || normalized.startsWith(`${ignored}/`))) return false;
+	if (ignored !== undefined && (ignored === '' || normalized === ignored || normalized.startsWith(`${ignored}/`)))
+		return false;
 	const name = normalized.slice(normalized.lastIndexOf('/') + 1);
-	return file.endsWith('.rs') || (normalized.startsWith('app-server-protocol/src/') && file.endsWith('.template.ts')) || name === 'Cargo.toml' || name === 'Cargo.lock' || name === 'build.rs';
+	return (
+		file.endsWith('.rs') ||
+		(normalized.startsWith('app-server-protocol/src/') && file.endsWith('.template.ts')) ||
+		name === 'Cargo.toml' ||
+		name === 'Cargo.lock' ||
+		name === 'build.rs'
+	);
 }
 
 export function relativeWatchedDirectory(watchRoot: string, directory: string): string | undefined {
@@ -44,7 +57,14 @@ export function shouldRebuildWorkspaceManifest(file: string | null): boolean {
 	return file === 'Cargo.toml' || file === 'Cargo.lock';
 }
 
-export async function watchAppServer(options: { skipInitial?: boolean; javascriptRuntime?: 'host-provided-node' | 'packaged-node'; onDidBuild?: () => Promise<void>; environment?: NodeJS.ProcessEnv; } = {}): Promise<() => void> {
+export async function watchAppServer(
+	options: {
+		skipInitial?: boolean;
+		javascriptRuntime?: 'host-provided-node' | 'packaged-node';
+		onDidBuild?: () => Promise<void>;
+		environment?: NodeJS.ProcessEnv;
+	} = {},
+): Promise<() => void> {
 	let buildRequested = !options.skipInitial;
 	let protocolRequested = buildRequested;
 	let fullBuildRequired = buildRequested;
@@ -67,16 +87,30 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 		// The Rust author SDK remains a backend build input after leaving crates/.
 		for (const source of [sharedRustSource, rustSdkSource]) {
 			const ignoredTarget = relativeWatchedDirectory(source, targetDirectory);
-			watchers.push(watch(source, { recursive: true }, (event, file) => requestBuild(source, file, event, fileName => shouldRebuildAppServer(fileName, ignoredTarget))));
+			watchers.push(
+				watch(source, { recursive: true }, (event, file) =>
+					requestBuild(source, file, event, fileName => shouldRebuildAppServer(fileName, ignoredTarget)),
+				),
+			);
 		}
 		if (process.platform === 'darwin') {
 			// libuv filters non-recursive directory events after FSEvents delivers
 			// them. A root-directory watch therefore also subscribes to build caches.
 			for (const file of ['Cargo.toml', 'Cargo.lock']) {
-				watchers.push(watchNativeFile(resolve(repositoryRoot, file), event => requestBuild(repositoryRoot, file, event, shouldRebuildWorkspaceManifest), error => console.error(`[app-server] Manifest watcher failed: ${file}`, error)));
+				watchers.push(
+					watchNativeFile(
+						resolve(repositoryRoot, file),
+						event => requestBuild(repositoryRoot, file, event, shouldRebuildWorkspaceManifest),
+						error => console.error(`[app-server] Manifest watcher failed: ${file}`, error),
+					),
+				);
 			}
 		} else {
-			watchers.push(watch(repositoryRoot, (event, file) => requestBuild(repositoryRoot, file, event, shouldRebuildWorkspaceManifest)));
+			watchers.push(
+				watch(repositoryRoot, (event, file) =>
+					requestBuild(repositoryRoot, file, event, shouldRebuildWorkspaceManifest),
+				),
+			);
 		}
 	} catch (error) {
 		stop();
@@ -86,7 +120,12 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 	if (buildRequested) void drainBuilds();
 	return stop;
 
-	function requestBuild(watchRoot: string, file: string | null, event: string, shouldRebuild: (file: string | null) => boolean): void {
+	function requestBuild(
+		watchRoot: string,
+		file: string | null,
+		event: string,
+		shouldRebuild: (file: string | null) => boolean,
+	): void {
 		if (stopped || file === null || !shouldRebuild(file)) return;
 		const source = resolve(watchRoot, file.replaceAll('\\', '/'));
 		if (process.platform === 'win32' && event === 'change') {
@@ -98,7 +137,11 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 				const stamp = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`;
 				const previous = observedFiles.get(source);
 				observedFiles.set(source, stamp);
-				if (stamp === previous || (previous === undefined && stat.mtimeMs < watchStarted && stat.ctimeMs < watchStarted)) return;
+				if (
+					stamp === previous ||
+					(previous === undefined && stat.mtimeMs < watchStarted && stat.ctimeMs < watchStarted)
+				)
+					return;
 			} catch {
 				observedFiles.delete(source);
 			}
@@ -126,11 +169,16 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 				buildRequested = false;
 				const sources = [...changedSources];
 				changedSources.clear();
-				fullBuildRequired ||= sources.length === 0 || !liveDirectory || sources.some(source => {
-					const file = relativeWatchedDirectory(resolve(sharedRustSource, 'app-server-diff/src'), source);
-					return file === undefined || !file.endsWith('.rs');
-				});
-				let needsProtocol = protocolRequested || sources.some(source => source.endsWith(`${sep}Cargo.toml`) || source.endsWith(`${sep}Cargo.lock`));
+				fullBuildRequired ||=
+					sources.length === 0 ||
+					!liveDirectory ||
+					sources.some(source => {
+						const file = relativeWatchedDirectory(resolve(sharedRustSource, 'app-server-diff/src'), source);
+						return file === undefined || !file.endsWith('.rs');
+					});
+				let needsProtocol =
+					protocolRequested ||
+					sources.some(source => source.endsWith(`${sep}Cargo.toml`) || source.endsWith(`${sep}Cargo.lock`));
 				protocolRequested = false;
 				try {
 					// Dependency/protocol builds retire the old semantic database before
@@ -143,7 +191,9 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 					}
 					// Snapshot each batch before awaiting: saves during a build belong to the next one.
 					const directories = protocolDirectories;
-					needsProtocol ||= sources.some(source => directories.some(directory => relativeWatchedDirectory(directory, source) !== undefined));
+					needsProtocol ||= sources.some(source =>
+						directories.some(directory => relativeWatchedDirectory(directory, source) !== undefined),
+					);
 					if (needsProtocol) {
 						await generateProtocol(cancellation.signal);
 						needsProtocol = false;
@@ -158,8 +208,12 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 					if (!liveOnly) await options.onDidBuild?.();
 				} catch (error) {
 					// A failed export must be retried before the next backend build, even for a business save.
-					protocolRequested ||= needsProtocol || protocolDirectories === undefined || protocolManifestRevision !== manifestRevision;
-					if (!stopped) console.error(`[app-server] ${error instanceof Error ? error.message : String(error)}`);
+					protocolRequested ||=
+						needsProtocol ||
+						protocolDirectories === undefined ||
+						protocolManifestRevision !== manifestRevision;
+					if (!stopped)
+						console.error(`[app-server] ${error instanceof Error ? error.message : String(error)}`);
 				}
 			}
 		} finally {
@@ -170,10 +224,16 @@ export async function watchAppServer(options: { skipInitial?: boolean; javascrip
 	async function runBackendBuild(liveOnly: boolean): Promise<void> {
 		if (liveOnly && liveBuilder) return liveBuilder.build();
 		// Web owns a packaged Node runtime; Electron supplies Node from its host.
-		const buildArguments = options.javascriptRuntime === 'packaged-node'
-			? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
-			: ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
-		await runPython(buildArguments, { cwd: repositoryRoot, environment, operation: 'backend build', signal: cancellation.signal });
+		const buildArguments =
+			options.javascriptRuntime === 'packaged-node'
+				? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
+				: ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
+		await runPython(buildArguments, {
+			cwd: repositoryRoot,
+			environment,
+			operation: 'backend build',
+			signal: cancellation.signal,
+		});
 	}
 
 	function stop(): void {

@@ -1,7 +1,13 @@
 import type { Event } from '../../../base/common/event.js';
 import type { IChannel } from '../../../base/parts/ipc/common/ipc.js';
 import { IMainProcessService } from '../../ipc/common/mainProcessService.js';
-import type { ActiveTunnelMode, IRemoteTunnelService, IRemoteTunnelSession, TunnelMode, TunnelStatus } from '../common/remoteTunnel.js';
+import type {
+	ActiveTunnelMode,
+	IRemoteTunnelService,
+	IRemoteTunnelSession,
+	TunnelMode,
+	TunnelStatus,
+} from '../common/remoteTunnel.js';
 
 /** Desktop facade for the application's inbound-host owner. */
 export class RemoteTunnelService implements IRemoteTunnelService {
@@ -18,10 +24,22 @@ export class RemoteTunnelService implements IRemoteTunnelService {
 		this.onDidTokenFailed = this.channel.listen('onDidTokenFailed');
 	}
 
-	public getTunnelStatus(): Promise<TunnelStatus> { return this.channel.call('getTunnelStatus'); }
-	public getMode(): Promise<TunnelMode> { return this.channel.call('getMode'); }
-	public initialize(mode: TunnelMode): Promise<TunnelStatus> { return this.channel.call('initialize', mode); }
-	public startTunnel(mode: ActiveTunnelMode): Promise<TunnelStatus> { return this.channel.call('startTunnel', mode); }
-	public stopTunnel(): Promise<void> { return this.channel.call('stopTunnel'); }
-	public getTunnelName(): Promise<string | undefined> { return this.channel.call('getTunnelName'); }
+	public getTunnelStatus(): Promise<TunnelStatus> {
+		return this.channel.call('getTunnelStatus');
+	}
+	public getMode(): Promise<TunnelMode> {
+		return this.channel.call('getMode');
+	}
+	public initialize(mode: TunnelMode): Promise<TunnelStatus> {
+		return this.channel.call('initialize', mode);
+	}
+	public startTunnel(mode: ActiveTunnelMode): Promise<TunnelStatus> {
+		return this.channel.call('startTunnel', mode);
+	}
+	public stopTunnel(): Promise<void> {
+		return this.channel.call('stopTunnel');
+	}
+	public getTunnelName(): Promise<string | undefined> {
+		return this.channel.call('getTunnelName');
+	}
 }

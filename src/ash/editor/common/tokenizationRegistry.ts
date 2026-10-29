@@ -2,7 +2,11 @@ import { type Color } from '../../base/common/color.js';
 import { Emitter, type Event } from '../../base/common/event.js';
 import { Disposable, type IDisposable, toDisposable } from '../../base/common/lifecycle.js';
 import { ColorId } from './encodedTokenAttributes.js';
-import { type ILazyTokenizationSupport, type ITokenizationRegistry, type ITokenizationSupportChangedEvent } from './languages.js';
+import {
+	type ILazyTokenizationSupport,
+	type ITokenizationRegistry,
+	type ITokenizationSupportChangedEvent,
+} from './languages.js';
 
 export class TokenizationRegistry<TSupport> implements ITokenizationRegistry<TSupport> {
 	private readonly supports = new Map<string, TSupport>();

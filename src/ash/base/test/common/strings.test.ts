@@ -1,6 +1,19 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { commonPrefixLength, commonSuffixLength, containsRTL, createRegExp, escapeRegExpCharacters, getCharContainingOffset, getLeadingWhitespace, GraphemeIterator, isBasicASCII, isHighSurrogate, isLowSurrogate, splitLines } from '../../common/strings.js';
+import {
+	commonPrefixLength,
+	commonSuffixLength,
+	containsRTL,
+	createRegExp,
+	escapeRegExpCharacters,
+	getCharContainingOffset,
+	getLeadingWhitespace,
+	GraphemeIterator,
+	isBasicASCII,
+	isHighSurrogate,
+	isLowSurrogate,
+	splitLines,
+} from '../../common/strings.js';
 
 test('escapeRegExpCharacters turns arbitrary text into a literal pattern', () => {
 	const value = 'a.*(b)+[c]?\\d^$|{}';
@@ -9,22 +22,23 @@ test('escapeRegExpCharacters turns arbitrary text into a literal pattern', () =>
 
 test('createRegExp and getLeadingWhitespace preserve editor search boundaries', () => {
 	const expression = createRegExp('word', false, { wholeWord: true, global: true });
-	assert.deepEqual([...('word sword word').matchAll(expression)].map(match => match.index), [0, 11]);
+	assert.deepEqual(
+		[...'word sword word'.matchAll(expression)].map(match => match.index),
+		[0, 11],
+	);
 	assert.equal(getLeadingWhitespace('x\t  value', 1), '\t  ');
 });
 
 test('ASCII and line helpers share editor text boundary semantics', () => {
-	assert.deepEqual({
-		plain: isBasicASCII('plain\ttext'),
-		control: isBasicASCII('\u0000'),
-		unicode: isBasicASCII('你好'),
-		lines: splitLines('first\rsecond\r\nthird\nfourth'),
-	}, {
-		plain: true,
-		control: false,
-		unicode: false,
-		lines: ['first', 'second', 'third', 'fourth'],
-	});
+	assert.deepEqual(
+		{
+			plain: isBasicASCII('plain\ttext'),
+			control: isBasicASCII('\u0000'),
+			unicode: isBasicASCII('你好'),
+			lines: splitLines('first\rsecond\r\nthird\nfourth'),
+		},
+		{ plain: true, control: false, unicode: false, lines: ['first', 'second', 'third', 'fourth'] },
+	);
 });
 
 test('string common lengths use UTF-16 code-unit identity', () => {

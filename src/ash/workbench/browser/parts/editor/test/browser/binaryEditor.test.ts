@@ -1,5 +1,5 @@
-import "../../../../../../editor/test/browser/testEditorDom.js";
-import { registerCodeEditorServices } from "../../../../../../editor/test/browser/testCodeEditor.js";
+import '../../../../../../editor/test/browser/testEditorDom.js';
+import { registerCodeEditorServices } from '../../../../../../editor/test/browser/testCodeEditor.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
@@ -19,7 +19,9 @@ test('Binary editor renders a bounded hexadecimal and ascii preview', async () =
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	const resource = URI.file('C:\\project\\sample.bin');
 	using services = new InstantiationService();
-	services.registerSingleton(IFileService, () => createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array([0x48, 0x69, 0x00, 0xff]))));
+	services.registerSingleton(IFileService, () =>
+		createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array([0x48, 0x69, 0x00, 0xff]))),
+	);
 	registerTestComponentServices(services, dom.window.document);
 	registerCodeEditorServices(services);
 	const pane = await binaryEditorDescriptor().create({ instantiationService: services });
@@ -28,9 +30,15 @@ test('Binary editor renders a bounded hexadecimal and ascii preview', async () =
 
 	assert.match(dom.window.document.querySelector('.ash-binary-editor-summary')?.textContent ?? '', /4 B.*read-only/i);
 	assert.ok(pane instanceof BaseBinaryResourceEditor);
-	assert.equal(pane.getControl()?.getModel()?.getValue(), '00000000  48 69 00 ff                                      |Hi..|');
+	assert.equal(
+		pane.getControl()?.getModel()?.getValue(),
+		'00000000  48 69 00 ff                                      |Hi..|',
+	);
 	assert.equal(pane.getMetadata(), '4 B');
-	assert.equal(dom.window.document.querySelector('.ash-binary-editor')?.getAttribute('aria-label'), 'Binary editor: sample.bin');
+	assert.equal(
+		dom.window.document.querySelector('.ash-binary-editor')?.getAttribute('aria-label'),
+		'Binary editor: sample.bin',
+	);
 
 	pane.dispose();
 	dom.window.close();
@@ -38,7 +46,10 @@ test('Binary editor renders a bounded hexadecimal and ascii preview', async () =
 
 test('binary editor descriptor is default for explicit binary content and optional for files', () => {
 	const descriptor = binaryEditorDescriptor();
-	assert.equal(descriptor.canOpen({ resource: URI.file('C:\\project\\sample.bin'), contentType: 'application/octet-stream' }), EditorPaneMatch.Default);
+	assert.equal(
+		descriptor.canOpen({ resource: URI.file('C:\\project\\sample.bin'), contentType: 'application/octet-stream' }),
+		EditorPaneMatch.Default,
+	);
 	assert.equal(descriptor.canOpen({ resource: URI.file('C:\\project\\sample.bin') }), EditorPaneMatch.Optional);
 	assert.equal(descriptor.canOpen({ resource: URI.parse('untitled:/sample.bin') }), EditorPaneMatch.None);
 });
@@ -55,7 +66,13 @@ test('Binary editor rejects oversized files before reading their bytes', async (
 		let reads = 0;
 		class OversizedFileService extends BinaryEditorTestFileSystemProvider {
 			override async stat(resource: URI) {
-				return { resource, kind: FileKind.File, sizeBytes: 129 * 1024 * 1024, readonly: true, modifiedAtMillis: undefined };
+				return {
+					resource,
+					kind: FileKind.File,
+					sizeBytes: 129 * 1024 * 1024,
+					readonly: true,
+					modifiedAtMillis: undefined,
+				};
 			}
 			override async readFile(resource: URI) {
 				reads++;
@@ -63,12 +80,17 @@ test('Binary editor rejects oversized files before reading their bytes', async (
 			}
 		}
 		using services = new InstantiationService();
-		services.registerSingleton(IFileService, () => createTestFileService(new OversizedFileService(new Uint8Array())));
+		services.registerSingleton(IFileService, () =>
+			createTestFileService(new OversizedFileService(new Uint8Array())),
+		);
 		registerTestComponentServices(services, dom.window.document);
 		registerCodeEditorServices(services);
 		using pane = await binaryEditorDescriptor().create({ instantiationService: services });
 		pane.create(dom.window.document.body);
-		await assert.rejects(pane.setInput({ resource: URI.file('/oversized.bin') }, new AbortController().signal), /too large/);
+		await assert.rejects(
+			pane.setInput({ resource: URI.file('/oversized.bin') }, new AbortController().signal),
+			/too large/,
+		);
 		assert.equal(reads, 0);
 		assert.equal(dom.window.document.querySelector('.ash-binary-editor-content')?.textContent, '');
 	} finally {
@@ -81,16 +103,27 @@ test('Binary preview translates complete and truncated summaries in Chinese', as
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	initializeTestLocalization('zh-CN');
 	try {
-		for (const [size, expected] of [[4, '4 B · 只读十六进制预览'], [65537, '64.0 KiB · 只读十六进制预览 · 前 64.0 KiB']] as const) {
+		for (const [size, expected] of [
+			[4, '4 B · 只读十六进制预览'],
+			[65537, '64.0 KiB · 只读十六进制预览 · 前 64.0 KiB'],
+		] as const) {
 			using services = new InstantiationService();
-			services.registerSingleton(IFileService, () => createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array(size))));
+			services.registerSingleton(IFileService, () =>
+				createTestFileService(new BinaryEditorTestFileSystemProvider(new Uint8Array(size))),
+			);
 			registerTestComponentServices(services, dom.window.document);
 			registerCodeEditorServices(services);
 			using pane = await binaryEditorDescriptor().create({ instantiationService: services });
 			pane.create(dom.window.document.body);
-			await pane.setInput({ resource: URI.file('/sample.bin'), label: 'sample.bin' }, new AbortController().signal);
+			await pane.setInput(
+				{ resource: URI.file('/sample.bin'), label: 'sample.bin' },
+				new AbortController().signal,
+			);
 			assert.equal(dom.window.document.querySelector('.ash-binary-editor-summary')?.textContent, expected);
-			assert.equal(dom.window.document.querySelector('.ash-binary-editor')?.getAttribute('aria-label'), '二进制编辑器：sample.bin');
+			assert.equal(
+				dom.window.document.querySelector('.ash-binary-editor')?.getAttribute('aria-label'),
+				'二进制编辑器：sample.bin',
+			);
 			assert.ok(pane instanceof BaseBinaryResourceEditor);
 			assert.equal(pane.getPreviewBytes().buffer.byteLength, Math.min(size, 65536));
 		}

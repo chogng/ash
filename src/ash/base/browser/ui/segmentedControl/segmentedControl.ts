@@ -53,10 +53,12 @@ export class SegmentedControl<T extends string> extends Disposable {
 		group.setAttribute('aria-label', options.ariaLabel);
 		group.setAttribute('aria-orientation', 'horizontal');
 		group.style.setProperty('--ash-segmented-control-count', String(options.items.length));
-		this._register(toDisposable(() => {
-			for (const animation of group.getAnimations?.({ subtree: true }) ?? []) animation.cancel();
-			group.remove();
-		}));
+		this._register(
+			toDisposable(() => {
+				for (const animation of group.getAnimations?.({ subtree: true }) ?? []) animation.cancel();
+				group.remove();
+			}),
+		);
 		const hovers = options.hoverDelegate ?? getHoverDelegate();
 		this.buttons = options.items.map(item => {
 			const button = h(container.ownerDocument, 'button');
@@ -72,9 +74,11 @@ export class SegmentedControl<T extends string> extends Disposable {
 				button.append(label);
 			}
 			this._register(hovers.setupDelayedHover(button, { content: item.label }));
-			this._register(addDisposableListener(button, 'click', () => {
-				if (!button.disabled) options.onActivate(item.id);
-			}));
+			this._register(
+				addDisposableListener(button, 'click', () => {
+					if (!button.disabled) options.onActivate(item.id);
+				}),
+			);
 			group.append(button);
 			return button;
 		});
@@ -109,26 +113,35 @@ export class SegmentedControl<T extends string> extends Disposable {
 		const rtl = getWindow(this.domNode).getComputedStyle(this.domNode).direction === 'rtl';
 		let next: number;
 		switch (event.key) {
-			case 'Home': next = this.buttons.findIndex(button => !button.disabled); break;
+			case 'Home':
+				next = this.buttons.findIndex(button => !button.disabled);
+				break;
 			case 'End':
 				next = this.buttons.length - 1;
 				while (next >= 0 && this.buttons[next]!.disabled) next--;
 				break;
-			case 'ArrowLeft': case 'ArrowRight': {
+			case 'ArrowLeft':
+			case 'ArrowRight': {
 				const direction = (event.key === 'ArrowRight' ? 1 : -1) * (rtl ? -1 : 1);
 				next = index;
 				for (let step = 1; step <= this.buttons.length; step++) {
 					const candidate = (index + direction * step + this.buttons.length) % this.buttons.length;
-					if (!this.buttons[candidate]!.disabled) { next = candidate; break; }
+					if (!this.buttons[candidate]!.disabled) {
+						next = candidate;
+						break;
+					}
 				}
 				break;
 			}
-			default: return;
+			default:
+				return;
 		}
 		if (next < 0) return;
 		event.preventDefault();
 		event.stopPropagation();
-		this.buttons.forEach((button, i) => { button.tabIndex = i === next ? 0 : -1; });
+		this.buttons.forEach((button, i) => {
+			button.tabIndex = i === next ? 0 : -1;
+		});
 		this.buttons[next]!.focus();
 	}
 }

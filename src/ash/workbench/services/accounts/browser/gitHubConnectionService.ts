@@ -35,7 +35,9 @@ export class GitHubConnectionService extends Disposable implements IGitHubConnec
 		this.isStarting = true;
 		this.cancelRequested = false;
 		try {
-			const challenge = await this.accounts.startLogin(host === 'github.com' ? { type: 'gitHubBrowser' } : { type: 'gitHubEnterpriseBrowser', host });
+			const challenge = await this.accounts.startLogin(
+				host === 'github.com' ? { type: 'gitHubBrowser' } : { type: 'gitHubEnterpriseBrowser', host },
+			);
 			this.isStarting = false;
 			const completion = this.completedWhileStarting.get(challenge.loginId);
 			this.completedWhileStarting.clear();
@@ -45,7 +47,10 @@ export class GitHubConnectionService extends Disposable implements IGitHubConnec
 				return;
 			}
 			if (challenge.type === 'connected') {
-				this.showMessage(DialogSeverity.Info, this.label('account.githubAlreadyConnected', 'GitHub is already connected.'));
+				this.showMessage(
+					DialogSeverity.Info,
+					this.label('account.githubAlreadyConnected', 'GitHub is already connected.'),
+				);
 				return;
 			}
 			if (challenge.type !== 'browser') throw new Error('GitHub browser login returned a different challenge');
@@ -54,7 +59,9 @@ export class GitHubConnectionService extends Disposable implements IGitHubConnec
 				this.complete(completion);
 				return;
 			}
-			this.accessibility.status(this.label('account.githubAuthorizeInBrowser', 'Authorize Ash in your browser to connect GitHub.'));
+			this.accessibility.status(
+				this.label('account.githubAuthorizeInBrowser', 'Authorize Ash in your browser to connect GitHub.'),
+			);
 		} catch (error) {
 			this.isStarting = false;
 			this.completedWhileStarting.clear();
@@ -85,22 +92,29 @@ export class GitHubConnectionService extends Disposable implements IGitHubConnec
 		if (completion.status.type === 'succeeded') {
 			this.accessibility.status(this.label('account.githubConnected', 'GitHub account connected.'));
 		} else {
-			this.showMessage(DialogSeverity.Error, this.label('account.githubConnectionFailed', 'Could not connect GitHub. Try again.'));
+			this.showMessage(
+				DialogSeverity.Error,
+				this.label('account.githubConnectionFailed', 'Could not connect GitHub. Try again.'),
+			);
 		}
 	}
 
 	private showError(error: unknown): void {
-		this.showMessage(DialogSeverity.Error, error instanceof AppServerRemoteError && error.errorName === 'AccountUnavailable'
-			? this.label('account.githubUnavailable', 'GitHub connection is unavailable. Check this build’s GitHub configuration.')
-			: this.label('account.githubConnectionFailed', 'Could not connect GitHub. Try again.'));
+		this.showMessage(
+			DialogSeverity.Error,
+			error instanceof AppServerRemoteError && error.errorName === 'AccountUnavailable'
+				? this.label(
+						'account.githubUnavailable',
+						'GitHub connection is unavailable. Check this build’s GitHub configuration.',
+					)
+				: this.label('account.githubConnectionFailed', 'Could not connect GitHub. Try again.'),
+		);
 	}
 
 	private showMessage(severity: DialogSeverity, message: string): void {
-		void this.dialogs.showMessage({
-			title: this.label('workbench.connectGitHub', 'Connect GitHub'),
-			message,
-			severity,
-		}).catch(error => this.log.error('github', 'Could not show GitHub connection dialog', error));
+		void this.dialogs
+			.showMessage({ title: this.label('workbench.connectGitHub', 'Connect GitHub'), message, severity })
+			.catch(error => this.log.error('github', 'Could not show GitHub connection dialog', error));
 	}
 
 	private label(key: string, fallback: string): string {
@@ -110,7 +124,10 @@ export class GitHubConnectionService extends Disposable implements IGitHubConnec
 	protected override disposeCore(): void {
 		const loginId = this.loginId;
 		this.loginId = undefined;
-		if (loginId) void this.accounts.cancelLogin(loginId).catch(error => this.log.error('github', 'Could not cancel GitHub login', error));
+		if (loginId)
+			void this.accounts
+				.cancelLogin(loginId)
+				.catch(error => this.log.error('github', 'Could not cancel GitHub login', error));
 		super.disposeCore();
 	}
 }

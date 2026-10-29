@@ -6,7 +6,11 @@ import { Disposable, toDisposable } from 'ash:editor/base/common/lifecycle.js';
 import { SelectBox, type SelectOption } from 'ash:editor/base/browser/ui/selectbox/selectbox.js';
 import { Button } from 'ash:editor/base/browser/ui/button/button.js';
 import { InputBox } from 'ash:editor/base/browser/ui/inputbox/inputbox.js';
-import { defaultButtonStyles, defaultInputBoxStyles, defaultSelectBoxStyles } from 'ash:editor/platform/theme/browser/defaultStyles.js';
+import {
+	defaultButtonStyles,
+	defaultInputBoxStyles,
+	defaultSelectBoxStyles,
+} from 'ash:editor/platform/theme/browser/defaultStyles.js';
 
 /** Shared control mechanics only; each contribution owns its choices, commands and derived state. */
 export class DocumentFormattingControls extends Disposable {
@@ -34,18 +38,24 @@ export class DocumentFormattingControls extends Disposable {
 		// Use the shared SelectBox for keyboard navigation, Escape/focus restoration
 		// and theme/HC styling, rather than maintaining a second dropdown behavior.
 		const select = this._register(new SelectBox(wrapper, { options, ariaLabel: label }, defaultSelectBoxStyles));
-		this._register(select.onDidSelect(({ value }) => {
-			if (!select.enabled) return;
-			if (value !== '') run(value);
-			// Mixed describes the selection; choosing it cannot clear document styles.
-			else select.value = this.displayedValues.get(select) ?? '';
-		}));
+		this._register(
+			select.onDidSelect(({ value }) => {
+				if (!select.enabled) return;
+				if (value !== '') run(value);
+				// Mixed describes the selection; choosing it cannot clear document styles.
+				else select.value = this.displayedValues.get(select) ?? '';
+			}),
+		);
 		return select;
 	}
 
 	protected addButton(label: string, run: () => void): Button {
 		const button = this._register(new Button(this.element, { ...defaultButtonStyles, label, size: 'small' }));
-		this._register(button.onDidClick(() => { if (button.enabled) run(); }));
+		this._register(
+			button.onDidClick(() => {
+				if (button.enabled) run();
+			}),
+		);
 		return button;
 	}
 
@@ -60,7 +70,11 @@ export class DocumentFormattingControls extends Disposable {
 	}
 
 	protected onInputCommit(input: InputBox, run: (value: string) => void): void {
-		this._register(addDisposableListener(input.inputElement, 'change', () => { if (input.enabled) run(input.value); }));
+		this._register(
+			addDisposableListener(input.inputElement, 'change', () => {
+				if (input.enabled) run(input.value);
+			}),
+		);
 	}
 
 	protected setSelectValue(select: SelectBox, value: string): void {

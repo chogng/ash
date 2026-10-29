@@ -12,8 +12,15 @@ suite('advisor browser component', () => {
 		const transcript = page.getByRole('log', { name: 'Chat transcript' });
 		await expect(transcript).toHaveAttribute('aria-live', 'polite');
 		await expect(transcript.getByText('Automatic review stopped this turn', { exact: true })).toBeVisible();
-		await expect(transcript.getByText('Automatic review rejected three consecutive actions.', { exact: true })).toBeVisible();
-		await expect(transcript.getByText('Repeated actions were rejected. Review the reason before requesting a safer approach.', { exact: true })).toBeVisible();
+		await expect(
+			transcript.getByText('Automatic review rejected three consecutive actions.', { exact: true }),
+		).toBeVisible();
+		await expect(
+			transcript.getByText(
+				'Repeated actions were rejected. Review the reason before requesting a safer approach.',
+				{ exact: true },
+			),
+		).toBeVisible();
 		await expect(transcript.getByRole('button')).toHaveCount(0);
 	});
 
@@ -24,7 +31,9 @@ suite('advisor browser component', () => {
 		await page.getByRole('button', { name: 'Show policy stop' }).click();
 		const transcript = page.getByRole('log', { name: '聊天记录' });
 		await expect(transcript).toContainText('自动审查已停止本轮执行');
-		await expect(transcript.getByText('多次操作被拒绝。请先查看原因，再要求采用更安全的方式。', { exact: true })).toBeVisible();
+		await expect(
+			transcript.getByText('多次操作被拒绝。请先查看原因，再要求采用更安全的方式。', { exact: true }),
+		).toBeVisible();
 		await expect(transcript.getByRole('button')).toHaveCount(0);
 	});
 
@@ -85,7 +94,9 @@ suite('advisor browser component', () => {
 		await page.getByRole('button', { name: 'Update editor typography' }).click();
 		await expect(line).toHaveCSS('font-size', '16px');
 		await expect(line).toHaveCSS('line-height', '26px');
-		await expect.poll(() => line.evaluate(element => getComputedStyle(element).fontFamily)).toMatch(/^"Courier New",/u);
+		await expect
+			.poll(() => line.evaluate(element => getComputedStyle(element).fontFamily))
+			.toMatch(/^"Courier New",/u);
 		await expect(code.getByRole('scrollbar', { name: 'Horizontal scrollbar' })).toBeVisible();
 		const unwrappedHeight = await block.evaluate(element => element.getBoundingClientRect().height);
 		await page.getByRole('button', { name: 'Customize code blocks' }).click();
@@ -96,7 +107,9 @@ suite('advisor browser component', () => {
 		await expect(paragraph).toHaveCSS('font-size', bodyFont);
 		await expect(inlineCode).toHaveCSS('font-family', inlineFont);
 		await page.getByRole('button', { name: 'Turn code wrap on' }).click();
-		await expect.poll(() => block.evaluate(element => element.getBoundingClientRect().height)).toBeGreaterThan(unwrappedHeight);
+		await expect
+			.poll(() => block.evaluate(element => element.getBoundingClientRect().height))
+			.toBeGreaterThan(unwrappedHeight);
 		await expect(code.getByRole('scrollbar', { name: 'Horizontal scrollbar' })).toBeHidden();
 		await page.getByRole('button', { name: 'Restore code defaults' }).click();
 		await expect(line).toHaveCSS('font-size', '16px');
@@ -105,7 +118,10 @@ suite('advisor browser component', () => {
 		await expect(code).toHaveAttribute('data-retained', 'true');
 		await page.getByRole('button', { name: 'Use automatic editor line height' }).click();
 		await expect(line).toHaveCSS('font-size', '18px');
-		await expect(line).toHaveCSS('line-height', `${Math.round(18 * (process.platform === 'darwin' ? 1.5 : 1.35))}px`);
+		await expect(line).toHaveCSS(
+			'line-height',
+			`${Math.round(18 * (process.platform === 'darwin' ? 1.5 : 1.35))}px`,
+		);
 	});
 
 	test('changing code typography keeps the first visible reply in place while reading history', async function () {
@@ -116,7 +132,9 @@ suite('advisor browser component', () => {
 		await page.locator('[data-item-id="code-20"]').scrollIntoViewIfNeeded();
 		const before = await page.locator('.ash-chat-list-widget').evaluate(view => {
 			const top = view.getBoundingClientRect().top;
-			const anchor = [...view.querySelectorAll<HTMLElement>('article')].find(row => row.getBoundingClientRect().bottom > top)!;
+			const anchor = [...view.querySelectorAll<HTMLElement>('article')].find(
+				row => row.getBoundingClientRect().bottom > top,
+			)!;
 			anchor.dataset.retained = 'true';
 			return { id: anchor.dataset.itemId!, top: anchor.getBoundingClientRect().top };
 		});

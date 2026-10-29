@@ -27,7 +27,10 @@ suite('auxiliaryBar browser component', () => {
 			await page.evaluate(() => window.ashAuxiliaryBarIntegration.setAutoHide(true));
 			await expect(selector).toBeVisible();
 			for (const position of ['top', 'bottom']) {
-				await page.evaluate(position => window.ashAuxiliaryBarIntegration.setLocation(position as ActivityBarPosition), position);
+				await page.evaluate(
+					position => window.ashAuxiliaryBarIntegration.setLocation(position as ActivityBarPosition),
+					position,
+				);
 				await expect(selector).toBeHidden();
 				await expect(title).toBeVisible();
 				await page.evaluate(() => window.ashAuxiliaryBarIntegration.setAutoHide(false));
@@ -50,9 +53,13 @@ suite('auxiliaryBar browser component', () => {
 				await page.evaluate(() => window.ashAuxiliaryBarIntegration.setOtherActive(true));
 				await expect(selector).toBeVisible();
 				await expect(selector.getByRole('tab', { name: 'Other', exact: true })).toBeVisible();
-				await page.evaluate(() => window.ashAuxiliaryBarIntegration.moveOther('sidebar' as ViewContainerLocation));
+				await page.evaluate(() =>
+					window.ashAuxiliaryBarIntegration.moveOther('sidebar' as ViewContainerLocation),
+				);
 				await expect(selector).toBeHidden();
-				await page.evaluate(() => window.ashAuxiliaryBarIntegration.moveOther('auxiliarybar' as ViewContainerLocation));
+				await page.evaluate(() =>
+					window.ashAuxiliaryBarIntegration.moveOther('auxiliarybar' as ViewContainerLocation),
+				);
 				await expect(selector).toBeVisible();
 				await page.evaluate(() => window.ashAuxiliaryBarIntegration.setOtherActive(false));
 				await expect(selector).toBeHidden();
@@ -90,8 +97,11 @@ suite('auxiliaryBar browser component', () => {
 			await expect(maximize).toBeFocused();
 			await expect(maximize).toHaveCSS('outline-style', 'solid');
 			await maximize.press('Enter');
-			await expect.poll(() => page.evaluate(() => window.ashAuxiliaryBarIntegration.state().maximized)).toBe(true);
-			for (const part of ['editor', 'sidebar', 'panel', 'agentSidebar']) await expect(page.locator(`[data-part="${part}"]`)).toBeHidden();
+			await expect
+				.poll(() => page.evaluate(() => window.ashAuxiliaryBarIntegration.state().maximized))
+				.toBe(true);
+			for (const part of ['editor', 'sidebar', 'panel', 'agentSidebar'])
+				await expect(page.locator(`[data-part="${part}"]`)).toBeHidden();
 			await expect(maximize).toBeFocused();
 			expect((await bar.boundingBox())!.width).toBeGreaterThan((await page.viewportSize())!.width - 100);
 			await expect(maximize.locator('[data-ash-icon-id="screen-normal"]')).toBeVisible();
@@ -101,7 +111,9 @@ suite('auxiliaryBar browser component', () => {
 			await expect(draft).toHaveValue('Keep this unsent message');
 		}
 		await page.getByRole('textbox', { name: 'editor', exact: true }).focus();
-		await page.evaluate(() => window.ashAuxiliaryBarIntegration.command('workbench.action.toggleMaximizedAuxiliaryBar'));
+		await page.evaluate(() =>
+			window.ashAuxiliaryBarIntegration.command('workbench.action.toggleMaximizedAuxiliaryBar'),
+		);
 		await expect(draft).toBeFocused();
 		await page.evaluate(() => window.ashAuxiliaryBarIntegration.setSide('right'));
 		await expect(page.locator('[data-part="editor"]')).toBeHidden();
@@ -113,7 +125,9 @@ suite('auxiliaryBar browser component', () => {
 		await expect(page.getByRole('textbox', { name: 'editor', exact: true })).toBeFocused();
 		await page.evaluate(() => window.ashAuxiliaryBarIntegration.command('workbench.action.toggleAuxiliaryBar'));
 		await expect(draft).toHaveValue('Keep this unsent message');
-		await expect.poll(() => page.evaluate(() => window.ashAuxiliaryBarIntegration.state().width)).toBe(ordinary.width);
+		await expect
+			.poll(() => page.evaluate(() => window.ashAuxiliaryBarIntegration.state().width))
+			.toBe(ordinary.width);
 		await page.screenshot({ path: testInfo.outputPath('auxiliary-bar-actions.png') });
 		expect(errors).toEqual([]);
 	});
@@ -127,6 +141,9 @@ suite('auxiliaryBar browser component', () => {
 		await expect(maximize).toHaveAttribute('aria-label', '最大化辅助侧栏');
 		await maximize.click();
 		await expect(maximize).toHaveAttribute('aria-label', '还原辅助侧栏');
-		await expect(page.locator('[data-action-id="workbench.action.closeAuxiliaryBar"] button')).toHaveAttribute('aria-label', '隐藏辅助侧栏');
+		await expect(page.locator('[data-action-id="workbench.action.closeAuxiliaryBar"] button')).toHaveAttribute(
+			'aria-label',
+			'隐藏辅助侧栏',
+		);
 	});
 });

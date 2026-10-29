@@ -3,4 +3,6 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { registerWorkbenchContribution, WorkbenchPhase } from '../../../common/contributions.js';
 import { SnippetCompletionProvider } from './snippetCompletionProvider.js';
 
-registerWorkbenchContribution('workbench.contrib.snippets', WorkbenchPhase.BlockStartup, accessor => accessor.get(IInstantiationService).createInstance(SnippetCompletionProvider));
+registerWorkbenchContribution('workbench.contrib.snippets', WorkbenchPhase.BlockStartup, accessor =>
+	accessor.get(IInstantiationService).createInstance(SnippetCompletionProvider),
+);

@@ -1,21 +1,46 @@
 import { throwIfCancelled } from '../../../../base/common/cancellation.js';
-import { Disposable, DisposableMap, toDisposable, type IDisposable, type IReference } from '../../../../base/common/lifecycle.js';
+import {
+	Disposable,
+	DisposableMap,
+	toDisposable,
+	type IDisposable,
+	type IReference,
+} from '../../../../base/common/lifecycle.js';
 import { isCancellationError, onUnexpectedError } from '../../../../base/common/errors.js';
 import { URI } from '../../../../base/common/uri.js';
 import { extUri } from '../../../../base/common/resources.js';
 import { Schemas } from '../../../../base/common/network.js';
 import type { LanguageWorkspaceEdit, LanguageWorkspaceEditEntry } from '../../../../editor/common/languages.js';
-import { ITextModelService, type ITextModelService as ITextModelServiceContract, type IResolvedTextEditorModel } from '../../../../editor/common/services/resolverService.js';
+import {
+	ITextModelService,
+	type ITextModelService as ITextModelServiceContract,
+	type IResolvedTextEditorModel,
+} from '../../../../editor/common/services/resolverService.js';
 import { AppServerProtocolClient } from '../../../../platform/agentHost/browser/appServerProtocolClient.js';
-import { APP_SERVER_METHODS, APP_SERVER_SERVER_REQUESTS, type TextDocumentReadParams, type TextDocumentApplyParams, type TextDocumentApplyResult, type TextDocumentReadResult, type TextDocumentListResult } from '../../../../../../.build/protocol/typescript/index.js';
+import {
+	APP_SERVER_METHODS,
+	APP_SERVER_SERVER_REQUESTS,
+	type TextDocumentReadParams,
+	type TextDocumentApplyParams,
+	type TextDocumentApplyResult,
+	type TextDocumentReadResult,
+	type TextDocumentListResult,
+} from '../../../../../../.build/protocol/typescript/index.js';
 import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
 import { FileNotFoundError } from '../../../../platform/files/common/files.js';
 import { WorkspaceEditConflictError } from '../../../../editor/browser/services/bulkEditService.js';
-import { IWorkingCopyService, type IWorkingCopyService as IWorkingCopyServiceContract } from '../../workingCopy/common/workingCopyService.js';
+import {
+	IWorkingCopyService,
+	type IWorkingCopyService as IWorkingCopyServiceContract,
+} from '../../workingCopy/common/workingCopyService.js';
 import type { ChatEditSource, ChatEditOutcome } from '../../chat/common/chatService.js';
 
 interface DocumentEditReview {
-	applyEdits(edit: LanguageWorkspaceEdit, signal: AbortSignal, source: ChatEditSource): Promise<{ readonly isApplied: boolean; }>;
+	applyEdits(
+		edit: LanguageWorkspaceEdit,
+		signal: AbortSignal,
+		source: ChatEditSource,
+	): Promise<{ readonly isApplied: boolean }>;
 	finishTurn(source: ChatEditSource, outcome: ChatEditOutcome): Promise<void>;
 }
 
@@ -29,31 +54,72 @@ interface DocumentSnapshot extends IDisposable {
 export class AppServerTextDocumentHost extends Disposable {
 	private readonly snapshots = this._register(new DisposableMap<string, DocumentSnapshot>());
 
-	constructor(private readonly client: AppServerProtocolClient, private readonly review: DocumentEditReview, @ITextModelService private readonly models: ITextModelServiceContract, @IWorkingCopyService private readonly workingCopies: IWorkingCopyServiceContract) {
+	constructor(
+		private readonly client: AppServerProtocolClient,
+		private readonly review: DocumentEditReview,
+		@ITextModelService private readonly models: ITextModelServiceContract,
+		@IWorkingCopyService private readonly workingCopies: IWorkingCopyServiceContract,
+	) {
 		super();
-		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/read'], (params, context) => this.read(params, context.signal)));
-		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/list'], (params, context) => this.list(params.root, context.signal)));
-		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/apply'], (params, context) => this.apply(params, context.signal)));
-		this._register(client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/release'], params => {
-			for (const snapshot of params.snapshots) { this.snapshots.deleteAndDispose(snapshot); }
-			return null;
-		}));
-		this._register(client.onStateChange(state => {
-			if (state !== 'ready') { this.snapshots.clearAndDisposeAll(); }
-		}));
-		this._register(client.onNotification(notification => {
-			if (notification.method === 'textDocument/turnFinished') {
-				void this.review.finishTurn({ threadId: notification.params.threadId, turnId: notification.params.turnId }, notification.params.outcome).catch(onUnexpectedError);
-			}
-		}));
+		this._register(
+			client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/read'], (params, context) =>
+				this.read(params, context.signal),
+			),
+		);
+		this._register(
+			client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/list'], (params, context) =>
+				this.list(params.root, context.signal),
+			),
+		);
+		this._register(
+			client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/apply'], (params, context) =>
+				this.apply(params, context.signal),
+			),
+		);
+		this._register(
+			client.registerRequestHandler(APP_SERVER_SERVER_REQUESTS['textDocument/release'], params => {
+				for (const snapshot of params.snapshots) {
+					this.snapshots.deleteAndDispose(snapshot);
+				}
+				return null;
+			}),
+		);
+		this._register(
+			client.onStateChange(state => {
+				if (state !== 'ready') {
+					this.snapshots.clearAndDisposeAll();
+				}
+			}),
+		);
+		this._register(
+			client.onNotification(notification => {
+				if (notification.method === 'textDocument/turnFinished') {
+					void this.review
+						.finishTurn(
+							{ threadId: notification.params.threadId, turnId: notification.params.turnId },
+							notification.params.outcome,
+						)
+						.catch(onUnexpectedError);
+				}
+			}),
+		);
 	}
 
 	private list(path: string, signal: AbortSignal): TextDocumentListResult {
 		throwIfCancelled(signal);
 		const root = documentComparisonResource(documentResource(path));
-		const documents = this.workingCopies.getAll()
-			.filter(copy => copy.backupKind === 'text' && copy.isDirty && extUri.isEqualOrParent(documentComparisonResource(copy.resource), root))
-			.map(copy => ({ relativePath: copy.resource.path.slice(root.path.replace(/\/$/u, '').length).replace(/^\//u, ''), text: copy.backup() }));
+		const documents = this.workingCopies
+			.getAll()
+			.filter(
+				copy =>
+					copy.backupKind === 'text' &&
+					copy.isDirty &&
+					extUri.isEqualOrParent(documentComparisonResource(copy.resource), root),
+			)
+			.map(copy => ({
+				relativePath: copy.resource.path.slice(root.path.replace(/\/$/u, '').length).replace(/^\//u, ''),
+				text: copy.backup(),
+			}));
 		return { kind: 'documents', documents };
 	}
 
@@ -68,13 +134,22 @@ export class AppServerTextDocumentHost extends Disposable {
 					throwIfCancelled(readSignal);
 					const { candidateGuessEncodings, ...decoding } = options ?? {};
 					const result = await this.client.request(APP_SERVER_METHODS['fs/readFile'], {
-						path: params.path, readAccess: params.readAccess, encoding,
+						path: params.path,
+						readAccess: params.readAccess,
+						encoding,
 						...decoding,
-						...(candidateGuessEncodings === undefined ? {} : { candidateGuessEncodings: [...candidateGuessEncodings] }),
+						...(candidateGuessEncodings === undefined
+							? {}
+							: { candidateGuessEncodings: [...candidateGuessEncodings] }),
 					});
 					throwIfCancelled(signal);
 					throwIfCancelled(readSignal);
-					return { resource: target, content: result.content, revision: result.revision, ...(result.encoding === undefined ? {} : { encoding: result.encoding }) };
+					return {
+						resource: target,
+						content: result.content,
+						revision: result.revision,
+						...(result.encoding === undefined ? {} : { encoding: result.encoding }),
+					};
 				},
 			});
 			// Resolution is not cancellable. Closing must also release a late result.
@@ -82,16 +157,30 @@ export class AppServerTextDocumentHost extends Disposable {
 			this.assertNotDisposed();
 			// Readers own independent leases, even for the same model. Another agent's
 			// read must not invalidate a pending edit; only a changed version does that.
-			if (this.snapshots.size >= 128) { throw new Error('Document snapshot limit reached'); }
+			if (this.snapshots.size >= 128) {
+				throw new Error('Document snapshot limit reached');
+			}
 			const model = reference.object.textEditorModel;
 			const id = crypto.randomUUID();
 			const ownedReference = reference;
-			this.snapshots.set(id, { reference: ownedReference, resource, version: model.getVersionId(), ...toDisposable(() => ownedReference.dispose()) });
+			this.snapshots.set(id, {
+				reference: ownedReference,
+				resource,
+				version: model.getVersionId(),
+				...toDisposable(() => ownedReference.dispose()),
+			});
 			reference = undefined;
 			return { kind: 'document', snapshot: id, text: model.getValue() };
 		} catch (error) {
-			if (isCancellationError(error)) { throw error; }
-			if (error instanceof FileNotFoundError || error instanceof AppServerRemoteError && error.errorName === 'FileSystemNotFound') { return { kind: 'notFound' }; }
+			if (isCancellationError(error)) {
+				throw error;
+			}
+			if (
+				error instanceof FileNotFoundError ||
+				(error instanceof AppServerRemoteError && error.errorName === 'FileSystemNotFound')
+			) {
+				return { kind: 'notFound' };
+			}
 			return { kind: 'failed', message: String(error) };
 		} finally {
 			reference?.dispose();
@@ -99,7 +188,7 @@ export class AppServerTextDocumentHost extends Disposable {
 	}
 
 	private async apply(params: TextDocumentApplyParams, signal: AbortSignal): Promise<TextDocumentApplyResult> {
-		const consumed = params.changes.flatMap(change => change.kind === 'create' ? [] : [change.snapshot]);
+		const consumed = params.changes.flatMap(change => (change.kind === 'create' ? [] : [change.snapshot]));
 		let applied = false;
 		try {
 			throwIfCancelled(signal);
@@ -113,59 +202,105 @@ export class AppServerTextDocumentHost extends Disposable {
 					continue;
 				}
 				const snapshot = this.snapshots.get(change.snapshot);
-				if (!snapshot || snapshot.reference.object.textEditorModel.getVersionId() !== snapshot.version) { return { kind: 'conflict' }; }
+				if (!snapshot || snapshot.reference.object.textEditorModel.getVersionId() !== snapshot.version) {
+					return { kind: 'conflict' };
+				}
 				claimResource(resources, snapshot.resource);
 				const model = snapshot.reference.object.textEditorModel;
 				// Check the captured version again inside the transaction after asynchronous preflight.
-				entries.push({ kind: 'textDocument', resource: snapshot.resource, version: snapshot.version, edits: [{ range: model.getFullModelRange(), text: change.kind === 'delete' ? model.getValue() : change.text }] });
-				if (change.kind === 'delete') { entries.push({ kind: 'delete', resource: snapshot.resource, missing: 'error', mode: 'fileOrEmptyDirectory' }); }
+				entries.push({
+					kind: 'textDocument',
+					resource: snapshot.resource,
+					version: snapshot.version,
+					edits: [
+						{
+							range: model.getFullModelRange(),
+							text: change.kind === 'delete' ? model.getValue() : change.text,
+						},
+					],
+				});
+				if (change.kind === 'delete') {
+					entries.push({
+						kind: 'delete',
+						resource: snapshot.resource,
+						missing: 'error',
+						mode: 'fileOrEmptyDirectory',
+					});
+				}
 				if (change.kind === 'move') {
 					const target = documentResource(change.target);
 					claimResource(resources, target);
 					entries.push({ kind: 'rename', source: snapshot.resource, target, existing: 'error' });
 				}
 			}
-			const result = await this.review.applyEdits({ entries }, signal, { threadId: params.threadId, turnId: params.turnId });
-			if (!result.isApplied) { return { kind: 'cancelled' }; }
+			const result = await this.review.applyEdits({ entries }, signal, {
+				threadId: params.threadId,
+				turnId: params.turnId,
+			});
+			if (!result.isApplied) {
+				return { kind: 'cancelled' };
+			}
 			applied = true;
 			// File tools participate in executable Agent tasks. Their success means the next
 			// process can read the edits; save retains the model and its existing undo history.
 			for (const key of resources) {
 				for (const copy of this.workingCopies.get(URI.parse(key))) {
-					if (copy.isDirty) { await copy.save(signal); }
+					if (copy.isDirty) {
+						await copy.save(signal);
+					}
 				}
 			}
 			return { kind: 'applied' };
 		} catch (error) {
-			if (applied) { return { kind: 'outcomeUnknown', message: String(error) }; }
-			if (error instanceof WorkspaceEditConflictError) { return { kind: 'conflict' }; }
-			if (error instanceof AggregateError) { return { kind: 'outcomeUnknown', message: String(error) }; }
-			if (isCancellationError(error)) { return { kind: 'cancelled' }; }
+			if (applied) {
+				return { kind: 'outcomeUnknown', message: String(error) };
+			}
+			if (error instanceof WorkspaceEditConflictError) {
+				return { kind: 'conflict' };
+			}
+			if (error instanceof AggregateError) {
+				return { kind: 'outcomeUnknown', message: String(error) };
+			}
+			if (isCancellationError(error)) {
+				return { kind: 'cancelled' };
+			}
 			return { kind: 'failed', message: String(error) };
 		} finally {
-			for (const snapshot of consumed) { this.snapshots.deleteAndDispose(snapshot); }
+			for (const snapshot of consumed) {
+				this.snapshots.deleteAndDispose(snapshot);
+			}
 		}
 	}
 }
 
 function documentComparisonResource(resource: URI): URI {
-	if (resource.scheme !== Schemas.file || resource.authority) { return resource; }
+	if (resource.scheme !== Schemas.file || resource.authority) {
+		return resource;
+	}
 	const path = resource.toEncodedComponents().path;
 	const drive = /^\/([A-Za-z]|%[\dA-Fa-f]{2}):\//u.exec(path)?.[1];
-	if (!drive) { return resource; }
+	if (!drive) {
+		return resource;
+	}
 	const letter = drive.startsWith('%') ? String.fromCharCode(Number.parseInt(drive.slice(1), 16)) : drive;
-	if (!/^[A-Za-z]$/u.test(letter)) { return resource; }
+	if (!/^[A-Za-z]$/u.test(letter)) {
+		return resource;
+	}
 	// Decode only an unreserved drive letter; preserve path case and every other encoded component.
 	return resource.withEncodedPath(`/${letter.toLowerCase()}${path.slice(drive.length + 1)}`);
 }
 
 function documentResource(path: string): URI {
-	if (!/^(?:[a-zA-Z]:[\\/]|\\\\|\/)/u.test(path)) { throw new TypeError('Document path must be absolute'); }
+	if (!/^(?:[a-zA-Z]:[\\/]|\\\\|\/)/u.test(path)) {
+		throw new TypeError('Document path must be absolute');
+	}
 	return URI.file(path);
 }
 
 function claimResource(resources: Set<string>, resource: URI): void {
 	const key = resource.toString();
-	if (resources.has(key)) { throw new TypeError('Document transaction repeats a resource'); }
+	if (resources.has(key)) {
+		throw new TypeError('Document transaction repeats a resource');
+	}
 	resources.add(key);
 }

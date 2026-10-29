@@ -35,7 +35,9 @@ export function getVariableNameValidator(variables: KnownVariables = readKnownVa
 	const known = new Set([...variables.colors, ...variables.others, ...variables.sizes]);
 	return (value, report) => {
 		// Preserve offsets while ignoring examples in comments, strings, and URLs.
-		const source = value.replace(/\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|url\([^)]*\)/gi, text => ' '.repeat(text.length));
+		const source = value.replace(/\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|url\([^)]*\)/gi, text =>
+			' '.repeat(text.length),
+		);
 		for (const match of source.matchAll(/(?<![\w-])var\(\s*(--[\w-]+)/g)) {
 			if (!known.has(match[1]!)) {
 				report(match[1]!, match.index);

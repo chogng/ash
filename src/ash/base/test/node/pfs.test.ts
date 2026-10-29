@@ -9,18 +9,24 @@ suite('filesystem rename', () => {
 		try {
 			let calls = 0;
 			const locked = Object.assign(new Error('File is busy'), { code: 'EPERM' });
-			fs.rename = async () => { if (++calls === 1) throw locked; };
+			fs.rename = async () => {
+				if (++calls === 1) throw locked;
+			};
 			if (process.platform === 'win32') {
 				await Promises.rename('source', 'target', 1000);
 				assert.equal(calls, 2);
 			} else {
 				await assert.rejects(Promises.rename('source', 'target'), error => error === locked);
 			}
-			fs.rename = async () => { throw locked; };
+			fs.rename = async () => {
+				throw locked;
+			};
 			await assert.rejects(Promises.rename('source', 'target', false), error => error === locked);
 			await assert.rejects(Promises.rename('source', 'target', 0), error => error === locked);
 			const missing = Object.assign(new Error('Missing source'), { code: 'ENOENT' });
-			fs.rename = async () => { throw missing; };
+			fs.rename = async () => {
+				throw missing;
+			};
 			await assert.rejects(Promises.rename('source', 'target'), error => error === missing);
 		} finally {
 			fs.rename = rename;

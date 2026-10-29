@@ -14,51 +14,115 @@ import { resetNlsResolver } from '../../../../../nls.js';
 suite('Terminal extension point production pipeline', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
-	for (const shape of ['standard', 'legacy'] as const) test(`publishes the ${shape} declaration through one terminal owner and withdraws it on catalog replacement`, async () => {
-		const profiles = [{ id: 'shell', title: '中文 Shell', icon: 'terminal-git-bash', color: 'terminal.ansiGreen' }];
-		const manifestJson = JSON.stringify({ name: 'shell', publisher: 'acme', version: '1.0.0', contributes: shape === 'standard' ? { terminal: { profiles } } : { terminalProfiles: profiles } });
-		const manifestSha256 = `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`;
-		let installed = true;
-		const api: IExtensionApi = {
-			resources: new ExtensionResourceLoaderService(async () => assert.fail('The terminal declaration must not read executable resources')),
-			list: async () => ({ generation: installed ? 1 : 2, diagnostics: [], extensions: installed ? [{ id: 'acme.shell', name: 'shell', publisher: 'acme', version: '1.0.0', displayName: 'Shell', sourceKind: 'user', manifestSha256, packageSha256: `sha256:${'a'.repeat(64)}`, manifestJson }] : [] }),
-		};
-		using extensions = new TestExtensionService(api);
-		using contributions = new TerminalContributionService(extensions);
-		const changes: string[][] = [];
-		using listener = contributions.onDidChangeTerminalProfiles(profiles => changes.push(profiles.map(profile => profile.id)));
-		await extensions.start();
-		assert.equal(contributions.terminalProfiles[0]?.extensionIdentifier, 'acme.shell');
-		assert.equal(contributions.terminalProfiles[0]?.title, '中文 Shell');
-		assert.equal(contributions.terminalProfiles[0]?.options?.icon?.id, 'terminal-git-bash');
-		assert.equal(Object.isFrozen(contributions.terminalProfiles), true);
-		installed = false;
-		await extensions.reload();
-		assert.deepEqual(contributions.terminalProfiles, []);
-		assert.deepEqual(changes, [['shell'], []]);
-	});
+	for (const shape of ['standard', 'legacy'] as const)
+		test(`publishes the ${shape} declaration through one terminal owner and withdraws it on catalog replacement`, async () => {
+			const profiles = [
+				{ id: 'shell', title: '中文 Shell', icon: 'terminal-git-bash', color: 'terminal.ansiGreen' },
+			];
+			const manifestJson = JSON.stringify({
+				name: 'shell',
+				publisher: 'acme',
+				version: '1.0.0',
+				contributes: shape === 'standard' ? { terminal: { profiles } } : { terminalProfiles: profiles },
+			});
+			const manifestSha256 = `sha256:${createHash('sha256').update(manifestJson).digest('hex')}`;
+			let installed = true;
+			const api: IExtensionApi = {
+				resources: new ExtensionResourceLoaderService(async () =>
+					assert.fail('The terminal declaration must not read executable resources'),
+				),
+				list: async () => ({
+					generation: installed ? 1 : 2,
+					diagnostics: [],
+					extensions: installed
+						? [
+								{
+									id: 'acme.shell',
+									name: 'shell',
+									publisher: 'acme',
+									version: '1.0.0',
+									displayName: 'Shell',
+									sourceKind: 'user',
+									manifestSha256,
+									packageSha256: `sha256:${'a'.repeat(64)}`,
+									manifestJson,
+								},
+							]
+						: [],
+				}),
+			};
+			using extensions = new TestExtensionService(api);
+			using contributions = new TerminalContributionService(extensions);
+			const changes: string[][] = [];
+			using listener = contributions.onDidChangeTerminalProfiles(profiles =>
+				changes.push(profiles.map(profile => profile.id)),
+			);
+			await extensions.start();
+			assert.equal(contributions.terminalProfiles[0]?.extensionIdentifier, 'acme.shell');
+			assert.equal(contributions.terminalProfiles[0]?.title, '中文 Shell');
+			assert.equal(contributions.terminalProfiles[0]?.options?.icon?.id, 'terminal-git-bash');
+			assert.equal(Object.isFrozen(contributions.terminalProfiles), true);
+			installed = false;
+			await extensions.reload();
+			assert.deepEqual(contributions.terminalProfiles, []);
+			assert.deepEqual(changes, [['shell'], []]);
+		});
 
 	test('manifest decoding uses the registered point before declarations reach a provider', () => {
-		const descriptor = { id: 'acme.shell', name: 'shell', publisher: 'acme', version: '1.0.0' } as Parameters<typeof parseExtensionManifest>[1];
+		const descriptor = { id: 'acme.shell', name: 'shell', publisher: 'acme', version: '1.0.0' } as Parameters<
+			typeof parseExtensionManifest
+		>[1];
 		for (const profiles of [
-			[{ id: 'same', title: 'First' }, { id: 'same', title: 'Second' }],
+			[
+				{ id: 'same', title: 'First' },
+				{ id: 'same', title: 'Second' },
+			],
 			[{ id: 'invalid/path', title: 'Shell' }],
 			[{ id: 'shell', title: 'bad\0title' }],
 			[{ id: 'shell', title: 'Shell', icon: 'file://untrusted' }],
 		]) {
 			for (const contributes of [{ terminal: { profiles } }, { terminalProfiles: profiles }]) {
-				assert.throws(() => parseExtensionManifest(JSON.stringify({ name: 'shell', publisher: 'acme', version: '1.0.0', contributes }), descriptor), /Invalid terminal profile contribution/);
+				assert.throws(
+					() =>
+						parseExtensionManifest(
+							JSON.stringify({ name: 'shell', publisher: 'acme', version: '1.0.0', contributes }),
+							descriptor,
+						),
+					/Invalid terminal profile contribution/,
+				);
 			}
 		}
 	});
 
 	test('rejects malformed terminal containers and competing standard and legacy declarations', () => {
-		const descriptor = { id: 'acme.shell', name: 'shell', publisher: 'acme', version: '1.0.0' } as Parameters<typeof parseExtensionManifest>[1];
+		const descriptor = { id: 'acme.shell', name: 'shell', publisher: 'acme', version: '1.0.0' } as Parameters<
+			typeof parseExtensionManifest
+		>[1];
 		const profiles = [{ id: 'shell', title: 'Shell' }];
 		for (const terminal of [null, [], 'invalid', { profiles: null }, { profiles }]) {
-			assert.throws(() => parseExtensionManifest(JSON.stringify({ name: 'shell', publisher: 'acme', version: '1.0.0', contributes: { terminal, terminalProfiles: profiles } }), descriptor), /Invalid terminal profile contribution/);
+			assert.throws(
+				() =>
+					parseExtensionManifest(
+						JSON.stringify({
+							name: 'shell',
+							publisher: 'acme',
+							version: '1.0.0',
+							contributes: { terminal, terminalProfiles: profiles },
+						}),
+						descriptor,
+					),
+				/Invalid terminal profile contribution/,
+			);
 		}
-		const parsed = parseExtensionManifest(JSON.stringify({ name: 'shell', publisher: 'acme', version: '1.0.0', contributes: { terminal: { profiles } } }), descriptor);
+		const parsed = parseExtensionManifest(
+			JSON.stringify({
+				name: 'shell',
+				publisher: 'acme',
+				version: '1.0.0',
+				contributes: { terminal: { profiles } },
+			}),
+			descriptor,
+		);
 		assert.deepEqual(parsed.contributes.terminal.profiles, [{ ...profiles[0], icon: undefined, color: undefined }]);
 		assert.equal('terminalProfiles' in parsed.contributes, false, 'The parsed model has a single canonical owner');
 	});
@@ -66,8 +130,24 @@ suite('Terminal extension point production pipeline', () => {
 	test('invalid declaration diagnostics use the selected non-default language', () => {
 		initializeTestLocalization('zh-CN');
 		try {
-			const descriptor = { id: 'acme.shell', name: 'shell', publisher: 'acme', version: '1.0.0' } as Parameters<typeof parseExtensionManifest>[1];
-			assert.throws(() => parseExtensionManifest(JSON.stringify({ name: 'shell', publisher: 'acme', version: '1.0.0', contributes: { terminal: { profiles: [{ id: 'invalid/path', title: 'Shell' }] } } }), descriptor), { message: '终端配置声明无效。' });
-		} finally { resetNlsResolver(); }
+			const descriptor = { id: 'acme.shell', name: 'shell', publisher: 'acme', version: '1.0.0' } as Parameters<
+				typeof parseExtensionManifest
+			>[1];
+			assert.throws(
+				() =>
+					parseExtensionManifest(
+						JSON.stringify({
+							name: 'shell',
+							publisher: 'acme',
+							version: '1.0.0',
+							contributes: { terminal: { profiles: [{ id: 'invalid/path', title: 'Shell' }] } },
+						}),
+						descriptor,
+					),
+				{ message: '终端配置声明无效。' },
+			);
+		} finally {
+			resetNlsResolver();
+		}
 	});
 });

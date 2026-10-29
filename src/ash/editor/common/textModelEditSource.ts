@@ -12,7 +12,7 @@ export class TextModelEditSource {
 	constructor(
 		public readonly metadata: ITextModelEditSourceMetadata,
 		_privateCtorGuard: typeof privateSymbol,
-	) { }
+	) {}
 
 	public toString(): string {
 		return `${this.metadata.source}`;
@@ -35,18 +35,20 @@ export class TextModelEditSource {
 	/**
 	 * Converts the metadata to a key string.
 	 * Only includes properties/values that have `level` many `$` prefixes or less.
-	*/
+	 */
 	public toKey(level: number, filter: { [TKey in ITextModelEditSourceMetadataKeys]?: boolean } = {}): string {
 		const metadata = this.metadata;
-		const keys = Object.entries(metadata).filter(([key, value]) => {
-			const filterVal = (filter as Record<string, boolean>)[key];
-			if (filterVal !== undefined) {
-				return filterVal;
-			}
+		const keys = Object.entries(metadata)
+			.filter(([key, value]) => {
+				const filterVal = (filter as Record<string, boolean>)[key];
+				if (filterVal !== undefined) {
+					return filterVal;
+				}
 
-			const prefixCount = (key.match(/\$/g) || []).length;
-			return prefixCount <= level && value !== undefined && value !== null && value !== '';
-		}).map(([key, value]) => `${key}:${value}`);
+				const prefixCount = (key.match(/\$/g) || []).length;
+				return prefixCount <= level && value !== undefined && value !== null && value !== '';
+			})
+			.map(([key, value]) => `${key}:${value}`);
 		return keys.join('-');
 	}
 
@@ -56,9 +58,7 @@ export class TextModelEditSource {
 	}
 }
 
-type TextModelEditSourceT<T> = TextModelEditSource & {
-	metadataT: T;
-};
+type TextModelEditSourceT<T> = TextModelEditSource & { metadataT: T };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createEditSource<T extends Record<string, any>>(metadata: T): TextModelEditSourceT<T> {
@@ -73,7 +73,8 @@ export function isAiEdit(source: TextModelEditSource): boolean {
 		case 'inlineChat.applyEdits':
 		case 'Chat.applyEdits':
 			return true;
-		case 'codeAction': return source.metadata.$isAI === true;
+		case 'codeAction':
+			return source.metadata.$isAI === true;
 	}
 	return false;
 }
@@ -87,14 +88,12 @@ export function isUserEdit(source: TextModelEditSource): boolean {
 }
 
 export const EditSources = {
-	unknown(data: { name?: string | null; }) {
-		return createEditSource({
-			source: 'unknown',
-			name: data.name,
-		} as const);
+	unknown(data: { name?: string | null }) {
+		return createEditSource({ source: 'unknown', name: data.name } as const);
 	},
 
-	rename: (oldName: string | undefined, newName: string) => createEditSource({ source: 'rename', $$$oldName: oldName, $$$newName: newName } as const),
+	rename: (oldName: string | undefined, newName: string) =>
+		createEditSource({ source: 'rename', $$$oldName: oldName, $$$newName: newName } as const),
 
 	chatApplyEdits(data: {
 		modelId: string | undefined;
@@ -144,7 +143,13 @@ export const EditSources = {
 	chatUndoEdits: () => createEditSource({ source: 'Chat.undoEdits' } as const),
 	chatReset: () => createEditSource({ source: 'Chat.reset' } as const),
 
-	inlineCompletionAccept(data: { nes: boolean; requestUuid: string; languageId: string; providerId?: ProviderId; correlationId: string | undefined; }) {
+	inlineCompletionAccept(data: {
+		nes: boolean;
+		requestUuid: string;
+		languageId: string;
+		providerId?: ProviderId;
+		correlationId: string | undefined;
+	}) {
 		return createEditSource({
 			source: 'inlineCompletionAccept',
 			$nes: data.nes,
@@ -155,7 +160,14 @@ export const EditSources = {
 		} as const);
 	},
 
-	inlineCompletionPartialAccept(data: { nes: boolean; requestUuid: string; languageId: string; providerId?: ProviderId; correlationId: string | undefined; type: 'word' | 'line'; }) {
+	inlineCompletionPartialAccept(data: {
+		nes: boolean;
+		requestUuid: string;
+		languageId: string;
+		providerId?: ProviderId;
+		correlationId: string | undefined;
+		type: 'word' | 'line';
+	}) {
 		return createEditSource({
 			source: 'inlineCompletionPartialAccept',
 			type: data.type,
@@ -167,7 +179,13 @@ export const EditSources = {
 		} as const);
 	},
 
-	inlineChatApplyEdit(data: { modelId: string | undefined; requestId: string | undefined; sessionId: string | undefined; languageId: string; extensionId: VersionedExtensionId | undefined; }) {
+	inlineChatApplyEdit(data: {
+		modelId: string | undefined;
+		requestId: string | undefined;
+		sessionId: string | undefined;
+		languageId: string;
+		extensionId: VersionedExtensionId | undefined;
+	}) {
 		return createEditSource({
 			source: 'inlineChat.applyEdits',
 			$modelId: avoidPathRedaction(data.modelId),
@@ -181,21 +199,27 @@ export const EditSources = {
 
 	reloadFromDisk: () => createEditSource({ source: 'reloadFromDisk' } as const),
 
-	cursor(data: { kind: 'compositionType' | 'compositionEnd' | 'type' | 'paste' | 'cut' | 'executeCommands' | 'executeCommand'; detailedSource?: string | null; }) {
-		return createEditSource({
-			source: 'cursor',
-			kind: data.kind,
-			detailedSource: data.detailedSource,
-		} as const);
+	cursor(data: {
+		kind: 'compositionType' | 'compositionEnd' | 'type' | 'paste' | 'cut' | 'executeCommands' | 'executeCommand';
+		detailedSource?: string | null;
+	}) {
+		return createEditSource({ source: 'cursor', kind: data.kind, detailedSource: data.detailedSource } as const);
 	},
 
 	setValue: () => createEditSource({ source: 'setValue' } as const),
 	eolChange: () => createEditSource({ source: 'eolChange' } as const),
 	applyEdits: () => createEditSource({ source: 'applyEdits' } as const),
 	snippet: () => createEditSource({ source: 'snippet' } as const),
-	suggest: (data: { providerId: ProviderId | undefined; }) => createEditSource({ source: 'suggest', ...toProperties(data.providerId) } as const),
+	suggest: (data: { providerId: ProviderId | undefined }) =>
+		createEditSource({ source: 'suggest', ...toProperties(data.providerId) } as const),
 
-	codeAction: (data: { kind: string | undefined; providerId: ProviderId | undefined; isAI?: boolean; }) => createEditSource({ source: 'codeAction', $isAI: data.isAI, $kind: data.kind, ...toProperties(data.providerId) } as const)
+	codeAction: (data: { kind: string | undefined; providerId: ProviderId | undefined; isAI?: boolean }) =>
+		createEditSource({
+			source: 'codeAction',
+			$isAI: data.isAI,
+			$kind: data.kind,
+			...toProperties(data.providerId),
+		} as const),
 };
 
 function toProperties(version: ProviderId | undefined) {
@@ -210,9 +234,12 @@ function toProperties(version: ProviderId | undefined) {
 }
 
 type Values<T> = T[keyof T];
-export type ITextModelEditSourceMetadata = Values<{ [TKey in keyof typeof EditSources]: ReturnType<typeof EditSources[TKey]>['metadataT'] }>;
-type ITextModelEditSourceMetadataKeys = Values<{ [TKey in keyof typeof EditSources]: keyof ReturnType<typeof EditSources[TKey]>['metadataT'] }>;
-
+export type ITextModelEditSourceMetadata = Values<{
+	[TKey in keyof typeof EditSources]: ReturnType<(typeof EditSources)[TKey]>['metadataT'];
+}>;
+type ITextModelEditSourceMetadataKeys = Values<{
+	[TKey in keyof typeof EditSources]: keyof ReturnType<(typeof EditSources)[TKey]>['metadataT'];
+}>;
 
 function avoidPathRedaction(str: string | undefined): string | undefined {
 	if (str === undefined) {
@@ -221,7 +248,6 @@ function avoidPathRedaction(str: string | undefined): string | undefined {
 	// To avoid false-positive file path redaction.
 	return str.replaceAll('/', '|');
 }
-
 
 export class EditDeltaInfo {
 	public static fromText(text: string): EditDeltaInfo {
@@ -244,9 +270,14 @@ export class EditDeltaInfo {
 		linesAdded: number | undefined,
 		linesRemoved: number | undefined,
 		charsAdded: number | undefined,
-		charsRemoved: number | undefined
+		charsRemoved: number | undefined,
 	): EditDeltaInfo | undefined {
-		if (linesAdded === undefined || linesRemoved === undefined || charsAdded === undefined || charsRemoved === undefined) {
+		if (
+			linesAdded === undefined ||
+			linesRemoved === undefined ||
+			charsAdded === undefined ||
+			charsRemoved === undefined
+		) {
 			return undefined;
 		}
 		return new EditDeltaInfo(linesAdded, linesRemoved, charsAdded, charsRemoved);
@@ -256,10 +287,9 @@ export class EditDeltaInfo {
 		public readonly linesAdded: number,
 		public readonly linesRemoved: number,
 		public readonly charsAdded: number,
-		public readonly charsRemoved: number
-	) { }
+		public readonly charsRemoved: number,
+	) {}
 }
-
 
 /**
  * This is an opaque serializable type that represents a unique identity for an edit.
@@ -271,7 +301,7 @@ export interface EditSuggestionId {
 export namespace EditSuggestionId {
 	/**
 	 * Use AiEditTelemetryServiceImpl to create a new id!
-	*/
+	 */
 	export function newId(genPrefixedUuid?: (ns: string) => string): EditSuggestionId {
 		const id = genPrefixedUuid ? genPrefixedUuid('sgt') : prefixedUuid('sgt');
 		return toEditIdentity(id);

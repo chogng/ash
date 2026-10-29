@@ -1,7 +1,12 @@
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import type { URI } from '../../../../base/common/uri.js';
-import { IBackupService, type IBackupContent, type IBackupRecord, type IBackupWorkspace } from '../../../../platform/backup/common/backup.js';
+import {
+	IBackupService,
+	type IBackupContent,
+	type IBackupRecord,
+	type IBackupWorkspace,
+} from '../../../../platform/backup/common/backup.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import type { IWorkingCopyBackupService, WorkingCopyBackup } from '../common/workingCopyBackupService.js';
@@ -17,7 +22,7 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 	private readonly legacyConflicts = new Map<string, WorkingCopyBackup>();
 	private readonly legacy: IndexedDbWorkingCopyBackupService;
 	private preparation: Promise<void> | undefined;
-	private movedRevisions: { workspaceId: string; revisions: ReadonlyMap<string, string>; } | undefined;
+	private movedRevisions: { workspaceId: string; revisions: ReadonlyMap<string, string> } | undefined;
 
 	constructor(
 		@IBackupService private readonly backups: IBackupService,
@@ -42,7 +47,11 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 				result.push(deserialize(record));
 				this.revisions.set(record.content.resource.toString(), record.revision);
 			} catch (error) {
-				this.logService.error('workingCopy', `Unable to interpret backup '${record.content.resource.toString()}'`, error);
+				this.logService.error(
+					'workingCopy',
+					`Unable to interpret backup '${record.content.resource.toString()}'`,
+					error,
+				);
 			}
 		}
 		return result;
@@ -86,13 +95,28 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 		const sourceId = this.workspaceId;
 		await this.prepare(generation);
 		const source = await this.backups.list(sourceId);
-		const observed = new Set(source.filter(record => this.revisions.get(record.content.resource.toString()) === record.revision).map(record => record.content.resource.toString()));
-		const moved = await this.backups.move(sourceId, target, source.map(record => ({ resource: record.content.resource, revision: record.revision })));
+		const observed = new Set(
+			source
+				.filter(record => this.revisions.get(record.content.resource.toString()) === record.revision)
+				.map(record => record.content.resource.toString()),
+		);
+		const moved = await this.backups.move(
+			sourceId,
+			target,
+			source.map(record => ({ resource: record.content.resource, revision: record.revision })),
+		);
 		this.assertCurrentWorkspace(generation);
 		// Moving bytes does not acknowledge recovery content. Retain only revisions
 		// already observed by this editor; unknown formats and other writers' newer
 		// source records still require explicit restoration in the destination.
-		this.movedRevisions = { workspaceId: target.id, revisions: new Map(moved.filter(record => observed.has(record.resource.toString())).map(record => [record.resource.toString(), record.revision])) };
+		this.movedRevisions = {
+			workspaceId: target.id,
+			revisions: new Map(
+				moved
+					.filter(record => observed.has(record.resource.toString()))
+					.map(record => [record.resource.toString(), record.revision]),
+			),
+		};
 	}
 
 	switchWorkspace(workspaceId: string): void {
@@ -101,7 +125,8 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 		this.workspaceId = workspaceId;
 		this.workspaceGeneration++;
 		this.revisions.clear();
-		if (this.movedRevisions?.workspaceId === workspaceId) for (const [key, revision] of this.movedRevisions.revisions) this.revisions.set(key, revision);
+		if (this.movedRevisions?.workspaceId === workspaceId)
+			for (const [key, revision] of this.movedRevisions.revisions) this.revisions.set(key, revision);
 		this.movedRevisions = undefined;
 		this.legacyConflicts.clear();
 		this.preparation = undefined;
@@ -117,17 +142,22 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 	private workspace(): IBackupWorkspace {
 		const workspace = this.workspaceContext.getWorkspace();
 		if (workspace.id !== this.workspaceId) throw new Error('Backup workspace does not match the current workspace');
-		return { id: workspace.id, folders: workspace.folders.map(folder => folder.uri), ...(workspace.configuration ? { configuration: workspace.configuration } : {}), ...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}) };
+		return {
+			id: workspace.id,
+			folders: workspace.folders.map(folder => folder.uri),
+			...(workspace.configuration ? { configuration: workspace.configuration } : {}),
+			...(workspace.remoteAuthority ? { remoteAuthority: workspace.remoteAuthority } : {}),
+		};
 	}
 
 	private prepare(generation: number): Promise<void> {
 		this.assertCurrentWorkspace(generation);
-		return this.preparation ??= this.migrate(generation).catch(error => {
+		return (this.preparation ??= this.migrate(generation).catch(error => {
 			if (generation === this.workspaceGeneration) {
 				this.preparation = undefined;
 			}
 			throw error;
-		});
+		}));
 	}
 
 	private async migrate(generation: number): Promise<void> {
@@ -145,7 +175,7 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 				this.legacyConflicts.set(backup.resource.toString(), backup);
 				continue;
 			}
-			const record = stored ?? await this.backups.store(workspace, content);
+			const record = stored ?? (await this.backups.store(workspace, content));
 			this.assertCurrentWorkspace(generation);
 			existing.set(backup.resource.toString(), record);
 			await this.legacy.deleteIfUnchanged(backup);
@@ -156,18 +186,37 @@ export class WorkingCopyBackupService extends Disposable implements IWorkingCopy
 }
 
 function serialize(backup: WorkingCopyBackup): IBackupContent {
-	return { resource: backup.resource, format: CONTENT_FORMAT, content: JSON.stringify({ kind: backup.kind, content: backup.content, ...(backup.languageId !== undefined ? { languageId: backup.languageId } : {}), ...(backup.contentType !== undefined ? { contentType: backup.contentType } : {}), ...(backup.label !== undefined ? { label: backup.label } : {}) }) };
+	return {
+		resource: backup.resource,
+		format: CONTENT_FORMAT,
+		content: JSON.stringify({
+			kind: backup.kind,
+			content: backup.content,
+			...(backup.languageId !== undefined ? { languageId: backup.languageId } : {}),
+			...(backup.contentType !== undefined ? { contentType: backup.contentType } : {}),
+			...(backup.label !== undefined ? { label: backup.label } : {}),
+		}),
+	};
 }
 
 function deserialize(record: IBackupRecord): WorkingCopyBackup {
-	if (record.content.format !== CONTENT_FORMAT) throw new Error(`Unsupported working-copy backup format: ${record.content.format}`);
+	if (record.content.format !== CONTENT_FORMAT)
+		throw new Error(`Unsupported working-copy backup format: ${record.content.format}`);
 	const payload: unknown = JSON.parse(record.content.content);
-	if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new Error('Invalid working-copy backup');
+	if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+		throw new Error('Invalid working-copy backup');
 	const value = payload as Record<string, unknown>;
-	if ((value.kind !== 'text' && value.kind !== 'structuredDocument') || typeof value.content !== 'string'
-		|| ['languageId', 'contentType', 'label'].some(key => value[key] !== undefined && typeof value[key] !== 'string')) throw new Error('Invalid working-copy backup content');
+	if (
+		(value.kind !== 'text' && value.kind !== 'structuredDocument') ||
+		typeof value.content !== 'string' ||
+		['languageId', 'contentType', 'label'].some(key => value[key] !== undefined && typeof value[key] !== 'string')
+	)
+		throw new Error('Invalid working-copy backup content');
 	return {
-		resource: record.content.resource, kind: value.kind, content: value.content, updatedAt: record.updatedAt,
+		resource: record.content.resource,
+		kind: value.kind,
+		content: value.content,
+		updatedAt: record.updatedAt,
 		...(typeof value.languageId === 'string' ? { languageId: value.languageId } : {}),
 		...(typeof value.contentType === 'string' ? { contentType: value.contentType } : {}),
 		...(typeof value.label === 'string' ? { label: value.label } : {}),

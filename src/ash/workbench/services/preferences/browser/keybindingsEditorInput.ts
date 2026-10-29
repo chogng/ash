@@ -28,7 +28,10 @@ export class KeybindingsEditorInput extends EditorInput {
 		super();
 	}
 
-	public static getOrCreate(input: IResourceEditorInput, instantiationService: IInstantiationService): KeybindingsEditorInput {
+	public static getOrCreate(
+		input: IResourceEditorInput,
+		instantiationService: IInstantiationService,
+	): KeybindingsEditorInput {
 		if (!isKeybindingsEditorInput(input)) throw new TypeError('Expected a Keyboard Shortcuts input');
 		if (input instanceof KeybindingsEditorInput && !input.isDisposed) return input;
 		const restored = this.restoredInputs.get(input)?.deref();
@@ -65,7 +68,11 @@ export class KeybindingsEditorInput extends EditorInput {
 }
 
 export function isKeybindingsEditorInput(input: IResourceEditorInput): boolean {
-	return input instanceof KeybindingsEditorInput || input.contentType === keybindingsEditorContentType || input.resource.toString() === keybindingsEditorResource.toString();
+	return (
+		input instanceof KeybindingsEditorInput ||
+		input.contentType === keybindingsEditorContentType ||
+		input.resource.toString() === keybindingsEditorResource.toString()
+	);
 }
 
 /** Uses the profile resource identity shared by the text model and shortcut services. */
@@ -73,17 +80,31 @@ export function createKeybindingsJsonEditorInput(resource: URI): IResourceEditor
 	return Object.freeze({
 		resource,
 		languageId: 'jsonc',
-		get label(): string { return localize({ bundle: 'ash', key: 'keybindings.jsonLabel' }, 'Keyboard Shortcuts (JSON)'); },
+		get label(): string {
+			return localize({ bundle: 'ash', key: 'keybindings.jsonLabel' }, 'Keyboard Shortcuts (JSON)');
+		},
 	});
 }
 
 EditorInputSerializers.registerStatic({
 	typeId: 'workbench.editorInput.keybindingsJson',
-	canSerialize: input => input.resource.scheme === Schemas.vscodeUserData && input.resource.path === '/user/keybindings.json' && !input.resource.authority && !input.resource.query && !input.resource.fragment,
+	canSerialize: input =>
+		input.resource.scheme === Schemas.vscodeUserData &&
+		input.resource.path === '/user/keybindings.json' &&
+		!input.resource.authority &&
+		!input.resource.query &&
+		!input.resource.fragment,
 	serialize: input => input.resource.toString(),
 	deserialize: value => {
 		const resource = URI.parse(requireString(value, 'keybindings JSON resource'));
-		if (resource.scheme !== Schemas.vscodeUserData || resource.path !== '/user/keybindings.json' || resource.authority || resource.query || resource.fragment) throw new TypeError('Invalid keybindings JSON resource');
+		if (
+			resource.scheme !== Schemas.vscodeUserData ||
+			resource.path !== '/user/keybindings.json' ||
+			resource.authority ||
+			resource.query ||
+			resource.fragment
+		)
+			throw new TypeError('Invalid keybindings JSON resource');
 		return createKeybindingsJsonEditorInput(resource);
 	},
 });

@@ -2,8 +2,13 @@ import { Emitter } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 
 export type PermissionDecision = 'allow' | 'deny';
-export interface IPermissionCategoryState { readonly category: PermissionCategory; readonly state: PermissionDecision | null; }
-export interface ISerializedBrowserPermissionsSnapshot { readonly origins: Readonly<Record<string, Partial<Record<PermissionCategory, PermissionDecision>>>>; }
+export interface IPermissionCategoryState {
+	readonly category: PermissionCategory;
+	readonly state: PermissionDecision | null;
+}
+export interface ISerializedBrowserPermissionsSnapshot {
+	readonly origins: Readonly<Record<string, Partial<Record<PermissionCategory, PermissionDecision>>>>;
+}
 
 export const enum PermissionCategory {
 	Location = 'location',
@@ -17,22 +22,46 @@ export const enum PermissionCategory {
 
 /** Opaque and malformed documents cannot own reusable site permissions. */
 export function toOriginKey(url: string | undefined | null): string {
-	if (!url) { return ''; }
+	if (!url) {
+		return '';
+	}
 	try {
 		const origin = new URL(url).origin;
 		return origin === 'null' ? '' : origin;
-	} catch { return ''; }
+	} catch {
+		return '';
+	}
 }
 
-export function electronPermissionToCategories(permission: string, mediaKinds?: ReadonlyArray<'video' | 'audio'>): PermissionCategory[] {
+export function electronPermissionToCategories(
+	permission: string,
+	mediaKinds?: ReadonlyArray<'video' | 'audio'>,
+): PermissionCategory[] {
 	switch (permission) {
-		case 'geolocation': case 'geolocation-approximate': return [PermissionCategory.Location];
-		case 'notifications': return [PermissionCategory.Notifications];
-		case 'sensors': return [PermissionCategory.Sensors];
-		case 'clipboard-read': case 'clipboard-sanitized-write': return [PermissionCategory.Clipboard];
-		case 'usb': case 'serial': case 'hid': return [PermissionCategory.Devices];
-		case 'media': return [...new Set((mediaKinds ?? ['video', 'audio']).map(kind => kind === 'video' ? PermissionCategory.Camera : PermissionCategory.Microphone))];
-		default: return [];
+		case 'geolocation':
+		case 'geolocation-approximate':
+			return [PermissionCategory.Location];
+		case 'notifications':
+			return [PermissionCategory.Notifications];
+		case 'sensors':
+			return [PermissionCategory.Sensors];
+		case 'clipboard-read':
+		case 'clipboard-sanitized-write':
+			return [PermissionCategory.Clipboard];
+		case 'usb':
+		case 'serial':
+		case 'hid':
+			return [PermissionCategory.Devices];
+		case 'media':
+			return [
+				...new Set(
+					(mediaKinds ?? ['video', 'audio']).map(kind =>
+						kind === 'video' ? PermissionCategory.Camera : PermissionCategory.Microphone,
+					),
+				),
+			];
+		default:
+			return [];
 	}
 }
 
@@ -48,23 +77,36 @@ export class BrowserPermissionStore extends Disposable {
 
 	set(origin: string, category: PermissionCategory, decision: PermissionDecision | null): void {
 		const key = toOriginKey(origin);
-		if (!key || this.getDecision(key, category) === (decision ?? undefined)) { return; }
+		if (!key || this.getDecision(key, category) === (decision ?? undefined)) {
+			return;
+		}
 		let grants = this.decisions.get(key);
 		if (decision === null) {
 			grants?.delete(category);
-			if (!grants?.size) { this.decisions.delete(key); }
+			if (!grants?.size) {
+				this.decisions.delete(key);
+			}
 		} else {
-			if (!grants) { grants = new Map(); this.decisions.set(key, grants); }
+			if (!grants) {
+				grants = new Map();
+				this.decisions.set(key, grants);
+			}
 			grants.set(category, decision);
 		}
 		this.changes.fire();
 	}
 
 	serialize(): ISerializedBrowserPermissionsSnapshot {
-		return { origins: Object.fromEntries([...this.decisions].map(([origin, values]) => [origin, Object.fromEntries(values)])) };
+		return {
+			origins: Object.fromEntries(
+				[...this.decisions].map(([origin, values]) => [origin, Object.fromEntries(values)]),
+			),
+		};
 	}
 	clear(): void {
-		if (!this.decisions.size) { return; }
+		if (!this.decisions.size) {
+			return;
+		}
 		this.decisions.clear();
 		this.changes.fire();
 	}

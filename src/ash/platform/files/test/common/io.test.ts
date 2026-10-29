@@ -22,13 +22,25 @@ suite('File stream IO', () => {
 			const resource = URI.file(join(directory, 'bytes.bin'));
 			await writeFile(resource.fsPath, new Uint8Array([0, 1, 2, 3, 4, 5]));
 			const stream = newWriteableStream<Uint8Array>(null);
-			const producer = readFileIntoStream(provider, resource, stream, buffer => buffer.buffer, { bufferSize: 2, position: 1, length: 4 }, CancellationToken.None);
+			const producer = readFileIntoStream(
+				provider,
+				resource,
+				stream,
+				buffer => buffer.buffer,
+				{ bufferSize: 2, position: 1, length: 4 },
+				CancellationToken.None,
+			);
 			const chunks = await consumeStream(stream, values => values.map(value => [...value]));
 			await producer;
-			assert.deepEqual(chunks, [[1, 2], [3, 4]]);
+			assert.deepEqual(chunks, [
+				[1, 2],
+				[3, 4],
+			]);
 			// Windows cannot remove an open file lacking delete sharing; also exercise the public closed handle guard.
 			await assert.rejects(provider.read(1, 0, new Uint8Array(1), 0, 1), /closed/);
-		} finally { await rm(directory, { recursive: true, force: true }); }
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 
 	test('cancellation while backpressured rejects the read and closes its descriptor', async () => {
@@ -43,16 +55,27 @@ suite('File stream IO', () => {
 			const write = stream.write;
 			stream.write = data => {
 				const result = write(data);
-				if (result instanceof Promise) { void blocked.complete(); }
+				if (result instanceof Promise) {
+					void blocked.complete();
+				}
 				return result;
 			};
-			const producer = readFileIntoStream(provider, resource, stream, buffer => buffer.buffer, { bufferSize: 1 }, cancellation.token);
+			const producer = readFileIntoStream(
+				provider,
+				resource,
+				stream,
+				buffer => buffer.buffer,
+				{ bufferSize: 1 },
+				cancellation.token,
+			);
 			await blocked.p;
 			cancellation.cancel();
 			await producer;
 			await assert.rejects(consumeStream(stream), CancellationError);
 			await assert.rejects(provider.read(1, 0, new Uint8Array(1), 0, 1), /closed/);
 			stream.destroy();
-		} finally { await rm(directory, { recursive: true, force: true }); }
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 });

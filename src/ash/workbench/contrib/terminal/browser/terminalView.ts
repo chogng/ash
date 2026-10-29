@@ -8,41 +8,58 @@ import {
 } from '../common/terminalContextKey.js';
 import { TerminalCommandId } from '../common/terminal.js';
 import { ITerminalProfileResolverService, ITerminalProfileService } from '../common/terminal.js';
-import { ITerminalProcessService, TerminalLocation, type IShellLaunchConfig } from '../../../../platform/terminal/common/terminal.js';
-import { terminalProfileIcon } from "./terminalIcon.js";
-import { type IContextKey } from "../../../../platform/contextkey/common/contextkey.js";
-import { ICommandService } from "../../../../platform/commands/common/commands.js";
-import { MenuWorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
-import { DropdownWithPrimaryActionViewItem } from "../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js";
-import { Separator, SubmenuAction, type IAction } from "../../../../base/common/actions.js";
+import {
+	ITerminalProcessService,
+	TerminalLocation,
+	type IShellLaunchConfig,
+} from '../../../../platform/terminal/common/terminal.js';
+import { terminalProfileIcon } from './terminalIcon.js';
+import { type IContextKey } from '../../../../platform/contextkey/common/contextkey.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { MenuWorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { DropdownWithPrimaryActionViewItem } from '../../../../platform/actions/browser/dropdownWithPrimaryActionViewItem.js';
+import { Separator, SubmenuAction, type IAction } from '../../../../base/common/actions.js';
 import { MenuItemAction } from '../../../../platform/actions/common/actions.js';
-import { MenuEntryActionViewItem, getFlatContextMenuActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import {
+	MenuEntryActionViewItem,
+	getFlatContextMenuActions,
+} from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { getKeybindingLabel } from '../../../../base/common/keybindingLabels.js';
 import { InstanceContext } from './terminalContextMenu.js';
 import { TerminalInstanceHover } from './terminalTooltip.js';
 import type { IManagedHover } from '../../../../platform/hover/browser/hoverService.js';
-import { ActionViewItem, LabelActionViewItem } from "../../../../base/browser/ui/actionbar/actionViewItems.js";
+import { ActionViewItem, LabelActionViewItem } from '../../../../base/browser/ui/actionbar/actionViewItems.js';
 import { localize } from '../../../../nls.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ServiceCollection } from '../../../../platform/instantiation/common/serviceCollection.js';
-import { TerminalDictationStateContext, TerminalVoiceContribution, type TerminalDictationState } from '../../terminalContrib/voice/browser/terminalVoice.js';
-import { Disposable, DisposableMap, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
-import { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import { IContextMenuService } from "../../../../platform/contextview/browser/contextView.js";
+import {
+	TerminalDictationStateContext,
+	TerminalVoiceContribution,
+	type TerminalDictationState,
+} from '../../terminalContrib/voice/browser/terminalVoice.js';
+import { Disposable, DisposableMap, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
+import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { isCancellationError } from '../../../../base/common/errors.js';
-import { AppServerRemoteError } from "../../../../platform/agentHost/common/appServerError.js";
-import { IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
-import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from "../../../browser/parts/views/viewPane.js";
-import { IWorkbenchLayoutService } from "../../../services/layout/browser/layoutService.js";
-import { type ITerminalInstance, type ITerminalProfile, ITerminalService, ITerminalGroupService, type IXtermTerminal } from "./terminal.js";
+import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
+import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../browser/parts/views/viewPane.js';
+import { IWorkbenchLayoutService } from '../../../services/layout/browser/layoutService.js';
+import {
+	type ITerminalInstance,
+	type ITerminalProfile,
+	ITerminalService,
+	ITerminalGroupService,
+	type IXtermTerminal,
+} from './terminal.js';
 
-import { TerminalTabbedView } from "./terminalTabbedView.js";
-import "./media/terminal.css";
-import { h, addDisposableListener, stopEvent } from "../../../../base/browser/dom.js";
-import { observeResize } from "../../../../base/browser/observer.js";
+import { TerminalTabbedView } from './terminalTabbedView.js';
+import './media/terminal.css';
+import { h, addDisposableListener, stopEvent } from '../../../../base/browser/dom.js';
+import { observeResize } from '../../../../base/browser/observer.js';
 import { IWorkbenchEnvironmentService } from '../../../services/environment/common/environmentService.js';
 
 /** Tabbed xterm panel whose persistent widgets preserve per-instance terminal state. */
@@ -74,16 +91,18 @@ export class TerminalViewPane extends ViewPane {
 		super(container, options);
 		this.terminalService = terminalService;
 		this.awaitingTransfer = environment.expectsTerminalTransfer === true && terminalService.instances.length === 0;
-		this.element.classList.add("ash-terminal-view");
+		this.element.classList.add('ash-terminal-view');
 		this.setHeaderVisible(false);
-		this.titleActions = this._register(instantiation.createInstance(TerminalTitleActions, this.headerActionsElement));
+		this.titleActions = this._register(
+			instantiation.createInstance(TerminalTitleActions, this.headerActionsElement),
+		);
 		this.updateProfiles();
 		this._register(profileService.onDidChangeAvailableProfiles(() => this.updateProfiles()));
 
-		this.contentElement.classList.add("ash-terminal-content");
-		this.statusElement = h(container.ownerDocument, "div");
-		this.statusElement.className = "ash-terminal-status";
-		this.statusElement.setAttribute("role", "status");
+		this.contentElement.classList.add('ash-terminal-content');
+		this.statusElement = h(container.ownerDocument, 'div');
+		this.statusElement.className = 'ash-terminal-status';
+		this.statusElement.setAttribute('role', 'status');
 		this.statusElement.hidden = true;
 		this.contentElement.append(this.statusElement);
 		this.tabsLayout = this._register(instantiation.createInstance(TerminalTabbedView, this.contentElement));
@@ -91,34 +110,44 @@ export class TerminalViewPane extends ViewPane {
 		this._register(this.tabsLayout.onDidFocusInstance(() => this.focus()));
 
 		for (const instance of terminalService.instances) this.addInstance(instance);
-		this._register(terminalService.onDidCreateInstance((instance) => {
-			this.awaitingTransfer = false;
-			this.addInstance(instance);
-			this.updateInstances();
-		}));
-		this._register(terminalService.onDidDisposeInstance((instance) => {
-			this.removeInstance(instance);
-			// A lazily created group service can observe disposal after this view.
-			// Let it retire membership before rendering the remaining group panes.
-			queueMicrotask(() => { if (!this.isDisposed) this.updateInstances(); });
-		}));
+		this._register(
+			terminalService.onDidCreateInstance(instance => {
+				this.awaitingTransfer = false;
+				this.addInstance(instance);
+				this.updateInstances();
+			}),
+		);
+		this._register(
+			terminalService.onDidDisposeInstance(instance => {
+				this.removeInstance(instance);
+				// A lazily created group service can observe disposal after this view.
+				// Let it retire membership before rendering the remaining group panes.
+				queueMicrotask(() => {
+					if (!this.isDisposed) this.updateInstances();
+				});
+			}),
+		);
 		this._register(terminalService.onDidChangeActiveInstance(() => this.updateInstances()));
 		this._register(terminalService.onDidChangeInstances(() => this.updateInstances()));
 		this._register(groups.onDidChangeGroups(() => this.updateInstances()));
-		this._register(this.onDidChangeBodyVisibility(visible => {
-			if (visible) {
-				queueMicrotask(() => {
+		this._register(
+			this.onDidChangeBodyVisibility(visible => {
+				if (visible) {
+					queueMicrotask(() => {
+						this.updateInstances();
+						void this.initialize();
+					});
+				} else {
+					this.focusSource = undefined;
 					this.updateInstances();
-					void this.initialize();
-				});
-			} else {
-				this.focusSource = undefined;
-				this.updateInstances();
-			}
-		}));
-		this._register(workspaceContext.onDidChangeWorkspace(() => {
-			if (this.terminalService.instances.length === 0) void this.initialize();
-		}));
+				}
+			}),
+		);
+		this._register(
+			workspaceContext.onDidChangeWorkspace(() => {
+				if (this.terminalService.instances.length === 0) void this.initialize();
+			}),
+		);
 
 		const layoutTerminals = (): void => {
 			const bounds = this.tabsLayout.element.getBoundingClientRect();
@@ -134,9 +163,15 @@ export class TerminalViewPane extends ViewPane {
 			void this.initialize();
 		});
 	}
-	public async getTerminalOutput(instance: ITerminalInstance, maxCharacters: number, signal: AbortSignal): Promise<string | undefined> {
+	public async getTerminalOutput(
+		instance: ITerminalInstance,
+		maxCharacters: number,
+		signal: AbortSignal,
+	): Promise<string | undefined> {
 		const item = this.items.get(instance);
-		if (!item || this.isDisposed || signal.aborted) { return undefined; }
+		if (!item || this.isDisposed || signal.aborted) {
+			return undefined;
+		}
 		const content = await item.widget.getBufferText(maxCharacters, signal);
 		return this.items.get(instance) === item && !signal.aborted ? content : undefined;
 	}
@@ -178,10 +213,14 @@ export class TerminalViewPane extends ViewPane {
 				if (!this.isBodyVisible() || this.isDisposed || this.terminalService.instances.length > 0) return;
 				this.titleActions.setCreating(true);
 				this.creating = this.terminalService.createTerminal();
-				try { await this.creating; }
-				finally {
+				try {
+					await this.creating;
+				} finally {
 					this.creating = undefined;
-					if (!this.isDisposed) { this.titleActions.setCreating(false); this.updateInstances(); }
+					if (!this.isDisposed) {
+						this.titleActions.setCreating(false);
+						this.updateInstances();
+					}
 				}
 			} else {
 				await this.profileService.refreshAvailableProfiles(this.terminalService.activeInstance?.dirId);
@@ -190,7 +229,7 @@ export class TerminalViewPane extends ViewPane {
 			this.updateProfiles();
 		} catch (error) {
 			if (this.isDisposed || isCancellationError(error)) return;
-			this.setStatus(terminalErrorMessage(error, "Terminal is unavailable"));
+			this.setStatus(terminalErrorMessage(error, 'Terminal is unavailable'));
 			this.updateProfiles();
 		} finally {
 			progress.done();
@@ -205,22 +244,34 @@ export class TerminalViewPane extends ViewPane {
 			if (os !== undefined) this.profileResolver.resolveIcon(shell, os);
 			return { ...profile, icon: shell.icon };
 		});
-		this.titleActions.setProfiles([...profiles, ...this.profileService.contributedProfiles.map(profile => ({ profileId: `extension:${profile.extensionIdentifier}/${profile.id}`, title: profile.title, isDefault: this.profileService.getDefaultProfileName() === profile.title }))]);
+		this.titleActions.setProfiles([
+			...profiles,
+			...this.profileService.contributedProfiles.map(profile => ({
+				profileId: `extension:${profile.extensionIdentifier}/${profile.id}`,
+				title: profile.title,
+				isDefault: this.profileService.getDefaultProfileName() === profile.title,
+			})),
+		]);
 	}
 
 	public async relaunchActive(): Promise<void> {
 		const instance = this.terminalService.activeInstance;
 		const item = instance ? this.items.get(instance) : undefined;
-		if (!instance || !item || instance.state === "reconnecting") return;
+		if (!instance || !item || instance.state === 'reconnecting') return;
 		if (this.isBodyVisible()) super.focus();
 		const focusSource = this.element.ownerDocument.activeElement;
 		this.setStatus(undefined);
 		try {
 			await this.terminalService.relaunchTerminal(instance, item.widget.dimensions());
-			if (!this.isDisposed && this.activeItem() === item && this.element.ownerDocument.activeElement === focusSource) item.widget.focus();
+			if (
+				!this.isDisposed &&
+				this.activeItem() === item &&
+				this.element.ownerDocument.activeElement === focusSource
+			)
+				item.widget.focus();
 		} catch (error) {
 			if (!this.isDisposed) {
-				this.setStatus(terminalErrorMessage(error, "Terminal relaunch failed"));
+				this.setStatus(terminalErrorMessage(error, 'Terminal relaunch failed'));
 			}
 		}
 	}
@@ -230,7 +281,7 @@ export class TerminalViewPane extends ViewPane {
 		if (!instance) return;
 		await this.terminalService.safeDisposeTerminal(instance);
 		if (!this.isDisposed) {
-			if (this.terminalService.instances.length === 0) this.layoutService.hidePart("panel");
+			if (this.terminalService.instances.length === 0) this.layoutService.hidePart('panel');
 			else this.terminalService.activeInstance?.xterm?.focus();
 		}
 	}
@@ -243,11 +294,7 @@ export class TerminalViewPane extends ViewPane {
 	private addInstance(instance: ITerminalInstance): void {
 		if (this.items.has(instance) || instance.target === TerminalLocation.Editor) return;
 		this.groups.createGroup(instance).attachToElement(this.widgetsElement);
-		const item = new TerminalViewItem(
-			instance,
-			instance.xterm!,
-			() => this.updateInstances(),
-		);
+		const item = new TerminalViewItem(instance, instance.xterm!, () => this.updateInstances());
 		this.items.set(instance, item);
 	}
 
@@ -267,7 +314,7 @@ export class TerminalViewPane extends ViewPane {
 		void item.instance.xtermReadyPromise.catch(error => {
 			if (this.isDisposed || this.items.get(item.instance) !== item) return;
 			this.removeInstance(item.instance);
-			this.setStatus(terminalErrorMessage(error, "Terminal renderer could not be loaded"));
+			this.setStatus(terminalErrorMessage(error, 'Terminal renderer could not be loaded'));
 		});
 	}
 
@@ -278,8 +325,11 @@ export class TerminalViewPane extends ViewPane {
 	private render(): void {
 		if (this.isDisposed) return;
 		const active = this.terminalService.activeInstance;
-		const instanceSwitcherPlacement = this.groups.groups.length > 1 ? "list" : "title";
-		this.titleActions.setActiveInstance(active?.target === TerminalLocation.Editor ? this.groups.activeGroup?.activeInstance : active, instanceSwitcherPlacement);
+		const instanceSwitcherPlacement = this.groups.groups.length > 1 ? 'list' : 'title';
+		this.titleActions.setActiveInstance(
+			active?.target === TerminalLocation.Editor ? this.groups.activeGroup?.activeInstance : active,
+			instanceSwitcherPlacement,
+		);
 		for (const group of this.groups.groups) {
 			group.attachToElement(this.widgetsElement);
 			group.setVisible(this.isBodyVisible() && group === this.groups.activeGroup);
@@ -302,17 +352,16 @@ export class TerminalViewPane extends ViewPane {
 	}
 
 	private setStatus(message: string | undefined): void {
-		this.statusElement.textContent = message ?? "";
+		this.statusElement.textContent = message ?? '';
 		this.statusElement.hidden = message === undefined;
 	}
-
 }
 
 function terminalErrorMessage(error: unknown, fallback: string): string {
 	const message = error instanceof Error ? error.message : String(error);
 	const errorName = error instanceof AppServerRemoteError ? error.errorName : message;
 	if (/TerminalUnavailable/.test(errorName)) {
-		return "Terminal is unavailable for this folder. Trust the folder to enable terminal processes, or continue in Restricted Mode.";
+		return 'Terminal is unavailable for this folder. Trust the folder to enable terminal processes, or continue in Restricted Mode.';
 	}
 	return error instanceof Error ? error.message : fallback;
 }
@@ -360,8 +409,10 @@ export class TerminalTitleActions extends Disposable {
 		super();
 		// Toolbar projections describe its panel instance, independently of the
 		// window-active editor terminal used by command palette preconditions.
-		const contextKeyService = this.contextKeyService = this._register(parentContext.createScoped(container));
-		this.instantiation = this._register(instantiation.createChild(new ServiceCollection([IContextKeyService, contextKeyService])));
+		const contextKeyService = (this.contextKeyService = this._register(parentContext.createScoped(container)));
+		this.instantiation = this._register(
+			instantiation.createChild(new ServiceCollection([IContextKeyService, contextKeyService])),
+		);
 		this.commandService = commandService;
 		this.creatingContext = TerminalCreatingContext.bindTo(contextKeyService);
 		this.hasActiveInstanceContext = TerminalHasActiveInstanceContext.bindTo(contextKeyService);
@@ -369,35 +420,37 @@ export class TerminalTitleActions extends Disposable {
 		this.activeInstanceStateContext = TerminalActiveInstanceStateContext.bindTo(contextKeyService);
 		this.inlineActionsContext = TerminalViewInlineActionsContext.bindTo(contextKeyService);
 		this.dictationContext = TerminalDictationStateContext.bindTo(contextKeyService);
-		this._register(configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration('terminal.integrated.tabs')) this.updateContext();
-		}));
-		this._register(contextKeyService.onDidChangeContext(event => {
-			if (event.affectsSome(new Set([TerminalContextKeys.tabsNarrow.key]))) this.updateContext();
-		}));
-		this._register(toDisposable(() => {
-			this.dictationContext.reset();
-			this.inlineActionsContext.reset();
-			this.activeInstanceStateContext.reset();
-			this.activeInstanceInTitleContext.reset();
-			this.hasActiveInstanceContext.reset();
-			this.creatingContext.reset();
-		}));
-		this.toolbar = this._register(new MenuWorkbenchToolBar(
-			container,
-			menuService,
-			contextMenuService,
-			MenuId.TerminalTitle,
-			{
-				ariaLabel: localize('terminal.title.actions', "Terminal actions"),
+		this._register(
+			configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration('terminal.integrated.tabs')) this.updateContext();
+			}),
+		);
+		this._register(
+			contextKeyService.onDidChangeContext(event => {
+				if (event.affectsSome(new Set([TerminalContextKeys.tabsNarrow.key]))) this.updateContext();
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				this.dictationContext.reset();
+				this.inlineActionsContext.reset();
+				this.activeInstanceStateContext.reset();
+				this.activeInstanceInTitleContext.reset();
+				this.hasActiveInstanceContext.reset();
+				this.creatingContext.reset();
+			}),
+		);
+		this.toolbar = this._register(
+			new MenuWorkbenchToolBar(container, menuService, contextMenuService, MenuId.TerminalTitle, {
+				ariaLabel: localize('terminal.title.actions', 'Terminal actions'),
 				contextKeyService,
 				highlightToggledItems: true,
 				menuOptions: { shouldForwardArgs: true },
-				actionViewItemProvider: (action) => this.createActionViewItem(action, contextMenuService),
-			},
-		));
+				actionViewItemProvider: action => this.createActionViewItem(action, contextMenuService),
+			}),
+		);
 		this.element = this.toolbar.element;
-		this.element.classList.add("ash-terminal-title-toolbar");
+		this.element.classList.add('ash-terminal-title-toolbar');
 		this._register(keybindings.onDidUpdateKeybindings(() => this.toolbar.refresh()));
 	}
 
@@ -410,9 +463,11 @@ export class TerminalTitleActions extends Disposable {
 		this.creatingContext.set(creating);
 	}
 
-	setActiveInstance(instance: ITerminalInstance | undefined, placement: "list" | "title"): void {
+	setActiveInstance(instance: ITerminalInstance | undefined, placement: 'list' | 'title'): void {
 		this.activeInstance = instance;
-		this.voiceListener.value = instance?.getContribution?.<TerminalVoiceContribution>(TerminalVoiceContribution.ID)?.onDidChange(() => this.updateContext());
+		this.voiceListener.value = instance
+			?.getContribution?.<TerminalVoiceContribution>(TerminalVoiceContribution.ID)
+			?.onDidChange(() => this.updateContext());
 		this.singleGroup = placement === 'title';
 		this.updateContext();
 		this.toolbar.refresh();
@@ -421,15 +476,22 @@ export class TerminalTitleActions extends Disposable {
 	private updateContext(): void {
 		const visible = (setting: string): boolean => {
 			const value = this.configuration.getValue<string>(`terminal.integrated.tabs.${setting}`);
-			return value === 'always' || value === 'singleTerminal' && this.singleGroup
-				|| value === 'singleTerminalOrNarrow' && (this.singleGroup || this.contextKeyService.getValue(TerminalContextKeys.tabsNarrow.key) === true);
+			return (
+				value === 'always' ||
+				(value === 'singleTerminal' && this.singleGroup) ||
+				(value === 'singleTerminalOrNarrow' &&
+					(this.singleGroup || this.contextKeyService.getValue(TerminalContextKeys.tabsNarrow.key) === true))
+			);
 		};
 		this.contextKeyService.bufferChangeEvents(() => {
 			this.activeInstanceInTitleContext.set(this.activeInstance !== undefined && visible('showActiveTerminal'));
 			this.inlineActionsContext.set(this.activeInstance !== undefined && visible('showActions'));
 			this.hasActiveInstanceContext.set(this.activeInstance !== undefined);
 			this.activeInstanceStateContext.set(this.activeInstance?.state ?? 'none');
-			this.dictationContext.set(this.activeInstance?.getContribution?.<TerminalVoiceContribution>(TerminalVoiceContribution.ID)?.state ?? 'unavailable');
+			this.dictationContext.set(
+				this.activeInstance?.getContribution?.<TerminalVoiceContribution>(TerminalVoiceContribution.ID)
+					?.state ?? 'unavailable',
+			);
 		});
 	}
 
@@ -437,11 +499,31 @@ export class TerminalTitleActions extends Disposable {
 		if (action instanceof MenuItemAction) {
 			const binding = this.keybindings.lookupKeybinding(action.id);
 			const shortcut = binding && getKeybindingLabel(binding);
-			const voice = action.id === 'workbench.action.terminal.startVoice' || action.id === 'workbench.action.terminal.stopVoice';
-			if (shortcut || voice) action = new MenuItemAction({
-				...action.item,
-				...(shortcut ? { tooltip: localize('terminal.title.actionKeybinding', '{0} ({1})', action.tooltip, shortcut) } : {}),
-			}, action.alt, voice && this.activeInstance ? { arg: new InstanceContext(this.activeInstance) } : { shouldForwardArgs: true }, this.contextKeyService, this.commandService);
+			const voice =
+				action.id === 'workbench.action.terminal.startVoice' ||
+				action.id === 'workbench.action.terminal.stopVoice';
+			if (shortcut || voice)
+				action = new MenuItemAction(
+					{
+						...action.item,
+						...(shortcut
+							? {
+									tooltip: localize(
+										'terminal.title.actionKeybinding',
+										'{0} ({1})',
+										action.tooltip,
+										shortcut,
+									),
+								}
+							: {}),
+					},
+					action.alt,
+					voice && this.activeInstance
+						? { arg: new InstanceContext(this.activeInstance) }
+						: { shouldForwardArgs: true },
+					this.contextKeyService,
+					this.commandService,
+				);
 		}
 		switch (action.id) {
 			case TerminalCommandId.Focus:
@@ -450,7 +532,9 @@ export class TerminalTitleActions extends Disposable {
 			case TerminalCommandId.New:
 				return new NewTerminalActionViewItem(
 					action,
-					new TerminalProfileSelectorAction(action.enabled, (profileId) => this.createTerminalWithProfile(profileId)),
+					new TerminalProfileSelectorAction(action.enabled, profileId =>
+						this.createTerminalWithProfile(profileId),
+					),
 					() => this.profileMenuActions(action),
 					contextMenuService,
 				);
@@ -461,26 +545,63 @@ export class TerminalTitleActions extends Disposable {
 
 	private profileMenuActions(action: IAction): IAction[] {
 		const instance = this.activeInstance;
-		const canSplit = instance?.state === 'running' && !instance.isReadOnly && !instance.shellLaunchConfig?.customPtyImplementation;
+		const canSplit =
+			instance?.state === 'running' &&
+			!instance.isReadOnly &&
+			!instance.shellLaunchConfig?.customPtyImplementation;
 		const command = (id: string, label: string, enabled: boolean, ...args: unknown[]): IAction => ({
-			id, label, tooltip: label, enabled, run: () => this.commandService.executeCommand(id, ...args),
+			id,
+			label,
+			tooltip: label,
+			enabled,
+			run: () => this.commandService.executeCommand(id, ...args),
 		});
 		return Separator.join(
 			[
 				command(TerminalCommandId.New, action.label, action.enabled),
-				command(TerminalCommandId.NewInNewWindow, localize('terminal.newInNewWindow', 'New Terminal Window'), action.enabled),
-				command(TerminalCommandId.Split, localize('terminal.group.splitMenu', 'Split Terminal'), action.enabled && !!canSplit, instance && new InstanceContext(instance)),
+				command(
+					TerminalCommandId.NewInNewWindow,
+					localize('terminal.newInNewWindow', 'New Terminal Window'),
+					action.enabled,
+				),
+				command(
+					TerminalCommandId.Split,
+					localize('terminal.group.splitMenu', 'Split Terminal'),
+					action.enabled && !!canSplit,
+					instance && new InstanceContext(instance),
+				),
 			],
-			this.profiles.map(profile => terminalProfileMenuAction(profile, profileId => this.createTerminalWithProfile(profileId))),
-			canSplit ? [new SubmenuAction('split.profile', localize('terminal.title.splitWithProfile', 'Split Terminal with Profile'),
-				this.profiles.map(profile => terminalProfileMenuAction(profile,
-					profileId => this.commandService.executeCommand(TerminalCommandId.Split, new InstanceContext(instance), profileId), TerminalCommandId.Split)))] : [],
-			...this.menuService.getMenuActions(MenuId.TerminalNewDropdownContext, { shouldForwardArgs: true }).map(([, actions]) => [...actions]),
+			this.profiles.map(profile =>
+				terminalProfileMenuAction(profile, profileId => this.createTerminalWithProfile(profileId)),
+			),
+			canSplit
+				? [
+						new SubmenuAction(
+							'split.profile',
+							localize('terminal.title.splitWithProfile', 'Split Terminal with Profile'),
+							this.profiles.map(profile =>
+								terminalProfileMenuAction(
+									profile,
+									profileId =>
+										this.commandService.executeCommand(
+											TerminalCommandId.Split,
+											new InstanceContext(instance),
+											profileId,
+										),
+									TerminalCommandId.Split,
+								),
+							),
+						),
+					]
+				: [],
+			...this.menuService
+				.getMenuActions(MenuId.TerminalNewDropdownContext, { shouldForwardArgs: true })
+				.map(([, actions]) => [...actions]),
 		);
 	}
 
 	private createTerminalWithProfile(profileId: unknown): unknown {
-		if (typeof profileId !== "string" || !this.profiles.some((profile) => profile.profileId === profileId)) {
+		if (typeof profileId !== 'string' || !this.profiles.some(profile => profile.profileId === profileId)) {
 			throw new TypeError(`Unknown terminal profile: ${String(profileId)}`);
 		}
 		return this.commandService.executeCommand(TerminalCommandId.NewWithProfile, profileId);
@@ -492,12 +613,19 @@ class NewTerminalActionViewItem extends DropdownWithPrimaryActionViewItem {
 	override render(container: HTMLElement): void {
 		super.render(container);
 		const primary = container.querySelector<HTMLButtonElement>('.ash-dropdown-with-primary-primary button')!;
-		this._register(addDisposableListener(primary, 'click', event => {
-			if (!event.altKey || !(this.action instanceof MenuItemAction) || !this.action.alt?.enabled) return;
-			stopEvent(event);
-			event.stopImmediatePropagation();
-			void this.action.alt.run();
-		}, true));
+		this._register(
+			addDisposableListener(
+				primary,
+				'click',
+				event => {
+					if (!event.altKey || !(this.action instanceof MenuItemAction) || !this.action.alt?.enabled) return;
+					stopEvent(event);
+					event.stopImmediatePropagation();
+					void this.action.alt.run();
+				},
+				true,
+			),
+		);
 	}
 }
 
@@ -511,9 +639,15 @@ class ActiveTerminalActionViewItem extends LabelActionViewItem {
 		@IContextKeyService private readonly contextKeyService: IContextKeyService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 	) {
-		const tooltip = instance.title === instance.profile.title
-			? localize('terminal.title.active', 'Active terminal: {0}', instance.title)
-			: localize('terminal.title.activeProfile', 'Active terminal: {0} ({1})', instance.title, instance.profile.title);
+		const tooltip =
+			instance.title === instance.profile.title
+				? localize('terminal.title.active', 'Active terminal: {0}', instance.title)
+				: localize(
+						'terminal.title.activeProfile',
+						'Active terminal: {0} ({1})',
+						instance.title,
+						instance.profile.title,
+					);
 		const status = instance.statusList?.primary;
 		super(action, {
 			label: instance.title,
@@ -528,7 +662,7 @@ class ActiveTerminalActionViewItem extends LabelActionViewItem {
 
 	override render(container: HTMLElement): void {
 		super.render(container);
-		container.classList.add("ash-terminal-active-action");
+		container.classList.add('ash-terminal-active-action');
 		container.dataset.state = this.instance.state;
 		const button = container.querySelector<HTMLButtonElement>('button')!;
 		button.setAttribute('aria-haspopup', 'menu');
@@ -539,42 +673,81 @@ class ActiveTerminalActionViewItem extends LabelActionViewItem {
 			button.setAttribute('aria-expanded', 'true');
 			try {
 				this.menus.showContextMenu({
-					getAnchor: () => button, getActions: () => actions,
-					onHide: didCancel => { button.setAttribute('aria-expanded', 'false'); if (didCancel && button.isConnected) button.focus(); },
+					getAnchor: () => button,
+					getActions: () => actions,
+					onHide: didCancel => {
+						button.setAttribute('aria-expanded', 'false');
+						if (didCancel && button.isConnected) button.focus();
+					},
 				});
-			} catch (error) { button.setAttribute('aria-expanded', 'false'); throw error; }
+			} catch (error) {
+				button.setAttribute('aria-expanded', 'false');
+				throw error;
+			}
 		};
-		this._register(addDisposableListener(button, 'click', event => {
-			stopEvent(event);
-			event.stopImmediatePropagation();
-			if (event.altKey) void this.commands.executeCommand(TerminalCommandId.Split, new InstanceContext(this.instance));
-			else open();
-		}, true));
-		this._register(addDisposableListener(button, 'contextmenu', event => { stopEvent(event); open(); }));
-		this._register(addDisposableListener(button, 'auxclick', event => {
-			if (event.button === 1) { stopEvent(event); void this.commands.executeCommand(TerminalCommandId.Kill, new InstanceContext(this.instance)); }
-		}));
-		this._register(addDisposableListener(button, 'keydown', event => {
-			if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'F10' && event.shiftKey) { stopEvent(event); open(); }
-		}));
+		this._register(
+			addDisposableListener(
+				button,
+				'click',
+				event => {
+					stopEvent(event);
+					event.stopImmediatePropagation();
+					if (event.altKey)
+						void this.commands.executeCommand(TerminalCommandId.Split, new InstanceContext(this.instance));
+					else open();
+				},
+				true,
+			),
+		);
+		this._register(
+			addDisposableListener(button, 'contextmenu', event => {
+				stopEvent(event);
+				open();
+			}),
+		);
+		this._register(
+			addDisposableListener(button, 'auxclick', event => {
+				if (event.button === 1) {
+					stopEvent(event);
+					void this.commands.executeCommand(TerminalCommandId.Kill, new InstanceContext(this.instance));
+				}
+			}),
+		);
+		this._register(
+			addDisposableListener(button, 'keydown', event => {
+				if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || (event.key === 'F10' && event.shiftKey)) {
+					stopEvent(event);
+					open();
+				}
+			}),
+		);
 	}
 }
 
 class TerminalProfileSelectorAction implements IAction {
 	readonly id = TerminalCommandId.NewWithProfile;
-	readonly label = localize('terminal.title.selectProfile', "Select Terminal Profile");
-	readonly tooltip = localize('terminal.title.selectProfile', "Select Terminal Profile");
+	readonly label = localize('terminal.title.selectProfile', 'Select Terminal Profile');
+	readonly tooltip = localize('terminal.title.selectProfile', 'Select Terminal Profile');
 	readonly checked = undefined;
 
-	constructor(readonly enabled: boolean, private readonly createTerminalWithProfile: (profileId: unknown) => unknown) { }
+	constructor(
+		readonly enabled: boolean,
+		private readonly createTerminalWithProfile: (profileId: unknown) => unknown,
+	) {}
 
 	run(...args: readonly unknown[]): unknown {
 		return this.createTerminalWithProfile(args[0]);
 	}
 }
 
-function terminalProfileMenuAction(profile: ITerminalProfile, createTerminalWithProfile: (profileId: unknown) => unknown, commandId = TerminalCommandId.NewWithProfile): IAction {
-	const label = profile.isDefault ? localize('terminal.title.defaultProfile', '{0} (Default)', profile.title) : profile.title;
+function terminalProfileMenuAction(
+	profile: ITerminalProfile,
+	createTerminalWithProfile: (profileId: unknown) => unknown,
+	commandId = TerminalCommandId.NewWithProfile,
+): IAction {
+	const label = profile.isDefault
+		? localize('terminal.title.defaultProfile', '{0} (Default)', profile.title)
+		: profile.title;
 	return {
 		id: `${commandId}.${profile.profileId}`,
 		label,

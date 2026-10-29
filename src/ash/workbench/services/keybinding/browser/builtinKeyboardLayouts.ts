@@ -1,5 +1,8 @@
 import { OperatingSystem } from '../../../../base/common/platform.js';
-import type { IKeyboardLayoutDefinition, IKeyboardMapping } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
+import type {
+	IKeyboardLayoutDefinition,
+	IKeyboardMapping,
+} from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
 import { toKeyboardLayoutDefinitions } from '../common/keymapInfo.js';
 import { KeyboardLayoutContribution } from './keyboardLayouts/_.contribution.js';
 
@@ -14,8 +17,8 @@ export function loadBuiltinKeyboardLayouts(
 	}
 	const promise = loadPlatformContribution(operatingSystem).then(() => {
 		const definitions = KeyboardLayoutContribution.INSTANCE.layoutInfos
-			.flatMap((info) => toKeyboardLayoutDefinitions(info))
-			.filter((definition) => definition.layout.operatingSystem === operatingSystem);
+			.flatMap(info => toKeyboardLayoutDefinitions(info))
+			.filter(definition => definition.layout.operatingSystem === operatingSystem);
 		return deduplicateLayouts(definitions);
 	});
 	layoutPromises.set(operatingSystem, promise);
@@ -66,9 +69,7 @@ async function loadPlatformContribution(operatingSystem: OperatingSystem): Promi
 	}
 }
 
-function deduplicateLayouts(
-	definitions: readonly IKeyboardLayoutDefinition[],
-): readonly IKeyboardLayoutDefinition[] {
+function deduplicateLayouts(definitions: readonly IKeyboardLayoutDefinition[]): readonly IKeyboardLayoutDefinition[] {
 	const unique = new Map<string, IKeyboardLayoutDefinition>();
 	for (const definition of definitions) {
 		if (!unique.has(definition.layout.id)) {

@@ -3,7 +3,12 @@ import { EDITOR_MODEL_DEFAULTS } from '../core/misc/textModelDefaults.js';
 import { EDITOR_FONT_DEFAULTS } from './fontInfo.js';
 import { diffEditorDefaultOptions } from './diffEditor.js';
 import { editorOptionsRegistry, EditorLineWrapping } from './editorOptions.js';
-import { ConfigurationScope, Extensions as ConfigurationExtensions, type IConfigurationPropertySchema, type IConfigurationRegistry } from '../../../platform/configuration/common/configurationRegistry.js';
+import {
+	ConfigurationScope,
+	Extensions as ConfigurationExtensions,
+	type IConfigurationPropertySchema,
+	type IConfigurationRegistry,
+} from '../../../platform/configuration/common/configurationRegistry.js';
 import { Registry } from '../../../platform/registry/common/platform.js';
 import { localize } from '../../../nls.js';
 
@@ -27,7 +32,10 @@ export const EditorMinimapConfiguration = Object.freeze({
 		parse: value => modelBoolean(value, 'editor.minimap.renderCharacters'),
 		setting: {
 			title: localize('context.minimap.renderCharacters', 'Render Characters'),
-			description: localize('context.minimap.renderCharacters.description', 'Draw text characters in the minimap.'),
+			description: localize(
+				'context.minimap.renderCharacters.description',
+				'Draw text characters in the minimap.',
+			),
 			valueType: 'boolean',
 		},
 	}),
@@ -75,7 +83,10 @@ export const EditorMinimapConfiguration = Object.freeze({
 		},
 		setting: {
 			title: localize('context.minimap.side', 'Side'),
-			description: localize('context.minimap.side.description', 'Place the minimap on the left or right side of the editor.'),
+			description: localize(
+				'context.minimap.side.description',
+				'Place the minimap on the left or right side of the editor.',
+			),
 			valueType: 'select',
 			options: [
 				{ value: 'right', label: localize('context.minimap.side.right', 'Right') },
@@ -88,7 +99,9 @@ export const EditorMinimapConfiguration = Object.freeze({
 		defaultValue: 'none',
 		parse(value) {
 			if (value === 'none' || value === 'mouseover' || value === 'scroll') return value;
-			throw new TypeError(localize('context.minimap.autohide.invalid', 'Minimap auto hide must be none, mouseover, or scroll.'));
+			throw new TypeError(
+				localize('context.minimap.autohide.invalid', 'Minimap auto hide must be none, mouseover, or scroll.'),
+			);
 		},
 		setting: {
 			title: localize('context.minimap.autohide', 'Auto Hide'),
@@ -106,13 +119,24 @@ export const EditorMinimapConfiguration = Object.freeze({
 		defaultValue: 120,
 		parse(value) {
 			if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1 || value > 10000) {
-				throw new RangeError(localize('context.minimap.integer.invalid', '{0} must be an integer between {1} and {2}.', 'editor.minimap.maxColumn', 1, 10000));
+				throw new RangeError(
+					localize(
+						'context.minimap.integer.invalid',
+						'{0} must be an integer between {1} and {2}.',
+						'editor.minimap.maxColumn',
+						1,
+						10000,
+					),
+				);
 			}
 			return value;
 		},
 		setting: {
 			title: localize('context.minimap.maxColumn', 'Maximum Columns'),
-			description: localize('context.minimap.maxColumn.description', 'Limit the number of columns drawn in the minimap.'),
+			description: localize(
+				'context.minimap.maxColumn.description',
+				'Limit the number of columns drawn in the minimap.',
+			),
 			valueType: 'number',
 			minimum: 1,
 			maximum: 10000,
@@ -123,13 +147,24 @@ export const EditorMinimapConfiguration = Object.freeze({
 		defaultValue: 1,
 		parse(value) {
 			if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1 || value > 3) {
-				throw new RangeError(localize('context.minimap.integer.invalid', '{0} must be an integer between {1} and {2}.', 'editor.minimap.scale', 1, 3));
+				throw new RangeError(
+					localize(
+						'context.minimap.integer.invalid',
+						'{0} must be an integer between {1} and {2}.',
+						'editor.minimap.scale',
+						1,
+						3,
+					),
+				);
 			}
 			return value;
 		},
 		setting: {
 			title: localize('context.minimap.scale', 'Scale'),
-			description: localize('context.minimap.scale.description', 'Choose the scale of content drawn in the minimap, from 1 to 3.'),
+			description: localize(
+				'context.minimap.scale.description',
+				'Choose the scale of content drawn in the minimap, from 1 to 3.',
+			),
 			valueType: 'number',
 			minimum: 1,
 			maximum: 3,
@@ -140,13 +175,24 @@ export const EditorMinimapConfiguration = Object.freeze({
 		defaultValue: 9,
 		parse(value) {
 			if (typeof value !== 'number' || !Number.isFinite(value) || value < 4 || value > 32) {
-				throw new RangeError(localize('context.minimap.number.invalid', '{0} must be a number between {1} and {2}.', 'editor.minimap.sectionHeaderFontSize', 4, 32));
+				throw new RangeError(
+					localize(
+						'context.minimap.number.invalid',
+						'{0} must be a number between {1} and {2}.',
+						'editor.minimap.sectionHeaderFontSize',
+						4,
+						32,
+					),
+				);
 			}
 			return value;
 		},
 		setting: {
 			title: localize('context.minimap.sectionHeaderFontSize', 'Section Header Font Size'),
-			description: localize('context.minimap.sectionHeaderFontSize.description', 'Set the font size of section headers in the minimap.'),
+			description: localize(
+				'context.minimap.sectionHeaderFontSize.description',
+				'Set the font size of section headers in the minimap.',
+			),
 			valueType: 'number',
 			minimum: 4,
 			maximum: 32,
@@ -157,13 +203,24 @@ export const EditorMinimapConfiguration = Object.freeze({
 		defaultValue: 1,
 		parse(value) {
 			if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 5) {
-				throw new RangeError(localize('context.minimap.number.invalid', '{0} must be a number between {1} and {2}.', 'editor.minimap.sectionHeaderLetterSpacing', 0, 5));
+				throw new RangeError(
+					localize(
+						'context.minimap.number.invalid',
+						'{0} must be a number between {1} and {2}.',
+						'editor.minimap.sectionHeaderLetterSpacing',
+						0,
+						5,
+					),
+				);
 			}
 			return value;
 		},
 		setting: {
 			title: localize('context.minimap.sectionHeaderLetterSpacing', 'Section Header Letter Spacing'),
-			description: localize('context.minimap.sectionHeaderLetterSpacing.description', 'Set the spacing between section header characters in the minimap.'),
+			description: localize(
+				'context.minimap.sectionHeaderLetterSpacing.description',
+				'Set the spacing between section header characters in the minimap.',
+			),
 			valueType: 'number',
 			minimum: 0,
 			maximum: 5,
@@ -175,7 +232,10 @@ export const EditorMinimapConfiguration = Object.freeze({
 		parse: value => modelBoolean(value, 'editor.minimap.showRegionSectionHeaders'),
 		setting: {
 			title: localize('context.minimap.showRegionSectionHeaders', 'Region Section Headers'),
-			description: localize('context.minimap.showRegionSectionHeaders.description', 'Show named regions as section headers in the minimap.'),
+			description: localize(
+				'context.minimap.showRegionSectionHeaders.description',
+				'Show named regions as section headers in the minimap.',
+			),
 			valueType: 'boolean',
 		},
 	}),
@@ -185,7 +245,10 @@ export const EditorMinimapConfiguration = Object.freeze({
 		parse: value => modelBoolean(value, 'editor.minimap.showMarkSectionHeaders'),
 		setting: {
 			title: localize('context.minimap.showMarkSectionHeaders', 'MARK Section Headers'),
-			description: localize('context.minimap.showMarkSectionHeaders.description', 'Show MARK comments as section headers in the minimap.'),
+			description: localize(
+				'context.minimap.showMarkSectionHeaders.description',
+				'Show MARK comments as section headers in the minimap.',
+			),
 			valueType: 'boolean',
 		},
 	}),
@@ -193,17 +256,31 @@ export const EditorMinimapConfiguration = Object.freeze({
 		key: 'editor.minimap.markSectionHeaderRegex',
 		defaultValue: '\\bMARK:\\s*(?<separator>\\-?)\\s*(?<label>.*)$',
 		parse(value) {
-			if (typeof value !== 'string') throw new TypeError(localize('context.minimap.pattern.invalid', 'The MARK section header pattern must be a valid regular expression.'));
+			if (typeof value !== 'string')
+				throw new TypeError(
+					localize(
+						'context.minimap.pattern.invalid',
+						'The MARK section header pattern must be a valid regular expression.',
+					),
+				);
 			try {
 				new RegExp(value);
 			} catch {
-				throw new TypeError(localize('context.minimap.pattern.invalid', 'The MARK section header pattern must be a valid regular expression.'));
+				throw new TypeError(
+					localize(
+						'context.minimap.pattern.invalid',
+						'The MARK section header pattern must be a valid regular expression.',
+					),
+				);
 			}
 			return value;
 		},
 		setting: {
 			title: localize('context.minimap.markSectionHeaderRegex', 'MARK Section Header Pattern'),
-			description: localize('context.minimap.markSectionHeaderRegex.description', 'Match MARK section headers with a regular expression containing a named label group.'),
+			description: localize(
+				'context.minimap.markSectionHeaderRegex.description',
+				'Match MARK section headers with a regular expression containing a named label group.',
+			),
 			valueType: 'text',
 			placeholder: '',
 		},
@@ -287,11 +364,7 @@ const properties: Record<string, JsonSchema> = {
 		minimum: 1,
 		description: 'Lines above this length are not tokenized for performance reasons.',
 	},
-	'editor.experimental.asyncTokenization': {
-		type: 'boolean',
-		default: true,
-		tags: ['experimental'],
-	},
+	'editor.experimental.asyncTokenization': { type: 'boolean', default: true, tags: ['experimental'] },
 	'editor.experimental.asyncTokenizationLogging': {
 		type: 'boolean',
 		default: false,
@@ -303,32 +376,16 @@ const properties: Record<string, JsonSchema> = {
 		tags: ['experimental'],
 		description: 'Verify asynchronous tokenization against the synchronous tokenizer.',
 	},
-	'editor.experimental.treeSitterTelemetry': {
-		type: 'boolean',
-		default: false,
-		tags: ['experimental'],
-	},
+	'editor.experimental.treeSitterTelemetry': { type: 'boolean', default: false, tags: ['experimental'] },
 	'editor.language.brackets': {
 		type: ['array', 'null'],
 		default: null,
-		items: {
-			type: 'array',
-			items: [
-				{ type: 'string' },
-				{ type: 'string' },
-			],
-		},
+		items: { type: 'array', items: [{ type: 'string' }, { type: 'string' }] },
 	},
 	'editor.language.colorizedBracketPairs': {
 		type: ['array', 'null'],
 		default: null,
-		items: {
-			type: 'array',
-			items: [
-				{ type: 'string' },
-				{ type: 'string' },
-			],
-		},
+		items: { type: 'array', items: [{ type: 'string' }, { type: 'string' }] },
 	},
 	'editor.fontFamily': { type: 'string', default: EDITOR_FONT_DEFAULTS.fontFamily },
 	'editor.fontSize': { type: 'number', default: EDITOR_FONT_DEFAULTS.fontSize, minimum: 6, maximum: 100 },
@@ -343,7 +400,11 @@ const properties: Record<string, JsonSchema> = {
 	'editor.wordWrapColumn': { type: 'number', default: 80, minimum: 1 },
 	'editor.wrappingStrategy': { type: 'string', enum: ['simple', 'advanced'], default: 'simple' },
 	'editor.wrappingIndent': { type: 'string', enum: ['none', 'same', 'indent', 'deepIndent'], default: 'same' },
-	'editor.renderWhitespace': { type: 'string', enum: ['none', 'boundary', 'selection', 'trailing', 'all'], default: 'selection' },
+	'editor.renderWhitespace': {
+		type: 'string',
+		enum: ['none', 'boundary', 'selection', 'trailing', 'all'],
+		default: 'selection',
+	},
 	'editor.renderControlCharacters': { type: 'boolean', default: true },
 	'editor.renderLineHighlight': { type: 'string', enum: ['none', 'gutter', 'line', 'all'], default: 'line' },
 	'editor.renderLineHighlightOnlyWhenFocus': { type: 'boolean', default: false },
@@ -353,9 +414,17 @@ const properties: Record<string, JsonSchema> = {
 	'editor.automaticLayout': { type: 'boolean', default: false },
 	'editor.mouseWheelZoom': { type: 'boolean', default: false },
 	'editor.mouseStyle': { type: 'string', enum: ['text', 'default', 'copy'], default: 'text' },
-	'editor.cursorBlinking': { type: 'string', enum: ['blink', 'smooth', 'phase', 'expand', 'solid'], default: 'blink' },
+	'editor.cursorBlinking': {
+		type: 'string',
+		enum: ['blink', 'smooth', 'phase', 'expand', 'solid'],
+		default: 'blink',
+	},
 	'editor.cursorSmoothCaretAnimation': { type: 'string', enum: ['off', 'explicit', 'on'], default: 'off' },
-	'editor.cursorStyle': { type: 'string', enum: ['line', 'block', 'underline', 'line-thin', 'block-outline', 'underline-thin'], default: 'line' },
+	'editor.cursorStyle': {
+		type: 'string',
+		enum: ['line', 'block', 'underline', 'line-thin', 'block-outline', 'underline-thin'],
+		default: 'line',
+	},
 	'editor.cursorWidth': { type: 'number', default: 0, minimum: 0 },
 	'editor.cursorSurroundingLines': { type: 'number', default: 0, minimum: 0 },
 	'editor.cursorSurroundingLinesStyle': { type: 'string', enum: ['default', 'all'], default: 'default' },
@@ -371,7 +440,11 @@ const properties: Record<string, JsonSchema> = {
 	'editor.copyWithSyntaxHighlighting': { type: 'boolean', default: true },
 	'editor.links': { type: 'boolean', default: true },
 	'editor.colorDecorators': { type: 'boolean', default: true },
-	'editor.colorDecoratorsActivatedOn': { type: 'string', enum: ['clickAndHover', 'click', 'hover'], default: 'clickAndHover' },
+	'editor.colorDecoratorsActivatedOn': {
+		type: 'string',
+		enum: ['clickAndHover', 'click', 'hover'],
+		default: 'clickAndHover',
+	},
 	'editor.colorDecoratorsLimit': { type: 'number', default: 500, minimum: 0 },
 	'editor.columnSelection': { type: 'boolean', default: false },
 	'editor.multiCursorModifier': { type: 'string', enum: ['ctrlCmd', 'alt'], default: 'alt' },
@@ -382,17 +455,33 @@ const properties: Record<string, JsonSchema> = {
 	'editor.tabFocusMode': { type: 'boolean', default: false },
 	'editor.find.cursorMoveOnType': { type: 'boolean', default: true },
 	'editor.find.findOnType': { type: 'boolean', default: true },
-	'editor.find.seedSearchStringFromSelection': { type: 'string', enum: ['never', 'always', 'selection'], default: 'always' },
+	'editor.find.seedSearchStringFromSelection': {
+		type: 'string',
+		enum: ['never', 'always', 'selection'],
+		default: 'always',
+	},
 	'editor.find.autoFindInSelection': { type: 'string', enum: ['never', 'always', 'multiline'], default: 'never' },
 	'editor.find.loop': { type: 'boolean', default: true },
 	'editor.find.closeOnResult': { type: 'boolean', default: false },
 	'editor.find.history': { type: 'string', enum: ['never', 'workspace'], default: 'workspace' },
 	'editor.find.replaceHistory': { type: 'string', enum: ['never', 'workspace'], default: 'workspace' },
-	'editor.autoClosingBrackets': { type: 'string', enum: ['always', 'languageDefined', 'beforeWhitespace', 'never'], default: 'languageDefined' },
-	'editor.autoClosingQuotes': { type: 'string', enum: ['always', 'languageDefined', 'beforeWhitespace', 'never'], default: 'languageDefined' },
+	'editor.autoClosingBrackets': {
+		type: 'string',
+		enum: ['always', 'languageDefined', 'beforeWhitespace', 'never'],
+		default: 'languageDefined',
+	},
+	'editor.autoClosingQuotes': {
+		type: 'string',
+		enum: ['always', 'languageDefined', 'beforeWhitespace', 'never'],
+		default: 'languageDefined',
+	},
 	'editor.autoClosingDelete': { type: 'string', enum: ['always', 'auto', 'never'], default: 'auto' },
 	'editor.autoClosingOvertype': { type: 'string', enum: ['always', 'auto', 'never'], default: 'auto' },
-	'editor.autoSurround': { type: 'string', enum: ['languageDefined', 'quotes', 'brackets', 'never'], default: 'languageDefined' },
+	'editor.autoSurround': {
+		type: 'string',
+		enum: ['languageDefined', 'quotes', 'brackets', 'never'],
+		default: 'languageDefined',
+	},
 	'editor.autoIndent': { type: 'string', enum: ['none', 'keep', 'brackets', 'advanced', 'full'], default: 'full' },
 	'editor.autoIndentOnPaste': { type: 'boolean', default: false },
 	'editor.formatOnType': { type: 'boolean', default: false },
@@ -410,7 +499,11 @@ const properties: Record<string, JsonSchema> = {
 	'editor.acceptSuggestionOnEnter': { type: 'string', enum: ['on', 'smart', 'off'], default: 'on' },
 	'editor.acceptSuggestionOnCommitCharacter': { type: 'boolean', default: true },
 	'editor.snippetSuggestions': { type: 'string', enum: ['top', 'bottom', 'inline', 'none'], default: 'inline' },
-	'editor.suggestSelection': { type: 'string', enum: ['first', 'recentlyUsed', 'recentlyUsedByPrefix'], default: 'first' },
+	'editor.suggestSelection': {
+		type: 'string',
+		enum: ['first', 'recentlyUsed', 'recentlyUsedByPrefix'],
+		default: 'first',
+	},
 	'editor.suggestFontSize': { type: 'number', default: 0, minimum: 0 },
 	'editor.suggestLineHeight': { type: 'number', default: 0, minimum: 0 },
 	'editor.tabCompletion': { type: 'string', enum: ['on', 'off', 'onlySnippets'], default: 'off' },
@@ -436,7 +529,10 @@ const properties: Record<string, JsonSchema> = {
 	'editor.minimap.autohide': { type: 'string', enum: ['none', 'mouseover', 'scroll'], default: 'none' },
 	'editor.minimap.showRegionSectionHeaders': { type: 'boolean', default: true },
 	'editor.minimap.showMarkSectionHeaders': { type: 'boolean', default: true },
-	'editor.minimap.markSectionHeaderRegex': { type: 'string', default: '\\bMARK:\\s*(?<separator>\\-?)\\s*(?<label>.*)$' },
+	'editor.minimap.markSectionHeaderRegex': {
+		type: 'string',
+		default: '\\bMARK:\\s*(?<separator>\\-?)\\s*(?<label>.*)$',
+	},
 	'editor.minimap.sectionHeaderFontSize': { type: 'number', default: 9, minimum: 4, maximum: 32 },
 	'editor.minimap.sectionHeaderLetterSpacing': { type: 'number', default: 1, minimum: 0, maximum: 5 },
 	'editor.scrollbar.vertical': { type: 'string', enum: ['auto', 'visible', 'hidden'], default: 'auto' },
@@ -445,43 +541,94 @@ const properties: Record<string, JsonSchema> = {
 	'editor.scrollbar.horizontalScrollbarSize': { type: 'number', default: 14, minimum: 0 },
 	'editor.stickyScroll.enabled': { type: 'boolean', default: true },
 	'editor.stickyScroll.maxLineCount': { type: 'number', default: 5, minimum: 1 },
-	'editor.bracketPairColorization.enabled': { type: 'boolean', default: EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.enabled },
-	'editor.bracketPairColorization.independentColorPoolPerBracketType': { type: 'boolean', default: EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.independentColorPoolPerBracketType },
+	'editor.bracketPairColorization.enabled': {
+		type: 'boolean',
+		default: EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.enabled,
+	},
+	'editor.bracketPairColorization.independentColorPoolPerBracketType': {
+		type: 'boolean',
+		default: EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.independentColorPoolPerBracketType,
+	},
 	'editor.unicodeHighlight.invisibleCharacters': { type: 'boolean', default: true },
 	'editor.unicodeHighlight.ambiguousCharacters': { type: 'boolean', default: true },
 	'editor.unicodeHighlight.includeComments': { type: 'boolean', default: false },
 	'editor.inlineSuggest.enabled': { type: 'boolean', default: true },
 	'editor.parameterHints.enabled': { type: 'boolean', default: true },
 	'editor.inlayHints.enabled': { type: 'boolean', default: true },
-	'diffEditor.maxComputationTime': { type: 'number', default: diffEditorDefaultOptions.maxComputationTime, minimum: 0 },
+	'diffEditor.maxComputationTime': {
+		type: 'number',
+		default: diffEditorDefaultOptions.maxComputationTime,
+		minimum: 0,
+	},
 	'diffEditor.maxFileSize': { type: 'number', default: diffEditorDefaultOptions.maxFileSize, minimum: 0 },
 	'diffEditor.renderSideBySide': { type: 'boolean', default: diffEditorDefaultOptions.renderSideBySide },
-	'diffEditor.enableSplitViewResizing': { type: 'boolean', default: diffEditorDefaultOptions.enableSplitViewResizing },
-	'diffEditor.splitViewDefaultRatio': { type: 'number', default: diffEditorDefaultOptions.splitViewDefaultRatio, minimum: 0.1, maximum: 0.9 },
-	'diffEditor.renderSideBySideInlineBreakpoint': { type: 'number', default: diffEditorDefaultOptions.renderSideBySideInlineBreakpoint, minimum: 0 },
-	'diffEditor.useInlineViewWhenSpaceIsLimited': { type: 'boolean', default: diffEditorDefaultOptions.useInlineViewWhenSpaceIsLimited },
+	'diffEditor.enableSplitViewResizing': {
+		type: 'boolean',
+		default: diffEditorDefaultOptions.enableSplitViewResizing,
+	},
+	'diffEditor.splitViewDefaultRatio': {
+		type: 'number',
+		default: diffEditorDefaultOptions.splitViewDefaultRatio,
+		minimum: 0.1,
+		maximum: 0.9,
+	},
+	'diffEditor.renderSideBySideInlineBreakpoint': {
+		type: 'number',
+		default: diffEditorDefaultOptions.renderSideBySideInlineBreakpoint,
+		minimum: 0,
+	},
+	'diffEditor.useInlineViewWhenSpaceIsLimited': {
+		type: 'boolean',
+		default: diffEditorDefaultOptions.useInlineViewWhenSpaceIsLimited,
+	},
 	'diffEditor.renderMarginRevertIcon': { type: 'boolean', default: diffEditorDefaultOptions.renderMarginRevertIcon },
 	'diffEditor.renderGutterMenu': { type: 'boolean', default: diffEditorDefaultOptions.renderGutterMenu },
 	'diffEditor.renderOverviewRuler': { type: 'boolean', default: diffEditorDefaultOptions.renderOverviewRuler },
 	'diffEditor.ignoreTrimWhitespace': { type: 'boolean', default: diffEditorDefaultOptions.ignoreTrimWhitespace },
 	'diffEditor.renderIndicators': { type: 'boolean', default: diffEditorDefaultOptions.renderIndicators },
 	'diffEditor.codeLens': { type: 'boolean', default: diffEditorDefaultOptions.diffCodeLens },
-	'diffEditor.wordWrap': { type: 'string', enum: ['off', 'on', 'inherit'], default: diffEditorDefaultOptions.diffWordWrap },
-	'diffEditor.diffAlgorithm': { type: 'string', enum: ['legacy', 'advanced', 'advanced-external', 'advanced-wasm'], default: diffEditorDefaultOptions.diffAlgorithm },
-	'diffEditor.hideUnchangedRegions.enabled': { type: 'boolean', default: diffEditorDefaultOptions.hideUnchangedRegions.enabled },
-	'diffEditor.hideUnchangedRegions.revealLineCount': { type: 'integer', default: diffEditorDefaultOptions.hideUnchangedRegions.revealLineCount, minimum: 1 },
-	'diffEditor.hideUnchangedRegions.minimumLineCount': { type: 'integer', default: diffEditorDefaultOptions.hideUnchangedRegions.minimumLineCount, minimum: 1 },
-	'diffEditor.hideUnchangedRegions.contextLineCount': { type: 'integer', default: diffEditorDefaultOptions.hideUnchangedRegions.contextLineCount, minimum: 1 },
+	'diffEditor.wordWrap': {
+		type: 'string',
+		enum: ['off', 'on', 'inherit'],
+		default: diffEditorDefaultOptions.diffWordWrap,
+	},
+	'diffEditor.diffAlgorithm': {
+		type: 'string',
+		enum: ['legacy', 'advanced', 'advanced-external', 'advanced-wasm'],
+		default: diffEditorDefaultOptions.diffAlgorithm,
+	},
+	'diffEditor.hideUnchangedRegions.enabled': {
+		type: 'boolean',
+		default: diffEditorDefaultOptions.hideUnchangedRegions.enabled,
+	},
+	'diffEditor.hideUnchangedRegions.revealLineCount': {
+		type: 'integer',
+		default: diffEditorDefaultOptions.hideUnchangedRegions.revealLineCount,
+		minimum: 1,
+	},
+	'diffEditor.hideUnchangedRegions.minimumLineCount': {
+		type: 'integer',
+		default: diffEditorDefaultOptions.hideUnchangedRegions.minimumLineCount,
+		minimum: 1,
+	},
+	'diffEditor.hideUnchangedRegions.contextLineCount': {
+		type: 'integer',
+		default: diffEditorDefaultOptions.hideUnchangedRegions.contextLineCount,
+		minimum: 1,
+	},
 	'diffEditor.experimental.showMoves': { type: 'boolean', default: diffEditorDefaultOptions.experimental.showMoves },
-	'diffEditor.experimental.showEmptyDecorations': { type: 'boolean', default: diffEditorDefaultOptions.experimental.showEmptyDecorations },
-	'diffEditor.experimental.useTrueInlineView': { type: 'boolean', default: diffEditorDefaultOptions.experimental.useTrueInlineView },
+	'diffEditor.experimental.showEmptyDecorations': {
+		type: 'boolean',
+		default: diffEditorDefaultOptions.experimental.showEmptyDecorations,
+	},
+	'diffEditor.experimental.useTrueInlineView': {
+		type: 'boolean',
+		default: diffEditorDefaultOptions.experimental.useTrueInlineView,
+	},
 };
 
 /** JSON schema for the editor settings namespace. */
-export const editorConfiguration: EditorConfigurationNode = {
-	...editorConfigurationBaseNode,
-	properties,
-};
+export const editorConfiguration: EditorConfigurationNode = { ...editorConfigurationBaseNode, properties };
 
 // Add schemas contributed by option descriptors, as in VS Code's registry.
 for (const editorOption of editorOptionsRegistry) {
@@ -541,13 +688,16 @@ export async function registerEditorFontConfigurations(getFontSnippets: () => Pr
 	cachedEditorConfigurationKeys = undefined;
 }
 
-function isConfigurationPropertySchema(schema: IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema; }): schema is IConfigurationPropertySchema {
-	return typeof schema === 'object' && (
-		schema.type !== undefined ||
-		schema.anyOf !== undefined ||
-		schema.allOf !== undefined ||
-		schema.oneOf !== undefined ||
-		schema.enum !== undefined
+function isConfigurationPropertySchema(
+	schema: IConfigurationPropertySchema | { [path: string]: IConfigurationPropertySchema },
+): schema is IConfigurationPropertySchema {
+	return (
+		typeof schema === 'object' &&
+		(schema.type !== undefined ||
+			schema.anyOf !== undefined ||
+			schema.allOf !== undefined ||
+			schema.oneOf !== undefined ||
+			schema.enum !== undefined)
 	);
 }
 
@@ -561,19 +711,65 @@ function schemaForDefault(value: unknown): JsonSchema {
 }
 
 for (const [key, defaultValue, title, description] of [
-	['diffEditor.renderIndicators', diffEditorDefaultOptions.renderIndicators, () => localize('diffEditor.indicators.title', 'Diff indicators'), () => localize('diffEditor.indicators.description', 'Show plus and minus signs beside added and removed lines.')],
-	['diffEditor.renderMarginRevertIcon', diffEditorDefaultOptions.renderMarginRevertIcon, () => localize('diffEditor.revertIcon.title', 'Revert change buttons'), () => localize('diffEditor.revertIcon.description', 'Show buttons to revert changes in the modified editor margin.')],
-	['diffEditor.renderGutterMenu', diffEditorDefaultOptions.renderGutterMenu, () => localize('diffEditor.gutterMenu.title', 'Change actions'), () => localize('diffEditor.gutterMenu.description', 'Show contributed actions beside changed blocks and selected changes.')],
-	['diffEditor.renderOverviewRuler', diffEditorDefaultOptions.renderOverviewRuler, () => localize('diffEditor.overviewRuler.title', 'Diff overview ruler'), () => localize('diffEditor.overviewRuler.description', 'Show differences and the current viewport in the diff overview ruler.')],
-	['diffEditor.experimental.showMoves', diffEditorDefaultOptions.experimental.showMoves, () => localize('diffEditor.showMoves.title', 'Show moved code'), () => localize('diffEditor.showMoves.description', 'Detect and connect code blocks that moved between the original and modified documents.')],
+	[
+		'diffEditor.renderIndicators',
+		diffEditorDefaultOptions.renderIndicators,
+		() => localize('diffEditor.indicators.title', 'Diff indicators'),
+		() =>
+			localize('diffEditor.indicators.description', 'Show plus and minus signs beside added and removed lines.'),
+	],
+	[
+		'diffEditor.renderMarginRevertIcon',
+		diffEditorDefaultOptions.renderMarginRevertIcon,
+		() => localize('diffEditor.revertIcon.title', 'Revert change buttons'),
+		() =>
+			localize(
+				'diffEditor.revertIcon.description',
+				'Show buttons to revert changes in the modified editor margin.',
+			),
+	],
+	[
+		'diffEditor.renderGutterMenu',
+		diffEditorDefaultOptions.renderGutterMenu,
+		() => localize('diffEditor.gutterMenu.title', 'Change actions'),
+		() =>
+			localize(
+				'diffEditor.gutterMenu.description',
+				'Show contributed actions beside changed blocks and selected changes.',
+			),
+	],
+	[
+		'diffEditor.renderOverviewRuler',
+		diffEditorDefaultOptions.renderOverviewRuler,
+		() => localize('diffEditor.overviewRuler.title', 'Diff overview ruler'),
+		() =>
+			localize(
+				'diffEditor.overviewRuler.description',
+				'Show differences and the current viewport in the diff overview ruler.',
+			),
+	],
+	[
+		'diffEditor.experimental.showMoves',
+		diffEditorDefaultOptions.experimental.showMoves,
+		() => localize('diffEditor.showMoves.title', 'Show moved code'),
+		() =>
+			localize(
+				'diffEditor.showMoves.description',
+				'Detect and connect code blocks that moved between the original and modified documents.',
+			),
+	],
 ] as const) {
 	configurationRegistry.registerConfiguration({
 		key,
 		defaultValue,
 		parse: value => modelBoolean(value, key),
 		setting: {
-			get title() { return title(); },
-			get description() { return description(); },
+			get title() {
+				return title();
+			},
+			get description() {
+				return description();
+			},
 			valueType: 'boolean',
 		},
 	});
@@ -582,7 +778,11 @@ for (const [key, defaultValue, title, description] of [
 // Schema entries alone do not participate in effective configuration values.
 // Keep optional performance measurements disabled until explicitly requested.
 for (const key of ['editor.experimental.treeSitterTelemetry']) {
-	configurationRegistry.registerConfiguration<boolean>({ key, defaultValue: false, parse: value => modelBoolean(value, key) });
+	configurationRegistry.registerConfiguration<boolean>({
+		key,
+		defaultValue: false,
+		parse: value => modelBoolean(value, key),
+	});
 }
 
 // The schema owner also registers the model settings consumed by editor services.
@@ -592,14 +792,30 @@ configurationRegistry.registerConfiguration<number>({
 	scope: ConfigurationScope.LANGUAGE_OVERRIDABLE,
 	parse(value: unknown): number {
 		if (!Number.isSafeInteger(value) || (value as number) < 10 || (value as number) > 65000) {
-			throw new RangeError(localize('limitIndicator.foldingInvalid', 'The folding region limit must be an integer between {0} and {1}.', 10, 65000));
+			throw new RangeError(
+				localize(
+					'limitIndicator.foldingInvalid',
+					'The folding region limit must be an integer between {0} and {1}.',
+					10,
+					65000,
+				),
+			);
 		}
 		return value as number;
 	},
 	setting: {
-		valueType: 'number', minimum: 10, maximum: 65000,
-		get title() { return localize('limitIndicator.foldingTitle', 'Maximum folding regions'); },
-		get description() { return localize('limitIndicator.foldingDescription', 'Limit the number of folding regions available in each editor.'); },
+		valueType: 'number',
+		minimum: 10,
+		maximum: 65000,
+		get title() {
+			return localize('limitIndicator.foldingTitle', 'Maximum folding regions');
+		},
+		get description() {
+			return localize(
+				'limitIndicator.foldingDescription',
+				'Limit the number of folding regions available in each editor.',
+			);
+		},
 	},
 });
 
@@ -610,8 +826,15 @@ configurationRegistry.registerConfiguration<boolean>({
 	parse: value => modelBoolean(value, 'editor.formatOnType'),
 	setting: {
 		valueType: 'boolean',
-		get title() { return localize('editor.formatOnType.title', 'Format on type'); },
-		get description() { return localize('editor.formatOnType.description', 'Format the current line after typing a character supported by the language formatter.'); },
+		get title() {
+			return localize('editor.formatOnType.title', 'Format on type');
+		},
+		get description() {
+			return localize(
+				'editor.formatOnType.description',
+				'Format the current line after typing a character supported by the language formatter.',
+			);
+		},
 	},
 });
 
@@ -639,7 +862,10 @@ configurationRegistry.registerConfiguration({
 	},
 	setting: {
 		title: localize('diffEditor.maxComputationTime.title', 'Max computation time'),
-		description: localize('diffEditor.maxComputationTime.description', 'Maximum time in milliseconds to compute a diff. Set to 0 for no time limit.'),
+		description: localize(
+			'diffEditor.maxComputationTime.description',
+			'Maximum time in milliseconds to compute a diff. Set to 0 for no time limit.',
+		),
 		valueType: 'number',
 		minimum: 0,
 		maximum: Number.MAX_SAFE_INTEGER,
@@ -651,7 +877,10 @@ configurationRegistry.registerConfiguration({
 	parse: value => modelBoolean(value, 'diffEditor.enableSplitViewResizing'),
 	setting: {
 		title: localize('diffEditor.enableSplitViewResizing.title', 'Resize diff editor columns'),
-		description: localize('diffEditor.enableSplitViewResizing.description', 'Allow dragging the separator between the original and modified editors.'),
+		description: localize(
+			'diffEditor.enableSplitViewResizing.description',
+			'Allow dragging the separator between the original and modified editors.',
+		),
 		valueType: 'boolean',
 	},
 });
@@ -666,7 +895,10 @@ configurationRegistry.registerConfiguration({
 	},
 	setting: {
 		title: localize('diffEditor.splitViewDefaultRatio.title', 'Default diff column ratio'),
-		description: localize('diffEditor.splitViewDefaultRatio.description', 'Portion of the diff editor width used by the original editor before resizing.'),
+		description: localize(
+			'diffEditor.splitViewDefaultRatio.description',
+			'Portion of the diff editor width used by the original editor before resizing.',
+		),
 		valueType: 'number',
 		minimum: 0.1,
 		maximum: 0.9,
@@ -683,7 +915,10 @@ configurationRegistry.registerConfiguration({
 	},
 	setting: {
 		title: localize('diffEditor.inlineBreakpoint.title', 'Inline diff width'),
-		description: localize('diffEditor.inlineBreakpoint.description', 'Show one column when the diff editor is at or below this width in pixels.'),
+		description: localize(
+			'diffEditor.inlineBreakpoint.description',
+			'Show one column when the diff editor is at or below this width in pixels.',
+		),
 		valueType: 'number',
 		minimum: 0,
 		maximum: Number.MAX_SAFE_INTEGER,
@@ -704,26 +939,36 @@ for (const [key, defaultValue, title, description] of [
 		'diffEditor.hideUnchangedRegions.contextLineCount',
 		diffEditorDefaultOptions.hideUnchangedRegions.contextLineCount,
 		localize('diffEditor.hideUnchanged.contextTitle', 'Context lines'),
-		localize('diffEditor.hideUnchanged.contextDescription', 'Keep this many unchanged lines visible beside each change.'),
+		localize(
+			'diffEditor.hideUnchanged.contextDescription',
+			'Keep this many unchanged lines visible beside each change.',
+		),
 	],
 	[
 		'diffEditor.hideUnchangedRegions.minimumLineCount',
 		diffEditorDefaultOptions.hideUnchangedRegions.minimumLineCount,
 		localize('diffEditor.hideUnchanged.minimumTitle', 'Minimum hidden lines'),
-		localize('diffEditor.hideUnchanged.minimumDescription', 'Only collapse a region when at least this many lines can be hidden.'),
+		localize(
+			'diffEditor.hideUnchanged.minimumDescription',
+			'Only collapse a region when at least this many lines can be hidden.',
+		),
 	],
 	[
 		'diffEditor.hideUnchangedRegions.revealLineCount',
 		diffEditorDefaultOptions.hideUnchangedRegions.revealLineCount,
 		localize('diffEditor.hideUnchanged.revealTitle', 'Reveal lines'),
-		localize('diffEditor.hideUnchanged.revealDescription', 'Show this many lines when expanding a collapsed region.'),
+		localize(
+			'diffEditor.hideUnchanged.revealDescription',
+			'Show this many lines when expanding a collapsed region.',
+		),
 	],
 ] as const) {
 	configurationRegistry.registerConfiguration({
 		key,
 		defaultValue,
 		parse(value) {
-			if (!Number.isSafeInteger(value) || (value as number) < 1) throw new RangeError(`${key} must be a positive integer`);
+			if (!Number.isSafeInteger(value) || (value as number) < 1)
+				throw new RangeError(`${key} must be a positive integer`);
 			return value as number;
 		},
 		setting: { title, description, valueType: 'number', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
@@ -739,7 +984,9 @@ configurationRegistry.registerConfiguration({
 		return value;
 	},
 });
-export const EditorSemanticHighlightingConfiguration = configurationRegistry.registerConfiguration<boolean | 'configuredByTheme'>({
+export const EditorSemanticHighlightingConfiguration = configurationRegistry.registerConfiguration<
+	boolean | 'configuredByTheme'
+>({
 	key: 'editor.semanticHighlighting.enabled',
 	defaultValue: 'configuredByTheme',
 	parse(value) {
@@ -751,12 +998,18 @@ configurationRegistry.registerConfiguration({
 	key: 'editor.tabSize',
 	defaultValue: EDITOR_MODEL_DEFAULTS.tabSize,
 	parse: value => modelInteger(value, 'editor.tabSize'),
-	setting: { title: 'Tab size', description: 'Set the number of columns represented by one tab.', valueType: 'number', minimum: 1, maximum: 100 },
+	setting: {
+		title: 'Tab size',
+		description: 'Set the number of columns represented by one tab.',
+		valueType: 'number',
+		minimum: 1,
+		maximum: 100,
+	},
 });
 configurationRegistry.registerConfiguration<number | 'tabSize'>({
 	key: 'editor.indentSize',
 	defaultValue: 'tabSize',
-	parse: value => value === 'tabSize' ? value : modelInteger(value, 'editor.indentSize'),
+	parse: value => (value === 'tabSize' ? value : modelInteger(value, 'editor.indentSize')),
 });
 for (const [key, defaultValue] of [
 	['editor.insertSpaces', EDITOR_MODEL_DEFAULTS.insertSpaces],
@@ -764,13 +1017,12 @@ for (const [key, defaultValue] of [
 	['editor.trimAutoWhitespace', EDITOR_MODEL_DEFAULTS.trimAutoWhitespace],
 	['editor.largeFileOptimizations', EDITOR_MODEL_DEFAULTS.largeFileOptimizations],
 	['editor.bracketPairColorization.enabled', EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.enabled],
-	['editor.bracketPairColorization.independentColorPoolPerBracketType', EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.independentColorPoolPerBracketType],
+	[
+		'editor.bracketPairColorization.independentColorPoolPerBracketType',
+		EDITOR_MODEL_DEFAULTS.bracketPairColorizationOptions.independentColorPoolPerBracketType,
+	],
 ] as const) {
-	configurationRegistry.registerConfiguration({
-		key,
-		defaultValue,
-		parse: value => modelBoolean(value, key),
-	});
+	configurationRegistry.registerConfiguration({ key, defaultValue, parse: value => modelBoolean(value, key) });
 }
 configurationRegistry.registerConfiguration<'auto' | '\n' | '\r\n'>({
 	key: 'files.eol',

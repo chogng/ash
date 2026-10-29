@@ -1,10 +1,10 @@
-import { Emitter, type Event } from "../../../common/event.js";
-import { Disposable } from "../../../common/lifecycle.js";
-import { IndexTreeModel, type IndexTreeNode } from "./indexTreeModel.js";
-import type { TreeFilter, TreeSorter, TreeVisibleSplice } from "./tree.js";
+import { Emitter, type Event } from '../../../common/event.js';
+import { Disposable } from '../../../common/lifecycle.js';
+import { IndexTreeModel, type IndexTreeNode } from './indexTreeModel.js';
+import type { TreeFilter, TreeSorter, TreeVisibleSplice } from './tree.js';
 
-export type ObjectTreeDefaultCollapseState = "collapsed" | "expanded";
-export type ObjectTreeModelChangeKind = "structure" | "collapse" | "filter" | "sort" | "rerender";
+export type ObjectTreeDefaultCollapseState = 'collapsed' | 'expanded';
+export type ObjectTreeModelChangeKind = 'structure' | 'collapse' | 'filter' | 'sort' | 'rerender';
 
 /** One structural entry supplied to `ObjectTreeModel`. */
 export interface ObjectTreeElement<T> {
@@ -51,67 +51,110 @@ export interface ObjectTreeModelCollapseStateChangeEvent<TNode> {
  */
 export class ObjectTreeModel<TNode> extends Disposable {
 	private readonly _onDidChange = this._register(new Emitter<ObjectTreeModelChangeEvent<TNode>>());
-	private readonly _onDidChangeCollapseState = this._register(new Emitter<ObjectTreeModelCollapseStateChangeEvent<TNode>>());
+	private readonly _onDidChangeCollapseState = this._register(
+		new Emitter<ObjectTreeModelCollapseStateChangeEvent<TNode>>(),
+	);
 	private readonly index: IndexTreeModel<TNode>;
 	private sorter: TreeSorter<TNode> | undefined;
 	private changeKindOverride: ObjectTreeModelChangeKind | undefined;
 
 	readonly onDidChange: Event<ObjectTreeModelChangeEvent<TNode>> = this._onDidChange.event;
-	readonly onDidChangeCollapseState: Event<ObjectTreeModelCollapseStateChangeEvent<TNode>> = this._onDidChangeCollapseState.event;
+	readonly onDidChangeCollapseState: Event<ObjectTreeModelCollapseStateChangeEvent<TNode>> =
+		this._onDidChangeCollapseState.event;
 
 	constructor(options: ObjectTreeModelOptions<TNode>) {
 		super();
 		this.sorter = options.sorter;
-		this.index = this._register(new IndexTreeModel<TNode>(undefined as TNode, {
-			defaultCollapseState: options.defaultCollapseState,
-			filter: options.filter,
-			identityProvider: options.identityProvider,
-			preserveCollapseStateByIdentity: true,
-		}));
-		this._register(this.index.onDidChange((event) => {
-			this._onDidChange.fire({ kind: this.changeKindOverride ?? event.kind, node: event.node as ObjectTreeNode<TNode> | undefined, visibleSplice: event.visibleSplice as TreeVisibleSplice<ObjectTreeNode<TNode>> | undefined });
-		}));
-		this._register(this.index.onDidChangeCollapseState(({ node, collapsed }) => {
-			this._onDidChangeCollapseState.fire({ node: node as ObjectTreeNode<TNode>, collapsed });
-		}));
+		this.index = this._register(
+			new IndexTreeModel<TNode>(undefined as TNode, {
+				defaultCollapseState: options.defaultCollapseState,
+				filter: options.filter,
+				identityProvider: options.identityProvider,
+				preserveCollapseStateByIdentity: true,
+			}),
+		);
+		this._register(
+			this.index.onDidChange(event => {
+				this._onDidChange.fire({
+					kind: this.changeKindOverride ?? event.kind,
+					node: event.node as ObjectTreeNode<TNode> | undefined,
+					visibleSplice: event.visibleSplice as TreeVisibleSplice<ObjectTreeNode<TNode>> | undefined,
+				});
+			}),
+		);
+		this._register(
+			this.index.onDidChangeCollapseState(({ node, collapsed }) => {
+				this._onDidChangeCollapseState.fire({ node: node as ObjectTreeNode<TNode>, collapsed });
+			}),
+		);
 	}
 
-	get children(): readonly TNode[] { return this.index.rootNodes.map((node) => node.element); }
-	get rootNodes(): readonly ObjectTreeNode<TNode>[] { return this.index.rootNodes as readonly ObjectTreeNode<TNode>[]; }
-	get visibleChildren(): readonly ObjectTreeNode<TNode>[] { return this.rootNodes.filter((node) => node.visible); }
-	get visibleNodes(): readonly ObjectTreeNode<TNode>[] { return this.index.visibleNodes as readonly ObjectTreeNode<TNode>[]; }
-	get size(): number { return this.index.size; }
+	get children(): readonly TNode[] {
+		return this.index.rootNodes.map(node => node.element);
+	}
+	get rootNodes(): readonly ObjectTreeNode<TNode>[] {
+		return this.index.rootNodes as readonly ObjectTreeNode<TNode>[];
+	}
+	get visibleChildren(): readonly ObjectTreeNode<TNode>[] {
+		return this.rootNodes.filter(node => node.visible);
+	}
+	get visibleNodes(): readonly ObjectTreeNode<TNode>[] {
+		return this.index.visibleNodes as readonly ObjectTreeNode<TNode>[];
+	}
+	get size(): number {
+		return this.index.size;
+	}
 
-	has(id: string): boolean { return this.getNode(id) !== undefined; }
+	has(id: string): boolean {
+		return this.getNode(id) !== undefined;
+	}
 	getNode(id: string): ObjectTreeNode<TNode> | undefined {
 		const node = this.index.getNodeById(id);
-		return node === this.index.rootNode ? undefined : node as ObjectTreeNode<TNode> | undefined;
+		return node === this.index.rootNode ? undefined : (node as ObjectTreeNode<TNode> | undefined);
 	}
-	getElement(id: string): TNode | undefined { return this.getNode(id)?.element; }
-	getParent(id: string): ObjectTreeNode<TNode> | undefined { return this.getNode(id)?.parent; }
+	getElement(id: string): TNode | undefined {
+		return this.getNode(id)?.element;
+	}
+	getParent(id: string): ObjectTreeNode<TNode> | undefined {
+		return this.getNode(id)?.parent;
+	}
 
 	setChildren(children: readonly ObjectTreeElement<TNode>[]): void {
-		this.withChangeKind("structure", () => this.index.setChildren(this.prepareElements(children)));
+		this.withChangeKind('structure', () => this.index.setChildren(this.prepareElements(children)));
 	}
 
 	setNodeChildren(parentId: string, children: readonly ObjectTreeElement<TNode>[]): void {
 		const parent = this.requireNode(parentId);
-		this.withChangeKind("structure", () => this.index.setNodeChildren(parent.location, this.prepareElements(children)));
+		this.withChangeKind('structure', () =>
+			this.index.setNodeChildren(parent.location, this.prepareElements(children)),
+		);
 	}
 
-	collapse(id: string): boolean { return this.index.collapse(this.requireNode(id).location); }
-	expand(id: string): boolean { return this.index.expand(this.requireNode(id).location); }
-	toggleCollapsed(id: string): boolean { return this.index.toggleCollapsed(this.requireNode(id).location); }
-	collapseRecursive(id: string): boolean { return this.index.collapseRecursive(this.requireNode(id).location); }
-	expandRecursive(id: string): boolean { return this.index.expandRecursive(this.requireNode(id).location); }
-	expandTo(id: string): boolean { return this.index.expandTo(this.requireNode(id).location); }
+	collapse(id: string): boolean {
+		return this.index.collapse(this.requireNode(id).location);
+	}
+	expand(id: string): boolean {
+		return this.index.expand(this.requireNode(id).location);
+	}
+	toggleCollapsed(id: string): boolean {
+		return this.index.toggleCollapsed(this.requireNode(id).location);
+	}
+	collapseRecursive(id: string): boolean {
+		return this.index.collapseRecursive(this.requireNode(id).location);
+	}
+	expandRecursive(id: string): boolean {
+		return this.index.expandRecursive(this.requireNode(id).location);
+	}
+	expandTo(id: string): boolean {
+		return this.index.expandTo(this.requireNode(id).location);
+	}
 
 	setFilter(filter: TreeFilter<TNode> | undefined): void {
-		this.withChangeKind("filter", () => this.index.setFilter(filter));
+		this.withChangeKind('filter', () => this.index.setFilter(filter));
 	}
 
 	refilter(): void {
-		this.withChangeKind("filter", () => this.index.refilter());
+		this.withChangeKind('filter', () => this.index.refilter());
 	}
 
 	setSorter(sorter: TreeSorter<TNode> | undefined): void {
@@ -122,11 +165,13 @@ export class ObjectTreeModel<TNode> extends Disposable {
 
 	resort(): void {
 		const current = this.rootNodes.map(toObjectTreeElement);
-		this.withChangeKind("sort", () => this.index.setChildren(this.prepareElements(current)));
+		this.withChangeKind('sort', () => this.index.setChildren(this.prepareElements(current)));
 	}
 
 	rerender(id?: string): void {
-		this.withChangeKind("rerender", () => this.index.rerender(id === undefined ? undefined : this.requireNode(id).location));
+		this.withChangeKind('rerender', () =>
+			this.index.rerender(id === undefined ? undefined : this.requireNode(id).location),
+		);
 	}
 
 	private prepareElements(elements: readonly ObjectTreeElement<TNode>[]): readonly ObjectTreeElement<TNode>[] {
@@ -134,7 +179,7 @@ export class ObjectTreeModel<TNode> extends Disposable {
 		if (!sorter) return elements;
 		const ordered = [...elements];
 		ordered.sort((left, right) => sorter.compare(left.element, right.element));
-		return ordered.map((treeElement) => ({
+		return ordered.map(treeElement => ({
 			element: treeElement.element,
 			collapsible: treeElement.collapsible,
 			collapsed: treeElement.collapsed,

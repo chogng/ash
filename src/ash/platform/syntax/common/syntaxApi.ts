@@ -1,11 +1,13 @@
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { Event } from '../../../base/common/event.js';
 
 import { syntaxLanguageDefinitions } from './syntaxLanguages.generated.js';
 
-export type SyntaxLanguage = typeof syntaxLanguageDefinitions[number]['id'];
+export type SyntaxLanguage = (typeof syntaxLanguageDefinitions)[number]['id'];
 export const syntaxLanguages: readonly SyntaxLanguage[] = syntaxLanguageDefinitions.map(language => language.id);
-export const syntaxEditorLanguageIds: readonly string[] = syntaxLanguageDefinitions.flatMap(language => [...language.editorIds]);
+export const syntaxEditorLanguageIds: readonly string[] = syntaxLanguageDefinitions.flatMap(language => [
+	...language.editorIds,
+]);
 const aliases = new Map<string, SyntaxLanguage>();
 const editorLanguages = new Map<SyntaxLanguage, string>();
 for (const language of syntaxLanguageDefinitions) {
@@ -33,7 +35,23 @@ export interface SyntaxRange {
 	readonly end: SyntaxPosition;
 }
 
-export type SyntaxTokenKind = "attribute" | "comment" | "constant" | "constructor" | "embedded" | "function" | "keyword" | "label" | "module" | "number" | "operator" | "property" | "punctuation" | "string" | "type" | "variable";
+export type SyntaxTokenKind =
+	| 'attribute'
+	| 'comment'
+	| 'constant'
+	| 'constructor'
+	| 'embedded'
+	| 'function'
+	| 'keyword'
+	| 'label'
+	| 'module'
+	| 'number'
+	| 'operator'
+	| 'property'
+	| 'punctuation'
+	| 'string'
+	| 'type'
+	| 'variable';
 
 export interface SyntaxToken {
 	readonly range: SyntaxRange;
@@ -48,7 +66,19 @@ export interface SyntaxSelectionRange {
 	readonly range: SyntaxRange;
 }
 
-export type SyntaxSymbolKind = "constant" | "enum" | "field" | "function" | "macro" | "method" | "module" | "static" | "struct" | "trait" | "type" | "variable";
+export type SyntaxSymbolKind =
+	| 'constant'
+	| 'enum'
+	| 'field'
+	| 'function'
+	| 'macro'
+	| 'method'
+	| 'module'
+	| 'static'
+	| 'struct'
+	| 'trait'
+	| 'type'
+	| 'variable';
 
 export interface SyntaxSymbol {
 	readonly name: string;
@@ -59,7 +89,7 @@ export interface SyntaxSymbol {
 
 export interface SyntaxDiagnostic {
 	readonly range: SyntaxRange;
-	readonly kind: "error" | "missing";
+	readonly kind: 'error' | 'missing';
 }
 
 export interface SyntaxOpenParams {
@@ -115,16 +145,28 @@ export interface SyntaxQueryParams extends SyntaxAnalyzeParams {
 	readonly kind: 'highlight' | 'facts' | 'preview';
 	readonly factsRevision?: number;
 	readonly factsTabSize?: number;
-	readonly ranges: readonly { startLineIndex: number; endLineIndex: number; }[];
+	readonly ranges: readonly { startLineIndex: number; endLineIndex: number }[];
 	readonly tabSize: number;
 	readonly lineIndex?: number;
 	readonly lines: readonly string[];
 }
 export interface SyntaxQueryResult {
 	readonly revision: number;
-	readonly rows: readonly { row: number; tokens: readonly { start: number; end: number; name: string; languageId?: string | null; }[]; }[];
+	readonly rows: readonly {
+		row: number;
+		tokens: readonly { start: number; end: number; name: string; languageId?: string | null }[];
+	}[];
 	readonly facts: SyntaxFactsDelta | null;
-	readonly brackets: readonly { range: SyntaxRange; opening: SyntaxRange; closing: SyntaxRange | null; text: string; closeText: string | null; level: number; equalLevel: number; minIndent: number; }[];
+	readonly brackets: readonly {
+		range: SyntaxRange;
+		opening: SyntaxRange;
+		closing: SyntaxRange | null;
+		text: string;
+		closeText: string | null;
+		level: number;
+		equalLevel: number;
+		minIndent: number;
+	}[];
 	readonly parseMs: number;
 	readonly queryMs: number;
 	readonly incremental: boolean;
@@ -143,7 +185,7 @@ export interface SyntaxEditorFold {
 }
 export interface SyntaxFactsDelta {
 	readonly baseRevision: number | null;
-	readonly edits: readonly { range: SyntaxRange; end: SyntaxPosition; }[];
+	readonly edits: readonly { range: SyntaxRange; end: SyntaxPosition }[];
 	readonly symbols: SyntaxFactsSplice<SyntaxSymbol>;
 	readonly folds: SyntaxFactsSplice<SyntaxEditorFold>;
 	readonly diagnostics: SyntaxFactsSplice<SyntaxDiagnostic>;
@@ -164,4 +206,4 @@ export interface ISyntaxApi {
 	close(params: SyntaxCloseParams): Promise<void>;
 }
 
-export const ISyntaxApi = createServiceIdentifier<ISyntaxApi>("syntaxApi");
+export const ISyntaxApi = createServiceIdentifier<ISyntaxApi>('syntaxApi');

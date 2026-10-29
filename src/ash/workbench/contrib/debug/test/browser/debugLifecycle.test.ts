@@ -33,13 +33,13 @@ for (const confirmed of [false, true])
 		);
 		using lifecycle = services.createInstance(BrowserLifecycleService, {
 			ownerWindow: browserEnvironment.window as unknown as Window,
-			onError: () => { },
+			onError: () => {},
 		});
 		using debug = new MockDebugService();
 		const prompts: string[] = [];
 		const configuration = { getValue: () => 'always' } as unknown as IConfigurationService;
 		const dialogs = {
-			confirm: async (request: { message: string; }) => {
+			confirm: async (request: { message: string }) => {
 				prompts.push(request.message);
 				return { confirmed };
 			},

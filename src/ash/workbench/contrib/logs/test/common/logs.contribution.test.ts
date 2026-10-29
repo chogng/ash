@@ -21,7 +21,13 @@ test('registered loggers reach Output before and after startup, respect visibili
 	const startup = loggers.createLogger('startup', { name: 'Startup' });
 	startup.warn('before Output loads');
 	services.registerInstance(ILoggerService, loggers);
-	using contribution = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.logs']);
+	using contribution = WorkbenchContributionsRegistry.createHost(
+		services,
+		error => {
+			throw error;
+		},
+		['workbench.contrib.logs'],
+	);
 	contribution.advance(WorkbenchPhase.AfterRestored);
 	const channel = output.getChannel('logger.startup')!;
 	assert.match(channel.getText(), /before Output loads/);
@@ -59,7 +65,13 @@ test('Show Window Log selects and reveals the Window channel through the registe
 	using window = output.createChannel({ id: windowLogId, label: 'Window', kind: 'log' });
 	using other = output.createChannel({ id: 'other', label: 'Other' });
 	output.selectChannel(other.id);
-	using contribution = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.logs']);
+	using contribution = WorkbenchContributionsRegistry.createHost(
+		services,
+		error => {
+			throw error;
+		},
+		['workbench.contrib.logs'],
+	);
 	contribution.advance(WorkbenchPhase.AfterRestored);
 	const reveals: [string, string][] = [];
 	using listener = output.onDidRequestShowChannel(event => reveals.push([event.channel.id, event.focus]));
@@ -76,11 +88,24 @@ test('Show Window Log uses the installed Chinese translation in the command pale
 		const services = workbenchInstantiationService(resources);
 		using logger = new LogService();
 		services.registerInstance(ILoggerService, logger);
-		using contribution = WorkbenchContributionsRegistry.createHost(services, error => { throw error; }, ['workbench.contrib.logs']);
+		using contribution = WorkbenchContributionsRegistry.createHost(
+			services,
+			error => {
+				throw error;
+			},
+			['workbench.contrib.logs'],
+		);
 		contribution.advance(WorkbenchPhase.AfterRestored);
-		const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(item => isMenuItem(item) && item.command.id === showWindowLogActionId);
+		const item = MenusRegistry.getMenuItems(MenuId.CommandPalette).find(
+			item => isMenuItem(item) && item.command.id === showWindowLogActionId,
+		);
 		assert.ok(item && isMenuItem(item));
-		assert.deepEqual(item.command.title, { original: 'Developer: Show Window Log', value: '开发人员: 显示窗口日志' });
+		assert.deepEqual(item.command.title, {
+			original: 'Developer: Show Window Log',
+			value: '开发人员: 显示窗口日志',
+		});
 		assert.match(catalog.bundles.ash!['output.help.windowLog']!, /显示窗口日志/);
-	} finally { resetNlsResolver(); }
+	} finally {
+		resetNlsResolver();
+	}
 });

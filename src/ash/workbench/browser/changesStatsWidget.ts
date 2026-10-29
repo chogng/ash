@@ -33,19 +33,29 @@ export class ChangesStatsWidget extends Disposable {
 		if (showFiles) {
 			const files = h(container.ownerDocument, 'span', { className: 'ash-changes-stats-files' });
 			element.append(files, container.ownerDocument.createTextNode(' '));
-			this._register(autorun(reader => {
-				const value = stats.read(reader);
-				files.textContent = value ? getChangesStatsFilesLabel(value.files) : '';
-			}));
+			this._register(
+				autorun(reader => {
+					const value = stats.read(reader);
+					files.textContent = value ? getChangesStatsFilesLabel(value.files) : '';
+				}),
+			);
 		}
-		this._register(instantiationService.createInstance(AnimatedCounterWidget, element, {
-			prefix: '+', cssClassName: 'ash-changes-stats-added', direction: 'topToBottom',
-			count: derived(reader => stats.read(reader)?.insertions),
-		}));
+		this._register(
+			instantiationService.createInstance(AnimatedCounterWidget, element, {
+				prefix: '+',
+				cssClassName: 'ash-changes-stats-added',
+				direction: 'topToBottom',
+				count: derived(reader => stats.read(reader)?.insertions),
+			}),
+		);
 		element.append(container.ownerDocument.createTextNode(' '));
-		this._register(instantiationService.createInstance(AnimatedCounterWidget, element, {
-			prefix: '−', cssClassName: 'ash-changes-stats-removed', direction: 'bottomToTop',
-			count: derived(reader => stats.read(reader)?.deletions),
-		}));
+		this._register(
+			instantiationService.createInstance(AnimatedCounterWidget, element, {
+				prefix: '−',
+				cssClassName: 'ash-changes-stats-removed',
+				direction: 'bottomToTop',
+				count: derived(reader => stats.read(reader)?.deletions),
+			}),
+		);
 	}
 }

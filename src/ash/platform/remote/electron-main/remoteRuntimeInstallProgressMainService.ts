@@ -1,9 +1,9 @@
-import { Emitter } from "../../../base/common/event.js";
-import type { Event } from "../../../base/common/event.js";
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { createSshRemoteAuthority } from "../common/remote.js";
-import type { RemoteRuntimeInstallProgress } from "../common/remoteRuntimeInstallProgress.js";
-import type { RemoteRuntimeInstallProgressState } from "../common/remoteRuntimeInstallProgress.js";
+import { Emitter } from '../../../base/common/event.js';
+import type { Event } from '../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { createSshRemoteAuthority } from '../common/remote.js';
+import type { RemoteRuntimeInstallProgress } from '../common/remoteRuntimeInstallProgress.js';
+import type { RemoteRuntimeInstallProgressState } from '../common/remoteRuntimeInstallProgress.js';
 
 /** Handle owned by the provision attempt that currently feeds the bootstrap UI. */
 export interface RemoteRuntimeInstallProgressOperation {
@@ -27,10 +27,12 @@ export class RemoteRuntimeInstallProgressMainService extends Disposable {
 
 	constructor() {
 		super();
-		this._register(toDisposable(() => {
-			this.cancel();
-			this.active = undefined;
-		}));
+		this._register(
+			toDisposable(() => {
+				this.cancel();
+				this.active = undefined;
+			}),
+		);
 	}
 
 	getState(): RemoteRuntimeInstallProgressState | undefined {
@@ -39,14 +41,14 @@ export class RemoteRuntimeInstallProgressMainService extends Disposable {
 
 	begin(host: string): RemoteRuntimeInstallProgressOperation {
 		this.assertNotDisposed();
-		if (this.active) throw new Error("A Remote runtime installation is already active");
+		if (this.active) throw new Error('A Remote runtime installation is already active');
 		const normalizedHost = createSshRemoteAuthority(host).host;
-		const identity = Symbol("remoteRuntimeInstall");
+		const identity = Symbol('remoteRuntimeInstall');
 		const cancellation = new AbortController();
 		this.active = {
 			identity,
 			cancellation,
-			state: Object.freeze({ host: normalizedHost, status: "installing", phase: "probingPlatform" }),
+			state: Object.freeze({ host: normalizedHost, status: 'installing', phase: 'probingPlatform' }),
 		};
 		this.changeEmitter.fire(this.active.state);
 		return Object.freeze({
@@ -58,10 +60,10 @@ export class RemoteRuntimeInstallProgressMainService extends Disposable {
 
 	cancel(): void {
 		const active = this.active;
-		if (!active || active.state.phase === "complete" || active.cancellation.signal.aborted) return;
-		active.state = Object.freeze({ ...active.state, status: "cancelling" });
+		if (!active || active.state.phase === 'complete' || active.cancellation.signal.aborted) return;
+		active.state = Object.freeze({ ...active.state, status: 'cancelling' });
 		this.changeEmitter.fire(active.state);
-		active.cancellation.abort("Remote runtime installation cancelled by the user");
+		active.cancellation.abort('Remote runtime installation cancelled by the user');
 	}
 
 	private report(identity: symbol, progress: RemoteRuntimeInstallProgress): void {

@@ -11,9 +11,15 @@ export class CwdDetectionCapability extends Disposable implements ICwdDetectionC
 	private trusted = false;
 	private readonly visited = new Set<string>();
 
-	get cwds(): string[] { return [...this.visited]; }
-	get isTrusted(): boolean { return this.trusted; }
-	getCwd(): string { return this.current; }
+	get cwds(): string[] {
+		return [...this.visited];
+	}
+	get isTrusted(): boolean {
+		return this.trusted;
+	}
+	getCwd(): string {
+		return this.current;
+	}
 
 	updateCwd(cwd: string, isTrusted = false): void {
 		if (this.isDisposed) return;

@@ -12,10 +12,17 @@ test('authority waiters share a published result and reconnect clears the old en
 	const first = resolver.resolveAuthority('team+build');
 	const second = resolver.resolveAuthority('team+build');
 	assert.equal(first, second);
-	const authority = { authority: 'team+build', connectTo: new WebSocketRemoteConnection('localhost', 9999), connectionToken: 'secret' };
+	const authority = {
+		authority: 'team+build',
+		connectTo: new WebSocketRemoteConnection('localhost', 9999),
+		connectionToken: 'secret',
+	};
 	resolver._setResolvedAuthority(authority);
 	assert.deepEqual(await first, { authority });
-	assert.deepEqual(resolver.getConnectionData('team+build'), { connectTo: authority.connectTo, connectionToken: authority.connectionToken });
+	assert.deepEqual(resolver.getConnectionData('team+build'), {
+		connectTo: authority.connectTo,
+		connectionToken: authority.connectionToken,
+	});
 	resolver._clearResolvedAuthority('team+build');
 	assert.equal(resolver.getConnectionData('team+build'), null);
 	const waiting = resolver.resolveAuthority('team+build');
@@ -37,14 +44,20 @@ test('canonical queries wait for a provider, share identity and discard results 
 	const waiting = resolver.getCanonicalURI(uri);
 	assert.equal(resolver.getCanonicalURI(uri), waiting);
 	let calls = 0;
-	resolver._setCanonicalURIProvider(async resource => { calls++; return resource.with({ path: '/canonical' }); });
+	resolver._setCanonicalURIProvider(async resource => {
+		calls++;
+		return resource.with({ path: '/canonical' });
+	});
 	assert.equal((await waiting).toString(), 'ash-remote://team+build/canonical?q=1#fragment');
 	assert.equal(await resolver.getCanonicalURI(uri), await waiting);
 	assert.equal(calls, 1);
 
 	const late = new DeferredPromise<URI>();
 	const entered = new DeferredPromise<void>();
-	resolver._setCanonicalURIProvider(async () => { await entered.complete(); return late.p; });
+	resolver._setCanonicalURIProvider(async () => {
+		await entered.complete();
+		return late.p;
+	});
 	const old = resolver.getCanonicalURI(uri);
 	await entered.p;
 	const rejected = assert.rejects(old, /[Cc]ancel/);
@@ -63,8 +76,16 @@ test('canonical queries wait for a provider, share identity and discard results 
 
 test('resolver options are published with the endpoint and disappear on reconnect', async () => {
 	using resolver = new RemoteAuthorityResolverService();
-	const authority = { authority: 'team+build', connectTo: new WebSocketRemoteConnection('localhost', 9999), connectionToken: undefined };
-	const options = { isTrusted: false, extensionHostEnv: { SET: 'value', REMOVE: null }, authenticationSession: { id: 'session', providerId: 'provider' } };
+	const authority = {
+		authority: 'team+build',
+		connectTo: new WebSocketRemoteConnection('localhost', 9999),
+		connectionToken: undefined,
+	};
+	const options = {
+		isTrusted: false,
+		extensionHostEnv: { SET: 'value', REMOVE: null },
+		authenticationSession: { id: 'session', providerId: 'provider' },
+	};
 	const waiting = resolver.resolveAuthority(authority.authority);
 	resolver._setResolvedAuthority(authority, options);
 	assert.deepEqual(await waiting, { authority, options });

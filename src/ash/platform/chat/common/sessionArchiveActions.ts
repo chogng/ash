@@ -23,21 +23,31 @@ export interface IChatSessionArchiveActionPresentation {
 	readonly unarchiveAll: IChatSessionArchiveAction;
 }
 
-export function getChatSessionArchiveActionWording(configurationService: IConfigurationService): ChatSessionArchiveActionWording {
-	return configurationService.getValue(ChatSessionArchiveActionWordingSettingId) === ChatSessionArchiveActionWording.MarkAsDone
-		? ChatSessionArchiveActionWording.MarkAsDone : ChatSessionArchiveActionWording.Archive;
+export function getChatSessionArchiveActionWording(
+	configurationService: IConfigurationService,
+): ChatSessionArchiveActionWording {
+	return configurationService.getValue(ChatSessionArchiveActionWordingSettingId) ===
+		ChatSessionArchiveActionWording.MarkAsDone
+		? ChatSessionArchiveActionWording.MarkAsDone
+		: ChatSessionArchiveActionWording.Archive;
 }
 
 /** Presentation follows the UI preference; Session lifecycle remains backend-owned. */
-export function getChatSessionArchiveActionPresentation(wording: ChatSessionArchiveActionWording): IChatSessionArchiveActionPresentation {
+export function getChatSessionArchiveActionPresentation(
+	wording: ChatSessionArchiveActionWording,
+): IChatSessionArchiveActionPresentation {
 	const done = wording === ChatSessionArchiveActionWording.MarkAsDone;
 	return {
 		archive: {
-			title: done ? localize2('chatSession.markAsDone', 'Mark as Done') : localize2('chatSession.archive', 'Archive'),
+			title: done
+				? localize2('chatSession.markAsDone', 'Mark as Done')
+				: localize2('chatSession.archive', 'Archive'),
 			icon: done ? Lxicon.check : Lxicon.archive,
 		},
 		archiveAll: {
-			title: done ? localize2('chatSession.markAllAsDone', 'Mark All as Done') : localize2('chatSession.archiveAll', 'Archive All'),
+			title: done
+				? localize2('chatSession.markAllAsDone', 'Mark All as Done')
+				: localize2('chatSession.archiveAll', 'Archive All'),
 			icon: done ? Lxicon.check : Lxicon.archive,
 		},
 		unarchive: {
@@ -45,7 +55,9 @@ export function getChatSessionArchiveActionPresentation(wording: ChatSessionArch
 			icon: Lxicon.refresh,
 		},
 		unarchiveAll: {
-			title: done ? localize2('chatSession.restoreAll', 'Restore All') : localize2('chatSession.unarchiveAll', 'Unarchive All'),
+			title: done
+				? localize2('chatSession.restoreAll', 'Restore All')
+				: localize2('chatSession.unarchiveAll', 'Unarchive All'),
 			icon: Lxicon.refresh,
 		},
 	};
@@ -53,5 +65,6 @@ export function getChatSessionArchiveActionPresentation(wording: ChatSessionArch
 
 export function getChatSessionArchivedSectionLabel(wording: ChatSessionArchiveActionWording): string {
 	return wording === ChatSessionArchiveActionWording.MarkAsDone
-		? localize('chatSession.done', 'Done') : localize('chatSession.archived', 'Archived');
+		? localize('chatSession.done', 'Done')
+		: localize('chatSession.archived', 'Archived');
 }

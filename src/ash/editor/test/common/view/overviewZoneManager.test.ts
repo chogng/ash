@@ -40,19 +40,34 @@ for (const scenario of [
 		name: 'pixel ratio 1, DOM height 600',
 		pixelRatio: 1,
 		domHeight: 600,
-		expected: [new ColorZone(12, 24, 1), new ColorZone(120, 132, 2), new ColorZone(360, 384, 3), new ColorZone(588, 600, 4)],
+		expected: [
+			new ColorZone(12, 24, 1),
+			new ColorZone(120, 132, 2),
+			new ColorZone(360, 384, 3),
+			new ColorZone(588, 600, 4),
+		],
 	},
 	{
 		name: 'pixel ratio 1, DOM height 300',
 		pixelRatio: 1,
 		domHeight: 300,
-		expected: [new ColorZone(6, 12, 1), new ColorZone(60, 66, 2), new ColorZone(180, 192, 3), new ColorZone(294, 300, 4)],
+		expected: [
+			new ColorZone(6, 12, 1),
+			new ColorZone(60, 66, 2),
+			new ColorZone(180, 192, 3),
+			new ColorZone(294, 300, 4),
+		],
 	},
 	{
 		name: 'pixel ratio 2, DOM height 300',
 		pixelRatio: 2,
 		domHeight: 300,
-		expected: [new ColorZone(12, 24, 1), new ColorZone(120, 132, 2), new ColorZone(360, 384, 3), new ColorZone(588, 600, 4)],
+		expected: [
+			new ColorZone(12, 24, 1),
+			new ColorZone(120, 132, 2),
+			new ColorZone(360, 384, 3),
+			new ColorZone(588, 600, 4),
+		],
 	},
 ] as const) {
 	test(`OverviewZoneManager matches the standard ${scenario.name} geometry`, () => {

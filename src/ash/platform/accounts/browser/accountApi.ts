@@ -22,7 +22,10 @@ export function createDisconnectedAccountApi(unavailable: UnavailableOperation):
 	};
 }
 
-export function createAppServerAccountApi(connection: AppServerProtocolClient, hostServices: BrowserAccountLoginHostServices): IAccountApi {
+export function createAppServerAccountApi(
+	connection: AppServerProtocolClient,
+	hostServices: BrowserAccountLoginHostServices,
+): IAccountApi {
 	return {
 		read: () => appServerRequest(connection, 'account/read', {}),
 		startLogin: params => startLogin(connection, params, hostServices),
@@ -31,14 +34,22 @@ export function createAppServerAccountApi(connection: AppServerProtocolClient, h
 	};
 }
 
-async function startLogin(connection: AppServerProtocolClient, params: Parameters<IAccountApi['startLogin']>[0], hostServices: BrowserAccountLoginHostServices): Promise<AccountLoginStartResult> {
+async function startLogin(
+	connection: AppServerProtocolClient,
+	params: Parameters<IAccountApi['startLogin']>[0],
+	hostServices: BrowserAccountLoginHostServices,
+): Promise<AccountLoginStartResult> {
 	const started = await appServerRequest(connection, 'account/login/start', params);
 	if (started.type === 'connected') {
 		return started;
 	}
 	try {
 		const target = started.type === 'browser' ? started.authorizationUrl : started.verificationUrl;
-		await hostServices.externalOpener.openExternal(target, { sourceUri: URI.parse(target) }, CancellationToken.None);
+		await hostServices.externalOpener.openExternal(
+			target,
+			{ sourceUri: URI.parse(target) },
+			CancellationToken.None,
+		);
 		if (started.type === 'deviceCode') await hostServices.clipboardService.writeText(started.userCode);
 		return started;
 	} catch (error) {

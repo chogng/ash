@@ -1,9 +1,20 @@
-import { Disposable, DisposableStore, MutableDisposable, isDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import {
+	Disposable,
+	DisposableStore,
+	MutableDisposable,
+	isDisposable,
+	toDisposable,
+} from '../../../base/common/lifecycle.js';
 import { CancellationTokenSource } from '../../../base/common/cancellation.js';
 import { Emitter } from '../../../base/common/event.js';
 import { IInstantiationService } from '../../instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../common/quickInput.js';
-import { QuickAccessRegistry, type IQuickAccessController, type IQuickAccessOptions, type IQuickAccessProviderDescriptor } from '../common/quickAccess.js';
+import {
+	QuickAccessRegistry,
+	type IQuickAccessController,
+	type IQuickAccessOptions,
+	type IQuickAccessProviderDescriptor,
+} from '../common/quickAccess.js';
 
 /** Keeps one picker mounted while its search provider changes with the input prefix. */
 export class QuickAccessController extends Disposable implements IQuickAccessController {
@@ -23,7 +34,10 @@ export class QuickAccessController extends Disposable implements IQuickAccessCon
 		if (this.active && !options) {
 			this.active.value = value;
 			this.active.show();
-			this.active.valueSelection = { start: QuickAccessRegistry.get(value)?.prefix.length ?? 0, end: value.length };
+			this.active.valueSelection = {
+				start: QuickAccessRegistry.get(value)?.prefix.length ?? 0,
+				end: value.length,
+			};
 			return;
 		}
 		this.active?.hide();
@@ -35,7 +49,8 @@ export class QuickAccessController extends Disposable implements IQuickAccessCon
 		let descriptor: IQuickAccessProviderDescriptor | undefined;
 		const updateNavigation = (): void => {
 			if (options) return;
-			const modes = QuickAccessRegistry.all().filter(mode => mode.tabLabel !== undefined)
+			const modes = QuickAccessRegistry.all()
+				.filter(mode => mode.tabLabel !== undefined)
 				.sort((left, right) => (left.tabOrder ?? Number.MAX_VALUE) - (right.tabOrder ?? Number.MAX_VALUE));
 			if (modes.length < 2) return;
 			picker.navigation = {
@@ -52,7 +67,10 @@ export class QuickAccessController extends Disposable implements IQuickAccessCon
 		};
 		const activate = (input: string): void => {
 			const match = QuickAccessRegistry.get(input);
-			const next = match && (!options?.enabledProviderPrefixes || options.enabledProviderPrefixes.includes(match.prefix)) ? match : QuickAccessRegistry.get('');
+			const next =
+				match && (!options?.enabledProviderPrefixes || options.enabledProviderPrefixes.includes(match.prefix))
+					? match
+					: QuickAccessRegistry.get('');
 			if (next === descriptor) return;
 			provider.clear();
 			descriptor = next;
@@ -77,16 +95,18 @@ export class QuickAccessController extends Disposable implements IQuickAccessCon
 			}
 		};
 		session.add(picker.onDidChangeValue(activate));
-		session.add(picker.onDidHide(() => {
-			this.active = undefined;
-			// A hide listener can open a new session without prematurely disposing this picker.
-			if (this.session.value === session) this.session.clearAndLeak();
-			// Accepted commands can dispose the captured editor before deferred picker cleanup.
-			provider.clear();
-			this.visibilityChanged.fire(false);
-			// Preserve delivery to hide listeners while releasing only this session afterward.
-			queueMicrotask(() => session.dispose());
-		}));
+		session.add(
+			picker.onDidHide(() => {
+				this.active = undefined;
+				// A hide listener can open a new session without prematurely disposing this picker.
+				if (this.session.value === session) this.session.clearAndLeak();
+				// Accepted commands can dispose the captured editor before deferred picker cleanup.
+				provider.clear();
+				this.visibilityChanged.fire(false);
+				// Preserve delivery to hide listeners while releasing only this session afterward.
+				queueMicrotask(() => session.dispose());
+			}),
+		);
 		this.session.value = session;
 		this.active = picker;
 		picker.value = value;

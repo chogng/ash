@@ -14,7 +14,13 @@ suite('Browser visit history', () => {
 		first.update({ favicon: 'data:image/png;base64,stale', title: 'Stale' });
 		first.delete();
 		second.update({ title: 'Updated', favicon: 'data:image/png;base64,two' });
-		assert.deepEqual(history.entries.items.map(entry => [entry.id, entry.title]), [[second.id, 'Updated'], [third.id, 'Three']]);
+		assert.deepEqual(
+			history.entries.items.map(entry => [entry.id, entry.title]),
+			[
+				[second.id, 'Updated'],
+				[third.id, 'Three'],
+			],
+		);
 		assert.deepEqual(Object.values(history.favicons.serialize().map), ['data:image/png;base64,two']);
 		history.clear();
 		assert.deepEqual([history.entries.items, history.favicons.serialize().map], [[], {}]);

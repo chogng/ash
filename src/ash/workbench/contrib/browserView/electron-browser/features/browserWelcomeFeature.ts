@@ -7,8 +7,14 @@ export class BrowserWelcomeFeature extends Disposable {
 	private readonly element: HTMLElement;
 	constructor(container: HTMLElement) {
 		super();
-		this.element = createBrowserWelcome(localize({ bundle: 'ash.workbench', key: 'browser.title' }, 'Browser'),
-			localize({ bundle: 'ash.workbench', key: 'browser.welcome' }, 'Enter a website address above. Choose a search engine in Settings to search from the address bar.'), container.ownerDocument);
+		this.element = createBrowserWelcome(
+			localize({ bundle: 'ash.workbench', key: 'browser.title' }, 'Browser'),
+			localize(
+				{ bundle: 'ash.workbench', key: 'browser.welcome' },
+				'Enter a website address above. Choose a search engine in Settings to search from the address bar.',
+			),
+			container.ownerDocument,
+		);
 		container.append(this.element);
 		this._register(toDisposable(() => this.element.remove()));
 	}

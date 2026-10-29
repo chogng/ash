@@ -12,13 +12,19 @@ test('Web deployments stamp the same content identity into both entry pages and 
 	const entries = ['browser/workbench/workbench.html', 'browser/sessions/sessions.html'];
 	for (const entry of entries) {
 		await mkdir(join(root, entry, '..'), { recursive: true });
-		await writeFile(join(root, entry), '<!doctype html><html><head><title>Ash</title></head><body><script type="module" src="/main.js"></script></body></html>');
+		await writeFile(
+			join(root, entry),
+			'<!doctype html><html><head><title>Ash</title></head><body><script type="module" src="/main.js"></script></body></html>',
+		);
 	}
 	await writeFile(join(root, 'main.js'), 'import "./style.css";globalThis.ashFixture="first";');
 	await writeFile(join(root, 'style.css'), 'body{color:black}');
 	const compile = async (): Promise<string> => {
 		const result = await build({
-			configFile: false, root, base: './', logLevel: 'silent',
+			configFile: false,
+			root,
+			base: './',
+			logLevel: 'silent',
 			plugins: [webUpdatePlugin()],
 			build: { write: false, rolldownOptions: { input: entries.map(entry => join(root, entry)) } },
 		});
@@ -30,9 +36,14 @@ test('Web deployments stamp the same content identity into both entry pages and 
 		for (const entry of entries) {
 			const html = result.output.find(output => output.fileName === entry);
 			assert.ok(html?.type === 'asset');
-			const stamp = /<meta name="ash-web-build" content="([a-f0-9]+)" data-version-url="([^"]+)"/u.exec(String(html.source));
+			const stamp = /<meta name="ash-web-build" content="([a-f0-9]+)" data-version-url="([^"]+)"/u.exec(
+				String(html.source),
+			);
 			assert.equal(stamp?.[1], version);
-			assert.equal(new URL(stamp![2], `https://ash.example/prefix/${entry}`).href, 'https://ash.example/prefix/web-version.json');
+			assert.equal(
+				new URL(stamp![2], `https://ash.example/prefix/${entry}`).href,
+				'https://ash.example/prefix/web-version.json',
+			);
 		}
 		return version;
 	};

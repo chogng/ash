@@ -92,7 +92,10 @@ export class ViewOverlays extends ViewPart {
 	}
 
 	public prepareRender(context: RenderingContext): void {
-		const viewportChanged = !this._visibleLines.hasViewport(context.viewportData.startLineNumber, context.viewportData.endLineNumber);
+		const viewportChanged = !this._visibleLines.hasViewport(
+			context.viewportData.startLineNumber,
+			context.viewportData.endLineNumber,
+		);
 		for (const overlay of this._dynamicOverlays) {
 			if (!viewportChanged && !overlay.shouldRender()) continue;
 			overlay.prepareRender(context);
@@ -109,9 +112,7 @@ export class ViewOverlays extends ViewPart {
 		const startLineNumber = context.viewportData.startLineNumber;
 		for (const [lineIndex, row] of this._visibleLines.render(context)) {
 			const lineNumber = lineIndex + 1;
-			const content = this._dynamicOverlays
-				.map(overlay => overlay.render(startLineNumber, lineNumber))
-				.join('');
+			const content = this._dynamicOverlays.map(overlay => overlay.render(startLineNumber, lineNumber)).join('');
 			if (this.renderedContents.get(row) !== content) {
 				row.innerHTML = content;
 				this.renderedContents.set(row, content);

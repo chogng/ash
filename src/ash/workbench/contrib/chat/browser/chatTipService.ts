@@ -29,12 +29,14 @@ export class ChatTipService extends Disposable implements IChatTipService {
 
 	constructor(@IStorageService storage: IStorageService) {
 		super();
-		this.dismissedTip = this._register(observableMemento({
-			key: DismissedTipStorageKey,
-			defaultValue: '',
-			toStorage: (value: string) => value,
-			fromStorage: (value: string) => value,
-		})(StorageScope.PROFILE, StorageTarget.USER, storage));
+		this.dismissedTip = this._register(
+			observableMemento({
+				key: DismissedTipStorageKey,
+				defaultValue: '',
+				toStorage: (value: string) => value,
+				fromStorage: (value: string) => value,
+			})(StorageScope.PROFILE, StorageTarget.USER, storage),
+		);
 		this._register(this.dismissedTip.onDidChange(() => this.dismissed.fire()));
 	}
 
@@ -42,7 +44,12 @@ export class ChatTipService extends Disposable implements IChatTipService {
 		if (this.dismissedTip.get() === AttachmentTipId) return undefined;
 		return {
 			id: AttachmentTipId,
-			content: new MarkdownString(localize('chat.tip.attachFiles', 'Tip: Attach text files or images with the + button. You can also paste or drop images into your message.')),
+			content: new MarkdownString(
+				localize(
+					'chat.tip.attachFiles',
+					'Tip: Attach text files or images with the + button. You can also paste or drop images into your message.',
+				),
+			),
 		};
 	}
 

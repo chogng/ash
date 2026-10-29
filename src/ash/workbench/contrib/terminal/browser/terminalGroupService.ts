@@ -3,7 +3,13 @@ import { Emitter } from '../../../../base/common/event.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
-import { ITerminalService, type ITerminalGroup, type ITerminalGroupService, type ITerminalInstance, type ITerminalView } from './terminal.js';
+import {
+	ITerminalService,
+	type ITerminalGroup,
+	type ITerminalGroupService,
+	type ITerminalInstance,
+	type ITerminalView,
+} from './terminal.js';
 import { TERMINAL_VIEW_ID } from '../common/terminal.js';
 import { TerminalGroup } from './terminalGroup.js';
 
@@ -21,22 +27,29 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 		@IViewsService private readonly views: IViewsService,
 	) {
 		super();
-		this._register(toDisposable(() => { this.recentGroups.length = 0; }));
+		this._register(
+			toDisposable(() => {
+				this.recentGroups.length = 0;
+			}),
+		);
 		for (const instance of terminals.instances) this.observeInstance(instance);
 		this.rememberActiveGroup();
 		this._register(terminals.onDidChangeActiveInstance(() => this.rememberActiveGroup()));
 		this._register(terminals.onDidCreateInstance(instance => this.observeInstance(instance)));
-		this._register(terminals.onDidDisposeInstance(instance => {
-			this.instanceLifetimes.deleteAndDispose(instance);
-			const group = this.getGroupForInstance(instance);
-			if (group) group.removeInstance(instance);
-		}));
+		this._register(
+			terminals.onDidDisposeInstance(instance => {
+				this.instanceLifetimes.deleteAndDispose(instance);
+				const group = this.getGroupForInstance(instance);
+				if (group) group.removeInstance(instance);
+			}),
+		);
 	}
 
 	private observeInstance(instance: ITerminalInstance): void {
 		const lifetime = new DisposableStore();
 		const update = (): void => {
-			if (instance.target === TerminalLocation.Editor) this.getGroupForInstance(instance)?.removeInstance(instance);
+			if (instance.target === TerminalLocation.Editor)
+				this.getGroupForInstance(instance)?.removeInstance(instance);
 			else this.createGroup(instance);
 		};
 		if (instance.onDidChangeTarget) lifetime.add(instance.onDidChangeTarget(update));
@@ -44,28 +57,33 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 		update();
 	}
 
-	get groups(): readonly ITerminalGroup[] { return [...this.groupLifetimes.keys()]; }
+	get groups(): readonly ITerminalGroup[] {
+		return [...this.groupLifetimes.keys()];
+	}
 	get activeGroup(): ITerminalGroup | undefined {
 		const active = this.terminals.activeInstance;
 		return (active && this.getGroupForInstance(active)) ?? this.recentGroups[0] ?? this.groups[0];
 	}
 
 	createGroup(instance: ITerminalInstance): ITerminalGroup {
-		if (instance.target === TerminalLocation.Editor) throw new Error('Editor terminals do not belong to a panel group');
+		if (instance.target === TerminalLocation.Editor)
+			throw new Error('Editor terminals do not belong to a panel group');
 		const existing = this.getGroupForInstance(instance);
 		if (existing) return existing;
 		const lifetime = new DisposableStore();
 		const group = lifetime.add(this.instantiation.createInstance(TerminalGroup, instance));
 		this.groupLifetimes.set(group, lifetime);
-		lifetime.add(group.onInstancesChanged(() => {
-			if (!group.terminalInstances.length) {
-				const index = this.recentGroups.indexOf(group);
-				if (index >= 0) this.recentGroups.splice(index, 1);
-				this.groupLifetimes.deleteAndDispose(group);
-			}
-			this.rememberActiveGroup();
-			this.changed.fire();
-		}));
+		lifetime.add(
+			group.onInstancesChanged(() => {
+				if (!group.terminalInstances.length) {
+					const index = this.recentGroups.indexOf(group);
+					if (index >= 0) this.recentGroups.splice(index, 1);
+					this.groupLifetimes.deleteAndDispose(group);
+				}
+				this.rememberActiveGroup();
+				this.changed.fire();
+			}),
+		);
 		this.changed.fire();
 		return group;
 	}
@@ -96,7 +114,12 @@ export class TerminalGroupService extends Disposable implements ITerminalGroupSe
 	}
 
 	moveInstance(source: ITerminalInstance, target: ITerminalInstance, side: 'before' | 'after'): void {
-		if (source === target || !this.terminals.instances.includes(source) || !this.terminals.instances.includes(target)) return;
+		if (
+			source === target ||
+			!this.terminals.instances.includes(source) ||
+			!this.terminals.instances.includes(target)
+		)
+			return;
 		const sourceGroup = this.getGroupForInstance(source);
 		const targetGroup = this.getGroupForInstance(target);
 		if (!sourceGroup || !targetGroup) return;

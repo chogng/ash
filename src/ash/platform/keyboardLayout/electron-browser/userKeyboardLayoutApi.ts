@@ -1,9 +1,6 @@
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import type { IMainProcessService } from '../../ipc/common/mainProcessService.js';
-import {
-	type IUserKeyboardLayoutApi,
-	validateUserKeyboardLayout,
-} from '../common/userKeyboardLayout.js';
+import { type IUserKeyboardLayoutApi, validateUserKeyboardLayout } from '../common/userKeyboardLayout.js';
 
 export function createUserKeyboardLayoutApi(mainProcessService: IMainProcessService): IUserKeyboardLayoutApi {
 	const channel = mainProcessService.getChannel('userKeyboardLayout');
@@ -19,7 +16,7 @@ export function createUserKeyboardLayoutApi(mainProcessService: IMainProcessServ
 			}
 		},
 		onDidChangeKeyboardLayout(listener) {
-			const subscription = channel.listen<unknown>('onDidChangeKeyboardLayout')((value) => {
+			const subscription = channel.listen<unknown>('onDidChangeKeyboardLayout')(value => {
 				validateUserKeyboardLayout(value);
 				listener();
 			});

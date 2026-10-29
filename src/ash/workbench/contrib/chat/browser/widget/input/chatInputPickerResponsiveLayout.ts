@@ -22,6 +22,9 @@ export class ChatInputPickerResponsiveLayout extends Disposable {
 		const preferredModelWidth = modelSelector.getBoundingClientRect().width;
 		modelSelector.style.removeProperty('flex-shrink');
 		const availableModelWidth = modelSelector.getBoundingClientRect().width;
-		modeSelector.classList.toggle('compact', availableModelWidth + 1 < Math.min(preferredModelWidth, minimumReadableModelWidth));
+		modeSelector.classList.toggle(
+			'compact',
+			availableModelWidth + 1 < Math.min(preferredModelWidth, minimumReadableModelWidth),
+		);
 	}
 }

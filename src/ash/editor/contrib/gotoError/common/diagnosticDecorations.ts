@@ -1,11 +1,26 @@
-import { Disposable } from "../../../../base/common/lifecycle.js";
-import { TextDecorationCollection } from "../../../common/model/decorationCollection.js";
+import { Disposable } from '../../../../base/common/lifecycle.js';
+import { TextDecorationCollection } from '../../../common/model/decorationCollection.js';
 import { type VersionedLanguageResultStore } from '../../../common/model/languageResultStore.js';
-import { type LanguageDiagnostic, type LanguageDiagnosticResult, type LanguageDiagnosticsPublisher, type LanguageDiagnosticsSource, LanguageDiagnosticSeverity } from '../../../common/languages.js';
-import { type URI } from "../../../../base/common/uri.js";
-import { MinimapPosition, OverviewRulerLane, TrackedRangeStickiness, type IModelDecorationOptions } from '../../../common/model.js';
+import {
+	type LanguageDiagnostic,
+	type LanguageDiagnosticResult,
+	type LanguageDiagnosticsPublisher,
+	type LanguageDiagnosticsSource,
+	LanguageDiagnosticSeverity,
+} from '../../../common/languages.js';
+import { type URI } from '../../../../base/common/uri.js';
+import {
+	MinimapPosition,
+	OverviewRulerLane,
+	TrackedRangeStickiness,
+	type IModelDecorationOptions,
+} from '../../../common/model.js';
 import { themeColorFromId } from '../../../../base/common/themables.js';
-import { accentForeground, errorForeground, warningForeground } from '../../../../platform/theme/common/colors/baseColors.js';
+import {
+	accentForeground,
+	errorForeground,
+	warningForeground,
+} from '../../../../platform/theme/common/colors/baseColors.js';
 
 /**
  * Projects current-version diagnostics into generic text decorations.
@@ -16,14 +31,22 @@ import { accentForeground, errorForeground, warningForeground } from '../../../.
 export class LanguageDiagnosticDecorationBridge extends Disposable {
 	readonly decorations: TextDecorationCollection<LanguageDiagnostic>;
 
-	constructor(private readonly store: VersionedLanguageResultStore<LanguageDiagnosticResult>, private readonly externalSource?: LanguageDiagnosticsSource, private readonly resource?: URI, private readonly renderDecorations = true) {
+	constructor(
+		private readonly store: VersionedLanguageResultStore<LanguageDiagnosticResult>,
+		private readonly externalSource?: LanguageDiagnosticsSource,
+		private readonly resource?: URI,
+		private readonly renderDecorations = true,
+	) {
 		super();
 		this.decorations = this._register(new TextDecorationCollection(store.textModel));
 		try {
 			this._register(store.onDidChange(() => this.synchronize()));
-			if (externalSource) this._register(externalSource.onDidChangeDiagnostics(resource => {
-				if (resource.toString() === this.resource?.toString()) this.synchronize();
-			}));
+			if (externalSource)
+				this._register(
+					externalSource.onDidChangeDiagnostics(resource => {
+						if (resource.toString() === this.resource?.toString()) this.synchronize();
+					}),
+				);
 			if (externalSource) this._register(store.textModel.onDidChangeContent(() => this.synchronize()));
 			this.synchronize();
 		} catch (error) {
@@ -37,16 +60,20 @@ export class LanguageDiagnosticDecorationBridge extends Disposable {
 		const external = this.resource ? this.externalSource?.getDiagnostics(this.resource) : undefined;
 		const externalDiagnostics = external?.revision === this.store.textModel.version ? external.diagnostics : [];
 		const diagnostics = deduplicateDiagnostics([...localDiagnostics, ...externalDiagnostics]);
-		this.decorations.replaceAll(diagnostics.map(diagnostic => ({
-			range: diagnostic.range,
-			stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
-			options: this.renderDecorations ? diagnosticDecorationOptions(diagnostic) : undefined,
-			metadata: diagnostic,
-		})));
+		this.decorations.replaceAll(
+			diagnostics.map(diagnostic => ({
+				range: diagnostic.range,
+				stickiness: TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+				options: this.renderDecorations ? diagnosticDecorationOptions(diagnostic) : undefined,
+				metadata: diagnostic,
+			})),
+		);
 	}
 }
 
-export function diagnosticDecorationOptions(diagnostic: LanguageDiagnostic): Omit<IModelDecorationOptions, 'stickiness'> {
+export function diagnosticDecorationOptions(
+	diagnostic: LanguageDiagnostic,
+): Omit<IModelDecorationOptions, 'stickiness'> {
 	const hoverMessage = { value: diagnosticHoverText(diagnostic) };
 	switch (diagnostic.severity) {
 		case LanguageDiagnosticSeverity.Error:
@@ -66,7 +93,12 @@ export function diagnosticDecorationOptions(diagnostic: LanguageDiagnostic): Omi
 	}
 }
 
-function markerOptions(className: string, colorId: string, zIndex: number, hoverMessage: { readonly value: string; }): Omit<IModelDecorationOptions, 'stickiness'> {
+function markerOptions(
+	className: string,
+	colorId: string,
+	zIndex: number,
+	hoverMessage: { readonly value: string },
+): Omit<IModelDecorationOptions, 'stickiness'> {
 	const color = themeColorFromId(colorId);
 	return {
 		description: 'marker-decoration',
@@ -86,7 +118,10 @@ function diagnosticHoverText(diagnostic: LanguageDiagnostic): string {
 
 /** Publishes the local syntax worker's current revision into the shared diagnostic repository. */
 export class LanguageDiagnosticPublisherBridge extends Disposable {
-	constructor(private readonly store: VersionedLanguageResultStore<LanguageDiagnosticResult>, private readonly publisher: LanguageDiagnosticsPublisher) {
+	constructor(
+		private readonly store: VersionedLanguageResultStore<LanguageDiagnosticResult>,
+		private readonly publisher: LanguageDiagnosticsPublisher,
+	) {
 		super();
 		this._register(publisher);
 		this._register(store.onDidChange(() => this.synchronize()));
@@ -103,7 +138,7 @@ function deduplicateDiagnostics(diagnostics: readonly LanguageDiagnostic[]): rea
 	const seen = new Set<string>();
 	return diagnostics.filter(diagnostic => {
 		const range = diagnostic.range;
-		const key = `${range.getStartPosition().lineNumber}:${range.getStartPosition().column}:${range.getEndPosition().lineNumber}:${range.getEndPosition().column}:${diagnostic.severity}:${diagnostic.message}:${diagnostic.source ?? ""}:${diagnostic.code ?? ""}`;
+		const key = `${range.getStartPosition().lineNumber}:${range.getStartPosition().column}:${range.getEndPosition().lineNumber}:${range.getEndPosition().column}:${diagnostic.severity}:${diagnostic.message}:${diagnostic.source ?? ''}:${diagnostic.code ?? ''}`;
 		if (seen.has(key)) return false;
 		seen.add(key);
 		return true;

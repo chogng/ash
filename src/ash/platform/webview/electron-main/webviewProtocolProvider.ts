@@ -11,7 +11,10 @@ export class WebviewProtocolProvider extends AbstractDisposable {
 		protocol.handle(Schemas.vscodeWebview, async request => {
 			const url = new URL(request.url);
 			const asset = /^\/assets\/(index-[\w-]+\.html|service-worker-[\w-]+\.js)$/.exec(url.pathname)?.[1];
-			const developmentAsset = /\/src\/ash\/workbench\/contrib\/webview\/browser\/pre\/(index\.html|service-worker\.js)$/.test(url.pathname);
+			const developmentAsset =
+				/\/src\/ash\/workbench\/contrib\/webview\/browser\/pre\/(index\.html|service-worker\.js)$/.test(
+					url.pathname,
+				);
 			if (request.method !== 'GET' || (!asset && !(developmentUrl && developmentAsset))) {
 				return new Response(null, { status: 404 });
 			}
@@ -22,7 +25,9 @@ export class WebviewProtocolProvider extends AbstractDisposable {
 				const bytes = await readFile(join(rendererRoot, 'assets', asset!));
 				return new Response(bytes, {
 					headers: {
-						'Content-Type': asset!.endsWith('.html') ? 'text/html; charset=utf-8' : 'text/javascript; charset=utf-8',
+						'Content-Type': asset!.endsWith('.html')
+							? 'text/html; charset=utf-8'
+							: 'text/javascript; charset=utf-8',
 						'Cache-Control': 'no-cache',
 					},
 				});

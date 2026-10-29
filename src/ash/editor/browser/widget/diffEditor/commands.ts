@@ -20,7 +20,10 @@ export class ToggleCollapseUnchangedRegions extends Action2 {
 
 	public override run(accessor: ServicesAccessor): Promise<void> {
 		const configuration = accessor.get(IConfigurationService);
-		return configuration.updateValue('diffEditor.hideUnchangedRegions.enabled', !configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'));
+		return configuration.updateValue(
+			'diffEditor.hideUnchangedRegions.enabled',
+			!configuration.getValue<boolean>('diffEditor.hideUnchangedRegions.enabled'),
+		);
 	}
 }
 
@@ -28,7 +31,11 @@ export class AccessibleDiffViewerNext extends Action2 {
 	public static readonly id = 'editor.action.accessibleDiffViewer.next';
 
 	constructor() {
-		super({ id: AccessibleDiffViewerNext.id, title: localize2({ bundle: 'ash', key: 'diffEditor.accessibleViewer.next' }, 'Next difference'), f1: true });
+		super({
+			id: AccessibleDiffViewerNext.id,
+			title: localize2({ bundle: 'ash', key: 'diffEditor.accessibleViewer.next' }, 'Next difference'),
+			f1: true,
+		});
 	}
 
 	public override run(accessor: ServicesAccessor): void {
@@ -40,7 +47,11 @@ export class AccessibleDiffViewerPrev extends Action2 {
 	public static readonly id = 'editor.action.accessibleDiffViewer.prev';
 
 	constructor() {
-		super({ id: AccessibleDiffViewerPrev.id, title: localize2({ bundle: 'ash', key: 'diffEditor.accessibleViewer.previous' }, 'Previous difference'), f1: true });
+		super({
+			id: AccessibleDiffViewerPrev.id,
+			title: localize2({ bundle: 'ash', key: 'diffEditor.accessibleViewer.previous' }, 'Previous difference'),
+			f1: true,
+		});
 	}
 
 	public override run(accessor: ServicesAccessor): void {
@@ -49,9 +60,10 @@ export class AccessibleDiffViewerPrev extends Action2 {
 }
 
 export function findFocusedDiffEditor(accessor: ServicesAccessor): DiffEditorWidget | undefined {
-	return accessor.get(ICodeEditorService).listDiffEditors().find(
-		(editor): editor is DiffEditorWidget => editor instanceof DiffEditorWidget && editor.hasFocus(),
-	);
+	return accessor
+		.get(ICodeEditorService)
+		.listDiffEditors()
+		.find((editor): editor is DiffEditorWidget => editor instanceof DiffEditorWidget && editor.hasFocus());
 }
 
 registerAction2(AccessibleDiffViewerNext);

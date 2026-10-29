@@ -4,10 +4,18 @@ import { Emitter } from '../../../../base/common/event.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
 import { IAgentVoiceService } from '../../../../platform/agentHost/common/agentService.js';
-import { type AgentVoiceSource, type ThreadTranscriptEntry, type ThreadTranscriptSnapshot, type ThreadTranscriptUpdateEnvelope } from '../../../../platform/agentHost/common/agent.js';
+import {
+	type AgentVoiceSource,
+	type ThreadTranscriptEntry,
+	type ThreadTranscriptSnapshot,
+	type ThreadTranscriptUpdateEnvelope,
+} from '../../../../platform/agentHost/common/agent.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { IAuxiliaryWindowService, type IAuxiliaryWindow } from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
+import {
+	IAuxiliaryWindowService,
+	type IAuxiliaryWindow,
+} from '../../../services/auxiliaryWindow/browser/auxiliaryWindowService.js';
 import { IChatService } from '../../../services/chat/common/chatService.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 import type { IAgentsVoiceWindowService } from '../common/agentsVoice.js';
@@ -32,19 +40,27 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 	private loading = false;
 	private latestRevision = -1;
 
-	constructor(@IAuxiliaryWindowService private readonly windows: IAuxiliaryWindowService,
+	constructor(
+		@IAuxiliaryWindowService private readonly windows: IAuxiliaryWindowService,
 		@IInstantiationService private readonly instantiation: IInstantiationService,
 		@IAgentVoiceService private readonly voice: IAgentVoiceService | undefined,
 		@IChatService private readonly chat: IChatService,
 		@IChatSessionNavigationService private readonly navigation: IChatSessionNavigationService,
 		@INotificationService private readonly notifications: INotificationService,
-	) { super(); }
+	) {
+		super();
+	}
 
-	get isOpen(): boolean { return !!this.window; }
+	get isOpen(): boolean {
+		return !!this.window;
+	}
 
 	openWindow(): Promise<void> {
 		this.assertNotDisposed();
-		if (this.window) { this.window.window.focus(); return Promise.resolve(); }
+		if (this.window) {
+			this.window.window.focus();
+			return Promise.resolve();
+		}
 		if (this.opening) return this.opening;
 		this.opener = getActiveWindow();
 		const focused = this.opener.document.activeElement;
@@ -52,47 +68,87 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 		const generation = ++this.generation;
 		const operation = this.open(generation);
 		this.opening = operation;
-		void operation.finally(() => { if (this.opening === operation) this.opening = undefined; }).catch(() => undefined);
+		void operation
+			.finally(() => {
+				if (this.opening === operation) this.opening = undefined;
+			})
+			.catch(() => undefined);
 		return operation;
 	}
 
 	private async open(generation: number): Promise<void> {
-		const window = await this.windows.open({ title: localize('agentsVoice.title', 'Voice conversation'), width: 400, height: 480 });
-		if (this.isDisposed || generation !== this.generation) { window.dispose(); return; }
+		const window = await this.windows.open({
+			title: localize('agentsVoice.title', 'Voice conversation'),
+			width: 400,
+			height: 480,
+		});
+		if (this.isDisposed || generation !== this.generation) {
+			window.dispose();
+			return;
+		}
 		this.window = window;
 		const controls = new DisposableStore();
 		this.controls.value = controls;
 		try {
 			const picker = controls.add(this.instantiation.createInstance(AgentsVoiceSessionsPicker));
 			let hold: string | undefined;
-			this.widget = controls.add(this.instantiation.createInstance(AgentsVoiceWidget, window.container, {
-				openSession: () => this.run(async () => {
-					this.opener?.focus();
-					const source = this.voice?.state ?? this.navigation.getActiveConversation();
-					if (source) await this.navigation.openConversation(source.sessionId, source.threadId);
-					else picker.show();
-				}),
-				connect: () => this.run(() => this.navigation.startVoiceConversation()),
-				toggleMute: () => this.run(() => this.voice?.setMuted(!this.voice.state?.muted)),
-				toggleInputMode: () => this.run(() => this.voice?.setInputMode(this.voice.state?.inputMode === 'pushToTalk' ? 'openMic' : 'pushToTalk')),
-				pttDown: () => { hold = generateUuid(); const id = hold; this.run(() => this.voice?.pttDown(id)); },
-				pttUp: () => { const id = hold; hold = undefined; if (id) this.run(() => this.voice?.pttUp(id)); },
-				disconnect: () => this.run(() => this.voice?.stop()),
-				stopPlayback: () => this.run(() => this.voice?.interrupt()),
-				closeWindow: () => this.closeWindow(),
-				showSessionsPicker: () => { this.opener?.focus(); picker.show(); },
-			}, {}));
+			this.widget = controls.add(
+				this.instantiation.createInstance(
+					AgentsVoiceWidget,
+					window.container,
+					{
+						openSession: () =>
+							this.run(async () => {
+								this.opener?.focus();
+								const source = this.voice?.state ?? this.navigation.getActiveConversation();
+								if (source) await this.navigation.openConversation(source.sessionId, source.threadId);
+								else picker.show();
+							}),
+						connect: () => this.run(() => this.navigation.startVoiceConversation()),
+						toggleMute: () => this.run(() => this.voice?.setMuted(!this.voice.state?.muted)),
+						toggleInputMode: () =>
+							this.run(() =>
+								this.voice?.setInputMode(
+									this.voice.state?.inputMode === 'pushToTalk' ? 'openMic' : 'pushToTalk',
+								),
+							),
+						pttDown: () => {
+							hold = generateUuid();
+							const id = hold;
+							this.run(() => this.voice?.pttDown(id));
+						},
+						pttUp: () => {
+							const id = hold;
+							hold = undefined;
+							if (id) this.run(() => this.voice?.pttUp(id));
+						},
+						disconnect: () => this.run(() => this.voice?.stop()),
+						stopPlayback: () => this.run(() => this.voice?.interrupt()),
+						closeWindow: () => this.closeWindow(),
+						showSessionsPicker: () => {
+							this.opener?.focus();
+							picker.show();
+						},
+					},
+					{},
+				),
+			);
 			controls.add(window.onDidClose(() => this.closeWindow()));
 			if (this.voice) controls.add(this.voice.onDidChange(() => this.update()));
-			controls.add(this.chat.onDidUpdateThreadTranscript(update => {
-				if (!this.sameSource(update, this.source)) return;
-				this.latestRevision = Math.max(this.latestRevision, update.revision);
-				if (this.loading) return;
-				this.apply(update);
-			}));
+			controls.add(
+				this.chat.onDidUpdateThreadTranscript(update => {
+					if (!this.sameSource(update, this.source)) return;
+					this.latestRevision = Math.max(this.latestRevision, update.revision);
+					if (this.loading) return;
+					this.apply(update);
+				}),
+			);
 			this.update();
 			this.opened.fire(true);
-		} catch (error) { this.closeWindow(); throw error; }
+		} catch (error) {
+			this.closeWindow();
+			throw error;
+		}
 	}
 
 	closeWindow(): void {
@@ -112,14 +168,21 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 		const window = this.window;
 		this.window = undefined;
 		window?.dispose();
-		if (source && owner) void this.chat.unsubscribeThread(source.sessionId, source.threadId, owner).catch(() => undefined);
-		if (wasOpen && this.previousFocus?.isConnected) { this.opener?.focus(); this.previousFocus.focus(); }
+		if (source && owner)
+			void this.chat.unsubscribeThread(source.sessionId, source.threadId, owner).catch(() => undefined);
+		if (wasOpen && this.previousFocus?.isConnected) {
+			this.opener?.focus();
+			this.previousFocus.focus();
+		}
 		this.previousFocus = undefined;
 		this.opener = undefined;
 		if (wasOpen) this.opened.fire(false);
 	}
 
-	async toggleWindow(): Promise<void> { if (this.isOpen || this.opening) this.closeWindow(); else await this.openWindow(); }
+	async toggleWindow(): Promise<void> {
+		if (this.isOpen || this.opening) this.closeWindow();
+		else await this.openWindow();
+	}
 
 	private update(): void {
 		const widget = this.widget;
@@ -130,25 +193,39 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 		widget.setMuted(state?.muted ?? false);
 		widget.setInputMode(state?.inputMode ?? 'openMic');
 		widget.setVoiceState(state?.listening ? 'listening' : 'idle');
-		const title = state && this.navigation.getConversations().find(conversation => this.sameSource(conversation, state))?.title;
-		const text = state?.state === 'connected' ? state.muted ? localize('agentsVoice.mutedStatus', 'Microphone muted') : state.listening ? localize('agentsVoice.listening', 'Listening…') : localize('agentsVoice.readyPtt', 'Press and hold to speak')
-			: state?.state === 'connecting' ? localize('agentsVoice.connecting', 'Connecting…')
-				: state?.state === 'stopping' ? localize('agentsVoice.stopping', 'Disconnecting…')
-					: state?.state === 'failed' ? localize('agentsVoice.failed', 'Voice connection failed: {0}', state.error ?? '')
-						: localize('agentsVoice.idle', 'Start voice from Chat.');
+		const title =
+			state &&
+			this.navigation.getConversations().find(conversation => this.sameSource(conversation, state))?.title;
+		const text =
+			state?.state === 'connected'
+				? state.muted
+					? localize('agentsVoice.mutedStatus', 'Microphone muted')
+					: state.listening
+						? localize('agentsVoice.listening', 'Listening…')
+						: localize('agentsVoice.readyPtt', 'Press and hold to speak')
+				: state?.state === 'connecting'
+					? localize('agentsVoice.connecting', 'Connecting…')
+					: state?.state === 'stopping'
+						? localize('agentsVoice.stopping', 'Disconnecting…')
+						: state?.state === 'failed'
+							? localize('agentsVoice.failed', 'Voice connection failed: {0}', state.error ?? '')
+							: localize('agentsVoice.idle', 'Start voice from Chat.');
 		widget.setStatusText(title ? localize('agentsVoice.statusWithChat', '{0} · {1}', text, title) : text);
 		const source = state ? { sessionId: state.sessionId, threadId: state.threadId } : undefined;
 		if (this.sameSource(source, this.source)) return;
 		const previous = this.source;
 		const previousOwner = this.subscriptionOwner;
 		this.source = source;
-		const owner = this.subscriptionOwner = source ? {} : undefined;
+		const owner = (this.subscriptionOwner = source ? {} : undefined);
 		this.entries = [];
 		this.revision = -1;
 		this.latestRevision = -1;
 		widget.setTranscriptTurns([]);
 		++this.generation;
-		if (previous && previousOwner) void this.chat.unsubscribeThread(previous.sessionId, previous.threadId, previousOwner).catch(() => undefined);
+		if (previous && previousOwner)
+			void this.chat
+				.unsubscribeThread(previous.sessionId, previous.threadId, previousOwner)
+				.catch(() => undefined);
 		if (source && owner) this.run(() => this.load(source, true, owner));
 	}
 
@@ -170,7 +247,9 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 				acquiring = false;
 				// Events during acquisition need only a revision fence, not an unbounded copy of transcript deltas.
 			} while (this.latestRevision > this.revision);
-		} finally { if (generation === this.generation) this.loading = false; }
+		} finally {
+			if (generation === this.generation) this.loading = false;
+		}
 	}
 
 	private acceptSnapshot(snapshot: ThreadTranscriptSnapshot): void {
@@ -189,21 +268,26 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 		}
 		this.revision = update.revision;
 		for (const change of update.changes) {
-			if (change.type === 'remove') this.entries = this.entries.filter(entry => !change.entryIds.includes(entry.entryId));
+			if (change.type === 'remove')
+				this.entries = this.entries.filter(entry => !change.entryIds.includes(entry.entryId));
 			else if (change.type === 'upsert') {
 				const index = this.entries.findIndex(entry => entry.entryId === change.entry.entryId);
 				if (change.entry.type === 'voiceTranscript') {
 					const entries = [...this.entries];
-					if (index < 0) entries.push(change.entry); else entries[index] = change.entry;
+					if (index < 0) entries.push(change.entry);
+					else entries[index] = change.entry;
 					this.entries = entries;
-				} else if (index >= 0) this.entries = this.entries.filter(entry => entry.entryId !== change.entry.entryId);
+				} else if (index >= 0)
+					this.entries = this.entries.filter(entry => entry.entryId !== change.entry.entryId);
 			}
 		}
 		this.renderTranscript();
 	}
 
 	private renderTranscript(): void {
-		this.widget?.setTranscriptTurns(this.entries.flatMap(entry => entry.type === 'voiceTranscript' ? [entry.transcript] : []));
+		this.widget?.setTranscriptTurns(
+			this.entries.flatMap(entry => (entry.type === 'voiceTranscript' ? [entry.transcript] : [])),
+		);
 	}
 
 	private sameSource(left: AgentVoiceSource | undefined, right: AgentVoiceSource | undefined): boolean {
@@ -213,9 +297,22 @@ export class AgentsVoiceWindowService extends Disposable implements IAgentsVoice
 	private run(operation: () => Promise<unknown> | undefined): void {
 		const generation = this.generation;
 		try {
-			void operation()?.catch(error => { if (!this.isDisposed && this.isOpen && generation === this.generation) this.notifications.error(localize('agentsVoice.operationFailed', 'Voice conversation: {0}', String(error))); });
-		} catch (error) { if (!this.isDisposed) this.notifications.error(localize('agentsVoice.operationFailed', 'Voice conversation: {0}', String(error))); }
+			void operation()?.catch(error => {
+				if (!this.isDisposed && this.isOpen && generation === this.generation)
+					this.notifications.error(
+						localize('agentsVoice.operationFailed', 'Voice conversation: {0}', String(error)),
+					);
+			});
+		} catch (error) {
+			if (!this.isDisposed)
+				this.notifications.error(
+					localize('agentsVoice.operationFailed', 'Voice conversation: {0}', String(error)),
+				);
+		}
 	}
 
-	protected override disposeCore(): void { this.closeWindow(); super.disposeCore(); }
+	protected override disposeCore(): void {
+		this.closeWindow();
+		super.disposeCore();
+	}
 }

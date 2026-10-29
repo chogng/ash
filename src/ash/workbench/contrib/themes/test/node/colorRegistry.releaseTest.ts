@@ -35,8 +35,12 @@ import { asCssVariableName } from '../../../../../platform/theme/common/sizeUtil
 test('update the CSS variable manifest from registered colors and sizes', async () => {
 	const path = resolve(process.cwd(), 'build/lib/stylelint/ash-known-variables.json');
 	const variables = JSON.parse(await readFile(path, 'utf8'));
-	variables.colors = Colors.getColors().map(({ id }) => colorCssVariable(id)).sort();
-	variables.sizes = Sizes.getSizes().map(({ id }) => asCssVariableName(id)).sort();
+	variables.colors = Colors.getColors()
+		.map(({ id }) => colorCssVariable(id))
+		.sort();
+	variables.sizes = Sizes.getSizes()
+		.map(({ id }) => asCssVariableName(id))
+		.sort();
 	const registered = new Set([...variables.colors, ...variables.sizes]);
 	variables.others = variables.others.filter((name: string) => !registered.has(name));
 	await writeFile(path, `${JSON.stringify(variables, null, '\t')}\n`);

@@ -31,23 +31,38 @@ export class SimplePagedScreenReaderStrategy implements IPagedScreenReaderStrate
 		return new Range(offset + 1, 1, offset + linesPerPage + 1, 1);
 	}
 
-	public fromEditorSelection(model: ISimpleModel, selection: Selection, linesPerPage: number, trimLongText: boolean): ISimpleScreenReaderContentState {
+	public fromEditorSelection(
+		model: ISimpleModel,
+		selection: Selection,
+		linesPerPage: number,
+		trimLongText: boolean,
+	): ISimpleScreenReaderContentState {
 		const limitCharacters = 500;
 		const selectionStartPage = this._getPageOfLine(selection.startLineNumber, linesPerPage);
 		const selectionStartPageRange = this._getRangeForPage(selectionStartPage, linesPerPage);
 		const selectionEndPage = this._getPageOfLine(selection.endLineNumber, linesPerPage);
 		const selectionEndPageRange = this._getRangeForPage(selectionEndPage, linesPerPage);
 
-		let pretextRange = selectionStartPageRange.intersectRanges(new Range(1, 1, selection.startLineNumber, selection.startColumn))!;
+		let pretextRange = selectionStartPageRange.intersectRanges(
+			new Range(1, 1, selection.startLineNumber, selection.startColumn),
+		)!;
 		if (trimLongText && model.getValueLengthInRange(pretextRange, EndOfLinePreference.LF) > limitCharacters) {
-			pretextRange = Range.fromPositions(model.modifyPosition(pretextRange.getEndPosition(), -limitCharacters), pretextRange.getEndPosition());
+			pretextRange = Range.fromPositions(
+				model.modifyPosition(pretextRange.getEndPosition(), -limitCharacters),
+				pretextRange.getEndPosition(),
+			);
 		}
 		const pretext = model.getValueInRange(pretextRange, EndOfLinePreference.LF);
 
 		const lastLine = model.getLineCount();
-		let posttextRange = selectionEndPageRange.intersectRanges(new Range(selection.endLineNumber, selection.endColumn, lastLine, model.getLineMaxColumn(lastLine)))!;
+		let posttextRange = selectionEndPageRange.intersectRanges(
+			new Range(selection.endLineNumber, selection.endColumn, lastLine, model.getLineMaxColumn(lastLine)),
+		)!;
 		if (trimLongText && model.getValueLengthInRange(posttextRange, EndOfLinePreference.LF) > limitCharacters) {
-			posttextRange = Range.fromPositions(posttextRange.getStartPosition(), model.modifyPosition(posttextRange.getStartPosition(), limitCharacters));
+			posttextRange = Range.fromPositions(
+				posttextRange.getStartPosition(),
+				model.modifyPosition(posttextRange.getStartPosition(), limitCharacters),
+			);
 		}
 		const posttext = model.getValueInRange(posttextRange, EndOfLinePreference.LF);
 
@@ -55,12 +70,16 @@ export class SimplePagedScreenReaderStrategy implements IPagedScreenReaderStrate
 		if (selectionStartPage === selectionEndPage || selectionStartPage + 1 === selectionEndPage) {
 			text = model.getValueInRange(selection, EndOfLinePreference.LF);
 		} else {
-			text = model.getValueInRange(selectionStartPageRange.intersectRanges(selection)!, EndOfLinePreference.LF)
-				+ String.fromCharCode(8230)
-				+ model.getValueInRange(selectionEndPageRange.intersectRanges(selection)!, EndOfLinePreference.LF);
+			text =
+				model.getValueInRange(selectionStartPageRange.intersectRanges(selection)!, EndOfLinePreference.LF) +
+				String.fromCharCode(8230) +
+				model.getValueInRange(selectionEndPageRange.intersectRanges(selection)!, EndOfLinePreference.LF);
 		}
 		if (trimLongText && text.length > 2 * limitCharacters) {
-			text = text.substring(0, limitCharacters) + String.fromCharCode(8230) + text.substring(text.length - limitCharacters);
+			text =
+				text.substring(0, limitCharacters) +
+				String.fromCharCode(8230) +
+				text.substring(text.length - limitCharacters);
 		}
 
 		const leftToRight = selection.getDirection() === SelectionDirection.LTR;
@@ -75,12 +94,22 @@ export class SimplePagedScreenReaderStrategy implements IPagedScreenReaderStrate
 	}
 }
 
-export function ariaLabelForScreenReaderContent(options: IComputedEditorOptions, keybindingService: IKeybindingService): string {
+export function ariaLabelForScreenReaderContent(
+	options: IComputedEditorOptions,
+	keybindingService: IKeybindingService,
+): string {
 	if (options.get(EditorOption.accessibilitySupport) === AccessibilitySupport.Disabled) {
-		const hasToggleKeybinding = keybindingService.lookupKeybinding('editor.action.toggleScreenReaderAccessibilityMode') !== undefined;
+		const hasToggleKeybinding =
+			keybindingService.lookupKeybinding('editor.action.toggleScreenReaderAccessibilityMode') !== undefined;
 		return hasToggleKeybinding
-			? nls.localize('accessibilityModeOffWithShortcut', 'The editor is not accessible at this time. Use the configured accessibility-mode shortcut to enable it.')
-			: nls.localize('accessibilityModeOff', 'The editor is not accessible at this time. Enable screen reader optimized mode from the command menu.');
+			? nls.localize(
+					'accessibilityModeOffWithShortcut',
+					'The editor is not accessible at this time. Use the configured accessibility-mode shortcut to enable it.',
+				)
+			: nls.localize(
+					'accessibilityModeOff',
+					'The editor is not accessible at this time. Enable screen reader optimized mode from the command menu.',
+				);
 	}
 	return options.get(EditorOption.ariaLabel);
 }

@@ -1,14 +1,14 @@
-import assert from "node:assert/strict";
-import { test } from "mocha";
-import { Selection } from "../../common/core/selection.js";
-import { Position } from "../../common/core/position.js";
-import { TextModel } from "../../common/model/textModel.js";
+import assert from 'node:assert/strict';
+import { test } from 'mocha';
+import { Selection } from '../../common/core/selection.js';
+import { Position } from '../../common/core/position.js';
+import { TextModel } from '../../common/model/textModel.js';
 import { createTestCursorsController } from './testCursorConfiguration.js';
 import { InputMode } from '../../common/inputMode.js';
 import { ViewModelEventsCollector } from '../../common/viewModelEventDispatcher.js';
 
-test("Overtype replaces complete following graphemes and stops at physical line ends", () => {
-	using model = new TextModel("a😊b\ncd");
+test('Overtype replaces complete following graphemes and stops at physical line ends', () => {
+	using model = new TextModel('a😊b\ncd');
 	using selections = createTestCursorsController(model, primaryFirst([caret(0, 1), caret(1, 1)], 0));
 	InputMode.setInputMode('overtype');
 	try {
@@ -16,10 +16,10 @@ test("Overtype replaces complete following graphemes and stops at physical line 
 	} finally {
 		InputMode.setInputMode('insert');
 	}
-	assert.equal(model.getText(), "aXY\ncXY");
+	assert.equal(model.getText(), 'aXY\ncXY');
 	assert.deepEqual(selections.getSelections(), primaryFirst([caret(0, 3), caret(1, 3)], 0));
 	selections.context.model.undo();
-	assert.equal(model.getText(), "a😊b\ncd");
+	assert.equal(model.getText(), 'a😊b\ncd');
 });
 
 test('Composition overtype removes the following text in the same undo transaction', () => {
@@ -62,17 +62,20 @@ for (const input of ['e\u0301', '👩‍💻', '🇨🇳', '😀', '中']) {
 			}
 
 			const after = [caret(0, 1 + input.length)];
-			assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, {
-				text: `a${input}😀e\u0301z\nend`, selections: after,
-			});
+			assert.deepEqual(
+				{ text: model.getText(), selections: controller.getSelections() },
+				{ text: `a${input}😀e\u0301z\nend`, selections: after },
+			);
 			model.undo();
-			assert.deepEqual({ text: model.getText(), selections: controller.getSelections(), canUndo: model.canUndo() }, {
-				text: original, selections: before, canUndo: false,
-			});
+			assert.deepEqual(
+				{ text: model.getText(), selections: controller.getSelections(), canUndo: model.canUndo() },
+				{ text: original, selections: before, canUndo: false },
+			);
 			model.redo();
-			assert.deepEqual({ text: model.getText(), selections: controller.getSelections() }, {
-				text: `a${input}😀e\u0301z\nend`, selections: after,
-			});
+			assert.deepEqual(
+				{ text: model.getText(), selections: controller.getSelections() },
+				{ text: `a${input}😀e\u0301z\nend`, selections: after },
+			);
 		});
 	}
 }
@@ -95,7 +98,7 @@ test('Composition overtype removes the whole following combining grapheme', () =
 });
 
 function caret(lineIndex: number, columnIndex: number): Selection {
-	return Selection.fromPositions(new Position((lineIndex) + 1, (columnIndex) + 1));
+	return Selection.fromPositions(new Position(lineIndex + 1, columnIndex + 1));
 }
 
 function primaryFirst<T>(items: readonly T[], primaryIndex: number): readonly T[] {

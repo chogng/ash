@@ -28,28 +28,79 @@ suite('Session Git actions', () => {
 			const started = new DeferredPromise<void>();
 			const calls: unknown[] = [];
 			const errors: string[] = [];
-			services.registerInstance(ISessionsService, { onDidChange: changed.event, get activeSelection() { return { kind: 'session', active: { session: { sessionId, workspace: { authorityId: 'local', root: '/session-worktree' } }, threadId: 'thread' } }; } } as unknown as ISessionsService);
+			services.registerInstance(ISessionsService, {
+				onDidChange: changed.event,
+				get activeSelection() {
+					return {
+						kind: 'session',
+						active: {
+							session: { sessionId, workspace: { authorityId: 'local', root: '/session-worktree' } },
+							threadId: 'thread',
+						},
+					};
+				},
+			} as unknown as ISessionsService);
 			services.registerInstance(ICommandService, {
 				executeCommand: async (command: string, ...args: unknown[]) => {
 					if (command === 'git.getRepositoryContexts') {
-						return ['unrelated', 'session-worktree'].map(id => ({ id, label: id, path: `/${id}`, root: URI.file(`/${id}`).toString(), head: { type: 'branch', name: branch, objectId: 'head' }, remotes: [] }));
+						return ['unrelated', 'session-worktree'].map(id => ({
+							id,
+							label: id,
+							path: `/${id}`,
+							root: URI.file(`/${id}`).toString(),
+							head: { type: 'branch', name: branch, objectId: 'head' },
+							remotes: [],
+						}));
 					}
 					calls.push([command, ...args]);
-					if (command === 'git.pull') { await started.complete(); await pending.p; if (interrupt === 'failure') { throw new Error('Pull conflict'); } }
-				}
+					if (command === 'git.pull') {
+						await started.complete();
+						await pending.p;
+						if (interrupt === 'failure') {
+							throw new Error('Pull conflict');
+						}
+					}
+				},
 			} as unknown as ICommandService);
-			services.registerInstance(IQuickInputService, { createQuickPick: () => { throw new Error('One matching repository needs no picker'); } } as unknown as IQuickInputService);
-			services.registerInstance(INotificationService, { info: () => undefined, error: (message: string) => errors.push(message) } as unknown as INotificationService);
+			services.registerInstance(IQuickInputService, {
+				createQuickPick: () => {
+					throw new Error('One matching repository needs no picker');
+				},
+			} as unknown as IQuickInputService);
+			services.registerInstance(INotificationService, {
+				info: () => undefined,
+				error: (message: string) => errors.push(message),
+			} as unknown as INotificationService);
 			const container = document.createElement('div');
 			using actions = services.createInstance(SessionSyncChangesActionViewItem, container);
 			container.querySelector<HTMLButtonElement>('button')!.click();
 			await started.p;
-			if (interrupt === 'selection') { sessionId = 'other'; changed.fire(); }
-			if (interrupt === 'branch') { branch = 'other'; }
+			if (interrupt === 'selection') {
+				sessionId = 'other';
+				changed.fire();
+			}
+			if (interrupt === 'branch') {
+				branch = 'other';
+			}
 			await pending.complete();
 			await new Promise<void>(resolve => setImmediate(resolve));
-			assert.deepEqual(calls, interrupt === 'none' ? [['git.pull', 'session-worktree'], ['git.push', 'session-worktree']] : [['git.pull', 'session-worktree']]);
-			assert.deepEqual(errors, interrupt === 'failure' ? ['Pull conflict'] : interrupt === 'branch' ? ['The repository or branch changed. Start the operation again.'] : []);
+			assert.deepEqual(
+				calls,
+				interrupt === 'none'
+					? [
+							['git.pull', 'session-worktree'],
+							['git.push', 'session-worktree'],
+						]
+					: [['git.pull', 'session-worktree']],
+			);
+			assert.deepEqual(
+				errors,
+				interrupt === 'failure'
+					? ['Pull conflict']
+					: interrupt === 'branch'
+						? ['The repository or branch changed. Start the operation again.']
+						: [],
+			);
 		});
 	}
 });

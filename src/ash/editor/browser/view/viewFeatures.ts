@@ -40,13 +40,22 @@ export interface TextViewFeature {
 const features = new Map<string, TextViewFeature>();
 const changed = markAsSingleton(new Emitter<void>());
 export const onDidChangeTextViewFeatures = changed.event;
-export function hasTextViewFeature(id: string): boolean { return features.has(id); }
-export function getTextViewFeatures(): readonly TextViewFeature[] { return [...features.values()]; }
+export function hasTextViewFeature(id: string): boolean {
+	return features.has(id);
+}
+export function getTextViewFeatures(): readonly TextViewFeature[] {
+	return [...features.values()];
+}
 
 /** Registration is leased by the admitted provider and observed by existing views and their layout. */
 export function registerTextViewFeature(feature: TextViewFeature): IDisposable {
 	if (features.has(feature.id)) throw new Error(`Duplicate text view feature '${feature.id}'`);
 	features.set(feature.id, feature);
 	changed.fire();
-	return toDisposable(() => { if (features.get(feature.id) === feature) { features.delete(feature.id); changed.fire(); } });
+	return toDisposable(() => {
+		if (features.get(feature.id) === feature) {
+			features.delete(feature.id);
+			changed.fire();
+		}
+	});
 }

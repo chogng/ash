@@ -1,11 +1,11 @@
 import { TestUriIdentityServices } from '../../../../../platform/uriIdentity/test/common/uriIdentityTestServices.js';
-import assert from "node:assert/strict";
-import { test, suiteTeardown } from "mocha";
-import { Emitter } from "../../../../../base/common/event.js";
-import { Disposable } from "../../../../../base/common/lifecycle.js";
-import { URI } from "../../../../../base/common/uri.js";
-import { BrowserWorkingCopyService } from "../../browser/browserWorkingCopyService.js";
-import type { IWorkingCopy } from "../../common/workingCopyService.js";
+import assert from 'node:assert/strict';
+import { test, suiteTeardown } from 'mocha';
+import { Emitter } from '../../../../../base/common/event.js';
+import { Disposable } from '../../../../../base/common/lifecycle.js';
+import { URI } from '../../../../../base/common/uri.js';
+import { BrowserWorkingCopyService } from '../../browser/browserWorkingCopyService.js';
+import type { IWorkingCopy } from '../../common/workingCopyService.js';
 import { FileService } from '../../../../../platform/files/common/fileService.js';
 import { FileSystemProviderCapabilities } from '../../../../../platform/files/common/files.js';
 import { MemoryFileService } from '../../../../contrib/bulkEdit/test/browser/bulkEditTestServices.js';
@@ -13,9 +13,9 @@ import { MemoryFileService } from '../../../../contrib/bulkEdit/test/browser/bul
 const uriIdentityServices = new TestUriIdentityServices();
 suiteTeardown(() => uriIdentityServices.dispose());
 
-test("BrowserWorkingCopyService indexes and unregisters format-specific copies", () => {
+test('BrowserWorkingCopyService indexes and unregisters format-specific copies', () => {
 	using service = uriIdentityServices.createInstance(BrowserWorkingCopyService);
-	using copy = new FakeWorkingCopy(URI.file("C:\\project\\paper.ash-academy"));
+	using copy = new FakeWorkingCopy(URI.file('C:\\project\\paper.ash-academy'));
 	const registered: IWorkingCopy[] = [];
 	const unregistered: IWorkingCopy[] = [];
 	using registeredListener = service.onDidRegister(value => registered.push(value));
@@ -60,9 +60,9 @@ test('BrowserWorkingCopyService reports initially dirty registrations and remova
 
 test('file aliases find every format-specific working copy and unregister through their original lifetime', () => {
 	using files = new FileService();
-	const provider = new class extends MemoryFileService {
+	const provider = new (class extends MemoryFileService {
 		public override capabilities = FileSystemProviderCapabilities.FileReadWrite;
-	}([]);
+	})([]);
 	using registeredProvider = files.registerProvider('file', provider);
 	using services = new TestUriIdentityServices(files);
 	using copies = services.createInstance(BrowserWorkingCopyService);
@@ -90,7 +90,7 @@ class FakeWorkingCopy extends Disposable implements IWorkingCopy {
 	readonly onDidChangeContent = this.dirtyEmitter.event;
 	isDirty = false;
 	readonly hasExternalChange = false;
-	readonly backupKind = "text" as const;
+	readonly backupKind = 'text' as const;
 
 	constructor(readonly resource: URI) {
 		super();
@@ -102,9 +102,11 @@ class FakeWorkingCopy extends Disposable implements IWorkingCopy {
 		this.dirtyEmitter.fire();
 	}
 
-	async save(_signal: AbortSignal): Promise<void> { }
-	backup(): string { return ""; }
-	restoreBackup(): void { }
-	async saveAs(_resource: URI, _signal: AbortSignal): Promise<void> { }
-	async revert(_signal: AbortSignal): Promise<void> { }
+	async save(_signal: AbortSignal): Promise<void> {}
+	backup(): string {
+		return '';
+	}
+	restoreBackup(): void {}
+	async saveAs(_resource: URI, _signal: AbortSignal): Promise<void> {}
+	async revert(_signal: AbortSignal): Promise<void> {}
 }

@@ -1,7 +1,10 @@
 import { DisposableStore } from '../../../../base/common/lifecycle.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
-import { IInstantiationService, type ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import {
+	IInstantiationService,
+	type ServicesAccessor,
+} from '../../../../platform/instantiation/common/instantiation.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -28,31 +31,49 @@ registerWorkbenchContribution('workbench.contrib.url', WorkbenchPhase.BlockResto
 	}
 });
 
-registerAction2(class ManageTrustedDomainsAction extends Action2 {
-	constructor() {
-		super({ id: 'workbench.action.manageTrustedDomain', title: localize2('url.trust.manage', 'Manage Trusted Domains'), f1: true });
-	}
+registerAction2(
+	class ManageTrustedDomainsAction extends Action2 {
+		constructor() {
+			super({
+				id: 'workbench.action.manageTrustedDomain',
+				title: localize2('url.trust.manage', 'Manage Trusted Domains'),
+				f1: true,
+			});
+		}
 
-	override async run(accessor: ServicesAccessor): Promise<void> {
-		await accessor.get(IEditorService).openEditor({
-			resource: TRUSTED_DOMAINS_URI, languageId: 'jsonc', label: localize('url.trust.manage', 'Manage Trusted Domains'),
-		}, { pinned: true });
-	}
-});
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			await accessor
+				.get(IEditorService)
+				.openEditor(
+					{
+						resource: TRUSTED_DOMAINS_URI,
+						languageId: 'jsonc',
+						label: localize('url.trust.manage', 'Manage Trusted Domains'),
+					},
+					{ pinned: true },
+				);
+		}
+	},
+);
 
-registerAction2(class OpenURLAction extends Action2 {
-	constructor() {
-		super({ id: 'workbench.action.url.openUrl', title: localize2('url.open.title', 'Open URL'), f1: true });
-	}
+registerAction2(
+	class OpenURLAction extends Action2 {
+		constructor() {
+			super({ id: 'workbench.action.url.openUrl', title: localize2('url.open.title', 'Open URL'), f1: true });
+		}
 
-	override async run(accessor: ServicesAccessor): Promise<void> {
-		const input = accessor.get(IQuickInputService);
-		const storage = accessor.get(IStorageService);
-		const opener = accessor.get(IOpenerService);
-		const key = 'workbench.action.url.openUrl.lastInput';
-		const target = await input.input({ title: localize('url.open.prompt', 'URL to Open'), value: storage.get(key, StorageScope.WORKSPACE, '') });
-		if (!target) return;
-		storage.store(key, target, StorageScope.WORKSPACE, StorageTarget.MACHINE);
-		await opener.open(target, { allowContributedOpeners: true });
-	}
-});
+		override async run(accessor: ServicesAccessor): Promise<void> {
+			const input = accessor.get(IQuickInputService);
+			const storage = accessor.get(IStorageService);
+			const opener = accessor.get(IOpenerService);
+			const key = 'workbench.action.url.openUrl.lastInput';
+			const target = await input.input({
+				title: localize('url.open.prompt', 'URL to Open'),
+				value: storage.get(key, StorageScope.WORKSPACE, ''),
+			});
+			if (!target) return;
+			storage.store(key, target, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+			await opener.open(target, { allowContributedOpeners: true });
+		}
+	},
+);

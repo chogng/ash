@@ -5,7 +5,14 @@ import { compareFileNames, compareFileNamesUnicode } from '../../common/comparer
 suite('Filename comparers', () => {
 	test('natural order compares the whole filename and resolves equivalent names deterministically', () => {
 		const names = ['part10.ts', 'part2.ts', 'part02.ts', 'Part2.ts', '.settings', 'part1.ts'];
-		assert.deepEqual(names.sort(compareFileNames), ['.settings', 'part1.ts', 'Part2.ts', 'part02.ts', 'part2.ts', 'part10.ts']);
+		assert.deepEqual(names.sort(compareFileNames), [
+			'.settings',
+			'part1.ts',
+			'Part2.ts',
+			'part02.ts',
+			'part2.ts',
+			'part10.ts',
+		]);
 		assert.ok(compareFileNames('a.z', 'b.a') < 0);
 		assert.ok(compareFileNames('resume', 'résumé') < 0);
 		assert.equal(compareFileNames('same.ts', 'same.ts'), 0);

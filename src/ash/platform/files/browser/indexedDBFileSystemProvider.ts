@@ -32,13 +32,19 @@ interface Entry {
 
 /** Browser files with atomic revision checks shared by every window on the same origin. */
 export class IndexedDBFileSystemProvider extends Disposable implements IFileSystemProvider {
-	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.PathCaseSensitive;
+	public readonly capabilities =
+		FileSystemProviderCapabilities.FileReadWrite |
+		FileSystemProviderCapabilities.FileFolderCopy |
+		FileSystemProviderCapabilities.PathCaseSensitive;
 	public readonly onDidChangeCapabilities = Event.None;
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	public readonly onDidChangeFiles = this.changes.event;
 	private readonly channel: BroadcastDataChannel<null>;
 
-	private constructor(private readonly database: IndexedDB, private readonly scheme: string) {
+	private constructor(
+		private readonly database: IndexedDB,
+		private readonly scheme: string,
+	) {
 		super();
 		this._register(toDisposable(() => database.close()));
 		this.channel = this._register(new BroadcastDataChannel<null>('ash-user-data-files'));
@@ -57,11 +63,19 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 	public async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
 		return this.access(false, entries => {
 			if (this.entry(entries, resource).kind !== FileKind.Directory) {
-				throw createFileSystemProviderError('Expected a directory', FileSystemProviderErrorCode.FileNotADirectory);
+				throw createFileSystemProviderError(
+					'Expected a directory',
+					FileSystemProviderErrorCode.FileNotADirectory,
+				);
 			}
 			const prefix = this.key(resource).replace(/\/$/u, '') + '/';
-			return [...entries].filter(([key]) => key.startsWith(prefix) && !key.slice(prefix.length).includes('/'))
-				.map(([key, entry]) => ({ resource: URI.parse(key), name: key.slice(prefix.length), kind: entry.kind }));
+			return [...entries]
+				.filter(([key]) => key.startsWith(prefix) && !key.slice(prefix.length).includes('/'))
+				.map(([key, entry]) => ({
+					resource: URI.parse(key),
+					name: key.slice(prefix.length),
+					kind: entry.kind,
+				}));
 		});
 	}
 
@@ -106,7 +120,10 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 			this.parents(entries, resource);
 			const entry = entries.get(this.key(resource)) ?? this.newEntry(FileKind.Directory, new Uint8Array());
 			if (entry.kind !== FileKind.Directory) {
-				throw createFileSystemProviderError('A file occupies this directory', FileSystemProviderErrorCode.FileExists);
+				throw createFileSystemProviderError(
+					'A file occupies this directory',
+					FileSystemProviderErrorCode.FileExists,
+				);
 			}
 			entries.set(this.key(resource), entry);
 			return this.fileStat(resource, entry);
@@ -142,7 +159,8 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 		return this.access(true, entries => {
 			const key = this.key(resource);
 			const current = entries.get(key);
-			if (current && !options.overwrite) throw createFileSystemProviderError('File already exists', FileSystemProviderErrorCode.FileExists);
+			if (current && !options.overwrite)
+				throw createFileSystemProviderError('File already exists', FileSystemProviderErrorCode.FileExists);
 			if (!current && !options.create) throw new FileNotFoundError(resource);
 			if (options.expectedRevision !== undefined && current?.revision !== options.expectedRevision) {
 				throw new FileRevisionConflictError(resource);
@@ -157,7 +175,12 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 		});
 	}
 
-	private async transfer(source: URI, target: URI, existing: FileExistingTargetBehavior, move: boolean): Promise<void> {
+	private async transfer(
+		source: URI,
+		target: URI,
+		existing: FileExistingTargetBehavior,
+		move: boolean,
+	): Promise<void> {
 		await this.access(true, entries => {
 			const from = this.key(source);
 			const to = this.key(target);
@@ -170,7 +193,10 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 					return;
 				}
 				if (existing === 'error') {
-					throw createFileSystemProviderError('Target already exists', FileSystemProviderErrorCode.FileExists);
+					throw createFileSystemProviderError(
+						'Target already exists',
+						FileSystemProviderErrorCode.FileExists,
+					);
 				}
 				for (const key of entries.keys()) {
 					if (key === to || key.startsWith(to + '/')) {
@@ -201,7 +227,9 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 				const values = store.getAll();
 				values.onsuccess = () => {
 					try {
-						const before = new Map(keys.result.map((key, index) => [String(key), values.result[index] as Entry]));
+						const before = new Map(
+							keys.result.map((key, index) => [String(key), values.result[index] as Entry]),
+						);
 						const entries = new Map(before);
 						result = operation(entries);
 						if (write) {
@@ -216,19 +244,30 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 								}
 							}
 						}
-					} catch (error) { failure = error; store.transaction.abort(); }
+					} catch (error) {
+						failure = error;
+						store.transaction.abort();
+					}
 				};
 				return values;
 			});
 		} catch (error) {
 			throw failure ?? error;
 		}
-		if (write && !this.isDisposed) { this.channel.postData(null); this.changes.fire({ resources: undefined }); }
+		if (write && !this.isDisposed) {
+			this.channel.postData(null);
+			this.changes.fire({ resources: undefined });
+		}
 		return result;
 	}
 
 	private key(resource: URI): string {
-		if (resource.scheme !== this.scheme || resource.query || resource.fragment || resource.path.split('/').some(segment => segment === '.' || segment === '..')) {
+		if (
+			resource.scheme !== this.scheme ||
+			resource.query ||
+			resource.fragment ||
+			resource.path.split('/').some(segment => segment === '.' || segment === '..')
+		) {
 			throw new TypeError('Invalid file resource');
 		}
 		return resource.toString();
@@ -248,7 +287,10 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 			const key = this.key(resource.with({ path: '/' + segments.slice(0, index).join('/') }));
 			const parent = entries.get(key);
 			if (parent && parent.kind !== FileKind.Directory) {
-				throw createFileSystemProviderError('Parent is not a directory', FileSystemProviderErrorCode.FileNotADirectory);
+				throw createFileSystemProviderError(
+					'Parent is not a directory',
+					FileSystemProviderErrorCode.FileNotADirectory,
+				);
 			}
 			if (!parent) {
 				entries.set(key, this.newEntry(FileKind.Directory, new Uint8Array()));
@@ -261,6 +303,12 @@ export class IndexedDBFileSystemProvider extends Disposable implements IFileSyst
 	}
 
 	private fileStat(resource: URI, entry: Entry): IFileStat {
-		return { resource, kind: entry.kind, sizeBytes: entry.bytes.byteLength, readonly: false, modifiedAtMillis: entry.modifiedAtMillis };
+		return {
+			resource,
+			kind: entry.kind,
+			sizeBytes: entry.bytes.byteLength,
+			readonly: false,
+			modifiedAtMillis: entry.modifiedAtMillis,
+		};
 	}
 }

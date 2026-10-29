@@ -1,6 +1,9 @@
 import { Disposable, DisposableStore, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { Schemas } from '../../../../base/common/network.js';
-import { AgentHostFileSystemProvider, type IRemoteFilesystemConnection } from '../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
+import {
+	AgentHostFileSystemProvider,
+	type IRemoteFilesystemConnection,
+} from '../../../../platform/agentHost/common/agentHostFileSystemProvider.js';
 import { IFileService, type IFileSystemProvider } from '../../../../platform/files/common/files.js';
 import { createDecorator } from '../../../../platform/instantiation/common/instantiation.js';
 

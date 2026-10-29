@@ -17,11 +17,7 @@ const { createTestCodeEditor } = await import('../../../../test/browser/testCode
 function createEditor(model: TextModel): ReturnType<typeof createTestCodeEditor> {
 	const container = environment.window.document.createElement('div');
 	environment.window.document.body.append(container);
-	const editor = createTestCodeEditor({
-		container,
-		model,
-		contributions: [],
-	});
+	const editor = createTestCodeEditor({ container, model, contributions: [] });
 	editor.onDidDispose(() => container.remove());
 	return editor;
 }
@@ -68,7 +64,12 @@ test('editor disposal and an already cancelled parent cancel pending operations'
 	using model = new TextModel('alpha');
 	using editor = createEditor(model);
 	using pending = new EditorKeybindingCancellationTokenSource(editor);
-	using cancelled = new EditorStateCancellationTokenSource(editor, CodeEditorStateFlag.Value, undefined, CancellationToken.Cancelled);
+	using cancelled = new EditorStateCancellationTokenSource(
+		editor,
+		CodeEditorStateFlag.Value,
+		undefined,
+		CancellationToken.Cancelled,
+	);
 	editor.dispose();
 	assert.deepEqual([pending.token.isCancellationRequested, cancelled.token.isCancellationRequested], [true, true]);
 });
@@ -80,7 +81,12 @@ test('Escape cancels nested operations one at a time and releases its handler', 
 	using outer = new EditorKeybindingCancellationTokenSource(editor);
 	using inner = new EditorKeybindingCancellationTokenSource(editor);
 	const escape = (): boolean => {
-		const event = new environment.window.KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true, cancelable: true });
+		const event = new environment.window.KeyboardEvent('keydown', {
+			key: 'Escape',
+			code: 'Escape',
+			bubbles: true,
+			cancelable: true,
+		});
 		editor.controller.element.dispatchEvent(event);
 		return event.defaultPrevented;
 	};

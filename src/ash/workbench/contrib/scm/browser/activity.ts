@@ -1,5 +1,9 @@
 import type { IWorkbenchContribution } from '../../../common/contributions.js';
-import { StatusbarAlignment, type IStatusbarEntryAccessor, IStatusbarService } from '../../../services/statusbar/browser/statusbar.js';
+import {
+	StatusbarAlignment,
+	type IStatusbarEntryAccessor,
+	IStatusbarService,
+} from '../../../services/statusbar/browser/statusbar.js';
 import { Disposable, DisposableMap, MutableDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
 import { localize } from '../../../../nls.js';
@@ -11,14 +15,19 @@ export class SCMActiveRepositoryController extends Disposable {
 	private readonly repositoryListener = this._register(new MutableDisposable<IDisposable>());
 	private readonly activity = this._register(new MutableDisposable<IDisposable>());
 
-	constructor(@ISCMViewService private readonly scmViewService: ISCMViewService, @IActivityService private readonly activityService: IActivityService) {
+	constructor(
+		@ISCMViewService private readonly scmViewService: ISCMViewService,
+		@IActivityService private readonly activityService: IActivityService,
+	) {
 		super();
 		this._register(scmViewService.onDidChangeActiveRepository(() => this.selectRepository()));
 		this.selectRepository();
 	}
 
 	private selectRepository(): void {
-		this.repositoryListener.value = this.scmViewService.activeRepository?.provider.onDidChangeResources(() => this.update());
+		this.repositoryListener.value = this.scmViewService.activeRepository?.provider.onDidChangeResources(() =>
+			this.update(),
+		);
 		this.update();
 	}
 
@@ -27,10 +36,21 @@ export class SCMActiveRepositoryController extends Disposable {
 		const provider = this.scmViewService.activeRepository?.provider;
 		if (!provider) return;
 		// A file can appear in both the staged and working-tree groups; the activity counts it once.
-		const count = provider.count ?? new Set(provider.groups.flatMap(group => group.resources.map(resource => extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)))).size;
+		const count =
+			provider.count ??
+			new Set(
+				provider.groups.flatMap(group =>
+					group.resources.map(resource => extUriBiasedIgnorePathCase.getComparisonKey(resource.sourceUri)),
+				),
+			).size;
 		if (!count) return;
-		const description = count === 1 ? localize('scm.activity.oneChange', '1 changed file') : localize('scm.activity.changes', '{0} changed files', count);
-		this.activity.value = this.activityService.showViewActivity(VIEW_PANE_ID, { badge: new NumberBadge(count, () => description) });
+		const description =
+			count === 1
+				? localize('scm.activity.oneChange', '1 changed file')
+				: localize('scm.activity.changes', '{0} changed files', count);
+		this.activity.value = this.activityService.showViewActivity(VIEW_PANE_ID, {
+			badge: new NumberBadge(count, () => description),
+		});
 	}
 }
 
@@ -62,19 +82,29 @@ export class ScmStatusContribution extends Disposable implements IWorkbenchContr
 		}
 		for (const command of commands) {
 			const alignment = command.alignment === 'right' ? StatusbarAlignment.Right : StatusbarAlignment.Left;
-			const entry = { icon: command.icon, showProgress: command.showProgress, text: command.text, ariaLabel: command.ariaLabel, tooltip: command.tooltip, run: command.run ? () => command.run?.() : undefined };
+			const entry = {
+				icon: command.icon,
+				showProgress: command.showProgress,
+				text: command.text,
+				ariaLabel: command.ariaLabel,
+				tooltip: command.tooltip,
+				run: command.run ? () => command.run?.() : undefined,
+			};
 			const current = this.entries.get(command.id);
 			if (current && this.statusbarService.getEntries(alignment).some(item => item.id === command.id)) {
 				current.update(entry);
 				continue;
 			}
 			this.entries.deleteAndDispose(command.id);
-			this.entries.set(command.id, this.statusbarService.addEntry(entry, {
-				id: command.id,
-				alignment,
-				priority: command.priority,
-				compactGroup: command.compactGroup,
-			}));
+			this.entries.set(
+				command.id,
+				this.statusbarService.addEntry(entry, {
+					id: command.id,
+					alignment,
+					priority: command.priority,
+					compactGroup: command.compactGroup,
+				}),
+			);
 		}
 	}
 }

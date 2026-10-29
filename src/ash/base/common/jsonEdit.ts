@@ -1,7 +1,20 @@
-import { SyntaxKind, createScanner, findNodeAtLocation, parseTree, type JSONPath, type Node, type ParseError, type Segment } from './json.js';
+import {
+	SyntaxKind,
+	createScanner,
+	findNodeAtLocation,
+	parseTree,
+	type JSONPath,
+	type Node,
+	type ParseError,
+	type Segment,
+} from './json.js';
 import { format, isEOL, type Edit, type FormattingOptions } from './jsonFormatter.js';
 
-export function removeProperty(text: string, path: JSONPath, formattingOptions: FormattingOptions = {}): readonly Edit[] {
+export function removeProperty(
+	text: string,
+	path: JSONPath,
+	formattingOptions: FormattingOptions = {},
+): readonly Edit[] {
 	return setProperty(text, path, undefined, formattingOptions);
 }
 
@@ -30,7 +43,11 @@ export function setProperty(
 
 	if (!parent) {
 		if (value === undefined) return Object.freeze([]);
-		return withFormatting(text, { offset: root?.offset ?? 0, length: root?.length ?? 0, content: JSON.stringify(value) }, formattingOptions);
+		return withFormatting(
+			text,
+			{ offset: root?.offset ?? 0, length: root?.length ?? 0, content: JSON.stringify(value) },
+			formattingOptions,
+		);
 	}
 	if (parent.type === 'object' && typeof lastSegment === 'string' && parent.children) {
 		const existing = findNodeAtLocation(parent, [lastSegment]);
@@ -39,7 +56,11 @@ export function setProperty(
 				if (!existing.parent) throw new Error('Malformed JSON AST');
 				return removeNode(text, parent, parent.children.indexOf(existing.parent), formattingOptions);
 			}
-			return withFormatting(text, { offset: existing.offset, length: existing.length, content: JSON.stringify(value) }, formattingOptions);
+			return withFormatting(
+				text,
+				{ offset: existing.offset, length: existing.length, content: JSON.stringify(value) },
+				formattingOptions,
+			);
 		}
 		if (value === undefined) return Object.freeze([]);
 		const newProperty = `${JSON.stringify(lastSegment)}: ${JSON.stringify(value)}`;
@@ -67,12 +88,18 @@ export function setProperty(
 			}
 			const previous = parent.children[index - 1];
 			if (!previous) throw new Error('Malformed JSON AST');
-			return withFormatting(text, { offset: previous.offset + previous.length, length: 0, content: `,${serialized}` }, formattingOptions);
+			return withFormatting(
+				text,
+				{ offset: previous.offset + previous.length, length: 0, content: `,${serialized}` },
+				formattingOptions,
+			);
 		}
 		if (lastSegment < 0 || lastSegment >= parent.children.length) return Object.freeze([]);
 		return removeNode(text, parent, lastSegment, formattingOptions);
 	}
-	throw new Error(`Cannot add ${typeof lastSegment === 'number' ? 'index' : 'property'} to parent of type ${parent.type}`);
+	throw new Error(
+		`Cannot add ${typeof lastSegment === 'number' ? 'index' : 'property'} to parent of type ${parent.type}`,
+	);
 }
 
 /** Remove the node and one separator, retaining comments outside the removed value. */

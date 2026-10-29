@@ -7,18 +7,18 @@ import { createAppServerExecutionSettingsService } from '../../browser/appServer
 
 test('execution defaults retain backend revision and publish only config changes', async () => {
 	using notifications = new Emitter<ServerNotification>();
-	const requests: { method: string; params: unknown; }[] = [];
+	const requests: { method: string; params: unknown }[] = [];
 	const execution = {
 		approvalMode: 'manual',
 		commandFileAccess: 'readOnly',
-		commandNetworkAccess: 'denied'
+		commandNetworkAccess: 'denied',
 	} as const;
 	const service = createAppServerExecutionSettingsService({
 		onNotification: notifications.event,
-		async request(definition: { method: string; }, params: unknown): Promise<unknown> {
+		async request(definition: { method: string }, params: unknown): Promise<unknown> {
 			requests.push({ method: definition.method, params });
 			return definition.method === 'config/read' ? { revision: 7, execution } : {};
-		}
+		},
 	} as unknown as AppServerProtocolClient);
 	const snapshot = await service.read();
 	assert.deepEqual(snapshot, { revision: 7, settings: execution });
@@ -26,14 +26,11 @@ test('execution defaults retain backend revision and publish only config changes
 	const next = { ...execution, approvalMode: 'auto' } as const;
 	await service.configure(next, snapshot.revision);
 	assert.deepEqual(requests[0], { method: 'config/read', params: {} });
-	const write = requests[1].params as { commandId: string; expectedRevision: number; execution: unknown; };
+	const write = requests[1].params as { commandId: string; expectedRevision: number; execution: unknown };
 	assert.ok(write.commandId);
 	assert.deepEqual(
 		{ ...requests[1], params: { ...write, commandId: 'command' } },
-		{
-			method: 'config/update',
-			params: { commandId: 'command', expectedRevision: 7, execution: next }
-		}
+		{ method: 'config/update', params: { commandId: 'command', expectedRevision: 7, execution: next } },
 	);
 	let changes = 0;
 	const subscription = service.onDidChange(() => changes++);

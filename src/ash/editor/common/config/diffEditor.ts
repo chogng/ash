@@ -24,11 +24,7 @@ export const diffEditorDefaultOptions = Object.freeze({
 	diffWordWrap: 'inherit' as const,
 	diffAlgorithm: 'advanced' as const,
 	accessibilityVerbose: false,
-	experimental: Object.freeze({
-		showMoves: false,
-		showEmptyDecorations: true,
-		useTrueInlineView: false,
-	}),
+	experimental: Object.freeze({ showMoves: false, showEmptyDecorations: true, useTrueInlineView: false }),
 	hideUnchangedRegions: Object.freeze({
 		enabled: false,
 		contextLineCount: 3,

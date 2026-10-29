@@ -11,5 +11,7 @@ export class DisassemblyViewInput implements IResourceEditorInput {
 	public readonly resource = URI.from({ scheme: Schemas.internal, authority: 'debug', path: '/disassembly' });
 	public readonly readOnly = true;
 	public readonly showBreadcrumbs = false;
-	public get label(): string { return localize('debug.disassembly', 'Disassembly'); }
+	public get label(): string {
+		return localize('debug.disassembly', 'Disassembly');
+	}
 }

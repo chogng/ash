@@ -2,7 +2,11 @@ import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
 import { type ISingleEditOperation } from '../../../common/core/editOperation.js';
-import { type ICursorStateComputerData, type IEditOperationBuilder, type ICommand } from '../../../common/editorCommon.js';
+import {
+	type ICursorStateComputerData,
+	type IEditOperationBuilder,
+	type ICommand,
+} from '../../../common/editorCommon.js';
 import { type ILanguageConfigurationService } from '../../../common/languages/languageConfigurationRegistry.js';
 import { type ITextModel } from '../../../common/model.js';
 
@@ -14,27 +18,59 @@ export class BlockCommentCommand implements ICommand {
 		private readonly selection: Selection,
 		private readonly insertSpace: boolean,
 		private readonly languageConfigurationService: ILanguageConfigurationService,
-	) { }
+	) {}
 
 	public static _haystackHasNeedleAtOffset(haystack: string, needle: string, offset: number): boolean {
 		if (offset < 0 || offset + needle.length > haystack.length) return false;
 		return haystack.slice(offset, offset + needle.length).toLocaleLowerCase() === needle.toLocaleLowerCase();
 	}
 
-	public static _createRemoveBlockCommentOperations(range: Range, startToken: string, endToken: string): ISingleEditOperation[] {
+	public static _createRemoveBlockCommentOperations(
+		range: Range,
+		startToken: string,
+		endToken: string,
+	): ISingleEditOperation[] {
 		if (range.isEmpty()) {
-			return [{
-				range: new Range(range.startLineNumber, range.startColumn - startToken.length, range.endLineNumber, range.endColumn + endToken.length),
-				text: '',
-			}];
+			return [
+				{
+					range: new Range(
+						range.startLineNumber,
+						range.startColumn - startToken.length,
+						range.endLineNumber,
+						range.endColumn + endToken.length,
+					),
+					text: '',
+				},
+			];
 		}
 		return [
-			{ range: new Range(range.startLineNumber, range.startColumn - startToken.length, range.startLineNumber, range.startColumn), text: '' },
-			{ range: new Range(range.endLineNumber, range.endColumn, range.endLineNumber, range.endColumn + endToken.length), text: '' },
+			{
+				range: new Range(
+					range.startLineNumber,
+					range.startColumn - startToken.length,
+					range.startLineNumber,
+					range.startColumn,
+				),
+				text: '',
+			},
+			{
+				range: new Range(
+					range.endLineNumber,
+					range.endColumn,
+					range.endLineNumber,
+					range.endColumn + endToken.length,
+				),
+				text: '',
+			},
 		];
 	}
 
-	public static _createAddBlockCommentOperations(range: Range, startToken: string, endToken: string, insertSpace: boolean): ISingleEditOperation[] {
+	public static _createAddBlockCommentOperations(
+		range: Range,
+		startToken: string,
+		endToken: string,
+		insertSpace: boolean,
+	): ISingleEditOperation[] {
 		if (range.isEmpty()) {
 			return [{ range, text: `${startToken}  ${endToken}` }];
 		}
@@ -55,7 +91,14 @@ export class BlockCommentCommand implements ICommand {
 
 		this.selectionId = builder.trackSelection(this.selection);
 		const removal = this.findRemoval(model, startToken, endToken);
-		const operations = removal ?? BlockCommentCommand._createAddBlockCommentOperations(this.selection, startToken, endToken, this.insertSpace);
+		const operations =
+			removal ??
+			BlockCommentCommand._createAddBlockCommentOperations(
+				this.selection,
+				startToken,
+				endToken,
+				this.insertSpace,
+			);
 		if (!removal && this.selection.isEmpty()) this.collapsedCaretOffset = startToken.length + 1;
 		for (const operation of operations) builder.addTrackedEditOperation(operation.range, operation.text);
 	}

@@ -59,7 +59,7 @@ export class ExceptionWidget extends Disposable implements IContentWidget {
 			}),
 		);
 		this._register(
-			addDisposableListener(this.node, 'keydown', (event) => {
+			addDisposableListener(this.node, 'keydown', event => {
 				if (event.key === 'Escape') {
 					event.preventDefault();
 					event.stopPropagation();
@@ -121,7 +121,7 @@ export class ExceptionWidget extends Disposable implements IContentWidget {
 			key === this.pauseKey() &&
 			this.debug.getViewModel().focusedStackFrame === frame;
 		void session.exceptionInfo(session.threadId).then(
-			(info) => {
+			info => {
 				if (!current()) return;
 				this.heading.textContent = info.exceptionId;
 				this.details.textContent = [info.description, describe(info.details)]
@@ -135,7 +135,7 @@ export class ExceptionWidget extends Disposable implements IContentWidget {
 				};
 				this.editor.layoutContentWidget(this);
 			},
-			(error) => {
+			error => {
 				if (!current() || isCancellationError(error)) return;
 				this.heading.textContent = localize('debug.exceptionDetails', 'Debug exception details');
 				this.details.textContent = error instanceof Error ? error.message : String(error);
@@ -152,7 +152,7 @@ export class ExceptionWidget extends Disposable implements IContentWidget {
 function describe(details: IDebugExceptionDetails | undefined): string {
 	return details
 		? [details.typeName, details.message, details.stackTrace, ...(details.innerException ?? []).map(describe)]
-			.filter(Boolean)
-			.join('\n')
+				.filter(Boolean)
+				.join('\n')
 		: '';
 }

@@ -34,44 +34,53 @@ test('Output channels open from the product command palette', async ({ workbench
 	await expect(output.locator('.view-lines')).not.toContainText('Workbench restored');
 });
 
-test('Output task file links open the editor at their line and column from the keyboard', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ target, testWorkspace, workbench }) => {
-	const taskLabel = 'Check src/link-target.ts:12:7 now';
-	await mkdir(join(testWorkspace.directory, 'src'), { recursive: true });
-	await mkdir(join(testWorkspace.directory, '.vscode'), { recursive: true });
-	await writeFile(join(testWorkspace.directory, 'src', 'link-target.ts'), Array.from({ length: 15 }, (_, index) => `// source line ${index + 1}`).join('\n'));
-	await writeFile(join(testWorkspace.directory, '.vscode', 'tasks.json'), JSON.stringify({
-		version: '2.0.0', tasks: [
-			{ label: taskLabel, type: 'shell', command: 'node -e "process.exit(0)"' },
-		]
-	}));
-	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
-	await workbench.quickaccess.select(taskLabel);
-	await workbench.page.getByRole('tab', { name: 'Tasks', exact: true }).click();
-	await expect(workbench.page.locator('.ash-task-run')).toContainText(`${taskLabel} — succeeded (0)`);
-	await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
-	await workbench.quickaccess.select('Tasks');
-	const output = workbench.page.locator('[data-view-id="ash.output"]');
-	const input = output.locator('.stanza-editor-input');
-	await expect(output.locator('.view-lines')).toContainText('src/link-target.ts:12:7');
-	await input.focus();
-	await workbench.page.keyboard.press('ControlOrMeta+f');
-	const find = output.getByRole('textbox', { name: 'Find', exact: true });
-	await find.fill('src/link-target.ts:12:7');
-	await find.press('Enter');
-	await find.press('Escape');
-	await workbench.quickaccess.runCommand('editor.action.openLink');
-	const group = workbench.editors.groupAt(0);
-	await expect(group.tabs.filter({ hasText: 'link-target.ts' })).toBeVisible();
-	await expect(group.editor.input).toBeFocused();
-	await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('Line 12, column 7');
-	await workbench.quickaccess.runCommand('workbench.action.output.clear');
-	await expect(output.locator('.view-lines')).not.toContainText('src/link-target.ts:12:7');
-});
+test(
+	'Output task file links open the editor at their line and column from the keyboard',
+	{ tag: ['@browser-app-server', '@electron-app-server'] },
+	async ({ target, testWorkspace, workbench }) => {
+		const taskLabel = 'Check src/link-target.ts:12:7 now';
+		await mkdir(join(testWorkspace.directory, 'src'), { recursive: true });
+		await mkdir(join(testWorkspace.directory, '.vscode'), { recursive: true });
+		await writeFile(
+			join(testWorkspace.directory, 'src', 'link-target.ts'),
+			Array.from({ length: 15 }, (_, index) => `// source line ${index + 1}`).join('\n'),
+		);
+		await writeFile(
+			join(testWorkspace.directory, '.vscode', 'tasks.json'),
+			JSON.stringify({
+				version: '2.0.0',
+				tasks: [{ label: taskLabel, type: 'shell', command: 'node -e "process.exit(0)"' }],
+			}),
+		);
+		await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
+		await workbench.quickaccess.select(taskLabel);
+		await workbench.page.getByRole('tab', { name: 'Tasks', exact: true }).click();
+		await expect(workbench.page.locator('.ash-task-run')).toContainText(`${taskLabel} — succeeded (0)`);
+		await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
+		await workbench.quickaccess.select('Tasks');
+		const output = workbench.page.locator('[data-view-id="ash.output"]');
+		const input = output.locator('.stanza-editor-input');
+		await expect(output.locator('.view-lines')).toContainText('src/link-target.ts:12:7');
+		await input.focus();
+		await workbench.page.keyboard.press('ControlOrMeta+f');
+		const find = output.getByRole('textbox', { name: 'Find', exact: true });
+		await find.fill('src/link-target.ts:12:7');
+		await find.press('Enter');
+		await find.press('Escape');
+		await workbench.quickaccess.runCommand('editor.action.openLink');
+		const group = workbench.editors.groupAt(0);
+		await expect(group.tabs.filter({ hasText: 'link-target.ts' })).toBeVisible();
+		await expect(group.editor.input).toBeFocused();
+		await expect(group.content.locator('.stanza-editor-accessibility-status')).toContainText('Line 12, column 7');
+		await workbench.quickaccess.runCommand('workbench.action.output.clear');
+		await expect(output.locator('.view-lines')).not.toContainText('src/link-target.ts:12:7');
+	},
+);
 
 interface ExternalOpening {
 	readonly urls: string[];
 	readonly windows: number[];
-	readonly navigations: { readonly url: string; readonly prevented: boolean; }[];
+	readonly navigations: { readonly url: string; readonly prevented: boolean }[];
 	restore(): void;
 }
 
@@ -79,24 +88,32 @@ async function captureExternalOpening(electron: ElectronApplication): Promise<vo
 	await electron.evaluate(({ shell, BrowserWindow }) => {
 		const original = shell.openExternal;
 		const urls: string[] = [];
-		(globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening = {
+		(globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening = {
 			urls,
 			windows: BrowserWindow.getAllWindows().map(window => window.id),
 			navigations: [],
-			restore: () => { shell.openExternal = original; },
+			restore: () => {
+				shell.openExternal = original;
+			},
 		};
-		shell.openExternal = async url => { urls.push(url); };
+		shell.openExternal = async url => {
+			urls.push(url);
+		};
 	});
 }
 
 test('editor document links open from the keyboard and modifier click', async ({ application, target, workbench }) => {
 	const page = workbench.page;
 	const href = 'https://example.test/editor-link?source=text#browser';
-	const electron = target.kind === 'electron' ? application as ElectronApplication : undefined;
+	const electron = target.kind === 'electron' ? (application as ElectronApplication) : undefined;
 	if (electron) {
 		await captureExternalOpening(electron);
 	} else {
-		await page.context().route(href.split('#')[0]!, route => route.fulfill({ contentType: 'text/html', body: '<title>Editor destination</title>' }));
+		await page
+			.context()
+			.route(href.split('#')[0]!, route =>
+				route.fulfill({ contentType: 'text/html', body: '<title>Editor destination</title>' }),
+			);
 	}
 	try {
 		await workbench.quickaccess.runCommand('workbench.action.files.newUntitledFile');
@@ -110,39 +127,54 @@ test('editor document links open from the keyboard and modifier click', async ({
 		for (const [index, method] of ['keyboard', 'pointer'].entries()) {
 			const popupOpened = electron ? undefined : page.context().waitForEvent('page');
 			// A fresh profile must approve this untrusted destination before host opening.
-			const confirmation = await workbench.dialogs.confirm(application, 'Open External Link', 'Open', async () => {
-				if (method === 'keyboard') {
-					await workbench.quickaccess.runCommand('editor.action.openLink');
-				} else {
-					const bounds = await link.boundingBox();
-					expect(bounds).not.toBeNull();
-					const point = { x: bounds!.x + bounds!.width / 2, y: bounds!.y + bounds!.height / 2 };
-					await page.mouse.move(point.x, point.y);
-					await page.mouse.click(point.x, point.y);
-					await page.keyboard.down('ControlOrMeta');
-					try {
-						await expect(page.locator('.stanza-editor-link-target')).toHaveCount(1);
+			const confirmation = await workbench.dialogs.confirm(
+				application,
+				'Open External Link',
+				'Open',
+				async () => {
+					if (method === 'keyboard') {
+						await workbench.quickaccess.runCommand('editor.action.openLink');
+					} else {
+						const bounds = await link.boundingBox();
+						expect(bounds).not.toBeNull();
+						const point = { x: bounds!.x + bounds!.width / 2, y: bounds!.y + bounds!.height / 2 };
+						await page.mouse.move(point.x, point.y);
 						await page.mouse.click(point.x, point.y);
-					} finally {
-						await page.keyboard.up('ControlOrMeta');
+						await page.keyboard.down('ControlOrMeta');
+						try {
+							await expect(page.locator('.stanza-editor-link-target')).toHaveCount(1);
+							await page.mouse.click(point.x, point.y);
+						} finally {
+							await page.keyboard.up('ControlOrMeta');
+						}
 					}
-				}
-			});
+				},
+			);
 			expect(confirmation.detail).toBe(href);
 			if (electron) {
-				await expect.poll(() => electron.evaluate(({ BrowserWindow }) => {
-					const state = (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening;
-					return {
-						urls: state.urls,
-						unchangedWindows: BrowserWindow.getAllWindows().map(window => window.id).join(',') === state.windows.join(','),
-					};
-				})).toEqual({ urls: Array.from({ length: index + 1 }, () => href), unchangedWindows: true });
+				await expect
+					.poll(() =>
+						electron.evaluate(({ BrowserWindow }) => {
+							const state = (globalThis as typeof globalThis & { externalOpening: ExternalOpening })
+								.externalOpening;
+							return {
+								urls: state.urls,
+								unchangedWindows:
+									BrowserWindow.getAllWindows()
+										.map(window => window.id)
+										.join(',') === state.windows.join(','),
+							};
+						}),
+					)
+					.toEqual({ urls: Array.from({ length: index + 1 }, () => href), unchangedWindows: true });
 			} else {
 				const popup = await popupOpened!;
 				try {
 					await expect(popup).toHaveURL(href);
 					await expect(popup).toHaveTitle('Editor destination');
-					expect(await popup.evaluate(() => ({ opener: window.opener, referrer: document.referrer }))).toEqual({ opener: null, referrer: '' });
+					expect(
+						await popup.evaluate(() => ({ opener: window.opener, referrer: document.referrer })),
+					).toEqual({ opener: null, referrer: '' });
 				} finally {
 					await popup.close();
 				}
@@ -151,12 +183,17 @@ test('editor document links open from the keyboard and modifier click', async ({
 		await expect(link).toBeVisible();
 	} finally {
 		if (electron) {
-			await electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.restore());
+			await electron.evaluate(() =>
+				(globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening.restore(),
+			);
 		}
 	}
 });
 
-test('editor Open Link and Output help are localized after a display-language restart', async ({ workbench, restartWorkbench }) => {
+test('editor Open Link and Output help are localized after a display-language restart', async ({
+	workbench,
+	restartWorkbench,
+}) => {
 	await workbench.quickaccess.runCommand('workbench.action.configureLocale');
 	const language = workbench.page.getByRole('dialog', { name: 'Select Display Language' }).getByRole('combobox');
 	await language.fill('简体中文');
@@ -166,8 +203,15 @@ test('editor Open Link and Output help are localized after a display-language re
 	await workbench.editors.groupAt(0).content.locator('.stanza-editor-input').focus();
 	// Keep the command prefix: replacing it switches Quick Access to file search.
 	await workbench.quickaccess.open('>打开链接');
-	await expect(workbench.quickaccess.element.getByRole('tab', { name: '命令', exact: true })).toHaveAttribute('aria-selected', 'true');
-	const openLink = workbench.quickaccess.items.filter({ has: workbench.page.locator('.ash-quick-pick-row-description').getByText('editor.action.openLink', { exact: true }) });
+	await expect(workbench.quickaccess.element.getByRole('tab', { name: '命令', exact: true })).toHaveAttribute(
+		'aria-selected',
+		'true',
+	);
+	const openLink = workbench.quickaccess.items.filter({
+		has: workbench.page
+			.locator('.ash-quick-pick-row-description')
+			.getByText('editor.action.openLink', { exact: true }),
+	});
 	await expect(openLink.locator('.ash-quick-pick-row-label')).toHaveText('打开链接');
 	await workbench.quickaccess.close();
 	await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
@@ -185,50 +229,72 @@ test('editor Open Link and Output help are localized after a display-language re
 test.describe('SCM external opening', () => {
 	test.use({ gitRepository: true });
 
-	test('Git commit links reach the system browser without creating an application window', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench }) => {
-		const run = promisify(execFile);
-		const cwd = testWorkspace.directory;
-		await run('git', ['remote', 'add', 'origin', 'https://github.com/ash-test/history.git'], { cwd });
-		const { stdout } = await run('git', ['rev-parse', 'HEAD'], { cwd });
-		const href = `https://github.com/ash-test/history/commit/${stdout.trim()}`;
-		const electron = application as ElectronApplication;
-		await captureExternalOpening(electron);
-		try {
-			const page = workbench.page;
-			await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
-			const history = page.locator('[data-view-id="ash.gitGraph"]');
-			await expect(history).toBeVisible();
-			await history.locator('.ash-pane-view-header').click();
-			await history.locator('[data-action-id="workbench.scm.action.graph.refresh"] > button').click();
-			const commit = history.getByRole('treeitem', { name: /Initial/ });
-			await expect(commit).toBeVisible();
-			await commit.focus();
-			await commit.press('Alt+ArrowDown');
-			const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
-			const openLink = hover.getByRole('button', { name: 'Open on GitHub', exact: true });
-			await openLink.focus();
-			await openLink.press('Enter');
-			await expect.poll(() => electron.evaluate(({ BrowserWindow }) => {
-				const state = (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening;
-				return {
-					urls: state.urls,
-					unchangedWindows: BrowserWindow.getAllWindows().map(window => window.id).join(',') === state.windows.join(','),
-				};
-			})).toEqual({ urls: [href], unchangedWindows: true });
-		} finally {
-			await electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.restore());
-		}
-	});
+	test(
+		'Git commit links reach the system browser without creating an application window',
+		{ tag: ['@electron-app-server'] },
+		async ({ application, target, testWorkspace, workbench }) => {
+			const run = promisify(execFile);
+			const cwd = testWorkspace.directory;
+			await run('git', ['remote', 'add', 'origin', 'https://github.com/ash-test/history.git'], { cwd });
+			const { stdout } = await run('git', ['rev-parse', 'HEAD'], { cwd });
+			const href = `https://github.com/ash-test/history/commit/${stdout.trim()}`;
+			const electron = application as ElectronApplication;
+			await captureExternalOpening(electron);
+			try {
+				const page = workbench.page;
+				await page.getByRole('tab', { name: /^Source Control(?:,|$)/u }).click();
+				const history = page.locator('[data-view-id="ash.gitGraph"]');
+				await expect(history).toBeVisible();
+				await history.locator('.ash-pane-view-header').click();
+				await history.locator('[data-action-id="workbench.scm.action.graph.refresh"] > button').click();
+				const commit = history.getByRole('treeitem', { name: /Initial/ });
+				await expect(commit).toBeVisible();
+				await commit.focus();
+				await commit.press('Alt+ArrowDown');
+				const hover = page.getByRole('tooltip').filter({ has: page.locator('.ash-scm-graph-hover') });
+				const openLink = hover.getByRole('button', { name: 'Open on GitHub', exact: true });
+				await openLink.focus();
+				await openLink.press('Enter');
+				await expect
+					.poll(() =>
+						electron.evaluate(({ BrowserWindow }) => {
+							const state = (globalThis as typeof globalThis & { externalOpening: ExternalOpening })
+								.externalOpening;
+							return {
+								urls: state.urls,
+								unchangedWindows:
+									BrowserWindow.getAllWindows()
+										.map(window => window.id)
+										.join(',') === state.windows.join(','),
+							};
+						}),
+					)
+					.toEqual({ urls: [href], unchangedWindows: true });
+			} finally {
+				await electron.evaluate(() =>
+					(globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening.restore(),
+				);
+			}
+		},
+	);
 });
 
-test('release notes external links use the product opener from the keyboard', async ({ application, target, workbench }) => {
+test('release notes external links use the product opener from the keyboard', async ({
+	application,
+	target,
+	workbench,
+}) => {
 	const page = workbench.page;
 	const href = 'https://example.test/ash-docs?topic=links#opening';
-	const electron = target.kind === 'electron' ? application as ElectronApplication : undefined;
+	const electron = target.kind === 'electron' ? (application as ElectronApplication) : undefined;
 	if (electron) {
 		await captureExternalOpening(electron);
 	} else {
-		await page.context().route(href.split('#')[0]!, route => route.fulfill({ contentType: 'text/html', body: '<title>External documentation</title>' }));
+		await page
+			.context()
+			.route(href.split('#')[0]!, route =>
+				route.fulfill({ contentType: 'text/html', body: '<title>External documentation</title>' }),
+			);
 	}
 	try {
 		await workbench.quickaccess.runCommand('workbench.action.showReleaseNotes');
@@ -245,13 +311,21 @@ test('release notes external links use the product opener from the keyboard', as
 		await link.focus();
 		if (electron) {
 			await link.press('Enter');
-			await expect.poll(() => electron.evaluate(({ BrowserWindow }) => {
-				const state = (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening;
-				return {
-					urls: state.urls,
-					unchangedWindows: BrowserWindow.getAllWindows().map(window => window.id).join(',') === state.windows.join(','),
-				};
-			})).toEqual({ urls: [href], unchangedWindows: true });
+			await expect
+				.poll(() =>
+					electron.evaluate(({ BrowserWindow }) => {
+						const state = (globalThis as typeof globalThis & { externalOpening: ExternalOpening })
+							.externalOpening;
+						return {
+							urls: state.urls,
+							unchangedWindows:
+								BrowserWindow.getAllWindows()
+									.map(window => window.id)
+									.join(',') === state.windows.join(','),
+						};
+					}),
+				)
+				.toEqual({ urls: [href], unchangedWindows: true });
 		} else {
 			const opened = page.context().waitForEvent('page');
 			await link.press('Enter');
@@ -266,63 +340,118 @@ test('release notes external links use the product opener from the keyboard', as
 		await expect(notes.getByRole('heading', { name: 'Ash 0.1', exact: true })).toBeVisible();
 	} finally {
 		if (electron) {
-			await electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.restore());
+			await electron.evaluate(() =>
+				(globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening.restore(),
+			);
 		}
 	}
 });
 
-test('desktop blocked navigation retains the current document IPC', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, workbench }) => {
-	const electron = application as ElectronApplication;
-	const page = workbench.page;
-	await installMainChannelTestClient(page);
-	const configuration = await (() => readUserSettings(page))();
-	const originalUrl = page.url();
-	const navigation = await electron.evaluateHandle(({ BrowserWindow }, originalUrl) => {
-		const result = { navigation: undefined as { url: string; prevented: boolean; } | undefined };
-		const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === originalUrl)!;
-		window.webContents.once('will-navigate', (event, url) => { result.navigation = { url, prevented: event.defaultPrevented }; });
-		return result;
-	}, originalUrl);
-	try {
-		const href = 'https://example.test/blocked-product-navigation';
-		await page.evaluate(href => { location.href = href; }, href);
-		await expect.poll(() => navigation.evaluate(result => result.navigation)).toEqual({ url: href, prevented: true });
-		expect(page.url()).toBe(originalUrl);
-		expect(await (() => readUserSettings(page))()).toEqual(configuration);
-	} finally {
-		await navigation.dispose();
-	}
-});
-
-test('desktop link window requests use the system and product pages cannot navigate away', { tag: ['@electron-ui', '@electron-app-server'] }, async ({ application, target, workbench }) => {
-	const electron = application as ElectronApplication;
-	await captureExternalOpening(electron);
-	try {
-		const agents = await workbench.openAgentsWindow(target.kind);
-		const urls: string[] = [];
-		for (const [index, page] of [workbench.page, agents].entries()) {
-			const href = `https://example.test/window-${index}`;
-			const originalUrl = page.url();
-			const windows = await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => window.id));
-			await page.evaluate(href => { window.open(href, '_blank', 'noopener,noreferrer'); }, href);
-			urls.push(href);
-			await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.urls)).toEqual(urls);
-			expect(await electron.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().map(window => window.id))).toEqual(windows);
-			await electron.evaluate(({ BrowserWindow }, originalUrl) => {
-				const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === originalUrl)!;
-				window.webContents.once('will-navigate', (event, url) => {
-					(globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.navigations.push({ url, prevented: event.defaultPrevented });
-				});
-			}, originalUrl);
-			await page.evaluate(href => { location.href = href; }, href);
-			await expect.poll(() => electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.navigations.at(-1))).toEqual({ url: href, prevented: true });
+test(
+	'desktop blocked navigation retains the current document IPC',
+	{ tag: ['@electron-ui', '@electron-app-server'] },
+	async ({ application, workbench }) => {
+		const electron = application as ElectronApplication;
+		const page = workbench.page;
+		await installMainChannelTestClient(page);
+		const configuration = await (() => readUserSettings(page))();
+		const originalUrl = page.url();
+		const navigation = await electron.evaluateHandle(({ BrowserWindow }, originalUrl) => {
+			const result = { navigation: undefined as { url: string; prevented: boolean } | undefined };
+			const window = BrowserWindow.getAllWindows().find(window => window.webContents.getURL() === originalUrl)!;
+			window.webContents.once('will-navigate', (event, url) => {
+				result.navigation = { url, prevented: event.defaultPrevented };
+			});
+			return result;
+		}, originalUrl);
+		try {
+			const href = 'https://example.test/blocked-product-navigation';
+			await page.evaluate(href => {
+				location.href = href;
+			}, href);
+			await expect
+				.poll(() => navigation.evaluate(result => result.navigation))
+				.toEqual({ url: href, prevented: true });
 			expect(page.url()).toBe(originalUrl);
-			await expect.poll(() => page.evaluate(selector => {
-				const bounds = document.querySelector(selector)?.getBoundingClientRect();
-				return Boolean(bounds && bounds.width > 0 && bounds.height > 0);
-			}, index === 0 ? '.ash-workbench' : '.ash-sessions-window')).toBe(true);
+			expect(await (() => readUserSettings(page))()).toEqual(configuration);
+		} finally {
+			await navigation.dispose();
 		}
-	} finally {
-		await electron.evaluate(() => (globalThis as typeof globalThis & { externalOpening: ExternalOpening; }).externalOpening.restore());
-	}
-});
+	},
+);
+
+test(
+	'desktop link window requests use the system and product pages cannot navigate away',
+	{ tag: ['@electron-ui', '@electron-app-server'] },
+	async ({ application, target, workbench }) => {
+		const electron = application as ElectronApplication;
+		await captureExternalOpening(electron);
+		try {
+			const agents = await workbench.openAgentsWindow(target.kind);
+			const urls: string[] = [];
+			for (const [index, page] of [workbench.page, agents].entries()) {
+				const href = `https://example.test/window-${index}`;
+				const originalUrl = page.url();
+				const windows = await electron.evaluate(({ BrowserWindow }) =>
+					BrowserWindow.getAllWindows().map(window => window.id),
+				);
+				await page.evaluate(href => {
+					window.open(href, '_blank', 'noopener,noreferrer');
+				}, href);
+				urls.push(href);
+				await expect
+					.poll(() =>
+						electron.evaluate(
+							() =>
+								(globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening
+									.urls,
+						),
+					)
+					.toEqual(urls);
+				expect(
+					await electron.evaluate(({ BrowserWindow }) =>
+						BrowserWindow.getAllWindows().map(window => window.id),
+					),
+				).toEqual(windows);
+				await electron.evaluate(({ BrowserWindow }, originalUrl) => {
+					const window = BrowserWindow.getAllWindows().find(
+						window => window.webContents.getURL() === originalUrl,
+					)!;
+					window.webContents.once('will-navigate', (event, url) => {
+						(
+							globalThis as typeof globalThis & { externalOpening: ExternalOpening }
+						).externalOpening.navigations.push({ url, prevented: event.defaultPrevented });
+					});
+				}, originalUrl);
+				await page.evaluate(href => {
+					location.href = href;
+				}, href);
+				await expect
+					.poll(() =>
+						electron.evaluate(() =>
+							(
+								globalThis as typeof globalThis & { externalOpening: ExternalOpening }
+							).externalOpening.navigations.at(-1),
+						),
+					)
+					.toEqual({ url: href, prevented: true });
+				expect(page.url()).toBe(originalUrl);
+				await expect
+					.poll(() =>
+						page.evaluate(
+							selector => {
+								const bounds = document.querySelector(selector)?.getBoundingClientRect();
+								return Boolean(bounds && bounds.width > 0 && bounds.height > 0);
+							},
+							index === 0 ? '.ash-workbench' : '.ash-sessions-window',
+						),
+					)
+					.toBe(true);
+			}
+		} finally {
+			await electron.evaluate(() =>
+				(globalThis as typeof globalThis & { externalOpening: ExternalOpening }).externalOpening.restore(),
+			);
+		}
+	},
+);

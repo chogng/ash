@@ -2,23 +2,23 @@ import type { IEditorGroup } from '../../../services/editor/common/editorGroupsS
 import type { IEditorPane, IResourceEditorInput } from '../../../common/editor.js';
 import { Composite } from '../../composite.js';
 import type { IBulkEditOptions } from '../../../../editor/browser/services/bulkEditService.js';
-import type { IDimension } from "../../../../base/browser/dom.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { type ITextFileService } from "../../../services/textfile/common/textfiles.js";
-import type { IFileService } from "../../../../platform/files/common/files.js";
-import type { IDiffService } from "../../../services/diff/common/diffService.js";
-import type { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
-import type { IWorkingCopyService } from "../../../services/workingCopy/common/workingCopyService.js";
-import type { IDocumentCollaborationApi } from "../../../../platform/collab/common/documentCollaborationApi.js";
-import type { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import { type LanguageLocation, type LanguageWorkspaceEdit } from "../../../../editor/common/languages.js";
-import type { ILanguageDiagnosticsService } from "../../../services/language/common/languageDiagnosticsService.js";
-import type { IKeybindingService } from "../../../../platform/keybinding/common/keybinding.js";
-import type { IKeyboardLayoutService } from "../../../../platform/keyboardLayout/common/keyboardLayout.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import type { IMenuService } from "../../../../platform/actions/common/actions.js";
-import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
+import type { IDimension } from '../../../../base/browser/dom.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { type ITextFileService } from '../../../services/textfile/common/textfiles.js';
+import type { IFileService } from '../../../../platform/files/common/files.js';
+import type { IDiffService } from '../../../services/diff/common/diffService.js';
+import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import type { IWorkingCopyService } from '../../../services/workingCopy/common/workingCopyService.js';
+import type { IDocumentCollaborationApi } from '../../../../platform/collab/common/documentCollaborationApi.js';
+import type { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import { type LanguageLocation, type LanguageWorkspaceEdit } from '../../../../editor/common/languages.js';
+import type { ILanguageDiagnosticsService } from '../../../services/language/common/languageDiagnosticsService.js';
+import type { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
+import type { IKeyboardLayoutService } from '../../../../platform/keyboardLayout/common/keyboardLayout.js';
+import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
+import type { IMenuService } from '../../../../platform/actions/common/actions.js';
+import type { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
 import type { TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
 import type { IAction } from '../../../../base/common/actions.js';
 import type { MenuId } from '../../../../platform/actions/common/actions.js';
@@ -35,15 +35,19 @@ export abstract class EditorPane extends Composite implements IEditorPane {
 	/** Assigned by the group host before the pane creates its content. Modal panes have no document group. */
 	public group: IEditorGroup | undefined;
 	/** Pane-owned controls borrowed by modal or compact window chrome while this pane is active. */
-	public getTitleControl(): HTMLElement | undefined { return undefined; }
+	public getTitleControl(): HTMLElement | undefined {
+		return undefined;
+	}
 	/** Lets a pane omit actions already hosted by its compact window title control. */
-	public override getActions(_menuId?: MenuId): readonly IAction[] { return super.getActions(); }
+	public override getActions(_menuId?: MenuId): readonly IAction[] {
+		return super.getActions();
+	}
 	public abstract setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void>;
 	public abstract clearInput(): void;
 	public abstract layout(dimension: IDimension): void;
 }
 
-export interface EditorPane extends IEditorPane { }
+export interface EditorPane extends IEditorPane {}
 
 export interface EditorPaneCreationOptions {
 	/** The input used to choose a profile-specific pane implementation. */
@@ -70,7 +74,10 @@ export interface EditorPaneCreationOptions {
 	readonly workingCopyService?: IWorkingCopyService;
 	readonly onSave?: () => Promise<void | boolean>;
 	readonly onOpenLocation?: (location: LanguageLocation) => void | Promise<void>;
-	readonly onApplyWorkspaceEdit?: (edit: LanguageWorkspaceEdit, options?: IBulkEditOptions) => void | boolean | Promise<void | boolean>;
+	readonly onApplyWorkspaceEdit?: (
+		edit: LanguageWorkspaceEdit,
+		options?: IBulkEditOptions,
+	) => void | boolean | Promise<void | boolean>;
 }
 
 export enum EditorPaneMatch {

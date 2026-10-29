@@ -17,7 +17,10 @@ export function useBrowserTests() {
 	const outputRoot = process.env.ASH_BROWSER_UNIT_RESULTS;
 	const outputPath = (...parts: string[]): string => {
 		if (!outputRoot) throw new Error('Run browser component tests through pnpm test:unit.');
-		const id = createHash('sha256').update(currentTest.file! + currentTest.fullTitle()).digest('hex').slice(0, 16);
+		const id = createHash('sha256')
+			.update(currentTest.file! + currentTest.fullTitle())
+			.digest('hex')
+			.slice(0, 16);
 		const path = resolve(outputRoot, id, ...parts);
 		mkdirSync(resolve(path, '..'), { recursive: true });
 		return path;
@@ -27,8 +30,13 @@ export function useBrowserTests() {
 		// Register after the suite has finished declaring its own teardown hooks.
 		// Those hooks still need their live page, as they did under Playwright.
 		this.test!.parent!.afterEach('close browser context', async () => {
-			try { await context?.tracing.stop(currentTest.state === 'failed' || pageErrors.length > 0 ? { path: outputPath('trace.zip') } : {}); }
-			finally { await context?.close(); }
+			try {
+				await context?.tracing.stop(
+					currentTest.state === 'failed' || pageErrors.length > 0 ? { path: outputPath('trace.zip') } : {},
+				);
+			} finally {
+				await context?.close();
+			}
 			assert.deepEqual(pageErrors, [], 'Unhandled browser errors');
 		});
 		if (!baseURL) throw new Error('Run browser component tests through pnpm test:unit.');
@@ -39,20 +47,37 @@ export function useBrowserTests() {
 		pageErrors = [];
 		context = await browser.newContext({ viewport: { width: 1280, height: 720 }, baseURL, ...options });
 		// Context events also cover popups and errors raised by the suite's teardown.
-		context.on('weberror', error => pageErrors.push(`${error.page()?.url() ?? 'Browser'}\n${error.error().stack ?? error.error().message}`));
+		context.on('weberror', error =>
+			pageErrors.push(`${error.page()?.url() ?? 'Browser'}\n${error.error().stack ?? error.error().message}`),
+		);
 		await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
 		page = await context.newPage();
 	});
-	suiteTeardown(async () => { await browser?.close(); });
+	suiteTeardown(async () => {
+		await browser?.close();
+	});
 	return {
-		get page(): Page { return page; },
-		get context(): BrowserContext { return context; },
-		get browser(): Browser { return browser; },
-		get baseURL(): string { return baseURL!; },
-		timeout(milliseconds: number): void { currentTest.timeout(milliseconds); },
+		get page(): Page {
+			return page;
+		},
+		get context(): BrowserContext {
+			return context;
+		},
+		get browser(): Browser {
+			return browser;
+		},
+		get baseURL(): string {
+			return baseURL!;
+		},
+		timeout(milliseconds: number): void {
+			currentTest.timeout(milliseconds);
+		},
 		info: {
 			outputPath,
-			async attach(name: string, attachment: { body?: string | Buffer; path?: string; contentType?: string; }): Promise<void> {
+			async attach(
+				name: string,
+				attachment: { body?: string | Buffer; path?: string; contentType?: string },
+			): Promise<void> {
 				const path = outputPath(name.replace(/[^a-zA-Z0-9._-]/gu, '_'));
 				if (attachment.body !== undefined) writeFileSync(path, attachment.body);
 				else if (attachment.path) copyFileSync(attachment.path, path);
@@ -60,8 +85,13 @@ export function useBrowserTests() {
 		},
 		use(value: BrowserContextOptions): void {
 			let previous: BrowserContextOptions;
-			suiteSetup(() => { previous = options; options = { ...options, ...value }; });
-			suiteTeardown(() => { options = previous; });
+			suiteSetup(() => {
+				previous = options;
+				options = { ...options, ...value };
+			});
+			suiteTeardown(() => {
+				options = previous;
+			});
 		},
 	};
 }

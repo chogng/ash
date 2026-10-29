@@ -1,8 +1,8 @@
-import { strict as assert } from "node:assert";
-import { test } from "mocha";
-import { JSDOM } from "jsdom";
-import { appendIcon, setIconResolver } from "../../browser/ui/lxicons/lxicon.js";
-import { getLxiconDefinition, registerLxicon } from "../../common/lxiconsUtil.js";
+import { strict as assert } from 'node:assert';
+import { test } from 'mocha';
+import { JSDOM } from 'jsdom';
+import { appendIcon, setIconResolver } from '../../browser/ui/lxicons/lxicon.js';
+import { getLxiconDefinition, registerLxicon } from '../../common/lxiconsUtil.js';
 import { Lxicon } from '../../common/lxicons.js';
 
 test('appendIcon creates isolated native glyph nodes in each document', () => {
@@ -20,7 +20,10 @@ test('appendIcon creates isolated native glyph nodes in each document', () => {
 		first.dataset.ashIconCharacter = 'X';
 		assert.equal(second.dataset.ashIconCharacter, '\ue001');
 		assert.equal(appendIcon(icon, secondDocument.body).dataset.ashIconCharacter, '\ue001');
-	} finally { firstDocument.defaultView?.close(); secondDocument.defaultView?.close(); }
+	} finally {
+		firstDocument.defaultView?.close();
+		secondDocument.defaultView?.close();
+	}
 });
 
 test('native font icons retain their identity through font theme overrides', () => {
@@ -32,7 +35,10 @@ test('native font icons retain their identity through font theme overrides', () 
 		const first = appendIcon(icon, firstDocument.body);
 		const second = appendIcon(icon, secondDocument.body);
 		assert.equal(first.getAttribute('data-ash-icon-id'), 'dialog-error');
-		assert.equal(first.getAttribute('data-ash-icon-character'), (defaultDefinition as { fontCharacter: string; }).fontCharacter);
+		assert.equal(
+			first.getAttribute('data-ash-icon-character'),
+			(defaultDefinition as { fontCharacter: string }).fontCharacter,
+		);
 		assert.equal(first.childElementCount, 0);
 		assert.equal(first.textContent, '');
 		assert.equal(first.getAttribute('aria-hidden'), 'true');
@@ -41,7 +47,7 @@ test('native font icons retain their identity through font theme overrides', () 
 		first.classList.add('custom-size');
 		first.setAttribute('title', 'Keep this tooltip');
 		const themedDefinition = { fontCharacter: 'B' };
-		setIconResolver(firstDocument, requested => requested.id === icon.id ? themedDefinition : undefined);
+		setIconResolver(firstDocument, requested => (requested.id === icon.id ? themedDefinition : undefined));
 		assert.equal(firstDocument.querySelector('.ash-icon'), first);
 		assert(first.classList.contains('custom-size'));
 		assert.equal(first.getAttribute('title'), 'Keep this tooltip');
@@ -50,11 +56,14 @@ test('native font icons retain their identity through font theme overrides', () 
 		assert.equal(source.innerHTML, sourceArtwork);
 		assert.equal(second.innerHTML, sourceArtwork);
 		assert.equal(appendIcon(icon, firstDocument.body).dataset.ashIconCharacter, 'B');
-		setIconResolver(firstDocument, requested => requested.id === icon.id ? defaultDefinition : undefined);
+		setIconResolver(firstDocument, requested => (requested.id === icon.id ? defaultDefinition : undefined));
 		assert.equal(first.innerHTML, sourceArtwork);
 		assert.equal(first.childElementCount, 0);
 		assert(first.classList.contains('ash-icon-default-font'));
-		const themedFont = { fontCharacter: 'A', font: { id: 'test-font', definition: { weight: '600', style: 'italic' } } };
+		const themedFont = {
+			fontCharacter: 'A',
+			font: { id: 'test-font', definition: { weight: '600', style: 'italic' } },
+		};
 		setIconResolver(firstDocument, () => themedFont);
 		assert.equal(first.dataset.ashIconCharacter, 'A');
 		assert.equal(first.style.getPropertyValue('--ash-icon-font-family'), '"test-font"');
@@ -69,7 +78,6 @@ test('native font icons retain their identity through font theme overrides', () 
 		secondDocument.defaultView?.close();
 	}
 });
-
 
 test('prepared glyph layers retain their animation identities and clear on theme replacement', () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
@@ -87,5 +95,7 @@ test('prepared glyph layers retain their animation identities and clear on theme
 		assert.equal(node.classList.contains('ash-icon-layered'), false);
 		setIconResolver(browser.window.document, () => undefined);
 		assert.equal(node.querySelectorAll('.ash-icon-font-layer').length, 9);
-	} finally { browser.window.close(); }
+	} finally {
+		browser.window.close();
+	}
 });

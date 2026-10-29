@@ -1,10 +1,19 @@
 import { Emitter, type Event } from '../../../../../base/common/event.js';
 import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import type { ILogService } from '../../../../log/common/log.js';
-import { GeneralShellType, PosixShellType, type ITerminalCommandScreen, type TerminalShellType } from '../../terminal.js';
+import {
+	GeneralShellType,
+	PosixShellType,
+	type ITerminalCommandScreen,
+	type TerminalShellType,
+} from '../../terminal.js';
 import type { ITerminalCommand } from '../capabilities.js';
 
-export const enum PromptInputState { Unknown = 0, Input = 1, Execute = 2 }
+export const enum PromptInputState {
+	Unknown = 0,
+	Input = 1,
+	Execute = 2,
+}
 
 export interface IPromptInputModelState {
 	readonly value: string;
@@ -43,7 +52,7 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 	private lastLine = 0;
 	private continuation: string | undefined;
 	private lastPrompt: string | undefined;
-	private rightPrompt: { start: number; end: number; } | undefined;
+	private rightPrompt: { start: number; end: number } | undefined;
 	private lastUserInput = '';
 	private shell: TerminalShellType;
 	private readonly started = this._register(new Emitter<IPromptInputModelState>());
@@ -54,12 +63,24 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 	readonly onDidChangeInput = this.changed.event;
 	readonly onDidFinishInput = this.finished.event;
 	readonly onDidInterrupt = this.interrupted.event;
-	get state(): PromptInputState { return this.inputState; }
-	get value(): string { return this.text; }
-	get cursorIndex(): number { return this.cursor; }
-	get ghostTextIndex(): number { return this.ghost; }
-	get prefix(): string { return this.cursor < 0 ? '' : this.text.slice(0, this.cursor); }
-	get suffix(): string { return this.cursor < 0 ? '' : this.text.slice(this.cursor, this.ghost < 0 ? undefined : this.ghost); }
+	get state(): PromptInputState {
+		return this.inputState;
+	}
+	get value(): string {
+		return this.text;
+	}
+	get cursorIndex(): number {
+		return this.cursor;
+	}
+	get ghostTextIndex(): number {
+		return this.ghost;
+	}
+	get prefix(): string {
+		return this.cursor < 0 ? '' : this.text.slice(0, this.cursor);
+	}
+	get suffix(): string {
+		return this.cursor < 0 ? '' : this.text.slice(this.cursor, this.ghost < 0 ? undefined : this.ghost);
+	}
 
 	constructor(
 		private readonly terminal: ITerminalCommandScreen,
@@ -70,24 +91,28 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 		private readonly log: ILogService,
 	) {
 		super();
-		this._register(onCommandStart(command => {
-			this.origin = command.marker;
-			this.startX = command.startX ?? terminal.buffer.normal.cursorX;
-			this.lastLine = this.origin?.line ?? 0;
-			this.rightPrompt = undefined;
-			this.text = '';
-			this.cursor = 0;
-			this.ghost = -1;
-			this.inputState = PromptInputState.Input;
-			this.started.fire(this.snapshot());
-			this.sync();
-		}));
+		this._register(
+			onCommandStart(command => {
+				this.origin = command.marker;
+				this.startX = command.startX ?? terminal.buffer.normal.cursorX;
+				this.lastLine = this.origin?.line ?? 0;
+				this.rightPrompt = undefined;
+				this.text = '';
+				this.cursor = 0;
+				this.ghost = -1;
+				this.inputState = PromptInputState.Input;
+				this.started.fire(this.snapshot());
+				this.sync();
+			}),
+		);
 		this._register(onCommandStartChanged(() => this.sync()));
 		this._register(onCommandExecuted(() => this.finish(PromptInputState.Execute)));
-		this._register(onCommandFinished(() => {
-			this.inputState = PromptInputState.Unknown;
-			this.origin = undefined;
-		}));
+		this._register(
+			onCommandFinished(() => {
+				this.inputState = PromptInputState.Unknown;
+				this.origin = undefined;
+			}),
+		);
 		const parsed = terminal.onWriteParsed(() => this.sync());
 		const cursor = terminal.onCursorMove(() => this.sync());
 		const input = terminal.onData(value => {
@@ -152,7 +177,13 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 	}
 
 	serialize(): ISerializedPromptInputModel {
-		return { modelState: this.snapshot(), commandStartX: this.startX, lastPromptLine: this.lastPrompt, continuationPrompt: this.continuation, lastUserInput: this.lastUserInput };
+		return {
+			modelState: this.snapshot(),
+			commandStartX: this.startX,
+			lastPromptLine: this.lastPrompt,
+			continuationPrompt: this.continuation,
+			lastUserInput: this.lastUserInput,
+		};
 	}
 
 	deserialize(value: ISerializedPromptInputModel): void {
@@ -170,7 +201,13 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 	}
 
 	private snapshot(): IPromptInputModelState {
-		return { value: this.text, prefix: this.prefix, suffix: this.suffix, cursorIndex: this.cursor, ghostTextIndex: this.ghost };
+		return {
+			value: this.text,
+			prefix: this.prefix,
+			suffix: this.suffix,
+			cursorIndex: this.cursor,
+			ghostTextIndex: this.ghost,
+		};
 	}
 
 	private finish(state: PromptInputState): void {
@@ -181,7 +218,12 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 	}
 
 	private sync(): void {
-		if (this.inputState !== PromptInputState.Input || !this.origin || this.origin.isDisposed || this.terminal.buffer.active.type !== 'normal') {
+		if (
+			this.inputState !== PromptInputState.Input ||
+			!this.origin ||
+			this.origin.isDisposed ||
+			this.terminal.buffer.active.type !== 'normal'
+		) {
 			return;
 		}
 		const buffer = this.terminal.buffer.normal;
@@ -210,13 +252,20 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 					}
 				}
 			}
-			const end = y === this.origin.line && this.rightPrompt && this.rightPrompt.end > this.rightPrompt.start ? this.rightPrompt.start : this.terminal.cols;
+			const end =
+				y === this.origin.line && this.rightPrompt && this.rightPrompt.end > this.rightPrompt.start
+					? this.rightPrompt.start
+					: this.terminal.cols;
 			// xterm trims the full row before slicing, so a right prompt outside
 			// this range can leave padding in the slice. Cursor cells below still
 			// preserve spaces the user actually entered.
 			const lineText = row.translateToString(true, start, end).replace(/ +$/, '');
 			let line = '';
-			for (let x = start; x < end && (line.length < lineText.length || (y === cursorLine && x < buffer.cursorX)); x++) {
+			for (
+				let x = start;
+				x < end && (line.length < lineText.length || (y === cursorLine && x < buffer.cursorX));
+				x++
+			) {
 				if (y === cursorLine && x === buffer.cursorX) {
 					cursor = text.length + line.length;
 				}
@@ -225,7 +274,10 @@ export class PromptInputModel extends Disposable implements IPromptInputModel {
 					continue;
 				}
 				const chars = cell.getChars() || ' ';
-				const styledSuggestion = cell.isDim() || ((this.shell === PosixShellType.Fish || this.shell === GeneralShellType.PowerShell) && cell.isItalic());
+				const styledSuggestion =
+					cell.isDim() ||
+					((this.shell === PosixShellType.Fish || this.shell === GeneralShellType.PowerShell) &&
+						cell.isItalic());
 				if (ghost < 0 && y === cursorLine && x >= buffer.cursorX && chars.trim() && styledSuggestion) {
 					ghost = text.length + line.length;
 				}

@@ -14,7 +14,7 @@ const stripIconsRegex = new RegExp(`(\\s)?(\\\\)?${iconPattern}(\\s)?`, 'gu');
 
 /** Escapes icon syntax so a label is displayed as literal text. */
 export function escapeIcons(text: string): string {
-	return text.replace(escapeIconsRegex, (match, escaped: string | undefined) => escaped ? match : `\\${match}`);
+	return text.replace(escapeIconsRegex, (match, escaped: string | undefined) => (escaped ? match : `\\${match}`));
 }
 
 /** Escapes an already escaped icon once more for Markdown content. */
@@ -25,10 +25,13 @@ export function markdownEscapeEscapedIcons(text: string): string {
 /** Removes rendered icon syntax while preserving escaped literal icons. */
 export function stripIcons(text: string): string {
 	if (!text.includes(iconStartMarker)) return text;
-	return text.replace(stripIconsRegex, (match, preWhitespace: string | undefined, escaped: string | undefined, postWhitespace: string | undefined) => {
-		if (escaped) return match;
-		return preWhitespace || postWhitespace || '';
-	});
+	return text.replace(
+		stripIconsRegex,
+		(match, preWhitespace: string | undefined, escaped: string | undefined, postWhitespace: string | undefined) => {
+			if (escaped) return match;
+			return preWhitespace || postWhitespace || '';
+		},
+	);
 }
 
 /** Converts icon syntax to words that screen readers can pronounce. */

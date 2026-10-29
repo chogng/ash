@@ -1,6 +1,12 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
-import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import {
+	Disposable,
+	DisposableStore,
+	MutableDisposable,
+	toDisposable,
+	type IDisposable,
+} from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { formatNlsMessage, localize } from '../../../../nls.js';
 import { type CodeEditorViewState, type CodeEditorWidget } from '../codeEditor/codeEditorWidget.js';
@@ -74,7 +80,9 @@ export class DiffEditorItemTemplate extends Disposable {
 		}
 		const labelsDomNode = h(ownerDocument, 'span');
 		labelsDomNode.className = 'stanza-multi-diff-editor-labels';
-		labelsDomNode.textContent = [item.originalLabel, item.modifiedLabel].filter(label => label !== undefined).join(' ↔ ');
+		labelsDomNode.textContent = [item.originalLabel, item.modifiedLabel]
+			.filter(label => label !== undefined)
+			.join(' ↔ ');
 		this.toggleDomNode.append(collapsedIconDomNode, expandedIconDomNode, titleDomNode, labelsDomNode);
 		headerDomNode.append(this.toggleDomNode);
 		this.incompleteStatusDomNode = h(ownerDocument, 'span');
@@ -139,8 +147,12 @@ export class DiffEditorItemTemplate extends Disposable {
 		this.editorListeners.clear();
 		this.editorSlot.value = editor;
 		if (this.onScrollChange) {
-			this.editorListeners.add(editor.originalEditor.onDidScrollChange(() => this.onScrollChange?.(editor.originalEditor)));
-			this.editorListeners.add(editor.modifiedEditor.onDidScrollChange(() => this.onScrollChange?.(editor.modifiedEditor)));
+			this.editorListeners.add(
+				editor.originalEditor.onDidScrollChange(() => this.onScrollChange?.(editor.originalEditor)),
+			);
+			this.editorListeners.add(
+				editor.modifiedEditor.onDidScrollChange(() => this.onScrollChange?.(editor.modifiedEditor)),
+			);
 		}
 		if (this.onLayoutChange) {
 			// Hidden-region reveal controls change content height without changing the file model.
@@ -165,7 +177,10 @@ export class DiffEditorItemTemplate extends Disposable {
 
 	public unmount(): void {
 		const editor = this.editor;
-		if (!editor) { this.modelRetention.clear(); return; }
+		if (!editor) {
+			this.modelRetention.clear();
+			return;
+		}
 		this.originalState = editor.originalEditor.saveViewState();
 		this.modifiedState = editor.modifiedEditor.saveViewState();
 		this.editorListeners.clear();
@@ -200,12 +215,18 @@ export class DiffEditorItemTemplate extends Disposable {
 			this.editorHostDomNode.tabIndex = 0;
 			this.editorHostDomNode.setAttribute('role', 'group');
 			this.editorHostDomNode.setAttribute('aria-label', this.item.label);
-			this.editorHostDomNode.textContent = localize('multiDiffEditor.binary', 'Binary file changed. Text comparison is unavailable.');
+			this.editorHostDomNode.textContent = localize(
+				'multiDiffEditor.binary',
+				'Binary file changed. Text comparison is unavailable.',
+			);
 		}
 		this.updateToggleLabel(this.domNode.classList.contains('collapsed'));
 		const model = this.item.model;
 		if (this.item.state === 'error') {
-			this.incompleteStatusDomNode.textContent = formatNlsMessage(localize('multiDiffEditor.loadError', 'Could not load {0}'), { 0: this.item.label });
+			this.incompleteStatusDomNode.textContent = formatNlsMessage(
+				localize('multiDiffEditor.loadError', 'Could not load {0}'),
+				{ 0: this.item.label },
+			);
 			return;
 		}
 		if (this.item.state === 'loading') {
@@ -213,21 +234,31 @@ export class DiffEditorItemTemplate extends Disposable {
 			return;
 		}
 		if (model?.state.kind === 'error') {
-			this.incompleteStatusDomNode.textContent = formatNlsMessage(localize('diffEditor.error', 'Could not compute differences: {0}'), { 0: model.state.error.message });
+			this.incompleteStatusDomNode.textContent = formatNlsMessage(
+				localize('diffEditor.error', 'Could not compute differences: {0}'),
+				{ 0: model.state.error.message },
+			);
 			return;
 		}
 		if (model?.state.kind === 'loading') {
 			this.incompleteStatusDomNode.textContent = localize('diffEditor.computing', 'Computing differences');
 			return;
 		}
-		this.incompleteStatusDomNode.textContent = model?.state.kind === 'ready' && model.state.quitEarly
-			? localize('diffEditor.incompleteShort', 'Diff may be incomplete')
-			: '';
+		this.incompleteStatusDomNode.textContent =
+			model?.state.kind === 'ready' && model.state.quitEarly
+				? localize('diffEditor.incompleteShort', 'Diff may be incomplete')
+				: '';
 	}
 
 	private updateToggleLabel(collapsed: boolean): void {
-		this.toggleDomNode.setAttribute('aria-label', formatNlsMessage(collapsed
-			? localize('multiDiffEditor.expandItem', 'Expand {0}')
-			: localize('multiDiffEditor.collapseItem', 'Collapse {0}'), { 0: this.item.label }));
+		this.toggleDomNode.setAttribute(
+			'aria-label',
+			formatNlsMessage(
+				collapsed
+					? localize('multiDiffEditor.expandItem', 'Expand {0}')
+					: localize('multiDiffEditor.collapseItem', 'Collapse {0}'),
+				{ 0: this.item.label },
+			),
+		);
 	}
 }

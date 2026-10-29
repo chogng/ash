@@ -1,9 +1,20 @@
-import type { CodebaseStatusResult, ConfigCommandResult, CodebaseModelsDto } from "../../../../../../.build/protocol/typescript/index.js";
-import type { ICodebaseApi } from "../../../../platform/codebase/common/codebaseApi.js";
-import type { CodebaseConfigurationCommandResult, CodebaseConfigurationSnapshot, CodebaseStatus, ICodebaseService, CodebaseAutomaticContext, CodebaseModels } from "../../../../platform/codebase/common/codebaseService.js";
+import type {
+	CodebaseStatusResult,
+	ConfigCommandResult,
+	CodebaseModelsDto,
+} from '../../../../../../.build/protocol/typescript/index.js';
+import type { ICodebaseApi } from '../../../../platform/codebase/common/codebaseApi.js';
+import type {
+	CodebaseConfigurationCommandResult,
+	CodebaseConfigurationSnapshot,
+	CodebaseStatus,
+	ICodebaseService,
+	CodebaseAutomaticContext,
+	CodebaseModels,
+} from '../../../../platform/codebase/common/codebaseService.js';
 
 export class AppServerCodebaseService implements ICodebaseService {
-	constructor(private readonly api: ICodebaseApi) { }
+	constructor(private readonly api: ICodebaseApi) {}
 
 	async readConfig(): Promise<CodebaseConfigurationSnapshot> {
 		const config = await this.api.readConfig();
@@ -17,25 +28,38 @@ export class AppServerCodebaseService implements ICodebaseService {
 		};
 	}
 
-	async configure(models: CodebaseModels | undefined, automaticContext: CodebaseAutomaticContext, expectedRevision: number): Promise<CodebaseConfigurationCommandResult> {
-		return projectCommandResult(await this.api.configure({
-			commandId: commandId("configure"),
-			expectedRevision,
-			models: models ? modelsDto(models) : null,
-			automaticContext,
-		}));
+	async configure(
+		models: CodebaseModels | undefined,
+		automaticContext: CodebaseAutomaticContext,
+		expectedRevision: number,
+	): Promise<CodebaseConfigurationCommandResult> {
+		return projectCommandResult(
+			await this.api.configure({
+				commandId: commandId('configure'),
+				expectedRevision,
+				models: models ? modelsDto(models) : null,
+				automaticContext,
+			}),
+		);
 	}
 
-	async status(): Promise<CodebaseStatus> { return projectStatus(await this.api.status()); }
-
+	async status(): Promise<CodebaseStatus> {
+		return projectStatus(await this.api.status());
+	}
 }
 
 function projectModels(models: CodebaseModelsDto): CodebaseModels {
-	return { embeddingModel: { ...models.embeddingModel }, rerankModel: models.rerankModel ? { ...models.rerankModel } : models.rerankModel };
+	return {
+		embeddingModel: { ...models.embeddingModel },
+		rerankModel: models.rerankModel ? { ...models.rerankModel } : models.rerankModel,
+	};
 }
 
 function modelsDto(models: CodebaseModels): CodebaseModelsDto {
-	return { embeddingModel: { ...models.embeddingModel }, rerankModel: models.rerankModel ? { ...models.rerankModel } : models.rerankModel };
+	return {
+		embeddingModel: { ...models.embeddingModel },
+		rerankModel: models.rerankModel ? { ...models.rerankModel } : models.rerankModel,
+	};
 }
 
 function projectCommandResult(result: ConfigCommandResult): CodebaseConfigurationCommandResult {

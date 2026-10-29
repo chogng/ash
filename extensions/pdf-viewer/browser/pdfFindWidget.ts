@@ -26,7 +26,10 @@ export class PdfFindWidget extends Disposable {
 	private current = -1;
 	private limited = false;
 
-	constructor(parent: HTMLElement, private readonly focusPages: () => void) {
+	constructor(
+		parent: HTMLElement,
+		private readonly focusPages: () => void,
+	) {
 		super();
 		const document = parent.ownerDocument;
 		this.element = h(document, 'div');
@@ -45,37 +48,61 @@ export class PdfFindWidget extends Disposable {
 		this.status.setAttribute('role', 'status');
 		this.status.setAttribute('aria-atomic', 'true');
 		this.element.append(this.input, this.status);
-		this.previous = this._register(new Button(this.element, {
-			...defaultButtonStyles, label: localize('pdf.viewer.previousMatch', 'Previous match'), icon: Lxicon.chevronUp,
-			iconOnly: true, size: 'small', onClick: () => this.move(-1),
-		}));
-		this.next = this._register(new Button(this.element, {
-			...defaultButtonStyles, label: localize('pdf.viewer.nextMatch', 'Next match'), icon: Lxicon.chevronDown,
-			iconOnly: true, size: 'small', onClick: () => this.move(1),
-		}));
-		this._register(new Button(this.element, {
-			...defaultButtonStyles, label: localize('pdf.viewer.closeFind', 'Close search'), icon: Lxicon.close,
-			iconOnly: true, size: 'small', onClick: () => this.close(),
-		}));
+		this.previous = this._register(
+			new Button(this.element, {
+				...defaultButtonStyles,
+				label: localize('pdf.viewer.previousMatch', 'Previous match'),
+				icon: Lxicon.chevronUp,
+				iconOnly: true,
+				size: 'small',
+				onClick: () => this.move(-1),
+			}),
+		);
+		this.next = this._register(
+			new Button(this.element, {
+				...defaultButtonStyles,
+				label: localize('pdf.viewer.nextMatch', 'Next match'),
+				icon: Lxicon.chevronDown,
+				iconOnly: true,
+				size: 'small',
+				onClick: () => this.move(1),
+			}),
+		);
+		this._register(
+			new Button(this.element, {
+				...defaultButtonStyles,
+				label: localize('pdf.viewer.closeFind', 'Close search'),
+				icon: Lxicon.close,
+				iconOnly: true,
+				size: 'small',
+				onClick: () => this.close(),
+			}),
+		);
 		parent.append(this.element);
-		this._register(addDisposableListener(this.input, 'input', event => {
-			if (!(event as InputEvent).isComposing) this.search();
-		}));
+		this._register(
+			addDisposableListener(this.input, 'input', event => {
+				if (!(event as InputEvent).isComposing) this.search();
+			}),
+		);
 		this._register(addDisposableListener(this.input, 'compositionend', () => this.search()));
-		this._register(addDisposableListener(this.element, 'keydown', event => {
-			if (event.isComposing) return;
-			if (event.key === 'Escape') this.close();
-			else if (event.key === 'Enter') this.move(event.shiftKey ? -1 : 1);
-			else return;
-			event.preventDefault();
-			event.stopPropagation();
-		}));
-		this._register(toDisposable(() => {
-			this.clearHighlights();
-			this.matches = [];
-			this.pages = [];
-			this.element.remove();
-		}));
+		this._register(
+			addDisposableListener(this.element, 'keydown', event => {
+				if (event.isComposing) return;
+				if (event.key === 'Escape') this.close();
+				else if (event.key === 'Enter') this.move(event.shiftKey ? -1 : 1);
+				else return;
+				event.preventDefault();
+				event.stopPropagation();
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				this.clearHighlights();
+				this.matches = [];
+				this.pages = [];
+				this.element.remove();
+			}),
+		);
 		this.updateStatus();
 	}
 
@@ -112,11 +139,17 @@ export class PdfFindWidget extends Disposable {
 		const query = this.input.value.trim();
 		if (query && !this.element.hidden) {
 			// Treat input literally; whitespace can cross extracted line boundaries and text runs.
-			const pattern = query.split(/\s+/u).map(part => part.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('\\s+');
+			const pattern = query
+				.split(/\s+/u)
+				.map(part => part.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&'))
+				.join('\\s+');
 			const expression = new RegExp(pattern, 'giu');
 			outer: for (const page of this.pages) {
 				for (const match of page.text.matchAll(expression)) {
-					if (this.matches.length === maximumMatches) { this.limited = true; break outer; }
+					if (this.matches.length === maximumMatches) {
+						this.limited = true;
+						break outer;
+					}
 					const start = match.index;
 					const end = start + match[0].length;
 					const first = page.textRuns.find(run => run.start <= start && run.end > start);
@@ -163,10 +196,10 @@ export class PdfFindWidget extends Disposable {
 				const highlight = h(layer.ownerDocument, 'div');
 				highlight.className = 'ash-pdf-search-match';
 				highlight.classList.toggle('current', index === this.current);
-				highlight.style.left = `${100 * (rect.left - bounds.left) / bounds.width}%`;
-				highlight.style.top = `${100 * (rect.top - bounds.top) / bounds.height}%`;
-				highlight.style.width = `${100 * rect.width / bounds.width}%`;
-				highlight.style.height = `${100 * rect.height / bounds.height}%`;
+				highlight.style.left = `${(100 * (rect.left - bounds.left)) / bounds.width}%`;
+				highlight.style.top = `${(100 * (rect.top - bounds.top)) / bounds.height}%`;
+				highlight.style.width = `${(100 * rect.width) / bounds.width}%`;
+				highlight.style.height = `${(100 * rect.height) / bounds.height}%`;
 				layer.append(highlight);
 			}
 		}
@@ -174,18 +207,34 @@ export class PdfFindWidget extends Disposable {
 	}
 
 	private revealCurrent(): void {
-		this.matches[this.current]?.page.element.querySelector('.ash-pdf-search-match.current')?.scrollIntoView({ block: 'center', inline: 'nearest' });
+		this.matches[this.current]?.page.element
+			.querySelector('.ash-pdf-search-match.current')
+			?.scrollIntoView({ block: 'center', inline: 'nearest' });
 	}
 
 	private updateStatus(): void {
 		const match = this.matches[this.current];
-		this.status.textContent = !this.input.value.trim() ? '' : match
-			? this.limited
-				? localize('pdf.viewer.matchesLimited', '{0} of the first {1} matches · page {2}', this.current + 1, maximumMatches, match.page.pageNumber)
-				: localize('pdf.viewer.matches', '{0} of {1} · page {2}', this.current + 1, this.matches.length, match.page.pageNumber)
-			: this.pages.some(page => page.text.trim())
-				? localize('pdf.viewer.noMatches', 'No matches')
-				: localize('pdf.viewer.noSearchableText', 'No searchable text in this PDF');
+		this.status.textContent = !this.input.value.trim()
+			? ''
+			: match
+				? this.limited
+					? localize(
+							'pdf.viewer.matchesLimited',
+							'{0} of the first {1} matches · page {2}',
+							this.current + 1,
+							maximumMatches,
+							match.page.pageNumber,
+						)
+					: localize(
+							'pdf.viewer.matches',
+							'{0} of {1} · page {2}',
+							this.current + 1,
+							this.matches.length,
+							match.page.pageNumber,
+						)
+				: this.pages.some(page => page.text.trim())
+					? localize('pdf.viewer.noMatches', 'No matches')
+					: localize('pdf.viewer.noSearchableText', 'No searchable text in this PDF');
 		this.setEnabled(!this.input.disabled);
 	}
 

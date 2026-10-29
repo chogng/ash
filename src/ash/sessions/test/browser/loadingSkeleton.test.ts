@@ -20,7 +20,10 @@ suite('Independent loading regions', () => {
 		assert.equal(content.element.hidden, false);
 		assert.equal(content.element.querySelector('[role="status"]')!.textContent, 'Content');
 		assert.equal(content.element.querySelectorAll('.ash-sessions-loading-row').length, 2);
-		assert.equal(content.element.querySelector('.ash-sessions-loading-shapes')!.getAttribute('aria-hidden'), 'true');
+		assert.equal(
+			content.element.querySelector('.ash-sessions-loading-shapes')!.getAttribute('aria-hidden'),
+			'true',
+		);
 		assert.equal(parent.querySelector('button, input, a, [tabindex]'), null);
 	});
 
@@ -46,18 +49,31 @@ suite('Region loading in the Sessions workbench', () => {
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			await page.locator('[data-action-id="sessions.open.customize"] button').click();
 			await expect(page.locator('.ash-customize-card')).toHaveCount(3);
-			const hold = () => page.evaluateHandle(() => {
-				const connectors = globalThis.ashWebWorkbenchHost!.api.connectors;
-				const original = connectors.list;
-				let finish!: () => void;
-				let fail!: (error: Error) => void;
-				const pending = new Promise<void>((resolve, reject) => { finish = resolve; fail = reject; });
-				connectors.list = async () => { await pending; return original.call(connectors); };
-				return {
-					release: () => { connectors.list = original; finish(); },
-					fail: () => { connectors.list = original; fail(new Error('Synthetic loading failure')); },
-				};
-			});
+			const hold = () =>
+				page.evaluateHandle(() => {
+					const connectors = globalThis.ashWebWorkbenchHost!.api.connectors;
+					const original = connectors.list;
+					let finish!: () => void;
+					let fail!: (error: Error) => void;
+					const pending = new Promise<void>((resolve, reject) => {
+						finish = resolve;
+						fail = reject;
+					});
+					connectors.list = async () => {
+						await pending;
+						return original.call(connectors);
+					};
+					return {
+						release: () => {
+							connectors.list = original;
+							finish();
+						},
+						fail: () => {
+							connectors.list = original;
+							fail(new Error('Synthetic loading failure'));
+						},
+					};
+				});
 			const gate = await hold();
 			const root = page.locator('.ash-customize');
 			const skeleton = root.locator('.ash-sessions-loading');

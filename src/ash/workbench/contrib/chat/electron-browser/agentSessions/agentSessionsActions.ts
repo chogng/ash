@@ -16,11 +16,7 @@ const openAgentsWindowTitleBarCommandId = 'workbench.action.chat.openAgentsWindo
 
 export class OpenAgentsWindowAction extends Action2 {
 	constructor() {
-		super({
-			id: OPEN_AGENTS_WINDOW_COMMAND_ID,
-			title: openAgentsWindowTitle,
-			f1: true,
-		});
+		super({ id: OPEN_AGENTS_WINDOW_COMMAND_ID, title: openAgentsWindowTitle, f1: true });
 	}
 
 	override run(accessor: ServicesAccessor, options?: unknown): Promise<void> {
@@ -35,7 +31,12 @@ export class OpenAgentsWindowTitleBarAction extends Action2 {
 			title: openInAgentsTitle,
 			tooltip: openInAgentsTooltip,
 			icon: ashTitlebarMark,
-			menu: { id: MenuId.TitleBarAdjacentCenter, when: IsAuxiliaryWindowContext.isEqualTo(false), group: 'navigation', order: 1 },
+			menu: {
+				id: MenuId.TitleBarAdjacentCenter,
+				when: IsAuxiliaryWindowContext.isEqualTo(false),
+				group: 'navigation',
+				order: 1,
+			},
 		});
 	}
 

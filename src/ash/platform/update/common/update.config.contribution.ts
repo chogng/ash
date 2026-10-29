@@ -1,5 +1,8 @@
 import { localize } from '../../../nls.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry } from '../../configuration/common/configurationRegistry.js';
+import {
+	Extensions as ConfigurationExtensions,
+	type IConfigurationRegistry,
+} from '../../configuration/common/configurationRegistry.js';
 import { Registry } from '../../registry/common/platform.js';
 import { DESKTOP_UPDATE_POLICY_SETTING, type DesktopUpdatePolicy } from './updateService.js';
 
@@ -14,7 +17,10 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).regis
 	setting: {
 		valueType: 'select',
 		title: localize('update.policyTitle', 'Update channel'),
-		description: localize('update.policyDescription', 'Choose automatic Ash Desktop updates. Never disables automatic checks; manual checks remain available.'),
+		description: localize(
+			'update.policyDescription',
+			'Choose automatic Ash Desktop updates. Never disables automatic checks; manual checks remain available.',
+		),
 		options: [
 			{ value: 'latest', label: localize('update.policyLatest', 'Latest') },
 			{ value: 'stable', label: localize('update.policyStable', 'Stable') },

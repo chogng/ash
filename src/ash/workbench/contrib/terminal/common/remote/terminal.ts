@@ -11,13 +11,17 @@ export interface ITerminalExecutionScope {
 export function terminalExecutionScope(workspace: IWorkspace): ITerminalExecutionScope {
 	return Object.freeze({
 		workspaceId: workspace.id,
-		remoteAuthority: workspace.remoteAuthority ?? (workspace.folders[0] && getRemoteAuthority(workspace.folders[0].uri)),
+		remoteAuthority:
+			workspace.remoteAuthority ?? (workspace.folders[0] && getRemoteAuthority(workspace.folders[0].uri)),
 		folders: Object.freeze(workspace.folders.map(folder => `${folder.id}:${folder.uri.toString()}`)),
 	});
 }
 
 export function terminalExecutionScopesEqual(left: ITerminalExecutionScope, right: ITerminalExecutionScope): boolean {
-	return left.workspaceId === right.workspaceId && left.remoteAuthority === right.remoteAuthority
-		&& left.folders.length === right.folders.length
-		&& left.folders.every((folder, index) => folder === right.folders[index]);
+	return (
+		left.workspaceId === right.workspaceId &&
+		left.remoteAuthority === right.remoteAuthority &&
+		left.folders.length === right.folders.length &&
+		left.folders.every((folder, index) => folder === right.folders[index])
+	);
 }

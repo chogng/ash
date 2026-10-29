@@ -1,7 +1,7 @@
-import type { Event } from "./event.js";
-import { Emitter } from "./event.js";
-import { DisposableMap, Disposable, DisposableStore, type IDisposable, toDisposable } from "./lifecycle.js";
-import { onUnexpectedError } from "./errors.js";
+import type { Event } from './event.js';
+import { Emitter } from './event.js';
+import { DisposableMap, Disposable, DisposableStore, type IDisposable, toDisposable } from './lifecycle.js';
+import { onUnexpectedError } from './errors.js';
 
 /** Reads an observable while recording it as a dependency of the current computation. */
 export interface IReader {
@@ -58,18 +58,12 @@ export function constObservable<T>(value: T): IObservable<T> {
 }
 
 /** Creates a named mutable observable value. */
-export function observableValue<T>(
-	_nameOrOwner: string | object,
-	initialValue: T,
-): ISettableObservable<T> {
+export function observableValue<T>(_nameOrOwner: string | object, initialValue: T): ISettableObservable<T> {
 	return new ObservableValue(initialValue);
 }
 
 /** Converts an event into an observable invalidation signal. */
-export function observableSignalFromEvent(
-	_nameOrOwner: string | object,
-	event: Event<unknown>,
-): IObservable<void> {
+export function observableSignalFromEvent(_nameOrOwner: string | object, event: Event<unknown>): IObservable<void> {
 	return new EventObservable(event);
 }
 
@@ -83,9 +77,7 @@ export function observableFromEvent<T>(
 }
 
 /** Creates a cached observable from dynamically tracked dependencies. */
-export function derived<T>(
-	compute: (reader: IReader) => T,
-): IObservable<T> {
+export function derived<T>(compute: (reader: IReader) => T): IObservable<T> {
 	return new DerivedObservable(compute);
 }
 
@@ -98,18 +90,18 @@ export function autorun(compute: (reader: IReader) => void): IDisposable {
  * Runs a computation with resources that are cleared before every rerun and
  * when the returned registration is disposed.
  */
-export function autorunWithStore(
-	compute: (reader: IReader, store: DisposableStore) => void,
-): IDisposable {
+export function autorunWithStore(compute: (reader: IReader, store: DisposableStore) => void): IDisposable {
 	return new ObservableReaction(reader => compute(reader, reader.store));
 }
 
 export function isObservable(value: unknown): value is IObservable<unknown> {
-	return typeof value === "object" &&
+	return (
+		typeof value === 'object' &&
 		value !== null &&
-		typeof (value as Partial<IObservable<unknown>>).get === "function" &&
-		typeof (value as Partial<IObservable<unknown>>).read === "function" &&
-		typeof (value as Partial<IObservable<unknown>>).onDidChange === "function";
+		typeof (value as Partial<IObservable<unknown>>).get === 'function' &&
+		typeof (value as Partial<IObservable<unknown>>).read === 'function' &&
+		typeof (value as Partial<IObservable<unknown>>).onDidChange === 'function'
+	);
 }
 
 abstract class ConvenientObservable<T> implements IObservable<T> {
@@ -120,15 +112,13 @@ abstract class ConvenientObservable<T> implements IObservable<T> {
 		return reader ? reader.readObservable(this) : this.get();
 	}
 
-	map<TMapped>(
-		mapValue: (value: T, reader: IReader) => TMapped,
-	): IObservable<TMapped> {
+	map<TMapped>(mapValue: (value: T, reader: IReader) => TMapped): IObservable<TMapped> {
 		return derived(reader => mapValue(this.read(reader), reader));
 	}
 }
 
 class ConstantObservable<T> extends ConvenientObservable<T> {
-	readonly onDidChange: Event<T> = () => toDisposable(() => { });
+	readonly onDidChange: Event<T> = () => toDisposable(() => {});
 
 	constructor(private readonly value: T) {
 		super();
@@ -139,8 +129,7 @@ class ConstantObservable<T> extends ConvenientObservable<T> {
 	}
 }
 
-class ObservableValue<T> extends ConvenientObservable<T>
-	implements ISettableObservable<T> {
+class ObservableValue<T> extends ConvenientObservable<T> implements ISettableObservable<T> {
 	private emitter: Emitter<T> | undefined;
 	// Values have no disposal scope; subscriptions own their notification resources.
 	readonly onDidChange: Event<T> = (listener, thisArgs, disposables) => {
@@ -180,7 +169,7 @@ class EventObservable extends ConvenientObservable<void> {
 		this.onDidChange = listener => event(() => listener(undefined));
 	}
 
-	get(): void { }
+	get(): void {}
 }
 
 class EventValueObservable<T> extends ConvenientObservable<T> {
@@ -271,7 +260,7 @@ class ObservableReaction extends Disposable implements IReaderWithStore {
 
 	readObservable<T>(observable: IObservable<T>): T {
 		if (!this.running) {
-			throw new Error("Observable dependencies can only be read during a computation");
+			throw new Error('Observable dependencies can only be read during a computation');
 		}
 		const dependency = observable as IObservable<unknown>;
 		this.nextDependencies.add(dependency);
@@ -336,6 +325,4 @@ class ObservableTransaction implements ITransaction {
 	}
 }
 
-const nonTrackingReader: IReader = {
-	readObservable: observable => observable.get(),
-};
+const nonTrackingReader: IReader = { readObservable: observable => observable.get() };

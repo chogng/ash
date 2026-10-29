@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 test.use({
-	userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1',
+	userAgent:
+		'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/18.0 Mobile/15E148 Safari/604.1',
 	hasTouch: true,
 	isMobile: true,
 	viewport: { width: 820, height: 1180 },

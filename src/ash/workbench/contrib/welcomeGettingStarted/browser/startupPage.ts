@@ -24,7 +24,11 @@ export class StartupPageRunnerContribution extends Disposable {
 	private async openStartupEditor(): Promise<void> {
 		const startupEditor = this.configurationService.getValue<StartupEditor>(StartupEditorConfigurationKey);
 		if (startupEditor === 'none') return;
-		if (startupEditor === 'welcomePageInEmptyWorkbench' && this.workspaceContext.getWorkbenchState() !== WorkbenchState.EMPTY) return;
+		if (
+			startupEditor === 'welcomePageInEmptyWorkbench' &&
+			this.workspaceContext.getWorkbenchState() !== WorkbenchState.EMPTY
+		)
+			return;
 		if (this.editorService.visibleEditors.length > 0) return;
 		await this.editorService.openEditor(createGettingStartedInput());
 	}

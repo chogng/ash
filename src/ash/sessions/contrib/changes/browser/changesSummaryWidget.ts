@@ -19,13 +19,24 @@ export class ChangesSummaryWidget extends Disposable {
 		const element = h(container.ownerDocument, 'p', { className: 'ash-sessions-changes-summary' });
 		container.append(element);
 		this._register(toDisposable(() => element.remove()));
-		this._register(autorun(reader => {
-			const statistics = this.summary.read(reader);
-			element.hidden = !statistics;
-		}));
-		this._register(this.instantiationService.createInstance(ChangesStatsWidget, element, derived(reader => {
-			const statistics = this.summary.read(reader);
-			return statistics ? { files: statistics.files, insertions: statistics.additions, deletions: statistics.deletions } : undefined;
-		}), true));
+		this._register(
+			autorun(reader => {
+				const statistics = this.summary.read(reader);
+				element.hidden = !statistics;
+			}),
+		);
+		this._register(
+			this.instantiationService.createInstance(
+				ChangesStatsWidget,
+				element,
+				derived(reader => {
+					const statistics = this.summary.read(reader);
+					return statistics
+						? { files: statistics.files, insertions: statistics.additions, deletions: statistics.deletions }
+						: undefined;
+				}),
+				true,
+			),
+		);
 	}
 }

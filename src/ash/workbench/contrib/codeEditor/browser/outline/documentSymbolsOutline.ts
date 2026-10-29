@@ -17,7 +17,14 @@ import { TextEditorSelectionSource } from '../../../../../platform/editor/common
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { IEditorPane } from '../../../../common/editor.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
-import { IOutlineService, type IOutline, type IOutlineCreator, type IOutlineListConfig, type OutlineChangeEvent, type OutlineTarget } from '../../../../services/outline/browser/outline.js';
+import {
+	IOutlineService,
+	type IOutline,
+	type IOutlineCreator,
+	type IOutlineListConfig,
+	type OutlineChangeEvent,
+	type OutlineTarget,
+} from '../../../../services/outline/browser/outline.js';
 
 /** Retains only a version-bound symbol result; the code editor continues to own its model and selection. */
 class DocumentSymbolsOutline extends Disposable implements IOutline<OutlineElement> {
@@ -27,7 +34,9 @@ class DocumentSymbolsOutline extends Disposable implements IOutline<OutlineEleme
 	public readonly onDidChange = this.changed.event;
 	private readonly modelListeners = this._register(new MutableDisposable<DisposableStore>());
 	private readonly request = this._register(new MutableDisposable());
-	private readonly updateSoon = this._register(new RunOnceScheduler(() => void this.update().catch(onUnexpectedExternalError), 150));
+	private readonly updateSoon = this._register(
+		new RunOnceScheduler(() => void this.update().catch(onUnexpectedExternalError), 150),
+	);
 	public readonly config: IOutlineListConfig<OutlineElement>;
 
 	constructor(
@@ -37,11 +46,18 @@ class DocumentSymbolsOutline extends Disposable implements IOutline<OutlineEleme
 	) {
 		super();
 		this.config = {
-			treeDataSource: { getChildren: element => element === this ? this.roots() : (element as OutlineElement).children.values() },
+			treeDataSource: {
+				getChildren: element =>
+					element === this ? this.roots() : (element as OutlineElement).children.values(),
+			},
 			comparator: {
 				compareByPosition: (a, b) => Range.compareRangesUsingStarts(a.symbol.range, b.symbol.range),
 				compareByName: (a, b) => a.symbol.name.localeCompare(b.symbol.name),
-				compareByType: (a, b) => (typeof a.symbol.kind === 'number' && typeof b.symbol.kind === 'number' ? a.symbol.kind - b.symbol.kind : String(a.symbol.kind).localeCompare(String(b.symbol.kind))) || a.symbol.name.localeCompare(b.symbol.name),
+				compareByType: (a, b) =>
+					(typeof a.symbol.kind === 'number' && typeof b.symbol.kind === 'number'
+						? a.symbol.kind - b.symbol.kind
+						: String(a.symbol.kind).localeCompare(String(b.symbol.kind))) ||
+					a.symbol.name.localeCompare(b.symbol.name),
 			},
 			options: {
 				modelOptions: { identityProvider: { getId: element => element.id }, defaultCollapseState: 'expanded' },
@@ -65,17 +81,23 @@ class DocumentSymbolsOutline extends Disposable implements IOutline<OutlineEleme
 				},
 			},
 		};
-		this._register(editor.onDidChangeModel(() => {
-			this.bindModel();
-			this.updateSoon.schedule(0);
-		}));
+		this._register(
+			editor.onDidChangeModel(() => {
+				this.bindModel();
+				this.updateSoon.schedule(0);
+			}),
+		);
 		this._register(editor.onDidChangeCursorPosition(() => this.changed.fire({ affectOnlyActiveElement: true })));
 		this._register(features.documentSymbolProvider.onDidChange(() => this.updateSoon.schedule(0)));
 		this.bindModel();
 	}
 
-	public get uri() { return this.editor.getModel()?.uri; }
-	public get isEmpty(): boolean { return this.roots().length === 0; }
+	public get uri() {
+		return this.editor.getModel()?.uri;
+	}
+	public get isEmpty(): boolean {
+		return this.roots().length === 0;
+	}
 
 	public get activeElement(): OutlineElement | undefined {
 		const position = this.editor.getPosition();
@@ -92,11 +114,22 @@ class DocumentSymbolsOutline extends Disposable implements IOutline<OutlineEleme
 		return active;
 	}
 
-	public async reveal(entry: OutlineElement, options: IEditorOptions, sideBySide: boolean, select: boolean): Promise<void> {
+	public async reveal(
+		entry: OutlineElement,
+		options: IEditorOptions,
+		sideBySide: boolean,
+		select: boolean,
+	): Promise<void> {
 		const model = this.editor.getModel();
 		if (!model || this.model?.version !== model.getVersionId()) return;
-		const range = select ? entry.symbol.selectionRange : Range.fromPositions(entry.symbol.selectionRange.getStartPosition());
-		await this.editors.openEditor({ resource: model.uri }, { ...options, selection: range, selectionSource: TextEditorSelectionSource.NAVIGATION }, sideBySide ? 'sideGroup' : 'activeGroup');
+		const range = select
+			? entry.symbol.selectionRange
+			: Range.fromPositions(entry.symbol.selectionRange.getStartPosition());
+		await this.editors.openEditor(
+			{ resource: model.uri },
+			{ ...options, selection: range, selectionSource: TextEditorSelectionSource.NAVIGATION },
+			sideBySide ? 'sideGroup' : 'activeGroup',
+		);
 	}
 
 	public async update(): Promise<void> {
@@ -104,9 +137,15 @@ class DocumentSymbolsOutline extends Disposable implements IOutline<OutlineEleme
 		const controller = new AbortController();
 		this.request.value = toDisposable(() => controller.abort());
 		const model = this.editor.getModel();
-		const outline = model instanceof TextModel
-			? await OutlineModel.create(this.features.documentSymbolProvider, model, controller.signal, onUnexpectedExternalError)
-			: null;
+		const outline =
+			model instanceof TextModel
+				? await OutlineModel.create(
+						this.features.documentSymbolProvider,
+						model,
+						controller.signal,
+						onUnexpectedExternalError,
+					)
+				: null;
 		if (this.isDisposed || controller.signal.aborted) return;
 		this.model = outline ?? undefined;
 		this.changed.fire({});
@@ -123,16 +162,20 @@ class DocumentSymbolsOutline extends Disposable implements IOutline<OutlineEleme
 		this.modelListeners.value = resources;
 		const model = this.editor.getModel();
 		if (!model) return;
-		resources.add(model.onDidChangeContent(() => {
-			this.request.clear();
-			this.updateSoon.schedule();
-		}));
+		resources.add(
+			model.onDidChangeContent(() => {
+				this.request.clear();
+				this.updateSoon.schedule();
+			}),
+		);
 		resources.add(model.onDidChangeLanguage(() => this.updateSoon.schedule(0)));
-		resources.add(model.onWillDispose(() => {
-			this.request.clear();
-			this.model = undefined;
-			this.changed.fire({});
-		}));
+		resources.add(
+			model.onWillDispose(() => {
+				this.request.clear();
+				this.model = undefined;
+				this.changed.fire({});
+			}),
+		);
 	}
 }
 
@@ -151,7 +194,11 @@ export class DocumentSymbolsOutlineCreator extends Disposable implements IOutlin
 		return control instanceof CodeEditorWidget || control instanceof DiffEditorWidget;
 	}
 
-	public async createOutline(pane: IEditorPane, target: OutlineTarget, token: CancellationToken): Promise<IOutline<OutlineElement> | undefined> {
+	public async createOutline(
+		pane: IEditorPane,
+		target: OutlineTarget,
+		token: CancellationToken,
+	): Promise<IOutline<OutlineElement> | undefined> {
 		throwIfCancelled(token);
 		const control = pane.getControl();
 		const editor = control instanceof DiffEditorWidget ? control.modifiedEditor : control;
@@ -160,7 +207,10 @@ export class DocumentSymbolsOutlineCreator extends Disposable implements IOutlin
 		using cancellation = token.onCancellationRequested(() => outline.dispose());
 		try {
 			await raceCancellationError(outline.update(), token);
-			if (token.isCancellationRequested) { outline.dispose(); return undefined; }
+			if (token.isCancellationRequested) {
+				outline.dispose();
+				return undefined;
+			}
 			return outline;
 		} catch (error) {
 			outline.dispose();

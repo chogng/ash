@@ -20,7 +20,9 @@ suite('Shell environment transactions', () => {
 		assert.deepEqual(capability.env, { value: { PATH: '/current' }, isTrusted: true });
 		capability.setEnvironment({ PATH: '/current' }, true);
 		assert.equal(events.length, 2);
-		assert.throws(() => { capability.env.value!.PATH = 'outside'; });
+		assert.throws(() => {
+			capability.env.value!.PATH = 'outside';
+		});
 	});
 
 	test('a forged fragment or end cannot regain trust, and abort clears an incomplete transaction', () => {

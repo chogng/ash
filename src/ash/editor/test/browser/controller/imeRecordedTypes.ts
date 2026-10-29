@@ -43,10 +43,7 @@ export interface IRecordedInputEvent {
 export type IRecordedEvent = IRecordedKeyboardEvent | IRecordedCompositionEvent | IRecordedInputEvent;
 
 export interface IRecorded {
-	env: {
-		OS: OperatingSystem;
-		browser: string;
-	};
+	env: { OS: OperatingSystem; browser: string };
 	initial: IRecordedTextareaState;
 	events: IRecordedEvent[];
 	final: IRecordedTextareaState;

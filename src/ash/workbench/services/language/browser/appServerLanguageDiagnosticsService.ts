@@ -1,28 +1,42 @@
-import { ITextFileService } from "../../textfile/common/textfiles.js";
-import { VSBuffer } from "../../../../base/common/buffer.js";
-import { Emitter } from "../../../../base/common/event.js";
-import { Disposable, combinedDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import { type URI } from "../../../../base/common/uri.js";
-import { Position } from "../../../../editor/common/core/position.js";
-import { Range } from "../../../../editor/common/core/range.js";
-import { LanguageDiagnosticSeverity, type LanguageDiagnostic, type LanguageDiagnosticsPublisher } from '../../../../editor/common/languages.js';
-import { type TextModel } from "../../../../editor/common/model/textModel.js";
-import { IServerEventApi } from "../../../../platform/agentHost/common/appServerApi.js";
-import { AppServerRemoteError } from "../../../../platform/agentHost/common/appServerError.js";
-import { workspaceResourceFromPath } from "../../../../platform/workspace/common/workspace.js";
-import { type ILanguageApi } from "../../../../platform/language/common/languageApi.js";
-import { workspaceRelativePath, IWorkspaceContextService } from "../../../../platform/workspace/common/workspace.js";
+import { ITextFileService } from '../../textfile/common/textfiles.js';
+import { VSBuffer } from '../../../../base/common/buffer.js';
+import { Emitter } from '../../../../base/common/event.js';
+import { Disposable, combinedDisposable, toDisposable, type IDisposable } from '../../../../base/common/lifecycle.js';
+import { type URI } from '../../../../base/common/uri.js';
+import { Position } from '../../../../editor/common/core/position.js';
+import { Range } from '../../../../editor/common/core/range.js';
+import {
+	LanguageDiagnosticSeverity,
+	type LanguageDiagnostic,
+	type LanguageDiagnosticsPublisher,
+} from '../../../../editor/common/languages.js';
+import { type TextModel } from '../../../../editor/common/model/textModel.js';
+import { IServerEventApi } from '../../../../platform/agentHost/common/appServerApi.js';
+import { AppServerRemoteError } from '../../../../platform/agentHost/common/appServerError.js';
+import { workspaceResourceFromPath } from '../../../../platform/workspace/common/workspace.js';
+import { type ILanguageApi } from '../../../../platform/language/common/languageApi.js';
+import { workspaceRelativePath, IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IWorkspaceTrustManagementService } from '../../../../platform/workspace/common/workspaceTrust.js';
-import { type AppServerErrorName, type LanguageCodeActionDiagnosticDto, type LanguageDiagnosticsNotification } from "../../../../../../.build/protocol/typescript/index.js";
-import { type ICodeIntelligenceDocumentService } from "../../codeIntelligence/common/codeIntelligenceDocumentService.js";
-import { AppServerLanguageSupport } from "./appServerLanguageSupport.js";
+import {
+	type AppServerErrorName,
+	type LanguageCodeActionDiagnosticDto,
+	type LanguageDiagnosticsNotification,
+} from '../../../../../../.build/protocol/typescript/index.js';
+import { type ICodeIntelligenceDocumentService } from '../../codeIntelligence/common/codeIntelligenceDocumentService.js';
+import { AppServerLanguageSupport } from './appServerLanguageSupport.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
-import { resolveAppServerLanguageDirAccess } from "./appServerLanguageWorkspace.js";
-import { type ILanguageDiagnosticsService, type LanguageDiagnosticSnapshot } from "../common/languageDiagnosticsService.js";
+import { resolveAppServerLanguageDirAccess } from './appServerLanguageWorkspace.js';
+import {
+	type ILanguageDiagnosticsService,
+	type LanguageDiagnosticSnapshot,
+} from '../common/languageDiagnosticsService.js';
 
 const MAX_LANGUAGE_DOCUMENT_BYTES = 10 * 1024 * 1024;
 const SYNCHRONIZE_DELAY_MS = 150;
-const UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES: ReadonlySet<AppServerErrorName> = new Set(["LanguageServiceUnavailable", "PermissionRequired"]);
+const UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES: ReadonlySet<AppServerErrorName> = new Set([
+	'LanguageServiceUnavailable',
+	'PermissionRequired',
+]);
 
 interface PullDiagnosticCapabilities {
 	readonly server: string;
@@ -87,93 +101,115 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		@IConfigurationService private readonly configuration: IConfigurationService,
 	) {
 		super();
-		this._register(textFiles.onDidSave(event => {
-			const entry = this.entries.get(event.resource.toString());
-			if (!entry || !this.languageAllowed || entry.references === 0) return;
-			if (entry.timer !== undefined) clearTimeout(entry.timer);
-			entry.timer = undefined;
-			this.enqueueSynchronization(entry, event.content);
-		}));
+		this._register(
+			textFiles.onDidSave(event => {
+				const entry = this.entries.get(event.resource.toString());
+				if (!entry || !this.languageAllowed || entry.references === 0) return;
+				if (entry.timer !== undefined) clearTimeout(entry.timer);
+				entry.timer = undefined;
+				this.enqueueSynchronization(entry, event.content);
+			}),
+		);
 		const subscription = events.subscribe(event => {
-			if (event.method === "language/diagnostics") this.acceptDiagnostics(event.params);
+			if (event.method === 'language/diagnostics') this.acceptDiagnostics(event.params);
 			if (event.method === 'language/diagnosticsRefresh') {
 				const dirId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
 				const queued = this.diagnosticRefreshes.size > 0;
 				for (const entry of this.entries.values()) {
 					const capabilities = this.pullCapabilities.get(`${entry.dirId}:${entry.languageId}`);
-					if (entry.dirId === dirId && capabilities?.supported && capabilities.server === event.params.server) this.diagnosticRefreshes.add(entry);
+					if (entry.dirId === dirId && capabilities?.supported && capabilities.server === event.params.server)
+						this.diagnosticRefreshes.add(entry);
 				}
-				if (!queued && this.diagnosticRefreshes.size > 0) queueMicrotask(() => {
-					const entries = [...this.diagnosticRefreshes];
-					this.diagnosticRefreshes.clear();
-					if (this.alive) for (const entry of entries) this.schedule(entry, true);
-				});
+				if (!queued && this.diagnosticRefreshes.size > 0)
+					queueMicrotask(() => {
+						const entries = [...this.diagnosticRefreshes];
+						this.diagnosticRefreshes.clear();
+						if (this.alive) for (const entry of entries) this.schedule(entry, true);
+					});
 			}
 			if (event.method === 'language/serverCapabilities') {
 				const dirId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
-				if (dirId) for (const languageId of event.params.languageIds) this.updatePullCapabilities(`${dirId}:${languageId}`, { server: event.params.server, supported: event.params.features.includes('pullDiagnostics') });
+				if (dirId)
+					for (const languageId of event.params.languageIds)
+						this.updatePullCapabilities(`${dirId}:${languageId}`, {
+							server: event.params.server,
+							supported: event.params.features.includes('pullDiagnostics'),
+						});
 			}
 			if (event.method === 'language/serverState' && event.params.state.type !== 'ready') {
 				const dirId = event.params.dirId ?? this.workspace.getWorkspace().folders[0]?.id;
 				for (const [key, capabilities] of this.pullCapabilities) {
-					if (key.startsWith(`${dirId}:`) && capabilities.server === event.params.server) this.updatePullCapabilities(key, undefined);
+					if (key.startsWith(`${dirId}:`) && capabilities.server === event.params.server)
+						this.updatePullCapabilities(key, undefined);
 				}
 			}
 			if (event.method === 'extensions/changed') this.clearPullCapabilities();
-			if (event.method === "extensions/changed" || event.method === "config/changed") this.queuePermissionRefresh();
+			if (event.method === 'extensions/changed' || event.method === 'config/changed')
+				this.queuePermissionRefresh();
 		});
 		this._register(toDisposable(() => subscription.dispose()));
-		this._register(configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration('rust-analyzer')) this.queuePermissionRefresh();
-		}));
+		this._register(
+			configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration('rust-analyzer')) this.queuePermissionRefresh();
+			}),
+		);
 		if (checkWorkspaceTrust) {
 			this._register(workspaceTrust.onDidChangeTrustedFolders(() => this.queuePermissionRefresh()));
-			this._register(workspaceTrust.addWorkspaceTrustTransitionParticipant({
-				participate: async () => {
-					this.queuePermissionRefresh();
-					await Promise.resolve();
-					await this.permissionQueue;
-				}
-			}));
+			this._register(
+				workspaceTrust.addWorkspaceTrustTransitionParticipant({
+					participate: async () => {
+						this.queuePermissionRefresh();
+						await Promise.resolve();
+						await this.permissionQueue;
+					},
+				}),
+			);
 		}
-		this._register(workspace.onDidChangeWorkspace(() => {
-			this.clearPullCapabilities();
-			this.languageAllowed = false;
-			this.support = new AppServerLanguageSupport();
-			for (const entry of this.entries.values()) {
-				entry.pullRequest?.abort();
-				if (entry.timer !== undefined) clearTimeout(entry.timer);
-				entry.timer = undefined;
-				// Drain the old binding before changing its relative path. A backend
-				// reply already in flight must be closed under that original identity.
-				entry.queue = entry.queue.catch(() => undefined).then(async () => {
-					await this.closeEntry(entry);
-					const target = this.workspaceTarget(entry.resource);
-					if (target) {
-						entry.dirId = target.dirId;
-						entry.path = target.path;
-						entry.wireWorkspaceFolderId = this.workspace.getWorkspace().folders.length > 1 ? target.dirId : undefined;
-					}
-				});
-			}
-			this.clearServerDiagnostics();
-			this.queuePermissionRefresh();
-		}));
-		this._register(toDisposable(() => {
-			this.alive = false;
-			this.workspaceDiagnosticsQueued = false;
-			this.workspaceDiagnosticsRequest?.abort();
-			this.clearPullCapabilities();
-			for (const entry of this.entries.values()) {
-				if (entry.timer !== undefined) clearTimeout(entry.timer);
-				entry.modelListener.dispose();
-			}
-			this.entries.clear();
-			this.diagnosticRefreshes.clear();
-			this.serverSnapshots.clear();
-			this.workspaceServerKeys.clear();
-			this.publishedDiagnostics.clear();
-		}));
+		this._register(
+			workspace.onDidChangeWorkspace(() => {
+				this.clearPullCapabilities();
+				this.languageAllowed = false;
+				this.support = new AppServerLanguageSupport();
+				for (const entry of this.entries.values()) {
+					entry.pullRequest?.abort();
+					if (entry.timer !== undefined) clearTimeout(entry.timer);
+					entry.timer = undefined;
+					// Drain the old binding before changing its relative path. A backend
+					// reply already in flight must be closed under that original identity.
+					entry.queue = entry.queue
+						.catch(() => undefined)
+						.then(async () => {
+							await this.closeEntry(entry);
+							const target = this.workspaceTarget(entry.resource);
+							if (target) {
+								entry.dirId = target.dirId;
+								entry.path = target.path;
+								entry.wireWorkspaceFolderId =
+									this.workspace.getWorkspace().folders.length > 1 ? target.dirId : undefined;
+							}
+						});
+				}
+				this.clearServerDiagnostics();
+				this.queuePermissionRefresh();
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				this.alive = false;
+				this.workspaceDiagnosticsQueued = false;
+				this.workspaceDiagnosticsRequest?.abort();
+				this.clearPullCapabilities();
+				for (const entry of this.entries.values()) {
+					if (entry.timer !== undefined) clearTimeout(entry.timer);
+					entry.modelListener.dispose();
+				}
+				this.entries.clear();
+				this.diagnosticRefreshes.clear();
+				this.serverSnapshots.clear();
+				this.workspaceServerKeys.clear();
+				this.publishedDiagnostics.clear();
+			}),
+		);
 	}
 
 	/** Initial workspace diagnostics must use the same loaded settings as restored editors. */
@@ -187,7 +223,8 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		const target = this.workspaceTarget(resource);
 		const key = resource.toString();
 		const existing = this.entries.get(key);
-		if (existing && (existing.model !== model || existing.languageId !== languageId)) throw new Error("One language document resource cannot bind multiple models or languages");
+		if (existing && (existing.model !== model || existing.languageId !== languageId))
+			throw new Error('One language document resource cannot bind multiple models or languages');
 		if (!target || model.largeFile.tooLargeForSynchronization) return Disposable.None;
 		if (existing) {
 			const reopening = existing.references === 0;
@@ -242,9 +279,11 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 				if (this.serverSnapshots.delete(key)) this.changeEmitter.fire(entry.resource);
 				// Drain the previous language before reopening this path. Its last
 				// synchronization may still be in flight, even at the same text revision.
-				entry.queue = entry.queue.catch(() => undefined).then(async () => {
-					if (this.alive && this.entries.get(key) === entry) await this.closeEntry(entry);
-				});
+				entry.queue = entry.queue
+					.catch(() => undefined)
+					.then(async () => {
+						if (this.alive && this.entries.get(key) === entry) await this.closeEntry(entry);
+					});
 				this.schedule(entry, true);
 			}),
 		);
@@ -256,12 +295,16 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 
 	getAllDiagnostics(): readonly LanguageDiagnosticSnapshot[] {
 		const resources = new Map<string, URI>();
-		for (const snapshot of this.serverSnapshots.values()) resources.set(snapshot.resource.toString(), snapshot.resource);
-		for (const published of this.publishedDiagnostics.values()) resources.set(published.resource.toString(), published.resource);
-		return Object.freeze([...resources.values()].flatMap(resource => {
-			const snapshot = this.mergeDiagnostics(resource);
-			return snapshot ? [snapshot] : [];
-		}));
+		for (const snapshot of this.serverSnapshots.values())
+			resources.set(snapshot.resource.toString(), snapshot.resource);
+		for (const published of this.publishedDiagnostics.values())
+			resources.set(published.resource.toString(), published.resource);
+		return Object.freeze(
+			[...resources.values()].flatMap(resource => {
+				const snapshot = this.mergeDiagnostics(resource);
+				return snapshot ? [snapshot] : [];
+			}),
+		);
 	}
 
 	createPublisher(resource: URI): LanguageDiagnosticsPublisher {
@@ -269,11 +312,13 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		let disposed = false;
 		return toDisposablePublisher(
 			(revision, diagnostics) => {
-				if (disposed) throw new ReferenceError("Language diagnostics publisher is already disposed");
-				if (!Number.isSafeInteger(revision) || revision < 1) throw new RangeError("Language diagnostics revision must be a positive safe integer");
+				if (disposed) throw new ReferenceError('Language diagnostics publisher is already disposed');
+				if (!Number.isSafeInteger(revision) || revision < 1)
+					throw new RangeError('Language diagnostics revision must be a positive safe integer');
 				const snapshot = Object.freeze({ resource, revision, diagnostics: Object.freeze([...diagnostics]) });
 				const current = this.publishedDiagnostics.get(id)?.snapshot;
-				if (current?.revision === revision && equalDiagnostics(current.diagnostics, snapshot.diagnostics)) return;
+				if (current?.revision === revision && equalDiagnostics(current.diagnostics, snapshot.diagnostics))
+					return;
 				this.publishedDiagnostics.set(id, { resource, snapshot });
 				this.changeEmitter.fire(resource);
 			},
@@ -287,7 +332,14 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 
 	private schedule(entry: LanguageDocumentEntry, immediate: boolean): void {
 		const target = this.workspaceTarget(entry.resource);
-		if (!this.languageAllowed || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry || target?.dirId !== entry.dirId || target.path !== entry.path) return;
+		if (
+			!this.languageAllowed ||
+			entry.references === 0 ||
+			this.entries.get(entry.resource.toString()) !== entry ||
+			target?.dirId !== entry.dirId ||
+			target.path !== entry.path
+		)
+			return;
 		if (entry.timer !== undefined) clearTimeout(entry.timer);
 		if (immediate) {
 			entry.timer = undefined;
@@ -307,47 +359,99 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		const snapshot = entry.model.createVersionedSnapshot();
 		const text = snapshot.getText();
 		if (VSBuffer.fromString(text).byteLength > MAX_LANGUAGE_DOCUMENT_BYTES) return;
-		entry.queue = entry.queue.catch(() => undefined).then(async () => {
-			if (!this.languageAllowed || generation !== this.permissionRefreshGeneration || languageGeneration !== entry.languageGeneration || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
-			const document = { ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, languageId: entry.languageId, revision: snapshot.version, text };
-			const languageSynchronized = this.support.supports(entry.dirId, entry.languageId);
-			let codeIntelligenceSynchronized = false;
-			await Promise.all([
-				languageSynchronized ? this.api.synchronize({ document }) : undefined,
-				this.canSynchronizeCodeIntelligence(entry)
-					? this.codeIntelligenceDocuments?.synchronize(document).then(() => { codeIntelligenceSynchronized = true; }).catch(reportCodeIntelligenceSynchronizationError)
-					: undefined,
-			]);
-			// Losing provider support does not close its backend document. Retain
-			// that ownership until closeEntry drains the old language binding.
-			entry.languageSynchronized ||= languageSynchronized;
-			entry.codeIntelligenceSynchronized ||= codeIntelligenceSynchronized;
-			if (!this.languageAllowed || generation !== this.permissionRefreshGeneration || languageGeneration !== entry.languageGeneration || entry.references === 0 || this.entries.get(entry.resource.toString()) !== entry) return;
-			if (!languageSynchronized) return;
-			if (savedText !== undefined) {
-				await this.api.save({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, text: savedText });
-			}
-			const key = `${entry.dirId}:${entry.languageId}`;
-			const capabilities = this.pullCapabilities.get(key);
-			// Synchronization and push diagnostics work even when pull is absent.
-			if (capabilities?.supported) {
-				const request = entry.pullRequest = new AbortController();
-				try {
-					const report = await this.api.documentDiagnostics({ document }, { signal: request.signal });
-					if (!this.alive || request.signal.aborted || generation !== this.permissionRefreshGeneration || languageGeneration !== entry.languageGeneration || entry.references === 0 || this.pullCapabilities.get(key) !== capabilities) return;
-					if (report.kind === "full") this.acceptDiagnostics({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path, revision: report.revision, diagnostics: report.diagnostics }, capabilities);
-				} catch (error) {
-					if (!request.signal.aborted && !isUnsupportedDiagnosticPull(error)) throw error;
-				} finally {
-					if (entry.pullRequest === request) entry.pullRequest = undefined;
+		entry.queue = entry.queue
+			.catch(() => undefined)
+			.then(async () => {
+				if (
+					!this.languageAllowed ||
+					generation !== this.permissionRefreshGeneration ||
+					languageGeneration !== entry.languageGeneration ||
+					entry.references === 0 ||
+					this.entries.get(entry.resource.toString()) !== entry
+				)
+					return;
+				const document = {
+					...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}),
+					path: entry.path,
+					languageId: entry.languageId,
+					revision: snapshot.version,
+					text,
+				};
+				const languageSynchronized = this.support.supports(entry.dirId, entry.languageId);
+				let codeIntelligenceSynchronized = false;
+				await Promise.all([
+					languageSynchronized ? this.api.synchronize({ document }) : undefined,
+					this.canSynchronizeCodeIntelligence(entry)
+						? this.codeIntelligenceDocuments
+								?.synchronize(document)
+								.then(() => {
+									codeIntelligenceSynchronized = true;
+								})
+								.catch(reportCodeIntelligenceSynchronizationError)
+						: undefined,
+				]);
+				// Losing provider support does not close its backend document. Retain
+				// that ownership until closeEntry drains the old language binding.
+				entry.languageSynchronized ||= languageSynchronized;
+				entry.codeIntelligenceSynchronized ||= codeIntelligenceSynchronized;
+				if (
+					!this.languageAllowed ||
+					generation !== this.permissionRefreshGeneration ||
+					languageGeneration !== entry.languageGeneration ||
+					entry.references === 0 ||
+					this.entries.get(entry.resource.toString()) !== entry
+				)
+					return;
+				if (!languageSynchronized) return;
+				if (savedText !== undefined) {
+					await this.api.save({
+						...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}),
+						path: entry.path,
+						text: savedText,
+					});
 				}
-			}
-			this.queueWorkspaceDiagnostics();
-		}).catch(error => { if (this.alive) reportLanguageSynchronizationError(error); });
+				const key = `${entry.dirId}:${entry.languageId}`;
+				const capabilities = this.pullCapabilities.get(key);
+				// Synchronization and push diagnostics work even when pull is absent.
+				if (capabilities?.supported) {
+					const request = (entry.pullRequest = new AbortController());
+					try {
+						const report = await this.api.documentDiagnostics({ document }, { signal: request.signal });
+						if (
+							!this.alive ||
+							request.signal.aborted ||
+							generation !== this.permissionRefreshGeneration ||
+							languageGeneration !== entry.languageGeneration ||
+							entry.references === 0 ||
+							this.pullCapabilities.get(key) !== capabilities
+						)
+							return;
+						if (report.kind === 'full')
+							this.acceptDiagnostics(
+								{
+									...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}),
+									path: entry.path,
+									revision: report.revision,
+									diagnostics: report.diagnostics,
+								},
+								capabilities,
+							);
+					} catch (error) {
+						if (!request.signal.aborted && !isUnsupportedDiagnosticPull(error)) throw error;
+					} finally {
+						if (entry.pullRequest === request) entry.pullRequest = undefined;
+					}
+				}
+				this.queueWorkspaceDiagnostics();
+			})
+			.catch(error => {
+				if (this.alive) reportLanguageSynchronizationError(error);
+			});
 	}
 
 	private queueWorkspaceDiagnostics(): void {
-		if (!this.alive || !this.languageAllowed || this.workspaceDiagnosticsQueued || !this.hasWorkspaceFolder()) return;
+		if (!this.alive || !this.languageAllowed || this.workspaceDiagnosticsQueued || !this.hasWorkspaceFolder())
+			return;
 		this.workspaceDiagnosticsQueued = true;
 		queueMicrotask(() => {
 			// Keep one pending refresh while a sweep is running. File synchronizations can
@@ -355,16 +459,18 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 			if (!this.alive || this.workspaceDiagnosticsRequest) return;
 			this.workspaceDiagnosticsQueued = false;
 			if (!this.languageAllowed || !this.hasWorkspaceFolder()) return;
-			const request = this.workspaceDiagnosticsRequest = new AbortController();
-			void this.refreshWorkspaceDiagnostics(request.signal).catch(error => {
-				if (this.alive && !request.signal.aborted) reportLanguageSynchronizationError(error);
-			}).finally(() => {
-				this.workspaceDiagnosticsRequest = undefined;
-				if (this.workspaceDiagnosticsQueued) {
-					this.workspaceDiagnosticsQueued = false;
-					this.queueWorkspaceDiagnostics();
-				}
-			});
+			const request = (this.workspaceDiagnosticsRequest = new AbortController());
+			void this.refreshWorkspaceDiagnostics(request.signal)
+				.catch(error => {
+					if (this.alive && !request.signal.aborted) reportLanguageSynchronizationError(error);
+				})
+				.finally(() => {
+					this.workspaceDiagnosticsRequest = undefined;
+					if (this.workspaceDiagnosticsQueued) {
+						this.workspaceDiagnosticsQueued = false;
+						this.queueWorkspaceDiagnostics();
+					}
+				});
 		});
 	}
 
@@ -396,9 +502,22 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		let supported = false;
 		for (const folder of this.workspace.getWorkspace().folders) {
 			for (const languageId of this.support.workspaceLanguageIds(folder.id)) {
-				if (!this.alive || signal.aborted || !this.languageAllowed || generation !== this.permissionRefreshGeneration || !this.hasWorkspaceFolder()) return;
+				if (
+					!this.alive ||
+					signal.aborted ||
+					!this.languageAllowed ||
+					generation !== this.permissionRefreshGeneration ||
+					!this.hasWorkspaceFolder()
+				)
+					return;
 				try {
-					const report = await this.api.directoryDiagnostics({ ...(this.workspace.getWorkspace().folders.length > 1 ? { dirId: folder.id } : {}), languageId }, { signal });
+					const report = await this.api.directoryDiagnostics(
+						{
+							...(this.workspace.getWorkspace().folders.length > 1 ? { dirId: folder.id } : {}),
+							languageId,
+						},
+						{ signal },
+					);
 					if (signal.aborted || generation !== this.permissionRefreshGeneration) return;
 					if (!report.supported) continue;
 					supported = true;
@@ -406,16 +525,33 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 						const resource = workspaceResourceFromPath(folder.uri, snapshot.path);
 						if (!resource) continue;
 						const key = resource.toString();
-						const diagnostics = snapshot.diagnostics.flatMap(diagnostic => projectWorkspaceDiagnostic(diagnostic));
-						const combined = deduplicateDiagnostics([...(next.get(key)?.diagnostics ?? []), ...diagnostics]);
+						const diagnostics = snapshot.diagnostics.flatMap(diagnostic =>
+							projectWorkspaceDiagnostic(diagnostic),
+						);
+						const combined = deduplicateDiagnostics([
+							...(next.get(key)?.diagnostics ?? []),
+							...diagnostics,
+						]);
 						next.set(key, Object.freeze({ resource, revision: 0, diagnostics: Object.freeze(combined) }));
 					}
 				} catch (error) {
-					if (this.alive && !signal.aborted && generation === this.permissionRefreshGeneration && !isUnsupportedDiagnosticPull(error)) reportLanguageSynchronizationError(error);
+					if (
+						this.alive &&
+						!signal.aborted &&
+						generation === this.permissionRefreshGeneration &&
+						!isUnsupportedDiagnosticPull(error)
+					)
+						reportLanguageSynchronizationError(error);
 				}
 			}
 		}
-		if (!this.alive || signal.aborted || this.workspaceDiagnosticsQueued || generation !== this.permissionRefreshGeneration) return;
+		if (
+			!this.alive ||
+			signal.aborted ||
+			this.workspaceDiagnosticsQueued ||
+			generation !== this.permissionRefreshGeneration
+		)
+			return;
 		if (!supported) return;
 		const changed = new Map<string, URI>();
 		for (const key of this.workspaceServerKeys) {
@@ -453,16 +589,35 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		queueMicrotask(() => {
 			this.permissionRefreshQueued = false;
 			const generation = this.permissionRefreshGeneration;
-			this.permissionQueue = this.permissionQueue.catch(() => undefined).then(() => this.refreshDirAccess(generation)).catch(reportDirAccessRefreshError);
+			this.permissionQueue = this.permissionQueue
+				.catch(() => undefined)
+				.then(() => this.refreshDirAccess(generation))
+				.catch(reportDirAccessRefreshError);
 		});
 	}
 
 	private async refreshDirAccess(generation: number): Promise<void> {
 		await Promise.all([...this.entries.values()].map(entry => entry.queue));
-		const access = await resolveAppServerLanguageDirAccess(this.workspace, this.workspaceTrust, this.checkWorkspaceTrust);
-		if (!this.alive || generation !== this.permissionRefreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
-		const support = access.allowed ? await AppServerLanguageSupport.read(this.api, this.workspace, this.configuration) : new AppServerLanguageSupport();
-		if (!this.alive || generation !== this.permissionRefreshGeneration || this.workspace.getWorkspace().id !== access.workspaceId) return;
+		const access = await resolveAppServerLanguageDirAccess(
+			this.workspace,
+			this.workspaceTrust,
+			this.checkWorkspaceTrust,
+		);
+		if (
+			!this.alive ||
+			generation !== this.permissionRefreshGeneration ||
+			this.workspace.getWorkspace().id !== access.workspaceId
+		)
+			return;
+		const support = access.allowed
+			? await AppServerLanguageSupport.read(this.api, this.workspace, this.configuration)
+			: new AppServerLanguageSupport();
+		if (
+			!this.alive ||
+			generation !== this.permissionRefreshGeneration ||
+			this.workspace.getWorkspace().id !== access.workspaceId
+		)
+			return;
 		this.support = support;
 		this.languageAllowed = access.allowed;
 		this.clearServerDiagnostics();
@@ -496,55 +651,89 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		}
 		entry.modelListener.dispose();
 		if (this.serverSnapshots.delete(key)) this.changeEmitter.fire(entry.resource);
-		entry.queue = entry.queue.catch(() => undefined).then(async () => {
-			// Releasing an editor can queue this close during Workbench disposal.
-			// The connection is gone by the next microtask; only a live owner may send it.
-			if (!this.alive || this.entries.get(key) !== entry || entry.references > 0) return;
-			await this.closeEntry(entry);
-			if (entry.references === 0 && this.entries.get(key) === entry) this.entries.delete(key);
-			this.queueWorkspaceDiagnostics();
-		}).catch(error => { if (this.alive) reportLanguageSynchronizationError(error); });
+		entry.queue = entry.queue
+			.catch(() => undefined)
+			.then(async () => {
+				// Releasing an editor can queue this close during Workbench disposal.
+				// The connection is gone by the next microtask; only a live owner may send it.
+				if (!this.alive || this.entries.get(key) !== entry || entry.references > 0) return;
+				await this.closeEntry(entry);
+				if (entry.references === 0 && this.entries.get(key) === entry) this.entries.delete(key);
+				this.queueWorkspaceDiagnostics();
+			})
+			.catch(error => {
+				if (this.alive) reportLanguageSynchronizationError(error);
+			});
 	}
 
-	private acceptDiagnostics(notification: LanguageDiagnosticsNotification, pullCapabilities?: PullDiagnosticCapabilities): void {
+	private acceptDiagnostics(
+		notification: LanguageDiagnosticsNotification,
+		pullCapabilities?: PullDiagnosticCapabilities,
+	): void {
 		if (!this.alive || !this.languageAllowed) return;
 		const folders = this.workspace.getWorkspace().folders;
 		const folder = notification.dirId
 			? folders.find(folder => folder.id === notification.dirId)
-			: folders.length === 1 ? folders[0] : undefined;
+			: folders.length === 1
+				? folders[0]
+				: undefined;
 		if (!folder) return;
 		const resource = workspaceResourceFromPath(folder.uri, notification.path);
 		if (!resource) return;
 		const key = resource.toString();
 		const entry = this.entries.get(key);
-		if (entry && (entry.references === 0 || !this.support.supports(entry.dirId, entry.languageId) || notification.revision > entry.model.version)) return;
+		if (
+			entry &&
+			(entry.references === 0 ||
+				!this.support.supports(entry.dirId, entry.languageId) ||
+				notification.revision > entry.model.version)
+		)
+			return;
 		if (!entry && this.support.workspaceLanguageIds(folder.id).length === 0) return;
 		const current = this.serverSnapshots.get(key);
 		if (current && current.revision > notification.revision) return;
-		const diagnostics = notification.diagnostics.flatMap(diagnostic => entry ? projectDiagnostic(diagnostic, entry.model) : projectWorkspaceDiagnostic(diagnostic));
+		const diagnostics = notification.diagnostics.flatMap(diagnostic =>
+			entry ? projectDiagnostic(diagnostic, entry.model) : projectWorkspaceDiagnostic(diagnostic),
+		);
 		if (current?.revision === notification.revision && equalDiagnostics(current.diagnostics, diagnostics)) {
 			// An identical push takes ownership so withdrawing pull cannot clear it.
-			if (!pullCapabilities && current.pullCapabilities) this.serverSnapshots.set(key, Object.freeze({ resource, revision: notification.revision, diagnostics: current.diagnostics }));
+			if (!pullCapabilities && current.pullCapabilities)
+				this.serverSnapshots.set(
+					key,
+					Object.freeze({ resource, revision: notification.revision, diagnostics: current.diagnostics }),
+				);
 			return;
 		}
-		this.serverSnapshots.set(key, Object.freeze({ resource, revision: notification.revision, diagnostics: Object.freeze(diagnostics), ...(pullCapabilities ? { pullCapabilities } : {}) }));
+		this.serverSnapshots.set(
+			key,
+			Object.freeze({
+				resource,
+				revision: notification.revision,
+				diagnostics: Object.freeze(diagnostics),
+				...(pullCapabilities ? { pullCapabilities } : {}),
+			}),
+		);
 		this.workspaceServerKeys.delete(key);
 		this.changeEmitter.fire(resource);
 	}
 
 	private mergeDiagnostics(resource: URI): LanguageDiagnosticSnapshot | undefined {
 		const key = resource.toString();
-		const candidates = [...this.publishedDiagnostics.values()].filter(candidate => candidate.resource.toString() === key).map(candidate => candidate.snapshot);
+		const candidates = [...this.publishedDiagnostics.values()]
+			.filter(candidate => candidate.resource.toString() === key)
+			.map(candidate => candidate.snapshot);
 		const server = this.serverSnapshots.get(key);
 		if (server) candidates.push(server);
 		if (candidates.length === 0) return undefined;
 		const revision = Math.max(...candidates.map(candidate => candidate.revision));
-		const diagnostics = deduplicateDiagnostics(candidates.filter(candidate => candidate.revision === revision).flatMap(candidate => candidate.diagnostics));
+		const diagnostics = deduplicateDiagnostics(
+			candidates.filter(candidate => candidate.revision === revision).flatMap(candidate => candidate.diagnostics),
+		);
 		return Object.freeze({ resource, revision, diagnostics: Object.freeze(diagnostics) });
 	}
 
-	private workspaceTarget(resource: URI): { readonly dirId: string; readonly path: string; } | undefined {
-		let match: { readonly dirId: string; readonly path: string; readonly rootLength: number; } | undefined;
+	private workspaceTarget(resource: URI): { readonly dirId: string; readonly path: string } | undefined {
+		let match: { readonly dirId: string; readonly path: string; readonly rootLength: number } | undefined;
 		for (const folder of this.workspace.getWorkspace().folders) {
 			try {
 				const path = workspaceRelativePath(folder.uri, resource);
@@ -569,8 +758,19 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 		// The backend replaces overlays when their execution root is retired.
 		// A path-only close is safe while that root remains in the directory set.
 		const retained = this.workspace.getWorkspace().folders.some(folder => folder.id === entry.dirId);
-		const closeLanguage = entry.languageSynchronized && retained ? this.api.close({ ...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}), path: entry.path }).catch(reportLanguageSynchronizationError) : undefined;
-		const closeCodeIntelligence = entry.codeIntelligenceSynchronized && retained ? this.codeIntelligenceDocuments?.close(entry.path).catch(reportCodeIntelligenceSynchronizationError) : undefined;
+		const closeLanguage =
+			entry.languageSynchronized && retained
+				? this.api
+						.close({
+							...(entry.wireWorkspaceFolderId ? { dirId: entry.wireWorkspaceFolderId } : {}),
+							path: entry.path,
+						})
+						.catch(reportLanguageSynchronizationError)
+				: undefined;
+		const closeCodeIntelligence =
+			entry.codeIntelligenceSynchronized && retained
+				? this.codeIntelligenceDocuments?.close(entry.path).catch(reportCodeIntelligenceSynchronizationError)
+				: undefined;
 		entry.languageSynchronized = false;
 		entry.codeIntelligenceSynchronized = false;
 		await Promise.all([closeLanguage, closeCodeIntelligence]);
@@ -578,23 +778,29 @@ export class AppServerLanguageDiagnosticsService extends Disposable implements I
 }
 
 function reportCodeIntelligenceSynchronizationError(error: unknown): void {
-	console.error("Code-intelligence document synchronization failed", error);
+	console.error('Code-intelligence document synchronization failed', error);
 }
 
 function reportDirAccessRefreshError(error: unknown): void {
-	console.error("Directory access refresh for language services failed", error);
+	console.error('Directory access refresh for language services failed', error);
 }
 
 function isUnsupportedDiagnosticPull(error: unknown): boolean {
 	return error instanceof AppServerRemoteError && UNSUPPORTED_DIAGNOSTIC_ERROR_NAMES.has(error.errorName);
 }
 
-function toDisposablePublisher(update: LanguageDiagnosticsPublisher["update"], dispose: () => void): LanguageDiagnosticsPublisher {
+function toDisposablePublisher(
+	update: LanguageDiagnosticsPublisher['update'],
+	dispose: () => void,
+): LanguageDiagnosticsPublisher {
 	return { update, dispose, [Symbol.dispose]: dispose };
 }
 
 function equalDiagnostics(left: readonly LanguageDiagnostic[], right: readonly LanguageDiagnostic[]): boolean {
-	return left.length === right.length && left.every((diagnostic, index) => diagnosticKey(diagnostic) === diagnosticKey(right[index]!));
+	return (
+		left.length === right.length &&
+		left.every((diagnostic, index) => diagnosticKey(diagnostic) === diagnosticKey(right[index]!))
+	);
 }
 
 function deduplicateDiagnostics(diagnostics: readonly LanguageDiagnostic[]): readonly LanguageDiagnostic[] {
@@ -609,25 +815,38 @@ function deduplicateDiagnostics(diagnostics: readonly LanguageDiagnostic[]): rea
 
 function diagnosticKey(diagnostic: LanguageDiagnostic): string {
 	const range = diagnostic.range;
-	return `${range.getStartPosition().lineNumber}:${range.getStartPosition().column}:${range.getEndPosition().lineNumber}:${range.getEndPosition().column}:${diagnostic.severity}:${diagnostic.message}:${diagnostic.source ?? ""}:${diagnostic.code ?? ""}`;
+	return `${range.getStartPosition().lineNumber}:${range.getStartPosition().column}:${range.getEndPosition().lineNumber}:${range.getEndPosition().column}:${diagnostic.severity}:${diagnostic.message}:${diagnostic.source ?? ''}:${diagnostic.code ?? ''}`;
 }
 
-function projectDiagnostic(diagnostic: LanguageCodeActionDiagnosticDto, model: TextModel): readonly LanguageDiagnostic[] {
+function projectDiagnostic(
+	diagnostic: LanguageCodeActionDiagnosticDto,
+	model: TextModel,
+): readonly LanguageDiagnostic[] {
 	const message = diagnostic.message.trim();
 	if (!message) return [];
 	const source = diagnostic.source?.trim() || undefined;
-	const code = typeof diagnostic.code === "string" ? diagnostic.code.trim() || undefined : typeof diagnostic.code === "number" && Number.isFinite(diagnostic.code) ? diagnostic.code : undefined;
+	const code =
+		typeof diagnostic.code === 'string'
+			? diagnostic.code.trim() || undefined
+			: typeof diagnostic.code === 'number' && Number.isFinite(diagnostic.code)
+				? diagnostic.code
+				: undefined;
 	try {
-		const range = Range.fromPositions(new Position((diagnostic.range.start.lineIndex) + 1, (diagnostic.range.start.columnIndex) + 1), new Position((diagnostic.range.end.lineIndex) + 1, (diagnostic.range.end.columnIndex) + 1));
+		const range = Range.fromPositions(
+			new Position(diagnostic.range.start.lineIndex + 1, diagnostic.range.start.columnIndex + 1),
+			new Position(diagnostic.range.end.lineIndex + 1, diagnostic.range.end.columnIndex + 1),
+		);
 		model.offsetAt(range.getStartPosition());
 		model.offsetAt(range.getEndPosition());
-		return [Object.freeze({
-			range,
-			severity: diagnostic.severity as LanguageDiagnosticSeverity,
-			message,
-			...(code === undefined ? {} : { code }),
-			...(source === undefined ? {} : { source }),
-		})];
+		return [
+			Object.freeze({
+				range,
+				severity: diagnostic.severity as LanguageDiagnosticSeverity,
+				message,
+				...(code === undefined ? {} : { code }),
+				...(source === undefined ? {} : { source }),
+			}),
+		];
 	} catch {
 		return [];
 	}
@@ -637,15 +856,31 @@ function projectWorkspaceDiagnostic(diagnostic: LanguageCodeActionDiagnosticDto)
 	const message = diagnostic.message.trim();
 	if (!message) return [];
 	const source = diagnostic.source?.trim() || undefined;
-	const code = typeof diagnostic.code === "string" ? diagnostic.code.trim() || undefined : typeof diagnostic.code === "number" && Number.isFinite(diagnostic.code) ? diagnostic.code : undefined;
+	const code =
+		typeof diagnostic.code === 'string'
+			? diagnostic.code.trim() || undefined
+			: typeof diagnostic.code === 'number' && Number.isFinite(diagnostic.code)
+				? diagnostic.code
+				: undefined;
 	try {
-		const range = Range.fromPositions(new Position((diagnostic.range.start.lineIndex) + 1, (diagnostic.range.start.columnIndex) + 1), new Position((diagnostic.range.end.lineIndex) + 1, (diagnostic.range.end.columnIndex) + 1));
-		return [Object.freeze({ range, severity: diagnostic.severity as LanguageDiagnosticSeverity, message, ...(code === undefined ? {} : { code }), ...(source === undefined ? {} : { source }) })];
+		const range = Range.fromPositions(
+			new Position(diagnostic.range.start.lineIndex + 1, diagnostic.range.start.columnIndex + 1),
+			new Position(diagnostic.range.end.lineIndex + 1, diagnostic.range.end.columnIndex + 1),
+		);
+		return [
+			Object.freeze({
+				range,
+				severity: diagnostic.severity as LanguageDiagnosticSeverity,
+				message,
+				...(code === undefined ? {} : { code }),
+				...(source === undefined ? {} : { source }),
+			}),
+		];
 	} catch {
 		return [];
 	}
 }
 
 function reportLanguageSynchronizationError(error: unknown): void {
-	console.error("App Server language document synchronization failed", error);
+	console.error('App Server language document synchronization failed', error);
 }

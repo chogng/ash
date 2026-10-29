@@ -1,19 +1,9 @@
-import { Emitter, type Event } from "../../../base/common/event.js";
-import {
-	decodeKeybinding,
-	type Keybinding,
-} from "../../../base/common/keybindings.js";
-import {
-	type IDisposable,
-	toDisposable,
-} from "../../../base/common/lifecycle.js";
-import type {
-	CommandId,
-} from "../../commands/common/commands.js";
-import type {
-	ContextKeyExpression,
-} from "../../contextkey/common/contextkey.js";
-import { operatingSystem } from "../../../base/common/platform.js";
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { decodeKeybinding, type Keybinding } from '../../../base/common/keybindings.js';
+import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
+import type { CommandId } from '../../commands/common/commands.js';
+import type { ContextKeyExpression } from '../../contextkey/common/contextkey.js';
+import { operatingSystem } from '../../../base/common/platform.js';
 
 export const enum KeybindingWeight {
 	EditorCore = 0,
@@ -31,9 +21,9 @@ export enum KeybindingSource {
 }
 
 export enum KeybindingRuleKind {
-	Command = "command",
-	Blocker = "blocker",
-	PassThrough = "passThrough",
+	Command = 'command',
+	Blocker = 'blocker',
+	PassThrough = 'passThrough',
 }
 
 /** One command shortcut contribution before host-specific resolution. */
@@ -59,31 +49,26 @@ export interface IKeybindingPassThrough extends IKeybindingBlocker {
 	readonly command?: CommandId;
 }
 
-export interface IRegisteredCommandKeybindingRule
-	extends IKeybindingRule {
+export interface IRegisteredCommandKeybindingRule extends IKeybindingRule {
 	readonly kind: KeybindingRuleKind.Command;
 	readonly keybinding: Keybinding;
 	readonly order: number;
 }
 
-export interface IRegisteredKeybindingBlocker
-	extends IKeybindingBlocker {
+export interface IRegisteredKeybindingBlocker extends IKeybindingBlocker {
 	readonly kind: KeybindingRuleKind.Blocker;
 	readonly keybinding: Keybinding;
 	readonly order: number;
 }
 
-export interface IRegisteredKeybindingPassThrough
-	extends IKeybindingPassThrough {
+export interface IRegisteredKeybindingPassThrough extends IKeybindingPassThrough {
 	readonly kind: KeybindingRuleKind.PassThrough;
 	readonly keybinding: Keybinding;
 	readonly order: number;
 }
 
 export type IRegisteredKeybindingRule =
-	| IRegisteredCommandKeybindingRule
-	| IRegisteredKeybindingBlocker
-	| IRegisteredKeybindingPassThrough;
+	IRegisteredCommandKeybindingRule | IRegisteredKeybindingBlocker | IRegisteredKeybindingPassThrough;
 
 /** Stores realm-wide keybinding contributions and their override order. */
 export class KeybindingRegistry {
@@ -91,8 +76,7 @@ export class KeybindingRegistry {
 	private readonly _onDidChangeKeybindings = new Emitter<void>();
 	private nextOrder = 1;
 
-	readonly onDidChangeKeybindings: Event<void> =
-		this._onDidChangeKeybindings.event;
+	readonly onDidChangeKeybindings: Event<void> = this._onDidChangeKeybindings.event;
 
 	registerKeybindingRule(rule: IKeybindingRule): IDisposable {
 		const registered: IRegisteredCommandKeybindingRule = {
@@ -104,9 +88,7 @@ export class KeybindingRegistry {
 		return this.register(registered);
 	}
 
-	registerKeybindingBlocker(
-		blocker: IKeybindingBlocker,
-	): IDisposable {
+	registerKeybindingBlocker(blocker: IKeybindingBlocker): IDisposable {
 		const registered: IRegisteredKeybindingBlocker = {
 			...blocker,
 			keybinding: resolveKeybinding(blocker.keybinding),
@@ -147,8 +129,8 @@ export class KeybindingRegistry {
 export const KeybindingsRegistry = new KeybindingRegistry();
 
 function resolveKeybinding(value: Keybinding | number | readonly number[]): Keybinding {
-	if (typeof value === "object" && !Array.isArray(value)) return value as Keybinding;
+	if (typeof value === 'object' && !Array.isArray(value)) return value as Keybinding;
 	const decoded = decodeKeybinding(value as number | readonly number[], operatingSystem);
-	if (!decoded) throw new TypeError("Keybinding must not be empty");
+	if (!decoded) throw new TypeError('Keybinding must not be empty');
 	return decoded;
 }

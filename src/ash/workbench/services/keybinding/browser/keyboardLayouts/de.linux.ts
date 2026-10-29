@@ -1,6 +1,5 @@
 import { KeyboardLayoutContribution } from './_.contribution.js';
 
-
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 	layout: { model: 'pc104', group: 0, layout: 'de', variant: '', options: '', rules: 'base' },
 	secondaryLayouts: [],
@@ -52,7 +51,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		Equal: ['́', '̀', '̧', '̨', 0],
 		BracketLeft: ['ü', 'Ü', '̈', '̊', 0],
 		BracketRight: ['+', '*', '~', '¯', 0],
-		Backslash: ['#', '\'', '’', '̆', 0],
+		Backslash: ['#', "'", '’', '̆', 0],
 		Semicolon: ['ö', 'Ö', '̋', '̣', 0],
 		Quote: ['ä', 'Ä', '̂', '̌', 0],
 		Backquote: ['̂', '°', '′', '″', 0],
@@ -177,7 +176,6 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		BrowserFavorites: [],
 		MailReply: [],
 		MailForward: [],
-		MailSend: []
-	}
+		MailSend: [],
+	},
 });
-

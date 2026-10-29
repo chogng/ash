@@ -23,7 +23,10 @@ export interface TrustedTypesPolicy {
 }
 
 export interface IMonacoEnvironment {
-	createTrustedTypesPolicy?(policyName: string, policyOptions?: TrustedTypesPolicyOptions): TrustedTypesPolicy | undefined;
+	createTrustedTypesPolicy?(
+		policyName: string,
+		policyOptions?: TrustedTypesPolicyOptions,
+	): TrustedTypesPolicy | undefined;
 	getWorker?(moduleId: string, label: string): Worker | Promise<Worker>;
 	getWorkerUrl?(moduleId: string, label: string): string;
 	globalAPI?: boolean;
@@ -35,7 +38,9 @@ interface BrowserGlobals {
 }
 
 /** Resolves browser-engine capabilities from one user-agent value. */
-export function getBrowserFeatures(source: string | Pick<Navigator, 'userAgent' | 'maxTouchPoints'> = browserGlobals.navigator ?? ''): Readonly<BrowserFeatures> {
+export function getBrowserFeatures(
+	source: string | Pick<Navigator, 'userAgent' | 'maxTouchPoints'> = browserGlobals.navigator ?? '',
+): Readonly<BrowserFeatures> {
 	const userAgent = typeof source === 'string' ? source : source.userAgent;
 	const maxTouchPoints = typeof source === 'string' ? 0 : source.maxTouchPoints;
 	const isFirefox = userAgent.includes('Firefox');
@@ -55,7 +60,11 @@ export function getBrowserFeatures(source: string | Pick<Navigator, 'userAgent' 
 }
 
 /** Registers a media-query change listener without relying on deprecated listener APIs. */
-export function addMatchMediaChangeListener(targetWindow: Window, query: string | MediaQueryList, listener: (this: MediaQueryList, event: MediaQueryListEvent) => unknown): void {
+export function addMatchMediaChangeListener(
+	targetWindow: Window,
+	query: string | MediaQueryList,
+	listener: (this: MediaQueryList, event: MediaQueryListEvent) => unknown,
+): void {
 	const mediaQuery = typeof query === 'string' ? targetWindow.matchMedia(query) : query;
 	mediaQuery.addEventListener('change', listener);
 }
@@ -65,7 +74,9 @@ const standaloneWindows = new WeakMap<Window, boolean>();
 /** Fullscreen temporarily replaces an installed application's display mode. */
 export function isStandalone(targetWindow: Window = globalThis.window): boolean {
 	if (typeof targetWindow?.matchMedia !== 'function') return false;
-	const installed = targetWindow.matchMedia('(display-mode: standalone), (display-mode: window-controls-overlay)').matches;
+	const installed = targetWindow.matchMedia(
+		'(display-mode: standalone), (display-mode: window-controls-overlay)',
+	).matches;
 	if (!targetWindow.matchMedia('(display-mode: fullscreen)').matches) {
 		standaloneWindows.set(targetWindow, installed);
 	}
@@ -73,12 +84,17 @@ export function isStandalone(targetWindow: Window = globalThis.window): boolean 
 }
 
 export function isWCOEnabled(targetWindow: Window = globalThis.window): boolean {
-	return (targetWindow?.navigator as Navigator & { windowControlsOverlay?: { visible: boolean; }; })?.windowControlsOverlay?.visible === true;
+	return (
+		(targetWindow?.navigator as Navigator & { windowControlsOverlay?: { visible: boolean } })?.windowControlsOverlay
+			?.visible === true
+	);
 }
 
 /** The browser supplies viewport coordinates; callers convert to their own container. */
 export function getWCOTitlebarAreaRect(targetWindow: Window): DOMRect | undefined {
-	return (targetWindow.navigator as Navigator & { windowControlsOverlay?: { getTitlebarAreaRect(): DOMRect; }; }).windowControlsOverlay?.getTitlebarAreaRect();
+	return (
+		targetWindow.navigator as Navigator & { windowControlsOverlay?: { getTitlebarAreaRect(): DOMRect } }
+	).windowControlsOverlay?.getTitlebarAreaRect();
 }
 
 export function getMonacoEnvironment(): IMonacoEnvironment | undefined {

@@ -1,12 +1,49 @@
-import { type IDimension } from "../../dom.js";
-import { Emitter, type Event } from "../../../common/event.js";
-import { Disposable, DisposableStore, type IDisposable, toDisposable } from "../../../common/lifecycle.js";
-import { type Sash, type SashPresentation } from "../sash/sash.js";
-import { type ISplitViewView, SplitView, type SplitViewLayoutPriority, type SplitViewOrientation, type SplitViewStyles } from "../splitview/splitview.js";
-import { assertChildIndex, assertDimension, assertInsertionIndex, descriptorNode, descriptorSizing, deserializeGridViewDescriptor, isSerializableView, normalizeDescriptor, normalizeRootDescriptor, orthogonal, replaceDescriptorNode, splitLocation, type GridLocation, type GridViewDescriptor, type GridViewSizing, type ISerializableView, type IView, type IViewDeserializer, type SerializedGridViewDescriptor, validateDescriptor, validateSerializedGridViewDescriptor, validateViewConstraints } from "./gridviewDescriptor.js";
-import { h } from "../../dom.js";
+import { type IDimension } from '../../dom.js';
+import { Emitter, type Event } from '../../../common/event.js';
+import { Disposable, DisposableStore, type IDisposable, toDisposable } from '../../../common/lifecycle.js';
+import { type Sash, type SashPresentation } from '../sash/sash.js';
+import {
+	type ISplitViewView,
+	SplitView,
+	type SplitViewLayoutPriority,
+	type SplitViewOrientation,
+	type SplitViewStyles,
+} from '../splitview/splitview.js';
+import {
+	assertChildIndex,
+	assertDimension,
+	assertInsertionIndex,
+	descriptorNode,
+	descriptorSizing,
+	deserializeGridViewDescriptor,
+	isSerializableView,
+	normalizeDescriptor,
+	normalizeRootDescriptor,
+	orthogonal,
+	replaceDescriptorNode,
+	splitLocation,
+	type GridLocation,
+	type GridViewDescriptor,
+	type GridViewSizing,
+	type ISerializableView,
+	type IView,
+	type IViewDeserializer,
+	type SerializedGridViewDescriptor,
+	validateDescriptor,
+	validateSerializedGridViewDescriptor,
+	validateViewConstraints,
+} from './gridviewDescriptor.js';
+import { h } from '../../dom.js';
 
-export { type GridLocation, type GridViewDescriptor, type GridViewSizing, type ISerializableView, type IView, type IViewDeserializer, type SerializedGridViewDescriptor } from "./gridviewDescriptor.js";
+export {
+	type GridLocation,
+	type GridViewDescriptor,
+	type GridViewSizing,
+	type ISerializableView,
+	type IView,
+	type IViewDeserializer,
+	type SerializedGridViewDescriptor,
+} from './gridviewDescriptor.js';
 
 export interface GridViewOptions {
 	/** Optional presentation applied to every Grid-owned Sash. */
@@ -40,7 +77,7 @@ interface GridNodeHost {
 }
 
 abstract class GridNode {
-	constructor(readonly initialSize: number) { }
+	constructor(readonly initialSize: number) {}
 
 	abstract readonly element: HTMLElement;
 	parent: ParentLink | undefined;
@@ -48,7 +85,7 @@ abstract class GridNode {
 	height = 0;
 	top = 0;
 	left = 0;
-	priority: SplitViewLayoutPriority = "normal";
+	priority: SplitViewLayoutPriority = 'normal';
 
 	abstract get minimumWidth(): number;
 	abstract get maximumWidth(): number;
@@ -57,9 +94,9 @@ abstract class GridNode {
 	abstract isVisible(): boolean;
 	abstract setDisplayed(visible: boolean): void;
 	abstract layout(width: number, height: number, top: number, left: number): void;
-	setBoundarySashes(_sashes: BoundarySashes): void { }
-	setEdgeSnapping(_enabled: boolean): void { }
-	setSashPresentation(_presentation: SashPresentation): void { }
+	setBoundarySashes(_sashes: BoundarySashes): void {}
+	setEdgeSnapping(_enabled: boolean): void {}
+	setSashPresentation(_presentation: SashPresentation): void {}
 }
 
 class LeafNode extends GridNode {
@@ -74,21 +111,35 @@ class LeafNode extends GridNode {
 		super(initialSize);
 	}
 
-	get element(): HTMLElement { return this.view.element; }
-	get minimumWidth(): number { return this.view.minimumWidth; }
-	get maximumWidth(): number { return this.view.maximumWidth; }
-	get minimumHeight(): number { return this.view.minimumHeight; }
-	get maximumHeight(): number { return this.view.maximumHeight; }
-	get preferredWidth(): number | undefined { return this.view.preferredWidth; }
-	isVisible(): boolean { return this.visible; }
+	get element(): HTMLElement {
+		return this.view.element;
+	}
+	get minimumWidth(): number {
+		return this.view.minimumWidth;
+	}
+	get maximumWidth(): number {
+		return this.view.maximumWidth;
+	}
+	get minimumHeight(): number {
+		return this.view.minimumHeight;
+	}
+	get maximumHeight(): number {
+		return this.view.maximumHeight;
+	}
+	get preferredWidth(): number | undefined {
+		return this.view.preferredWidth;
+	}
+	isVisible(): boolean {
+		return this.visible;
+	}
 
 	override setBoundarySashes(sashes: BoundarySashes): void {
 		// Branches rotate relative axes at each level. Leaves expose physical edges to their consumers.
-		this.view.setBoundarySashes?.(this.parent?.branch.orientation === "horizontal" ? {
-			top: sashes.start, right: sashes.orthogonalEnd, bottom: sashes.end, left: sashes.orthogonalStart,
-		} : {
-			top: sashes.orthogonalStart, right: sashes.end, bottom: sashes.orthogonalEnd, left: sashes.start,
-		});
+		this.view.setBoundarySashes?.(
+			this.parent?.branch.orientation === 'horizontal'
+				? { top: sashes.start, right: sashes.orthogonalEnd, bottom: sashes.end, left: sashes.orthogonalStart }
+				: { top: sashes.orthogonalStart, right: sashes.end, bottom: sashes.orthogonalEnd, left: sashes.start },
+		);
 	}
 
 	setDisplayed(visible: boolean): void {
@@ -100,8 +151,14 @@ class LeafNode extends GridNode {
 	layout(width: number, height: number, top: number, left: number): void {
 		// Frame insets can change a view's constraints while its outer box stays put.
 		const constraints = [this.minimumWidth, this.maximumWidth, this.minimumHeight, this.maximumHeight];
-		if (this.didLayout && this.width === width && this.height === height && this.top === top && this.left === left
-			&& constraints.every((value, index) => value === this.layoutConstraints?.[index])) {
+		if (
+			this.didLayout &&
+			this.width === width &&
+			this.height === height &&
+			this.top === top &&
+			this.left === left &&
+			constraints.every((value, index) => value === this.layoutConstraints?.[index])
+		) {
 			return;
 		}
 		this.didLayout = true;
@@ -134,13 +191,14 @@ class BranchNode extends GridNode {
 	) {
 		super(initialSize);
 		this.priority = priority;
-		this.splitView = host.ownSplitView(new SplitView(
-			host.container,
-			orientation,
-			{ sashPresentation: host.sashPresentation, styles: host.styles },
-		));
+		this.splitView = host.ownSplitView(
+			new SplitView(host.container, orientation, {
+				sashPresentation: host.sashPresentation,
+				styles: host.styles,
+			}),
+		);
 		this.element = this.splitView.element;
-		this.children = descriptors.map((descriptor) => host.createNode(descriptor));
+		this.children = descriptors.map(descriptor => host.createNode(descriptor));
 		for (const [index, child] of this.children.entries()) {
 			child.parent = { branch: this, index };
 			this.splitView.addView(new AxisView(child, orientation), descriptorSizing(descriptors[index]!));
@@ -148,27 +206,27 @@ class BranchNode extends GridNode {
 		this.updateBoundarySashes();
 		this.tryLink2x2Sashes(host);
 		host.registerEvent(this.splitView.onDidChangeViewSizes(() => host.handleSplitViewChange()));
-		host.registerEvent(this.splitView.onDidSashReset((boundaryIndex) => this.resetSash(boundaryIndex)));
+		host.registerEvent(this.splitView.onDidSashReset(boundaryIndex => this.resetSash(boundaryIndex)));
 	}
 
 	get minimumWidth(): number {
-		return this.axisConstraint("minimumWidth", Math.max, 0);
+		return this.axisConstraint('minimumWidth', Math.max, 0);
 	}
 
 	get maximumWidth(): number {
-		return this.axisConstraint("maximumWidth", Math.min, Number.POSITIVE_INFINITY);
+		return this.axisConstraint('maximumWidth', Math.min, Number.POSITIVE_INFINITY);
 	}
 
 	get minimumHeight(): number {
-		return this.axisConstraint("minimumHeight", Math.max, 0);
+		return this.axisConstraint('minimumHeight', Math.max, 0);
 	}
 
 	get maximumHeight(): number {
-		return this.axisConstraint("maximumHeight", Math.min, Number.POSITIVE_INFINITY);
+		return this.axisConstraint('maximumHeight', Math.min, Number.POSITIVE_INFINITY);
 	}
 
 	isVisible(): boolean {
-		return this.children.some((child) => child.isVisible());
+		return this.children.some(child => child.isVisible());
 	}
 
 	setDisplayed(visible: boolean): void {
@@ -181,7 +239,7 @@ class BranchNode extends GridNode {
 		this.top = top;
 		this.left = left;
 		this.updateSplitViewEdgeSnappingEnablement();
-		if (this.orientation === "horizontal") {
+		if (this.orientation === 'horizontal') {
 			this.splitView.layout(width, height);
 		} else {
 			this.splitView.layout(height, width);
@@ -209,22 +267,17 @@ class BranchNode extends GridNode {
 	}
 
 	private axisConstraint(
-		property: "minimumWidth" | "maximumWidth" | "minimumHeight" | "maximumHeight",
+		property: 'minimumWidth' | 'maximumWidth' | 'minimumHeight' | 'maximumHeight',
 		orthogonalReducer: (left: number, right: number) => number,
 		orthogonalInitial: number,
 	): number {
-		const visible = this.children.filter((child) => child.isVisible());
+		const visible = this.children.filter(child => child.isVisible());
 		if (visible.length === 0) return 0;
-		const isPrimary = this.orientation === "horizontal"
-			? property.endsWith("Width")
-			: property.endsWith("Height");
+		const isPrimary = this.orientation === 'horizontal' ? property.endsWith('Width') : property.endsWith('Height');
 		if (isPrimary) {
 			return visible.reduce((total, child) => total + child[property], 0);
 		}
-		return visible.reduce(
-			(result, child) => orthogonalReducer(result, child[property]),
-			orthogonalInitial,
-		);
+		return visible.reduce((result, child) => orthogonalReducer(result, child[property]), orthogonalInitial);
 	}
 
 	private resetSash(boundaryIndex: number): void {
@@ -234,18 +287,17 @@ class BranchNode extends GridNode {
 		if (beforeIndex === undefined || afterIndex === undefined) return;
 		const before = this.children[beforeIndex];
 		const after = this.children[afterIndex];
-		const beforeWidth = this.orientation === "horizontal" && before instanceof LeafNode
-			? before.preferredWidth
-			: undefined;
-		const afterWidth = this.orientation === "horizontal" && after instanceof LeafNode
-			? after.preferredWidth
-			: undefined;
+		const beforeWidth =
+			this.orientation === 'horizontal' && before instanceof LeafNode ? before.preferredWidth : undefined;
+		const afterWidth =
+			this.orientation === 'horizontal' && after instanceof LeafNode ? after.preferredWidth : undefined;
 		const total = this.splitView.getViewSize(beforeIndex) + this.splitView.getViewSize(afterIndex);
-		const leadingSize = beforeWidth !== undefined
-			? Math.round(beforeWidth)
-			: afterWidth !== undefined
-				? total - Math.round(afterWidth)
-				: undefined;
+		const leadingSize =
+			beforeWidth !== undefined
+				? Math.round(beforeWidth)
+				: afterWidth !== undefined
+					? total - Math.round(afterWidth)
+					: undefined;
 		this.splitView.resetSash(boundaryIndex, leadingSize);
 	}
 
@@ -262,7 +314,8 @@ class BranchNode extends GridNode {
 				start: this.boundarySashes.orthogonalStart,
 				end: this.boundarySashes.orthogonalEnd,
 				orthogonalStart: index === 0 ? this.boundarySashes.start : this.splitView.getSash(index - 1),
-				orthogonalEnd: index === this.children.length - 1 ? this.boundarySashes.end : this.splitView.getSash(index),
+				orthogonalEnd:
+					index === this.children.length - 1 ? this.boundarySashes.end : this.splitView.getSash(index),
 			});
 		}
 	}
@@ -271,24 +324,27 @@ class BranchNode extends GridNode {
 		if (this.children.length !== 2) return;
 		const [first, second] = this.children;
 		if (!(first instanceof BranchNode) || !(second instanceof BranchNode)) return;
-		if (first.orientation !== second.orientation || first.children.length !== 2 || second.children.length !== 2) return;
+		if (first.orientation !== second.orientation || first.children.length !== 2 || second.children.length !== 2)
+			return;
 		if (first.splitView.getViewSize(0) !== second.splitView.getViewSize(0)) return;
 		const firstSash = first.splitView.getSash(0);
 		const secondSash = second.splitView.getSash(0);
 		if (!firstSash || !secondSash) return;
 		firstSash.linkedSash = secondSash;
 		secondSash.linkedSash = firstSash;
-		host.registerEvent(toDisposable(() => {
-			if (firstSash.linkedSash === secondSash) firstSash.linkedSash = undefined;
-			if (secondSash.linkedSash === firstSash) secondSash.linkedSash = undefined;
-		}));
+		host.registerEvent(
+			toDisposable(() => {
+				if (firstSash.linkedSash === secondSash) firstSash.linkedSash = undefined;
+				if (secondSash.linkedSash === firstSash) secondSash.linkedSash = undefined;
+			}),
+		);
 	}
 
 	private updateSplitViewEdgeSnappingEnablement(): void {
 		const root = this.rootNode();
-		const offset = this.orientation === "horizontal" ? this.left : this.top;
-		const size = this.orientation === "horizontal" ? this.width : this.height;
-		const absoluteSize = this.orientation === "horizontal" ? root.width : root.height;
+		const offset = this.orientation === 'horizontal' ? this.left : this.top;
+		const size = this.orientation === 'horizontal' ? this.width : this.height;
+		const absoluteSize = this.orientation === 'horizontal' ? root.width : root.height;
 		this.splitView.startSnappingEnabled = this.edgeSnapping || offset > 0;
 		this.splitView.endSnappingEnabled = this.edgeSnapping || offset + size < absoluteSize;
 	}
@@ -304,34 +360,32 @@ class AxisView implements ISplitViewView {
 	constructor(
 		readonly node: GridNode,
 		readonly orientation: SplitViewOrientation,
-	) { }
+	) {}
 
-	get element(): HTMLElement { return this.node.element; }
+	get element(): HTMLElement {
+		return this.node.element;
+	}
 	get priority(): SplitViewLayoutPriority {
-		return this.node instanceof LeafNode ? this.node.view.priority ?? this.node.priority : this.node.priority;
+		return this.node instanceof LeafNode ? (this.node.view.priority ?? this.node.priority) : this.node.priority;
 	}
 	get minimumSize(): number {
-		return this.orientation === "horizontal"
-			? this.node.minimumWidth
-			: this.node.minimumHeight;
+		return this.orientation === 'horizontal' ? this.node.minimumWidth : this.node.minimumHeight;
 	}
 	get maximumSize(): number {
-		return this.orientation === "horizontal"
-			? this.node.maximumWidth
-			: this.node.maximumHeight;
+		return this.orientation === 'horizontal' ? this.node.maximumWidth : this.node.maximumHeight;
 	}
 	get snap(): boolean {
 		return this.node instanceof LeafNode && this.node.view.snap === true;
 	}
-	get paneOverflow(): "hidden" | "visible" {
-		return this.node instanceof BranchNode ? "visible" : "hidden";
+	get paneOverflow(): 'hidden' | 'visible' {
+		return this.node instanceof BranchNode ? 'visible' : 'hidden';
 	}
 
 	layout(size: number, offset: number, orthogonalSize: number): void {
 		const parent = this.node.parent?.branch;
 		const parentTop = parent?.top ?? 0;
 		const parentLeft = parent?.left ?? 0;
-		if (this.orientation === "horizontal") {
+		if (this.orientation === 'horizontal') {
 			this.node.layout(size, orthogonalSize, parentTop, parentLeft + offset);
 		} else {
 			this.node.layout(orthogonalSize, size, parentTop + offset, parentLeft);
@@ -373,22 +427,14 @@ export class GridView extends Disposable {
 		options: GridViewOptions = {},
 	): GridView {
 		validateSerializedGridViewDescriptor(descriptor);
-		return new GridView(
-			container,
-			deserializeGridViewDescriptor(descriptor, deserializer),
-			options,
-		);
+		return new GridView(container, deserializeGridViewDescriptor(descriptor, deserializer), options);
 	}
 
-	constructor(
-		container: HTMLElement,
-		descriptor: GridViewDescriptor<IView>,
-		options: GridViewOptions = {},
-	) {
+	constructor(container: HTMLElement, descriptor: GridViewDescriptor<IView>, options: GridViewOptions = {}) {
 		super();
 		const ownerDocument = container.ownerDocument;
-		this.element = h(ownerDocument, "div");
-		this.element.className = "ash-grid ash-grid-view";
+		this.element = h(ownerDocument, 'div');
+		this.element.className = 'ash-grid ash-grid-view';
 		this._sashPresentation = options.sashPresentation;
 		this.styles = options.styles;
 		this._edgeSnapping = options.edgeSnapping ?? false;
@@ -401,14 +447,30 @@ export class GridView extends Disposable {
 		return this.root.orientation;
 	}
 
-	get width(): number { return this.root.width; }
-	get height(): number { return this.root.height; }
-	get minimumWidth(): number { return this.root.minimumWidth; }
-	get maximumWidth(): number { return this.root.maximumWidth; }
-	get minimumHeight(): number { return this.root.minimumHeight; }
-	get maximumHeight(): number { return this.root.maximumHeight; }
-	get edgeSnapping(): boolean { return this._edgeSnapping; }
-	get sashPresentation(): SashPresentation { return this._sashPresentation; }
+	get width(): number {
+		return this.root.width;
+	}
+	get height(): number {
+		return this.root.height;
+	}
+	get minimumWidth(): number {
+		return this.root.minimumWidth;
+	}
+	get maximumWidth(): number {
+		return this.root.maximumWidth;
+	}
+	get minimumHeight(): number {
+		return this.root.minimumHeight;
+	}
+	get maximumHeight(): number {
+		return this.root.maximumHeight;
+	}
+	get edgeSnapping(): boolean {
+		return this._edgeSnapping;
+	}
+	get sashPresentation(): SashPresentation {
+		return this._sashPresentation;
+	}
 
 	set edgeSnapping(enabled: boolean) {
 		if (this._edgeSnapping === enabled) return;
@@ -422,8 +484,8 @@ export class GridView extends Disposable {
 	}
 
 	layout(width: number, height: number): void {
-		assertDimension(width, "width");
-		assertDimension(height, "height");
+		assertDimension(width, 'width');
+		assertDimension(height, 'height');
 		this.layoutWidth = width;
 		this.layoutHeight = height;
 		this.didLayout = true;
@@ -442,7 +504,7 @@ export class GridView extends Disposable {
 
 	addView(view: IView, sizing: GridViewSizing, location: GridLocation): void {
 		if (this.leaves.has(view)) {
-			throw new Error("GridView cannot contain the same view twice");
+			throw new Error('GridView cannot contain the same view twice');
 		}
 		validateViewConstraints(view);
 		const [parentLocation, index] = splitLocation(location);
@@ -450,39 +512,33 @@ export class GridView extends Disposable {
 		let descriptor = this.snapshot();
 		const parent = descriptorNode(descriptor, parentLocation);
 		const leaf = createAddedLeaf(view, sizing, runtimeParent);
-		if (parent.type === "branch") {
+		if (parent.type === 'branch') {
 			assertInsertionIndex(index, parent.children.length);
 			const children = [...parent.children];
-			if (typeof sizing !== "number" && sizing.type === "split") {
+			if (typeof sizing !== 'number' && sizing.type === 'split') {
 				const target = children[sizing.index];
-				if (!target) throw new RangeError("GridView split target is out of range");
+				if (!target) throw new RangeError('GridView split target is out of range');
 				const splitSize = target.size / 2;
 				children[sizing.index] = { ...target, size: splitSize };
 				leaf.size = splitSize;
 			}
 			children.splice(index, 0, leaf);
-			descriptor = replaceDescriptorNode(
-				descriptor,
-				parentLocation,
-				{ ...parent, children },
-			);
+			descriptor = replaceDescriptorNode(descriptor, parentLocation, { ...parent, children });
 		} else {
 			if (index !== 0 && index !== 1) {
-				throw new RangeError("GridView nested insertion index must be 0 or 1");
+				throw new RangeError('GridView nested insertion index must be 0 or 1');
 			}
 			const orientation = orthogonal(runtimeParent.parent?.branch.orientation ?? this.root.orientation);
-			const existingSize = orientation === "horizontal"
-				? runtimeParent.width
-				: runtimeParent.height;
+			const existingSize = orientation === 'horizontal' ? runtimeParent.width : runtimeParent.height;
 			const childSize = existingSize > 0 ? existingSize : parent.size;
 			const existing = { ...parent, size: childSize };
-			if (typeof sizing !== "number" && sizing.type === "split") {
+			if (typeof sizing !== 'number' && sizing.type === 'split') {
 				existing.size = childSize / 2;
 				leaf.size = childSize / 2;
 			}
 			const children = index === 0 ? [leaf, existing] : [existing, leaf];
 			descriptor = replaceDescriptorNode(descriptor, parentLocation, {
-				type: "branch",
+				type: 'branch',
 				orientation,
 				size: parent.size,
 				children,
@@ -496,20 +552,16 @@ export class GridView extends Disposable {
 	removeView(location: GridLocation): IView {
 		const leaf = this.leafAt(location);
 		if (this.leaves.size === 1) {
-			throw new Error("GridView cannot remove its last view");
+			throw new Error('GridView cannot remove its last view');
 		}
 		let descriptor = this.snapshot();
 		const [parentLocation, index] = splitLocation(location);
 		const parent = descriptorNode(descriptor, parentLocation);
-		if (parent.type !== "branch" || parent.children[index]?.type !== "leaf") {
-			throw new Error("GridView location does not identify a leaf");
+		if (parent.type !== 'branch' || parent.children[index]?.type !== 'leaf') {
+			throw new Error('GridView location does not identify a leaf');
 		}
 		const children = parent.children.filter((_, childIndex) => childIndex !== index);
-		descriptor = replaceDescriptorNode(
-			descriptor,
-			parentLocation,
-			{ ...parent, children },
-		);
+		descriptor = replaceDescriptorNode(descriptor, parentLocation, { ...parent, children });
 		this.rebuild(normalizeDescriptor(descriptor, true));
 		leaf.view.element.remove();
 		this._onDidChange.fire();
@@ -519,8 +571,8 @@ export class GridView extends Disposable {
 	moveView(parentLocation: GridLocation, from: number, to: number): void {
 		let descriptor = this.snapshot();
 		const parent = descriptorNode(descriptor, parentLocation);
-		if (parent.type !== "branch") {
-			throw new Error("GridView parent location does not identify a branch");
+		if (parent.type !== 'branch') {
+			throw new Error('GridView parent location does not identify a branch');
 		}
 		assertChildIndex(from, parent.children.length);
 		assertChildIndex(to, parent.children.length);
@@ -528,11 +580,7 @@ export class GridView extends Disposable {
 		const children = [...parent.children];
 		const [moved] = children.splice(from, 1);
 		children.splice(to, 0, moved!);
-		descriptor = replaceDescriptorNode(
-			descriptor,
-			parentLocation,
-			{ ...parent, children },
-		);
+		descriptor = replaceDescriptorNode(descriptor, parentLocation, { ...parent, children });
 		this.rebuild(descriptor);
 		this._onDidChange.fire();
 	}
@@ -556,10 +604,8 @@ export class GridView extends Disposable {
 		const node = location ? this.node(location) : this.root;
 		if (node instanceof LeafNode && !node.visible && node.parent) {
 			const { branch, index } = node.parent;
-			const primarySize =
-				branch.splitView.getViewCachedVisibleSize(index) ??
-				branch.splitView.getViewSize(index);
-			return branch.orientation === "horizontal"
+			const primarySize = branch.splitView.getViewCachedVisibleSize(index) ?? branch.splitView.getViewSize(index);
+			return branch.orientation === 'horizontal'
 				? { width: primarySize, height: branch.height }
 				: { width: branch.width, height: primarySize };
 		}
@@ -575,12 +621,12 @@ export class GridView extends Disposable {
 	resizeView(location: GridLocation, dimension: Partial<IDimension>): void {
 		const leaf = this.leafAt(location);
 		if (dimension.width !== undefined) {
-			assertDimension(dimension.width, "view width");
-			this.resizeOnAxis(leaf, "horizontal", dimension.width);
+			assertDimension(dimension.width, 'view width');
+			this.resizeOnAxis(leaf, 'horizontal', dimension.width);
 		}
 		if (dimension.height !== undefined) {
-			assertDimension(dimension.height, "view height");
-			this.resizeOnAxis(leaf, "vertical", dimension.height);
+			assertDimension(dimension.height, 'view height');
+			this.resizeOnAxis(leaf, 'vertical', dimension.height);
 		}
 	}
 
@@ -614,18 +660,18 @@ export class GridView extends Disposable {
 			container: this.element,
 			sashPresentation: this._sashPresentation,
 			styles: this.styles,
-			ownSplitView: (splitView) => this.treeResources.add(splitView),
-			registerEvent: (disposable) => {
+			ownSplitView: splitView => this.treeResources.add(splitView),
+			registerEvent: disposable => {
 				this.treeResources.add(disposable);
 			},
-			createNode: (nodeDescriptor) => this.createNode(nodeDescriptor, host),
+			createNode: nodeDescriptor => this.createNode(nodeDescriptor, host),
 			handleSplitViewChange: () => {
 				if (!this.layingOut) this._onDidChange.fire();
 			},
 		};
 		const root = this.createNode(descriptor, host);
 		if (!(root instanceof BranchNode)) {
-			throw new TypeError("GridView root must be a branch");
+			throw new TypeError('GridView root must be a branch');
 		}
 		this.root = root;
 		this.root.setEdgeSnapping(this._edgeSnapping);
@@ -633,21 +679,20 @@ export class GridView extends Disposable {
 		for (const [view, leaf] of this.leaves) {
 			leaf.setDisplayed(leaf.visible);
 			if (view.onDidChange) {
-				this.treeResources.add(view.onDidChange(() => {
-					if (this.didLayout) this.layout(this.layoutWidth, this.layoutHeight);
-				}));
+				this.treeResources.add(
+					view.onDidChange(() => {
+						if (this.didLayout) this.layout(this.layoutWidth, this.layoutHeight);
+					}),
+				);
 			}
 		}
 		if (this.didLayout) this.layout(this.layoutWidth, this.layoutHeight);
 	}
 
-	private createNode(
-		descriptor: GridViewDescriptor<IView>,
-		host: GridNodeHost,
-	): GridNode {
-		if (descriptor.type === "leaf") {
+	private createNode(descriptor: GridViewDescriptor<IView>, host: GridNodeHost): GridNode {
+		if (descriptor.type === 'leaf') {
 			const leaf = new LeafNode(descriptor.view, descriptor.visible !== false, descriptor.size);
-			leaf.priority = descriptor.priority ?? "normal";
+			leaf.priority = descriptor.priority ?? 'normal';
 			this.leaves.set(descriptor.view, leaf);
 			host.registerEvent(toDisposable(() => descriptor.view.setBoundarySashes?.({})));
 			return leaf;
@@ -655,17 +700,13 @@ export class GridView extends Disposable {
 		return new BranchNode(
 			descriptor.orientation,
 			descriptor.children,
-			descriptor.priority ?? "normal",
+			descriptor.priority ?? 'normal',
 			descriptor.size,
 			host,
 		);
 	}
 
-	private resizeOnAxis(
-		leaf: LeafNode,
-		orientation: SplitViewOrientation,
-		size: number,
-	): void {
+	private resizeOnAxis(leaf: LeafNode, orientation: SplitViewOrientation, size: number): void {
 		let node: GridNode = leaf;
 		while (node.parent) {
 			const { branch, index } = node.parent;
@@ -681,7 +722,7 @@ export class GridView extends Disposable {
 		let node: GridNode = this.root;
 		for (const index of location) {
 			if (!(node instanceof BranchNode)) {
-				throw new Error("GridView location traverses through a leaf");
+				throw new Error('GridView location traverses through a leaf');
 			}
 			assertChildIndex(index, node.children.length);
 			node = node.children[index]!;
@@ -692,14 +733,14 @@ export class GridView extends Disposable {
 	private leafAt(location: GridLocation): LeafNode {
 		const node = this.node(location);
 		if (!(node instanceof LeafNode)) {
-			throw new Error("GridView location does not identify a leaf");
+			throw new Error('GridView location does not identify a leaf');
 		}
 		return node;
 	}
 
 	private leaf(view: IView): LeafNode {
 		const leaf = this.leaves.get(view);
-		if (!leaf) throw new Error("Grid view is not registered");
+		if (!leaf) throw new Error('Grid view is not registered');
 		return leaf;
 	}
 
@@ -711,22 +752,16 @@ export class GridView extends Disposable {
 function snapshotGridNode(node: GridNode, didLayout: boolean): GridViewDescriptor<IView> {
 	const size = gridNodeSize(node, didLayout);
 	if (node instanceof LeafNode) {
-		return {
-			type: "leaf",
-			view: node.view,
-			size,
-			visible: node.visible,
-			priority: node.priority,
-		};
+		return { type: 'leaf', view: node.view, size, visible: node.visible, priority: node.priority };
 	}
 	if (!(node instanceof BranchNode)) {
-		throw new TypeError("GridView contains an unsupported node");
+		throw new TypeError('GridView contains an unsupported node');
 	}
 	return {
-		type: "branch",
+		type: 'branch',
 		orientation: node.orientation,
 		size,
-		children: node.children.map((child) => snapshotGridNode(child, didLayout)),
+		children: node.children.map(child => snapshotGridNode(child, didLayout)),
 		priority: node.priority,
 	};
 }
@@ -735,24 +770,18 @@ function serializeGridNode(node: GridNode, didLayout: boolean): SerializedGridVi
 	const size = gridNodeSize(node, didLayout);
 	if (node instanceof LeafNode) {
 		if (!isSerializableView(node.view)) {
-			throw new TypeError("SerializableGrid contains a non-serializable view");
+			throw new TypeError('SerializableGrid contains a non-serializable view');
 		}
-		return {
-			type: "leaf",
-			data: node.view.toJSON(),
-			size,
-			visible: node.visible,
-			priority: node.priority,
-		};
+		return { type: 'leaf', data: node.view.toJSON(), size, visible: node.visible, priority: node.priority };
 	}
 	if (!(node instanceof BranchNode)) {
-		throw new TypeError("SerializableGrid contains an unsupported node");
+		throw new TypeError('SerializableGrid contains an unsupported node');
 	}
 	return {
-		type: "branch",
+		type: 'branch',
 		orientation: node.orientation,
 		size,
-		children: node.children.map((child) => serializeGridNode(child, didLayout)),
+		children: node.children.map(child => serializeGridNode(child, didLayout)),
 		priority: node.priority,
 	};
 }
@@ -763,47 +792,43 @@ function gridNodeSize(node: GridNode, didLayout: boolean): number {
 		return branch.splitView.getViewCachedVisibleSize(index) ?? branch.splitView.getViewSize(index);
 	}
 	if (!didLayout) return node.initialSize;
-	return node instanceof BranchNode && node.orientation === "vertical" ? node.height : node.width;
+	return node instanceof BranchNode && node.orientation === 'vertical' ? node.height : node.width;
 }
 
 function sameBoundarySashes(left: BoundarySashes, right: BoundarySashes): boolean {
-	return left.start === right.start && left.end === right.end && left.orthogonalStart === right.orthogonalStart && left.orthogonalEnd === right.orthogonalEnd;
+	return (
+		left.start === right.start &&
+		left.end === right.end &&
+		left.orthogonalStart === right.orthogonalStart &&
+		left.orthogonalEnd === right.orthogonalEnd
+	);
 }
 
 function createAddedLeaf(
 	view: IView,
 	sizing: GridViewSizing,
 	parent: GridNode,
-): {
-	type: "leaf";
-	view: IView;
-	size: number;
-	visible: boolean;
-	priority: SplitViewLayoutPriority;
-} {
-	if (typeof sizing === "number") {
-		assertDimension(sizing, "added view size");
-		return { type: "leaf", view, size: sizing, visible: true, priority: "normal" };
+): { type: 'leaf'; view: IView; size: number; visible: boolean; priority: SplitViewLayoutPriority } {
+	if (typeof sizing === 'number') {
+		assertDimension(sizing, 'added view size');
+		return { type: 'leaf', view, size: sizing, visible: true, priority: 'normal' };
 	}
-	if (sizing.type === "invisible") {
-		assertDimension(sizing.cachedVisibleSize, "added view cached visible size");
-		return {
-			type: "leaf",
-			view,
-			size: sizing.cachedVisibleSize,
-			visible: false,
-			priority: "normal",
-		};
+	if (sizing.type === 'invisible') {
+		assertDimension(sizing.cachedVisibleSize, 'added view cached visible size');
+		return { type: 'leaf', view, size: sizing.cachedVisibleSize, visible: false, priority: 'normal' };
 	}
-	const primarySize = parent instanceof BranchNode
-		? (parent.orientation === "horizontal" ? parent.width : parent.height)
-		: Math.max(parent.width, parent.height);
+	const primarySize =
+		parent instanceof BranchNode
+			? parent.orientation === 'horizontal'
+				? parent.width
+				: parent.height
+			: Math.max(parent.width, parent.height);
 	const divisor = parent instanceof BranchNode ? parent.children.length + 1 : 2;
 	return {
-		type: "leaf",
+		type: 'leaf',
 		view,
 		size: primarySize > 0 ? primarySize / divisor : parent.initialSize / divisor,
 		visible: true,
-		priority: "normal",
+		priority: 'normal',
 	};
 }

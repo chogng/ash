@@ -1,12 +1,12 @@
-import "./media/chatViewTitleControl.css";
-import { Disposable, toDisposable } from "../../../../../../base/common/lifecycle.js";
-import { AnchorPosition } from "../../../../../../base/common/layout.js";
-import { MenuWorkbenchToolBar } from "../../../../../../platform/actions/browser/toolbar.js";
-import { getFlatContextMenuActions } from "../../../../../../platform/actions/browser/menuEntryActionViewItem.js";
-import { IMenuService, MenuId } from "../../../../../../platform/actions/common/actions.js";
-import { IContextMenuService } from "../../../../../../platform/contextview/browser/contextView.js";
-import type { PartTitleProjection } from "../../../../../browser/parts/views/viewPane.js";
-import { addDisposableListener, h } from "../../../../../../base/browser/dom.js";
+import './media/chatViewTitleControl.css';
+import { Disposable, toDisposable } from '../../../../../../base/common/lifecycle.js';
+import { AnchorPosition } from '../../../../../../base/common/layout.js';
+import { MenuWorkbenchToolBar } from '../../../../../../platform/actions/browser/toolbar.js';
+import { getFlatContextMenuActions } from '../../../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import { IMenuService, MenuId } from '../../../../../../platform/actions/common/actions.js';
+import { IContextMenuService } from '../../../../../../platform/contextview/browser/contextView.js';
+import type { PartTitleProjection } from '../../../../../browser/parts/views/viewPane.js';
+import { addDisposableListener, h } from '../../../../../../base/browser/dom.js';
 
 import { Lxicon } from '../../../../../../base/common/lxicons.js';
 import { appendIcon } from '../../../../../../base/browser/ui/lxicons/lxicon.js';
@@ -53,40 +53,48 @@ export class ChatViewTitleControl extends Disposable {
 		this.titleElement.append(this.titleButton);
 		container.append(this.titleElement);
 		this._register(toDisposable(() => this.titleElement.remove()));
-		this._register(addDisposableListener(this.titleButton, 'click', () => {
-			if (this.titleButton.getAttribute('aria-expanded') === 'true') return;
-			this.titleButton.setAttribute('aria-expanded', 'true');
-			void this.showHistory().catch(onUnexpectedError).finally(() => {
-				this.titleButton.setAttribute('aria-expanded', 'false');
-				if (ownerDocument.activeElement === ownerDocument.body && this.titleButton.isConnected) this.titleButton.focus();
-			});
-		}));
-		this._register(addDisposableListener(this.titleButton, 'contextmenu', event => this.showTitleContextMenu(event)));
-		this._register(addDisposableListener(this.titleButton, 'keydown', event => {
-			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showTitleContextMenu(event);
-		}));
+		this._register(
+			addDisposableListener(this.titleButton, 'click', () => {
+				if (this.titleButton.getAttribute('aria-expanded') === 'true') return;
+				this.titleButton.setAttribute('aria-expanded', 'true');
+				void this.showHistory()
+					.catch(onUnexpectedError)
+					.finally(() => {
+						this.titleButton.setAttribute('aria-expanded', 'false');
+						if (ownerDocument.activeElement === ownerDocument.body && this.titleButton.isConnected)
+							this.titleButton.focus();
+					});
+			}),
+		);
+		this._register(
+			addDisposableListener(this.titleButton, 'contextmenu', event => this.showTitleContextMenu(event)),
+		);
+		this._register(
+			addDisposableListener(this.titleButton, 'keydown', event => {
+				if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))
+					this.showTitleContextMenu(event);
+			}),
+		);
 		this.update(undefined);
 
-		this.actionsElement = h(ownerDocument, "div");
-		this.actionsElement.className = "ash-chat-title-actions";
+		this.actionsElement = h(ownerDocument, 'div');
+		this.actionsElement.className = 'ash-chat-title-actions';
 		container.append(this.actionsElement);
-		const toolbar = this._register(new MenuWorkbenchToolBar(
-			this.actionsElement,
-			menuService,
-			contextMenuService,
-			MenuId.ChatTitle,
-			{ hoverAnchorPosition: AnchorPosition.Below, menuOptions: { renderShortTitle: true } },
-		));
-		toolbar.element.setAttribute("aria-label", localize("chat.title.actions", "Chat actions"));
-		this.layoutToolbar = this._register(new MenuWorkbenchToolBar(
-			this.actionsElement,
-			menuService,
-			contextMenuService,
-			MenuId.ChatTitleLayout,
-			{ highlightToggledItems: true, hoverAnchorPosition: AnchorPosition.Below },
-		));
-		this.layoutToolbar.element.setAttribute("aria-label", localize("chat.title.layout", "Chat layout"));
-		this.layoutToolbar.element.classList.add("ash-chat-title-layout-actions");
+		const toolbar = this._register(
+			new MenuWorkbenchToolBar(this.actionsElement, menuService, contextMenuService, MenuId.ChatTitle, {
+				hoverAnchorPosition: AnchorPosition.Below,
+				menuOptions: { renderShortTitle: true },
+			}),
+		);
+		toolbar.element.setAttribute('aria-label', localize('chat.title.actions', 'Chat actions'));
+		this.layoutToolbar = this._register(
+			new MenuWorkbenchToolBar(this.actionsElement, menuService, contextMenuService, MenuId.ChatTitleLayout, {
+				highlightToggledItems: true,
+				hoverAnchorPosition: AnchorPosition.Below,
+			}),
+		);
+		this.layoutToolbar.element.setAttribute('aria-label', localize('chat.title.layout', 'Chat layout'));
+		this.layoutToolbar.element.classList.add('ash-chat-title-layout-actions');
 		this._register(toDisposable(() => this.actionsElement.remove()));
 	}
 
@@ -101,14 +109,25 @@ export class ChatViewTitleControl extends Disposable {
 		// also stays explicit instead of falling back to a later active selection.
 		const active = this.navigation.getActiveConversation();
 		const context = active ? { sessionId: active.sessionId, threadId: active.threadId } : {};
-		const actions = getFlatContextMenuActions(this.menuService.getMenuActions(MenuId.ChatTitle, { arg: context, renderShortTitle: true }), undefined, this.titleButton.ownerDocument.defaultView ?? undefined);
+		const actions = getFlatContextMenuActions(
+			this.menuService.getMenuActions(MenuId.ChatTitle, { arg: context, renderShortTitle: true }),
+			undefined,
+			this.titleButton.ownerDocument.defaultView ?? undefined,
+		);
 		this.contextMenuService.showContextMenu({
 			cancellationToken: this.menuCancellation,
-			getAnchor: () => event.type === 'contextmenu'
-				? { x: (event as MouseEvent).clientX, y: (event as MouseEvent).clientY, targetWindow: this.titleButton.ownerDocument.defaultView ?? undefined }
-				: this.titleButton,
+			getAnchor: () =>
+				event.type === 'contextmenu'
+					? {
+							x: (event as MouseEvent).clientX,
+							y: (event as MouseEvent).clientY,
+							targetWindow: this.titleButton.ownerDocument.defaultView ?? undefined,
+						}
+					: this.titleButton,
 			getActions: () => actions,
-			onHide: () => { if (this.titleButton.isConnected) this.titleButton.focus(); },
+			onHide: () => {
+				if (this.titleButton.isConnected) this.titleButton.focus();
+			},
 		});
 	}
 

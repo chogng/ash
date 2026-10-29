@@ -15,7 +15,7 @@ import {
 	createDesignEffect,
 	designEffects,
 	supportsDesignShadowSpread,
-	type DesignEffect
+	type DesignEffect,
 } from '../../../common/model/designEffects.js';
 import { designBlendModes, type DesignBlendMode } from '../../../common/model/designPaint.js';
 import { flattenDesignShapes } from '../../../common/model/document.js';
@@ -37,163 +37,248 @@ export class EffectPropertiesWidget extends Disposable {
 	) {
 		super();
 		this.domNode = h(document, 'div', { className: 'ash-design-property-fields ash-design-property-wide' });
-		const effectList = this.select(localize('sessions.design.effectLayer', 'Effect'), [], () => this.effect?.id ?? '', value => {
-			this.selection.effectId = value;
-			this.selection.editingBlur = false;
-		});
+		const effectList = this.select(
+			localize('sessions.design.effectLayer', 'Effect'),
+			[],
+			() => this.effect?.id ?? '',
+			value => {
+				this.selection.effectId = value;
+				this.selection.editingBlur = false;
+			},
+		);
 		this.updates.push(() => {
-			effectList.replaceChildren(...this.effects.map((effect, index) => h(
-				document,
-				'option',
-				{ properties: { value: effect.id } },
-				localize(
-					'sessions.design.effectListEntry',
-					'{0}: {1}',
-					index + 1,
-					designEffectTypeLabel(effect.type)
-				)
-			)));
+			effectList.replaceChildren(
+				...this.effects.map((effect, index) =>
+					h(
+						document,
+						'option',
+						{ properties: { value: effect.id } },
+						localize(
+							'sessions.design.effectListEntry',
+							'{0}: {1}',
+							index + 1,
+							designEffectTypeLabel(effect.type),
+						),
+					),
+				),
+			);
 			effectList.value = this.effect?.id ?? '';
 		});
-		this.action(localize('sessions.design.effectAdd', 'Add effect'), () => {
-			const type = types.find(type => canAddDesignEffect(this.effects, type))!;
-			const effect = createDesignEffect(type);
-			this.selection.effectId = effect.id;
-			this.setEffects([effect, ...this.effects]);
-		}, () => types.some(type => canAddDesignEffect(this.effects, type)));
-		this.action(localize('sessions.design.effectDuplicate', 'Duplicate effect'), () => {
-			const effect = this.effect!, copy = { ...effect, id: generateUuid() };
-			const effects = [...this.effects];
-			effects.splice(effects.indexOf(effect), 0, copy);
-			this.selection.effectId = copy.id;
-			this.setEffects(effects);
-		}, () => !!this.effect && canAddDesignEffect(this.effects, this.effect.type));
-		this.action(localize('sessions.design.effectRemove', 'Remove effect'), () => {
-			this.selection.editingBlur = false;
-			this.setEffects(this.effects.filter(effect => effect.id !== this.effect?.id));
-			this.selection.effectId = undefined;
-		}, () => !!this.effect);
-		for (const [direction, label] of [[-1, localize('sessions.design.effectUp', 'Move effect up')], [1, localize('sessions.design.effectDown', 'Move effect down')]] as const) {
-			this.action(label, () => {
-				const effects = [...this.effects], index = effects.indexOf(this.effect!);
-				[effects[index], effects[index + direction]] = [effects[index + direction], effects[index]];
+		this.action(
+			localize('sessions.design.effectAdd', 'Add effect'),
+			() => {
+				const type = types.find(type => canAddDesignEffect(this.effects, type))!;
+				const effect = createDesignEffect(type);
+				this.selection.effectId = effect.id;
+				this.setEffects([effect, ...this.effects]);
+			},
+			() => types.some(type => canAddDesignEffect(this.effects, type)),
+		);
+		this.action(
+			localize('sessions.design.effectDuplicate', 'Duplicate effect'),
+			() => {
+				const effect = this.effect!,
+					copy = { ...effect, id: generateUuid() };
+				const effects = [...this.effects];
+				effects.splice(effects.indexOf(effect), 0, copy);
+				this.selection.effectId = copy.id;
 				this.setEffects(effects);
-			}, () => !!this.effect && this.effects.indexOf(this.effect) + direction >= 0 && this.effects.indexOf(this.effect) + direction < this.effects.length);
+			},
+			() => !!this.effect && canAddDesignEffect(this.effects, this.effect.type),
+		);
+		this.action(
+			localize('sessions.design.effectRemove', 'Remove effect'),
+			() => {
+				this.selection.editingBlur = false;
+				this.setEffects(this.effects.filter(effect => effect.id !== this.effect?.id));
+				this.selection.effectId = undefined;
+			},
+			() => !!this.effect,
+		);
+		for (const [direction, label] of [
+			[-1, localize('sessions.design.effectUp', 'Move effect up')],
+			[1, localize('sessions.design.effectDown', 'Move effect down')],
+		] as const) {
+			this.action(
+				label,
+				() => {
+					const effects = [...this.effects],
+						index = effects.indexOf(this.effect!);
+					[effects[index], effects[index + direction]] = [effects[index + direction], effects[index]];
+					this.setEffects(effects);
+				},
+				() =>
+					!!this.effect &&
+					this.effects.indexOf(this.effect) + direction >= 0 &&
+					this.effects.indexOf(this.effect) + direction < this.effects.length,
+			);
 		}
-		const type = this.select(localize('sessions.design.effectType', 'Effect type'), types.map(type => [type, designEffectTypeLabel(type)]), () => this.effect?.type ?? 'drop-shadow', value => {
-			const effect = this.effect!, next = value as DesignEffect['type'];
-			if (next === effect.type || !canAddDesignEffect(this.effects, next)) {
-				return;
-			}
-			const replacement = createDesignEffect(next);
-			const shadow = this.shadow;
-			this.edit({
-				...replacement,
-				id: effect.id,
-				...(effect.visible === undefined ? {} : { visible: effect.visible }),
-				blur: effect.blur,
-				...(this.blur?.progressive && (next === 'layer-blur' || next === 'background-blur') ? { progressive: this.blur.progressive } : {}),
-				...(shadow && (next === 'drop-shadow' || next === 'inner-shadow') ? {
-					x: shadow.x,
-					y: shadow.y,
-					color: shadow.color,
-					spread: shadow.spread ?? 0,
-					...(shadow.blendMode ? { blendMode: shadow.blendMode } : {})
-				} : {}),
-			});
-		});
+		const type = this.select(
+			localize('sessions.design.effectType', 'Effect type'),
+			types.map(type => [type, designEffectTypeLabel(type)]),
+			() => this.effect?.type ?? 'drop-shadow',
+			value => {
+				const effect = this.effect!,
+					next = value as DesignEffect['type'];
+				if (next === effect.type || !canAddDesignEffect(this.effects, next)) {
+					return;
+				}
+				const replacement = createDesignEffect(next);
+				const shadow = this.shadow;
+				this.edit({
+					...replacement,
+					id: effect.id,
+					...(effect.visible === undefined ? {} : { visible: effect.visible }),
+					blur: effect.blur,
+					...(this.blur?.progressive && (next === 'layer-blur' || next === 'background-blur')
+						? { progressive: this.blur.progressive }
+						: {}),
+					...(shadow && (next === 'drop-shadow' || next === 'inner-shadow')
+						? {
+								x: shadow.x,
+								y: shadow.y,
+								color: shadow.color,
+								spread: shadow.spread ?? 0,
+								...(shadow.blendMode ? { blendMode: shadow.blendMode } : {}),
+							}
+						: {}),
+				});
+			},
+		);
 		this.updates.push(() => {
 			for (const option of type.options) {
-				option.disabled = option.value !== this.effect?.type && !canAddDesignEffect(this.effects, option.value as DesignEffect['type']);
+				option.disabled =
+					option.value !== this.effect?.type &&
+					!canAddDesignEffect(this.effects, option.value as DesignEffect['type']);
 			}
 		});
 		this.checkbox(
 			localize('sessions.design.effectVisible', 'Effect visible'),
 			() => this.effect?.visible !== false,
-			value => this.effect && this.edit({
-				...this.effect,
-				visible: value
-			})
+			value => this.effect && this.edit({ ...this.effect, visible: value }),
 		);
 		this.number(
 			localize('sessions.design.effectBlur', 'Effect blur'),
 			() => this.effect?.blur,
-			value => this.effect && this.edit({
-				...this.effect,
-				blur: value
-			}),
+			value => this.effect && this.edit({ ...this.effect, blur: value }),
 			() => !!this.effect && !this.blur?.progressive,
-			0
+			0,
 		);
 		this.select(
 			localize('sessions.design.blurMode', 'Blur mode'),
-			[['uniform', localize('sessions.design.blurUniform', 'Uniform')], ['progressive', localize('sessions.design.blurProgressive', 'Progressive')]],
-			() => this.blur?.progressive ? 'progressive' : 'uniform',
+			[
+				['uniform', localize('sessions.design.blurUniform', 'Uniform')],
+				['progressive', localize('sessions.design.blurProgressive', 'Progressive')],
+			],
+			() => (this.blur?.progressive ? 'progressive' : 'uniform'),
 			value => {
-				if (!this.blur) { return; }
+				if (!this.blur) {
+					return;
+				}
 				const { progressive, ...effect } = this.blur;
-				this.edit(value === 'progressive' ? {
-					...effect,
-					progressive: progressive ?? { startBlur: 0, start: { x: .5, y: 0 }, end: { x: .5, y: 1 } }
-				} : effect);
+				this.edit(
+					value === 'progressive'
+						? {
+								...effect,
+								progressive: progressive ?? {
+									startBlur: 0,
+									start: { x: 0.5, y: 0 },
+									end: { x: 0.5, y: 1 },
+								},
+							}
+						: effect,
+				);
 			},
-			() => !!this.blur
+			() => !!this.blur,
 		);
-		this.number(localize('sessions.design.blurStart', 'Start blur'), () => this.blur?.progressive?.startBlur, value => {
-			if (this.blur?.progressive) { this.edit({ ...this.blur, progressive: { ...this.blur.progressive, startBlur: value } }); }
-		}, () => !!this.blur?.progressive, 0);
-		this.number(localize('sessions.design.blurEnd', 'End blur'), () => this.blur?.blur, value => {
-			if (this.blur) { this.edit({ ...this.blur, blur: value }); }
-		}, () => !!this.blur?.progressive, 0);
+		this.number(
+			localize('sessions.design.blurStart', 'Start blur'),
+			() => this.blur?.progressive?.startBlur,
+			value => {
+				if (this.blur?.progressive) {
+					this.edit({ ...this.blur, progressive: { ...this.blur.progressive, startBlur: value } });
+				}
+			},
+			() => !!this.blur?.progressive,
+			0,
+		);
+		this.number(
+			localize('sessions.design.blurEnd', 'End blur'),
+			() => this.blur?.blur,
+			value => {
+				if (this.blur) {
+					this.edit({ ...this.blur, blur: value });
+				}
+			},
+			() => !!this.blur?.progressive,
+			0,
+		);
 		const positions = [
 			['start', 'x', localize('sessions.design.blurStartX', 'Blur start X (%)')],
 			['start', 'y', localize('sessions.design.blurStartY', 'Blur start Y (%)')],
 			['end', 'x', localize('sessions.design.blurEndX', 'Blur end X (%)')],
-			['end', 'y', localize('sessions.design.blurEndY', 'Blur end Y (%)')]
+			['end', 'y', localize('sessions.design.blurEndY', 'Blur end Y (%)')],
 		] as const;
 		for (const [point, axis, label] of positions) {
-			this.number(label, () => (this.blur?.progressive?.[point][axis] ?? 0) * 100, value => {
-				const blur = this.blur;
-				if (!blur?.progressive) { return; }
-				this.edit({
-					...blur, progressive: {
-						...blur.progressive,
-						[point]: { ...blur.progressive[point], [axis]: value / 100 }
+			this.number(
+				label,
+				() => (this.blur?.progressive?.[point][axis] ?? 0) * 100,
+				value => {
+					const blur = this.blur;
+					if (!blur?.progressive) {
+						return;
 					}
-				});
-			}, () => !!this.blur?.progressive);
+					this.edit({
+						...blur,
+						progressive: {
+							...blur.progressive,
+							[point]: { ...blur.progressive[point], [axis]: value / 100 },
+						},
+					});
+				},
+				() => !!this.blur?.progressive,
+			);
 		}
-		const editBlur = this.action(localize('sessions.design.blurEdit', 'Edit blur on canvas'), () => {
-			this.selection.effectId = this.blur!.id;
-			this.selection.editingBlur = !this.selection.editingBlur;
-			this.selection.editingGradient = false;
-			this.selection.editingVector = false;
-			this.selection.editingWidth = false;
-			this.focusCanvas();
-		}, () => !!this.blur?.progressive && this.blur.visible !== false, () => !!this.blur?.progressive);
+		const editBlur = this.action(
+			localize('sessions.design.blurEdit', 'Edit blur on canvas'),
+			() => {
+				this.selection.effectId = this.blur!.id;
+				this.selection.editingBlur = !this.selection.editingBlur;
+				this.selection.editingGradient = false;
+				this.selection.editingVector = false;
+				this.selection.editingWidth = false;
+				this.focusCanvas();
+			},
+			() => !!this.blur?.progressive && this.blur.visible !== false,
+			() => !!this.blur?.progressive,
+		);
 		this.updates.push(() => editBlur.domNode.setAttribute('aria-pressed', String(this.selection.editingBlur)));
-		this.number(localize('sessions.design.shadowX', 'Shadow X'), () => this.shadow?.x, value => this.shadow && this.edit({
-			...this.shadow,
-			x: value
-		}), () => !!this.shadow);
-		this.number(localize('sessions.design.shadowY', 'Shadow Y'), () => this.shadow?.y, value => this.shadow && this.edit({
-			...this.shadow,
-			y: value
-		}), () => !!this.shadow);
+		this.number(
+			localize('sessions.design.shadowX', 'Shadow X'),
+			() => this.shadow?.x,
+			value => this.shadow && this.edit({ ...this.shadow, x: value }),
+			() => !!this.shadow,
+		);
+		this.number(
+			localize('sessions.design.shadowY', 'Shadow Y'),
+			() => this.shadow?.y,
+			value => this.shadow && this.edit({ ...this.shadow, y: value }),
+			() => !!this.shadow,
+		);
 		this.number(
 			localize('sessions.design.effectSpread', 'Shadow spread'),
 			() => this.shadow?.spread ?? 0,
-			value => this.shadow && this.edit({
-				...this.shadow,
-				spread: value
-			}),
-			() => !!this.shadow && !!this.shape && supportsDesignShadowSpread(this.shape)
+			value => this.shadow && this.edit({ ...this.shadow, spread: value }),
+			() => !!this.shadow && !!this.shape && supportsDesignShadowSpread(this.shape),
 		);
 		const spreadHint = h(
 			document,
 			'p',
 			{ className: 'ash-design-property-wide' },
-			localize('sessions.design.effectSpreadHint', 'Spread is available on rectangles, ellipses, and clipped frames with a visible fill.')
+			localize(
+				'sessions.design.effectSpreadHint',
+				'Spread is available on rectangles, ellipses, and clipped frames with a visible fill.',
+			),
 		);
 		this.domNode.append(spreadHint);
 		this.updates.push(() => {
@@ -202,35 +287,46 @@ export class EffectPropertiesWidget extends Disposable {
 		this.checkbox(
 			localize('sessions.design.effectShowBehind', 'Show shadow behind transparent areas'),
 			() => this.shadow?.showBehind ?? false,
-			value => this.shadow?.type === 'drop-shadow' && this.edit({
-				...this.shadow,
-				showBehind: value
-			}),
-			() => this.shadow?.type === 'drop-shadow'
+			value => this.shadow?.type === 'drop-shadow' && this.edit({ ...this.shadow, showBehind: value }),
+			() => this.shadow?.type === 'drop-shadow',
 		);
 		this.select(
 			localize('sessions.design.effectBlend', 'Shadow blend mode'),
 			designBlendModes.map(mode => [mode, designBlendLabel(mode)]),
 			() => this.shadow?.blendMode ?? 'normal',
-			value => this.shadow && this.edit({
-				...this.shadow,
-				blendMode: value as DesignBlendMode
-			}),
-			() => !!this.shadow
+			value => this.shadow && this.edit({ ...this.shadow, blendMode: value as DesignBlendMode }),
+			() => !!this.shadow,
 		);
-		const color = this._register(createDesignColorPicker(instantiation, document, { color: localize('sessions.design.effectChooseColor', 'Choose shadow color'), value: localize('sessions.design.shadowColor', 'Shadow color'), opacity: localize('sessions.design.shadowOpacity', 'Shadow opacity (%)') }));
+		const color = this._register(
+			createDesignColorPicker(instantiation, document, {
+				color: localize('sessions.design.effectChooseColor', 'Choose shadow color'),
+				value: localize('sessions.design.shadowColor', 'Shadow color'),
+				opacity: localize('sessions.design.shadowOpacity', 'Shadow opacity (%)'),
+			}),
+		);
 		color.domNode.classList.add('ash-design-property-wide');
 		this.domNode.append(color.domNode);
-		this._register(color.onDidCommitColor(value => { if (this.editable && this.shadow) { this.edit({ ...this.shadow, color: Color.Format.CSS.formatHexA(value, true) }); } }));
+		this._register(
+			color.onDidCommitColor(value => {
+				if (this.editable && this.shadow) {
+					this.edit({ ...this.shadow, color: Color.Format.CSS.formatHexA(value, true) });
+				}
+			}),
+		);
 		this.updates.push(() => {
 			color.domNode.hidden = !this.shadow;
 			color.enabled = this.editable && !!this.shadow;
-			color.setColor(Color.Format.CSS.parseHex(this.shadow?.color ?? '#000000')!, `${this.shape?.id}:${this.effect?.id}`);
+			color.setColor(
+				Color.Format.CSS.parseHex(this.shadow?.color ?? '#000000')!,
+				`${this.shape?.id}:${this.effect?.id}`,
+			);
 		});
 	}
 
 	private get shape() {
-		return this.selection.ids.size === 1 ? flattenDesignShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id)) : undefined;
+		return this.selection.ids.size === 1
+			? flattenDesignShapes(this.controller.model.value.shapes).find(shape => this.selection.ids.has(shape.id))
+			: undefined;
 	}
 
 	private get editable(): boolean {
@@ -257,33 +353,28 @@ export class EffectPropertiesWidget extends Disposable {
 
 	private setEffects(effects: readonly DesignEffect[]): void {
 		if (this.shape && this.editable) {
-			this.commands.updateShape({
-				...this.shape,
-				effects
-			});
+			this.commands.updateShape({ ...this.shape, effects });
 		}
 	}
 
 	private edit(effect: DesignEffect): void {
-		this.setEffects(this.effects.map(value => value.id === effect.id ? effect : value));
+		this.setEffects(this.effects.map(value => (value.id === effect.id ? effect : value)));
 	}
 
-	private action(
-		label: string,
-		run: () => void,
-		enabled: () => boolean,
-		visible = () => true): Button {
-		const button = this._register(new Button(this.domNode, {
-			...defaultButtonStyles,
-			label,
-			ariaLabel: label,
-			onClick: () => {
-				if (this.editable && enabled()) {
-					run();
-					this.refresh();
-				}
-			},
-		}));
+	private action(label: string, run: () => void, enabled: () => boolean, visible = () => true): Button {
+		const button = this._register(
+			new Button(this.domNode, {
+				...defaultButtonStyles,
+				label,
+				ariaLabel: label,
+				onClick: () => {
+					if (this.editable && enabled()) {
+						run();
+						this.refresh();
+					}
+				},
+			}),
+		);
 		this.updates.push(() => {
 			button.enabled = this.editable && enabled();
 			button.domNode.hidden = !visible();
@@ -296,17 +387,21 @@ export class EffectPropertiesWidget extends Disposable {
 		choices: readonly (readonly [string, string])[],
 		value: () => string,
 		change: (value: string) => void,
-		visible = () => true): HTMLSelectElement {
-		const document = this.domNode.ownerDocument, input = h(document, 'select', { attributes: { 'aria-label': label } });
+		visible = () => true,
+	): HTMLSelectElement {
+		const document = this.domNode.ownerDocument,
+			input = h(document, 'select', { attributes: { 'aria-label': label } });
 		input.append(...choices.map(([value, text]) => h(document, 'option', { properties: { value } }, text)));
 		const row = h(document, 'label', { className: 'ash-design-property-wide' }, label, input);
 		this.domNode.append(row);
-		this._register(addDisposableListener(input, 'change', () => {
-			if (this.editable && this.effect) {
-				change(input.value);
-				this.refresh();
-			}
-		}));
+		this._register(
+			addDisposableListener(input, 'change', () => {
+				if (this.editable && this.effect) {
+					change(input.value);
+					this.refresh();
+				}
+			}),
+		);
 		this.updates.push(() => {
 			row.hidden = !visible();
 			input.disabled = !this.editable || !this.effect;
@@ -320,15 +415,12 @@ export class EffectPropertiesWidget extends Disposable {
 		value: () => number | undefined,
 		change: (value: number) => void,
 		visible: () => boolean,
-		min?: number): void {
+		min?: number,
+	): void {
 		const document = this.domNode.ownerDocument;
 		const input = h(document, 'input', {
-			properties: {
-				type: 'number',
-				step: 'any',
-				...(min === undefined ? {} : { min: String(min) })
-			},
-			attributes: { 'aria-label': label }
+			properties: { type: 'number', step: 'any', ...(min === undefined ? {} : { min: String(min) }) },
+			attributes: { 'aria-label': label },
 		});
 		const row = h(document, 'label', { className: 'ash-design-property-wide' }, label, input);
 		this.domNode.append(row);
@@ -340,12 +432,14 @@ export class EffectPropertiesWidget extends Disposable {
 			}
 		};
 		this._register(addDisposableListener(input, 'change', commit));
-		this._register(addDisposableListener(input, 'keydown', event => {
-			if (event.key === 'Enter') {
-				commit();
-				event.preventDefault();
-			}
-		}));
+		this._register(
+			addDisposableListener(input, 'keydown', event => {
+				if (event.key === 'Enter') {
+					commit();
+					event.preventDefault();
+				}
+			}),
+		);
 		this.updates.push(() => {
 			row.hidden = !visible();
 			input.disabled = !this.editable;
@@ -359,18 +453,19 @@ export class EffectPropertiesWidget extends Disposable {
 		label: string,
 		value: () => boolean,
 		change: (value: boolean) => void,
-		visible = () => true): void {
-		const document = this.domNode.ownerDocument, input = h(document, 'input', {
-			properties: { type: 'checkbox' },
-			attributes: { 'aria-label': label }
-		});
+		visible = () => true,
+	): void {
+		const document = this.domNode.ownerDocument,
+			input = h(document, 'input', { properties: { type: 'checkbox' }, attributes: { 'aria-label': label } });
 		const row = h(document, 'label', { className: 'ash-design-property-wide' }, input, label);
 		this.domNode.append(row);
-		this._register(addDisposableListener(input, 'change', () => {
-			if (this.editable && this.effect) {
-				change(input.checked);
-			}
-		}));
+		this._register(
+			addDisposableListener(input, 'change', () => {
+				if (this.editable && this.effect) {
+					change(input.checked);
+				}
+			}),
+		);
 		this.updates.push(() => {
 			row.hidden = !visible();
 			input.disabled = !this.editable || !this.effect;
@@ -379,12 +474,16 @@ export class EffectPropertiesWidget extends Disposable {
 	}
 
 	public update(): void {
-		if (!this.blur?.progressive || !this.editable || this.blur.visible === false || this.blur.id !== this.selection.effectId) {
+		if (
+			!this.blur?.progressive ||
+			!this.editable ||
+			this.blur.visible === false ||
+			this.blur.id !== this.selection.effectId
+		) {
 			this.selection.editingBlur = false;
 		}
 		for (const update of this.updates) {
 			update();
 		}
 	}
-
 }

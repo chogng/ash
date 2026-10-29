@@ -6,11 +6,11 @@ import type { UnavailableOperation } from '../../renderer/browser/disconnectedHo
 import type { IAgentExecutionSettingsService } from '../common/agentExecutionSettingsService.js';
 
 export function createAppServerExecutionSettingsService(
-	connection: AppServerProtocolClient
+	connection: AppServerProtocolClient,
 ): IAgentExecutionSettingsService {
 	return {
 		onDidChange: (listener, thisArgs, disposables) => {
-			const subscription = connection.onNotification((event) => {
+			const subscription = connection.onNotification(event => {
 				if (event.method === 'config/changed') {
 					listener.call(thisArgs);
 				}
@@ -30,18 +30,18 @@ export function createAppServerExecutionSettingsService(
 			await appServerRequest(connection, 'config/update', {
 				commandId: generateUuid(),
 				expectedRevision,
-				execution: { ...settings }
+				execution: { ...settings },
 			});
-		}
+		},
 	};
 }
 
 export function createDisconnectedExecutionSettingsService(
-	unavailable: UnavailableOperation
+	unavailable: UnavailableOperation,
 ): IAgentExecutionSettingsService {
 	return {
 		onDidChange: Event.None,
 		read: () => unavailable('executionSettings.read'),
-		configure: () => unavailable('executionSettings.configure')
+		configure: () => unavailable('executionSettings.configure'),
 	};
 }

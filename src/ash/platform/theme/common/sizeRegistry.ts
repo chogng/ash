@@ -1,5 +1,5 @@
-import { validateTokenId } from "./colorRegistry.js";
-import type { SizeValue } from "./sizeUtils.js";
+import { validateTokenId } from './colorRegistry.js';
+import type { SizeValue } from './sizeUtils.js';
 
 export interface SizeContribution {
 	readonly id: string;
@@ -21,7 +21,7 @@ export class SizeRegistry {
 
 	registerSize(id: string, value: SizeValue, metadata: SizeRegistrationMetadata): string {
 		if (this.sealed) throw new Error(`Size registry is sealed; cannot register: ${id}`);
-		validateTokenId(id, "size");
+		validateTokenId(id, 'size');
 		if (this.sizes.has(id)) throw new Error(`Size token is already registered: ${id}`);
 		this.sizes.set(id, Object.freeze({ id, value: Object.freeze({ ...value }), ...metadata }));
 		return id;

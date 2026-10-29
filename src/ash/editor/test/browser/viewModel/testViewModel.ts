@@ -3,7 +3,12 @@ import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle
 import { darkColorTheme } from '../../../../platform/theme/common/colorTheme.js';
 import { TestThemeService } from '../../../../platform/theme/test/common/testThemeService.js';
 import { type EditorViewportOptions, View } from '../../../browser/view.js';
-import { EditorLineWrapping, editorOptionsRegistry, type IEditorOptions, WrappingIndent } from '../../../common/config/editorOptions.js';
+import {
+	EditorLineWrapping,
+	editorOptionsRegistry,
+	type IEditorOptions,
+	WrappingIndent,
+} from '../../../common/config/editorOptions.js';
 import { type CursorsController } from '../../../common/cursor/cursor.js';
 import { CursorState } from '../../../common/cursorCommon.js';
 import { CursorChangeReason } from '../../../common/cursorEvents.js';
@@ -13,14 +18,23 @@ import { ViewModel } from '../../../common/viewModel/viewModelImpl.js';
 import { TestLanguageConfigurationService } from '../../common/modes/testLanguageConfigurationService.js';
 import { createTestConfiguration } from '../config/testConfiguration.js';
 
-export type TestViewOptions = Omit<EditorViewportOptions, 'configuration' | 'theme' | 'viewModel' | 'padding' | 'commandDelegate'> & Omit<IEditorOptions, 'padding' | 'wrappingIndent'> & {
-	readonly lineWrapping?: EditorLineWrapping;
-	readonly wrappingIndent?: WrappingIndent;
-	readonly cursorOptions?: IEditorOptions;
-	readonly padding?: { readonly top: number; readonly bottom: number; readonly left: number; readonly right: number; };
-	readonly model: TextModel;
-	readonly selectionController?: CursorsController;
-};
+export type TestViewOptions = Omit<
+	EditorViewportOptions,
+	'configuration' | 'theme' | 'viewModel' | 'padding' | 'commandDelegate'
+> &
+	Omit<IEditorOptions, 'padding' | 'wrappingIndent'> & {
+		readonly lineWrapping?: EditorLineWrapping;
+		readonly wrappingIndent?: WrappingIndent;
+		readonly cursorOptions?: IEditorOptions;
+		readonly padding?: {
+			readonly top: number;
+			readonly bottom: number;
+			readonly left: number;
+			readonly right: number;
+		};
+		readonly model: TextModel;
+		readonly selectionController?: CursorsController;
+	};
 
 /** Builds the same configuration-model-view chain used by an editor widget. */
 export class TestView extends View {
@@ -38,8 +52,16 @@ export class TestView extends View {
 			viewModel: setup.viewModel,
 			commandDelegate: {
 				type: text => setup.viewModel.type(text, 'keyboard'),
-				paste: (text, pasteOnNewLine, multicursorText) => setup.viewModel.paste(text, pasteOnNewLine, multicursorText, 'keyboard'),
-				compositionType: (text, replacePrevCharCnt, replaceNextCharCnt, positionDelta) => setup.viewModel.compositionType(text, replacePrevCharCnt, replaceNextCharCnt, positionDelta, 'keyboard'),
+				paste: (text, pasteOnNewLine, multicursorText) =>
+					setup.viewModel.paste(text, pasteOnNewLine, multicursorText, 'keyboard'),
+				compositionType: (text, replacePrevCharCnt, replaceNextCharCnt, positionDelta) =>
+					setup.viewModel.compositionType(
+						text,
+						replacePrevCharCnt,
+						replaceNextCharCnt,
+						positionDelta,
+						'keyboard',
+					),
 				startComposition: () => setup.viewModel.startComposition(),
 				endComposition: () => setup.viewModel.endComposition('keyboard'),
 				cut: () => setup.viewModel.cut('keyboard'),
@@ -69,7 +91,9 @@ function createViewModel(options: TestViewOptions): {
 	if (!ownerWindow) throw new ReferenceError('Test editor requires a browser window');
 	const store = new DisposableStore();
 	const editorOptions: IEditorOptions = {
-		...Object.fromEntries(editorOptionsRegistry.map(option => [option.name, options[option.name as keyof TestViewOptions]])),
+		...Object.fromEntries(
+			editorOptionsRegistry.map(option => [option.name, options[option.name as keyof TestViewOptions]]),
+		),
 		...options.cursorOptions,
 		ariaLabel: options.ariaLabel,
 		automaticLayout: options.automaticLayout,
@@ -80,10 +104,7 @@ function createViewModel(options: TestViewOptions): {
 		lineNumbers: options.lineNumbers ?? (options.presentation === 'embedded' ? 'off' : undefined),
 		lineNumbersMinChars: 1,
 		glyphMargin: options.glyphMargin,
-		guides: {
-			...options.guides,
-			indentation: options.guides?.indentation ?? options.presentation !== 'embedded',
-		},
+		guides: { ...options.guides, indentation: options.guides?.indentation ?? options.presentation !== 'embedded' },
 		minimap: { ...options.minimap, enabled: options.minimap?.enabled ?? options.presentation !== 'embedded' },
 		renderWhitespace: options.renderWhitespace,
 		padding: options.padding ? { top: options.padding.top, bottom: options.padding.bottom } : undefined,
@@ -97,18 +118,20 @@ function createViewModel(options: TestViewOptions): {
 	const attachedView = options.model.onBeforeAttached();
 	store.add(toDisposable(() => options.model.onBeforeDetached(attachedView)));
 	const lineBreaksComputerFactory = MonospaceLineBreaksComputerFactory.create(configuration.options);
-	const viewModel = store.add(new ViewModel(
-		1,
-		configuration,
-		options.model,
-		lineBreaksComputerFactory,
-		lineBreaksComputerFactory,
-		callback => scheduleAtNextAnimationFrame(ownerWindow, callback),
-		languageConfigurationService,
-		themeService,
-		attachedView,
-		{ batchChanges: callback => callback() },
-	));
+	const viewModel = store.add(
+		new ViewModel(
+			1,
+			configuration,
+			options.model,
+			lineBreaksComputerFactory,
+			lineBreaksComputerFactory,
+			callback => scheduleAtNextAnimationFrame(ownerWindow, callback),
+			languageConfigurationService,
+			themeService,
+			attachedView,
+			{ batchChanges: callback => callback() },
+		),
+	);
 	if (options.selectionController) {
 		const synchronizeSelections = (): void => {
 			viewModel.setCursorStates(
@@ -120,20 +143,20 @@ function createViewModel(options: TestViewOptions): {
 		synchronizeSelections();
 		store.add(options.selectionController.onDidChange(synchronizeSelections));
 	}
-	return {
-		configuration,
-		theme: themeService.getColorTheme(),
-		viewModel,
-		store,
-	};
+	return { configuration, theme: themeService.getColorTheme(), viewModel, store };
 }
 
 function testWrappingIndent(value: WrappingIndent | undefined): IEditorOptions['wrappingIndent'] {
 	switch (value) {
-		case WrappingIndent.None: return 'none';
-		case WrappingIndent.Same: return 'same';
-		case WrappingIndent.Indent: return 'indent';
-		case WrappingIndent.DeepIndent: return 'deepIndent';
-		default: return undefined;
+		case WrappingIndent.None:
+			return 'none';
+		case WrappingIndent.Same:
+			return 'same';
+		case WrappingIndent.Indent:
+			return 'indent';
+		case WrappingIndent.DeepIndent:
+			return 'deepIndent';
+		default:
+			return undefined;
 	}
 }

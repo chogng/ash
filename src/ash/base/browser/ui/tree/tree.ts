@@ -1,13 +1,9 @@
-import { mapDragAndDropData, type DragAndDropData } from "../dnd/dnd.js";
-import type { ListDragOverPosition, ListDragTargetSector } from "../list/list.js";
+import { mapDragAndDropData, type DragAndDropData } from '../dnd/dnd.js';
+import type { ListDragOverPosition, ListDragTargetSector } from '../list/list.js';
 
-export const TreeVisibility = Object.freeze({
-	Hidden: "hidden",
-	Visible: "visible",
-	Recurse: "recurse",
-} as const);
+export const TreeVisibility = Object.freeze({ Hidden: 'hidden', Visible: 'visible', Recurse: 'recurse' } as const);
 
-export type TreeVisibility = typeof TreeVisibility[keyof typeof TreeVisibility];
+export type TreeVisibility = (typeof TreeVisibility)[keyof typeof TreeVisibility];
 export type TreeFilterResult = boolean | TreeVisibility;
 
 export interface TreeFilter<T> {
@@ -44,21 +40,21 @@ export interface TreeVisibleSplice<TNode> {
 	readonly elements: readonly TNode[];
 }
 
-export type TreeIndentGuides = "none" | "onHover" | "always";
-export type TreeSelectionPresentation = "active" | "subtle";
+export type TreeIndentGuides = 'none' | 'onHover' | 'always';
+export type TreeSelectionPresentation = 'active' | 'subtle';
 
 export interface TreeTwistieState {
 	readonly collapsible: boolean;
 	readonly expanded: boolean;
 }
 
-export type TreePointerTarget = "twistie" | "contents";
+export type TreePointerTarget = 'twistie' | 'contents';
 
-export const TreeFindMode = Object.freeze({ Highlight: "highlight", Filter: "filter" } as const);
-export type TreeFindMode = typeof TreeFindMode[keyof typeof TreeFindMode];
+export const TreeFindMode = Object.freeze({ Highlight: 'highlight', Filter: 'filter' } as const);
+export type TreeFindMode = (typeof TreeFindMode)[keyof typeof TreeFindMode];
 
-export const TreeFindMatchType = Object.freeze({ Fuzzy: "fuzzy", Contiguous: "contiguous" } as const);
-export type TreeFindMatchType = typeof TreeFindMatchType[keyof typeof TreeFindMatchType];
+export const TreeFindMatchType = Object.freeze({ Fuzzy: 'fuzzy', Contiguous: 'contiguous' } as const);
+export type TreeFindMatchType = (typeof TreeFindMatchType)[keyof typeof TreeFindMatchType];
 
 export interface TreeKeyboardNavigationLabelProvider<T> {
 	getKeyboardNavigationLabel(element: T): string | readonly string[] | undefined;
@@ -70,14 +66,14 @@ export interface TreeFindResult<T> {
 	readonly activeMatch: T | undefined;
 }
 
-export const TreeDragOverBubble = Object.freeze({ Up: "up", Down: "down" } as const);
-export type TreeDragOverBubble = typeof TreeDragOverBubble[keyof typeof TreeDragOverBubble];
+export const TreeDragOverBubble = Object.freeze({ Up: 'up', Down: 'down' } as const);
+export type TreeDragOverBubble = (typeof TreeDragOverBubble)[keyof typeof TreeDragOverBubble];
 
 export type TreeDragData<T> = DragAndDropData<T>;
 
 export interface TreeDragOverReaction {
 	readonly accept: boolean;
-	readonly effect?: "copy" | "move";
+	readonly effect?: 'copy' | 'move';
 	readonly position?: ListDragOverPosition;
 	readonly bubble?: TreeDragOverBubble;
 	readonly autoExpand?: boolean;
@@ -88,9 +84,26 @@ export interface TreeDragAndDrop<T> {
 	getDragURI(element: T): string | undefined;
 	getDragLabel?: (elements: readonly T[], browserEvent: DragEvent) => string | undefined;
 	onDragStart?: (data: TreeDragData<T>, browserEvent: DragEvent) => void;
-	onDragOver: (data: TreeDragData<T>, target: T | undefined, targetIndex: number | undefined, targetSector: ListDragTargetSector | undefined, browserEvent: DragEvent) => boolean | TreeDragOverReaction;
-	onDragLeave?: (data: TreeDragData<T>, target: T | undefined, targetIndex: number | undefined, browserEvent: DragEvent) => void;
-	drop: (data: TreeDragData<T>, target: T | undefined, targetIndex: number | undefined, targetSector: ListDragTargetSector | undefined, browserEvent: DragEvent) => void;
+	onDragOver: (
+		data: TreeDragData<T>,
+		target: T | undefined,
+		targetIndex: number | undefined,
+		targetSector: ListDragTargetSector | undefined,
+		browserEvent: DragEvent,
+	) => boolean | TreeDragOverReaction;
+	onDragLeave?: (
+		data: TreeDragData<T>,
+		target: T | undefined,
+		targetIndex: number | undefined,
+		browserEvent: DragEvent,
+	) => void;
+	drop: (
+		data: TreeDragData<T>,
+		target: T | undefined,
+		targetIndex: number | undefined,
+		targetSector: ListDragTargetSector | undefined,
+		browserEvent: DragEvent,
+	) => void;
 	onDragEnd?: (browserEvent: DragEvent) => void;
 }
 

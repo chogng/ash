@@ -24,7 +24,12 @@ suite('Terminal status notifications', () => {
 		statuses.add(updated);
 		statuses.remove(original.id);
 		statuses.remove(original.id);
-		assert.deepEqual(events, [['add', original], ['remove', original], ['add', updated], ['remove', updated]]);
+		assert.deepEqual(events, [
+			['add', original],
+			['remove', original],
+			['add', updated],
+			['remove', updated],
+		]);
 		assert.deepEqual(primaryChanges, []);
 		assert.equal(statuses.primary, error);
 		assert.deepEqual(statuses.statuses, [error]);

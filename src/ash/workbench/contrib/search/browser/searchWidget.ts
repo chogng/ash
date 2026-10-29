@@ -6,7 +6,10 @@ import { Button } from '../../../../base/browser/ui/button/button.js';
 import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
-import { ContextScopedFindInput, ContextScopedReplaceInput } from '../../../../platform/history/browser/contextScopedHistoryWidget.js';
+import {
+	ContextScopedFindInput,
+	ContextScopedReplaceInput,
+} from '../../../../platform/history/browser/contextScopedHistoryWidget.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { ISearchHistoryService } from '../common/searchHistoryService.js';
 import { localize } from '../../../../nls.js';
@@ -53,35 +56,42 @@ export class SearchWidget extends Disposable {
 		queryRow.className = 'ash-search-query-row';
 		const queryField = h(document, 'div');
 		queryField.className = 'ash-search-query-field';
-		this.replaceToggle = this._register(new Button(queryRow, {
-			...defaultButtonStyles,
-			label: localize('search.toggleReplace', 'Toggle Replace'),
-			title: localize('search.toggleReplace', 'Toggle Replace'),
-			icon: Lxicon.chevronRight,
-			iconOnly: true,
-			size: 'small',
-			onClick: () => this.setReplaceExpanded(!!this.replaceRow.hidden),
-		}));
+		this.replaceToggle = this._register(
+			new Button(queryRow, {
+				...defaultButtonStyles,
+				label: localize('search.toggleReplace', 'Toggle Replace'),
+				title: localize('search.toggleReplace', 'Toggle Replace'),
+				icon: Lxicon.chevronRight,
+				iconOnly: true,
+				size: 'small',
+				onClick: () => this.setReplaceExpanded(!!this.replaceRow.hidden),
+			}),
+		);
 		queryRow.append(queryField);
 		// History scopes capture their DOM parent at construction, before later focus events.
 		this.domNode.append(queryRow);
-		this.searchInput = this._register(instantiation.createInstance(ContextScopedFindInput<true>, queryField, {
-			label: localize('search.queryLabel', 'Search workspace'),
-			placeholder: localize('search.query', 'Search'),
-			presentation: 'compact',
-			flexibleHeight: true,
-			flexibleMaxHeight: 134,
-			history: new Set(history.load().search),
-		}));
-		this.queryOptions = this._register(new ActionBar(queryField, {
-			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-			ariaLabel: localize('search.options', 'Search options'),
-			highlightToggledItems: true,
-			actionViewItemProvider: action => new LabelActionViewItem(action, {
-				label: queryOptionLabels[action.id] ?? action.label,
-				ariaLabel: action.label,
+		this.searchInput = this._register(
+			instantiation.createInstance(ContextScopedFindInput<true>, queryField, {
+				label: localize('search.queryLabel', 'Search workspace'),
+				placeholder: localize('search.query', 'Search'),
+				presentation: 'compact',
+				flexibleHeight: true,
+				flexibleMaxHeight: 134,
+				history: new Set(history.load().search),
 			}),
-		}));
+		);
+		this.queryOptions = this._register(
+			new ActionBar(queryField, {
+				actionViewItemOptions: { buttonStyles: defaultButtonStyles },
+				ariaLabel: localize('search.options', 'Search options'),
+				highlightToggledItems: true,
+				actionViewItemProvider: action =>
+					new LabelActionViewItem(action, {
+						label: queryOptionLabels[action.id] ?? action.label,
+						ariaLabel: action.label,
+					}),
+			}),
+		);
 		this.queryOptions.element.classList.add('ash-search-query-options');
 		this.replaceRow = h(document, 'div');
 		this.replaceRow.className = 'ash-search-replace-row';
@@ -91,34 +101,52 @@ export class SearchWidget extends Disposable {
 		replaceField.className = 'ash-search-replace-field';
 		this.replaceRow.append(replaceField);
 		this.domNode.append(this.replaceRow);
-		this.replaceInput = this._register(instantiation.createInstance(ContextScopedReplaceInput<true>, replaceField, {
-			label: localize('search.replace', 'Replace'),
-			presentation: 'compact',
-			flexibleHeight: true,
-			flexibleMaxHeight: 134,
-			history: new Set(history.load().replace),
-		}));
-		this.replaceActions = this._register(new ActionBar(replaceField, {
-			actionViewItemOptions: { buttonStyles: defaultButtonStyles },
-			ariaLabel: localize('search.replaceActions', 'Replacement actions'),
-			highlightToggledItems: true,
-			actionViewItemProvider: action => new LabelActionViewItem(action, { label: action.id === 'search.preserveCase' ? 'AB' : '', ariaLabel: action.label }),
-		}));
+		this.replaceInput = this._register(
+			instantiation.createInstance(ContextScopedReplaceInput<true>, replaceField, {
+				label: localize('search.replace', 'Replace'),
+				presentation: 'compact',
+				flexibleHeight: true,
+				flexibleMaxHeight: 134,
+				history: new Set(history.load().replace),
+			}),
+		);
+		this.replaceActions = this._register(
+			new ActionBar(replaceField, {
+				actionViewItemOptions: { buttonStyles: defaultButtonStyles },
+				ariaLabel: localize('search.replaceActions', 'Replacement actions'),
+				highlightToggledItems: true,
+				actionViewItemProvider: action =>
+					new LabelActionViewItem(action, {
+						label: action.id === 'search.preserveCase' ? 'AB' : '',
+						ariaLabel: action.label,
+					}),
+			}),
+		);
 		this.setReplaceExpanded(true);
 		for (const input of [this.searchInput, this.replaceInput]) {
 			this._register(input.inputBox.onDidChange(() => this.changed.fire()));
-			this._register(input.inputBox.onKeyDown(event => {
-				if (event.key === 'Enter' && !event.isComposing && !event.shiftKey && !event.altKey && input === this.searchInput) {
-					event.preventDefault();
-					event.stopPropagation();
-					this.submitted.fire();
-				}
-			}));
+			this._register(
+				input.inputBox.onKeyDown(event => {
+					if (
+						event.key === 'Enter' &&
+						!event.isComposing &&
+						!event.shiftKey &&
+						!event.altKey &&
+						input === this.searchInput
+					) {
+						event.preventDefault();
+						event.stopPropagation();
+						this.submitted.fire();
+					}
+				}),
+			);
 		}
-		this._register(history.onDidClearHistory(() => {
-			this.searchInput.inputBox.clearHistory();
-			this.replaceInput.inputBox.clearHistory();
-		}));
+		this._register(
+			history.onDidClearHistory(() => {
+				this.searchInput.inputBox.clearHistory();
+				this.replaceInput.inputBox.clearHistory();
+			}),
+		);
 		this.updateOptions();
 		const targetWindow = document.defaultView!;
 		if (targetWindow.ResizeObserver) {
@@ -126,7 +154,10 @@ export class SearchWidget extends Disposable {
 			// Responsive classes can resize the observed widget; apply them in the next frame.
 			const observer = new targetWindow.ResizeObserver(() => {
 				if (!scheduled.value) {
-					scheduled.value = scheduleAtNextAnimationFrame(targetWindow, () => { scheduled.clear(); this.layout(); });
+					scheduled.value = scheduleAtNextAnimationFrame(targetWindow, () => {
+						scheduled.clear();
+						this.layout();
+					});
 				}
 			});
 			observer.observe(this.domNode);
@@ -157,7 +188,9 @@ export class SearchWidget extends Disposable {
 	}
 
 	public setReplaceEnabled(enabled: boolean): void {
-		if (enabled === this.canReplace) { return; }
+		if (enabled === this.canReplace) {
+			return;
+		}
 		this.canReplace = enabled;
 		this.updateOptions();
 	}

@@ -27,24 +27,44 @@ test('file icon classes describe the resource name, compound extensions and dete
 
 test('file icon classes prefer an open model and describe folders and data labels', () => {
 	using languages = new LanguageService();
-	using registration = languages.registerLanguage({ id: 'typescript', extensions: ['.ts'], mimetypes: ['text/typescript'] });
+	using registration = languages.registerLanguage({
+		id: 'typescript',
+		extensions: ['.ts'],
+		mimetypes: ['text/typescript'],
+	});
 	const resource = URI.file('/workspace/readme.ts');
 	using model = new TextModel('content', { resource, languageId: 'rust' });
-	const models = { getModel: (candidate: URI): TextModel | null => candidate.toString() === resource.toString() ? model : null };
+	const models = {
+		getModel: (candidate: URI): TextModel | null => (candidate.toString() === resource.toString() ? model : null),
+	};
 
 	assert.equal(getIconClasses(models, languages, resource).at(-1), 'rust-lang-file-icon');
 	using plainTextModel = new TextModel('content', { resource, languageId: 'plaintext' });
-	const plainTextModels = { getModel: (candidate: URI): TextModel | null => candidate.toString() === resource.toString() ? plainTextModel : null };
+	const plainTextModels = {
+		getModel: (candidate: URI): TextModel | null =>
+			candidate.toString() === resource.toString() ? plainTextModel : null,
+	};
 	assert.equal(getIconClasses(plainTextModels, languages, resource).at(-1), 'typescript-lang-file-icon');
 	assert.deepEqual(getIconClasses(undefined, languages, URI.file('/workspace/src'), FileKind.Directory), [
-		'folder-icon', 'workspace-name-dir-icon', 'src-name-folder-icon',
+		'folder-icon',
+		'workspace-name-dir-icon',
+		'src-name-folder-icon',
 	]);
 	assert.deepEqual(getIconClasses(undefined, languages, URI.file('/workspace'), 'rootFolder'), [
-		'rootfolder-icon', 'workspace-root-name-folder-icon',
+		'rootfolder-icon',
+		'workspace-root-name-folder-icon',
 	]);
-	assert.deepEqual(getIconClasses(undefined, languages, URI.parse('data:text/typescript;label:Demo%20File.ts;base64,AA')), [
-		'file-icon', 'demo/file.ts-name-file-icon', 'name-file-icon', 'ts-ext-file-icon', 'ext-file-icon', 'typescript-lang-file-icon',
-	]);
+	assert.deepEqual(
+		getIconClasses(undefined, languages, URI.parse('data:text/typescript;label:Demo%20File.ts;base64,AA')),
+		[
+			'file-icon',
+			'demo/file.ts-name-file-icon',
+			'name-file-icon',
+			'ts-ext-file-icon',
+			'ext-file-icon',
+			'typescript-lang-file-icon',
+		],
+	);
 });
 
 test('explicit icons override resource classes', () => {
@@ -53,7 +73,8 @@ test('explicit icons override resource classes', () => {
 
 	assert.deepEqual(getIconClasses(undefined, languages, undefined), ['file-icon']);
 	assert.deepEqual(getIconClasses(undefined, languages, resource, FileKind.File, ThemeIcon.fromId('file')), [
-		'codicon-file', 'predefined-file-icon',
+		'codicon-file',
+		'predefined-file-icon',
 	]);
 	assert.deepEqual(getIconClasses(undefined, languages, resource, FileKind.File, URI.file('/icons/custom.svg')), []);
 });

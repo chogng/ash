@@ -12,7 +12,11 @@ const config = resolve(import.meta.dirname, 'vite/vite.config.ts');
 const [command = 'all', ...extra] = process.argv.slice(2);
 const prepared = extra.length === 1 && extra[0] === '--prepared';
 
-if ((extra.length && !prepared) || !['all', 'host', 'renderer', 'web', 'prepare'].includes(command) || (command === 'prepare' && prepared)) {
+if (
+	(extra.length && !prepared) ||
+	!['all', 'host', 'renderer', 'web', 'prepare'].includes(command) ||
+	(command === 'prepare' && prepared)
+) {
 	throw new Error('Usage: build.ts [all|host|renderer|web|prepare] [--prepared]');
 }
 
@@ -25,7 +29,13 @@ if (command === 'prepare') {
 	if (command === 'all' || command === 'host') await buildHost();
 	if (command === 'all' || command === 'renderer' || command === 'web') {
 		if (!prepared) await run(checker, ['check', '-p', 'tsconfig.renderer.json', '--all']);
-		await run(process.execPath, [bundler, 'build', '--config', config, ...(command === 'web' ? ['--mode', 'web'] : [])]);
+		await run(process.execPath, [
+			bundler,
+			'build',
+			'--config',
+			config,
+			...(command === 'web' ? ['--mode', 'web'] : []),
+		]);
 	}
 }
 

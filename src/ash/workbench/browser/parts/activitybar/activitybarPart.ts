@@ -6,7 +6,11 @@ import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { Separator, type IAction } from '../../../../base/common/actions.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import type { CompositeBar } from '../compositeBar.js';
-import { WorkbenchConfiguration, type SideBarLocation, type WorkbenchLayoutStyle } from '../../../common/configuration.js';
+import {
+	WorkbenchConfiguration,
+	type SideBarLocation,
+	type WorkbenchLayoutStyle,
+} from '../../../common/configuration.js';
 import { IMenuService } from '../../../../platform/actions/common/actions.js';
 import { ActivityBarContextMenu, ActivityBarItemContextMenu } from '../../actions/layoutActions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
@@ -24,7 +28,9 @@ export class ActivitybarPart extends Part {
 		if (this.layoutStyle === 'modern') return this.compact ? 36 : 44;
 		return this.compact ? 36 : 48;
 	}
-	public override get maximumWidth(): number { return this.minimumWidth; }
+	public override get maximumWidth(): number {
+		return this.minimumWidth;
+	}
 
 	constructor(
 		container: HTMLElement,
@@ -41,29 +47,49 @@ export class ActivitybarPart extends Part {
 		this.contentDomNode.classList.add('ash-activity-bar-content');
 		this.layoutStyle = this.configurationService.getValue<WorkbenchLayoutStyle>(WorkbenchConfiguration.layoutStyle);
 		this.compact = this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarCompact);
-		this.sideBarLocation = this.configurationService.getValue<SideBarLocation>(WorkbenchConfiguration.sideBarLocation);
+		this.sideBarLocation = this.configurationService.getValue<SideBarLocation>(
+			WorkbenchConfiguration.sideBarLocation,
+		);
 		this.contentDomNode.append(compositeBar.domNode, globalCompositeBar.domNode);
 		this.applyPosition();
-		compositeBar.setBadgesEnabled(this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarBadges));
-		this._register(this.configurationService.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(WorkbenchConfiguration.activityBarBadges)) {
-				compositeBar.setBadgesEnabled(this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarBadges));
-			}
-		}));
+		compositeBar.setBadgesEnabled(
+			this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarBadges),
+		);
+		this._register(
+			this.configurationService.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(WorkbenchConfiguration.activityBarBadges)) {
+					compositeBar.setBadgesEnabled(
+						this.configurationService.getValue<boolean>(WorkbenchConfiguration.activityBarBadges),
+					);
+				}
+			}),
+		);
 		this._register(addDisposableListener(this.domNode, 'contextmenu', event => this.showContextMenu(event)));
-		this._register(addDisposableListener(compositeBar.domNode, 'contextmenu', event => {
-			if (!this.domNode.contains(compositeBar.domNode)) this.showContextMenu(event);
-		}));
-		this._register(addDisposableListener(globalCompositeBar.domNode, 'contextmenu', event => {
-			if (!this.domNode.contains(globalCompositeBar.domNode)) this.showContextMenu(event);
-		}));
-		this._register(addDisposableListener(this.domNode, 'keydown', event => {
-			if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showContextMenu(event);
-		}));
+		this._register(
+			addDisposableListener(compositeBar.domNode, 'contextmenu', event => {
+				if (!this.domNode.contains(compositeBar.domNode)) this.showContextMenu(event);
+			}),
+		);
+		this._register(
+			addDisposableListener(globalCompositeBar.domNode, 'contextmenu', event => {
+				if (!this.domNode.contains(globalCompositeBar.domNode)) this.showContextMenu(event);
+			}),
+		);
+		this._register(
+			addDisposableListener(this.domNode, 'keydown', event => {
+				if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) this.showContextMenu(event);
+			}),
+		);
 		for (const domNode of [compositeBar.domNode, globalCompositeBar.domNode]) {
-			this._register(addDisposableListener(domNode, 'keydown', event => {
-				if (!this.domNode.contains(domNode) && (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) this.showContextMenu(event);
-			}));
+			this._register(
+				addDisposableListener(domNode, 'keydown', event => {
+					if (
+						!this.domNode.contains(domNode) &&
+						(event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))
+					)
+						this.showContextMenu(event);
+				}),
+			);
 		}
 	}
 
@@ -83,13 +109,17 @@ export class ActivitybarPart extends Part {
 				using context = this.contextKeys.createScoped(h(this.domNode.ownerDocument, 'div'));
 				context.setContext('viewContainerLocation', ViewContainerLocation.Sidebar);
 				const groups = this.menuService.getMenuActions(ActivityBarItemContextMenu, { arg: id }, context);
-				const keybindingActions = groups.filter(([group]) => group === '1_keybinding').flatMap(([, items]) => items);
+				const keybindingActions = groups
+					.filter(([group]) => group === '1_keybinding')
+					.flatMap(([, items]) => items);
 				const moveGroups = groups.filter(([group]) => group !== '1_keybinding').map(([, items]) => [...items]);
 				return Separator.join([...keybindingActions, ...actions], ...moveGroups);
 			},
 			getKeyBinding: action => {
 				const prefix = 'ash.activityBar.togglePinned.';
-				return this.keybindings.lookupKeybinding(action.id.startsWith(prefix) ? decodeURIComponent(action.id.slice(prefix.length)) : action.id);
+				return this.keybindings.lookupKeybinding(
+					action.id.startsWith(prefix) ? decodeURIComponent(action.id.slice(prefix.length)) : action.id,
+				);
 			},
 		});
 	}
@@ -127,6 +157,9 @@ export class ActivitybarPart extends Part {
 
 	private getContextMenuActions(): readonly IAction[] {
 		const actions = this.menuService.getMenuActions(ActivityBarContextMenu);
-		return Separator.join([...this.globalCompositeBar.getContextMenuActions()], ...actions.map(([, group]) => [...group]));
+		return Separator.join(
+			[...this.globalCompositeBar.getContextMenuActions()],
+			...actions.map(([, group]) => [...group]),
+		);
 	}
 }

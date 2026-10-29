@@ -8,9 +8,13 @@ export const packageVersion = manifest.version;
 
 export function getEditorProfile(editorId: string) {
 	switch (editorId) {
-		case 'stanza.editor.document': return academyProfile;
-		case 'ash.editor.document': return generalProfile;
-		case 'ash.collaboration.notes': return channelNotesProfile;
-		default: throw new RangeError(`Unknown Academy editor '${editorId}'`);
+		case 'stanza.editor.document':
+			return academyProfile;
+		case 'ash.editor.document':
+			return generalProfile;
+		case 'ash.collaboration.notes':
+			return channelNotesProfile;
+		default:
+			throw new RangeError(`Unknown Academy editor '${editorId}'`);
 	}
 }

@@ -13,7 +13,9 @@ export interface IChatLayoutOwner {
 }
 
 export function chatLayoutOwnersEqual(a: IChatLayoutOwner | undefined, b: IChatLayoutOwner | undefined): boolean {
-	if (!a || !b) { return a === b; }
+	if (!a || !b) {
+		return a === b;
+	}
 	return extUri.isEqual(a.sessionResource, b.sessionResource) && extUri.isEqual(a.chatResource, b.chatResource);
 }
 
@@ -26,13 +28,23 @@ export interface IChatLayoutPresentationSnapshot {
 /** Derives layout policy from configuration and host presentation, without owning selection. */
 export class ChatLayoutPresentation extends Disposable {
 	public readonly state: IObservable<IChatLayoutPresentationSnapshot>;
-	public get configured(): ChatLayoutMode { return this.state.get().mode; }
+	public get configured(): ChatLayoutMode {
+		return this.state.get().mode;
+	}
 
-	constructor(startupDesktop: boolean, isPhoneLayout: IObservable<boolean>, @IConfigurationService configuration: IConfigurationService) {
+	constructor(
+		startupDesktop: boolean,
+		isPhoneLayout: IObservable<boolean>,
+		@IConfigurationService configuration: IConfigurationService,
+	) {
 		super();
-		const changed = observableSignalFromEvent(this, listener => configuration.onDidChangeConfiguration(event => {
-			if (event.affectsConfiguration(SESSIONS_LAYOUT_SCOPE_SETTING)) { listener(event); }
-		}));
+		const changed = observableSignalFromEvent(this, listener =>
+			configuration.onDidChangeConfiguration(event => {
+				if (event.affectsConfiguration(SESSIONS_LAYOUT_SCOPE_SETTING)) {
+					listener(event);
+				}
+			}),
+		);
 		let generation = 0;
 		this.state = derived(reader => {
 			changed.read(reader);
@@ -42,7 +54,11 @@ export class ChatLayoutPresentation extends Disposable {
 		});
 		// Ash derived values only cache while observed; snapshots must retain one identity
 		// throughout this owner's lifetime, including between queued operations.
-		this._register(autorun(reader => { this.state.read(reader); }));
+		this._register(
+			autorun(reader => {
+				this.state.read(reader);
+			}),
+		);
 	}
 
 	public isCurrent(snapshot: IChatLayoutPresentationSnapshot): boolean {
@@ -59,18 +75,33 @@ export interface IChatLayoutSnapshot {
 /** A queue operation retains this derived snapshot instead of retaining mutable Session objects. */
 export class ChatLayoutContext extends Disposable {
 	public readonly state: IObservable<IChatLayoutSnapshot>;
-	constructor(private readonly presentation: ChatLayoutPresentation, owner: IObservable<IChatLayoutOwner | undefined>) {
+	constructor(
+		private readonly presentation: ChatLayoutPresentation,
+		owner: IObservable<IChatLayoutOwner | undefined>,
+	) {
 		super();
 		let generation = 0;
-		this.state = derived(reader => Object.freeze({
-			owner: owner.read(reader), presentation: presentation.state.read(reader), generation: ++generation,
-		}));
-		this._register(autorun(reader => { this.state.read(reader); }));
+		this.state = derived(reader =>
+			Object.freeze({
+				owner: owner.read(reader),
+				presentation: presentation.state.read(reader),
+				generation: ++generation,
+			}),
+		);
+		this._register(
+			autorun(reader => {
+				this.state.read(reader);
+			}),
+		);
 	}
 
 	public isCurrent(snapshot: IChatLayoutSnapshot): boolean {
 		const current = this.state.get();
-		return !this.isDisposed && this.presentation.isCurrent(current.presentation) && snapshot.generation === current.generation &&
-			chatLayoutOwnersEqual(snapshot.owner, current.owner);
+		return (
+			!this.isDisposed &&
+			this.presentation.isCurrent(current.presentation) &&
+			snapshot.generation === current.generation &&
+			chatLayoutOwnersEqual(snapshot.owner, current.owner)
+		);
 	}
 }

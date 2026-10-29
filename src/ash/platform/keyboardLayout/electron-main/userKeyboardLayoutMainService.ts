@@ -37,14 +37,16 @@ export class UserKeyboardLayoutMainService extends Disposable {
 		super();
 		this.filePath = options.filePath;
 		this.watchFile = options.watchFile;
-		this.onError = options.onError ?? ((error) => console.error('Failed to process user keyboard layout', error));
+		this.onError = options.onError ?? (error => console.error('Failed to process user keyboard layout', error));
 		this.openResourceInHost = options.openResource;
-		this._register(toDisposable(() => {
-			this.closed = true;
-			if (this.reloadTimer !== undefined) {
-				globalThis.clearTimeout(this.reloadTimer);
-			}
-		}));
+		this._register(
+			toDisposable(() => {
+				this.closed = true;
+				if (this.reloadTimer !== undefined) {
+					globalThis.clearTimeout(this.reloadTimer);
+				}
+			}),
+		);
 	}
 
 	public static async create(options: UserKeyboardLayoutMainServiceOptions): Promise<UserKeyboardLayoutMainService> {
@@ -54,7 +56,10 @@ export class UserKeyboardLayoutMainService extends Disposable {
 			await service.reload(false);
 			service.startWatching();
 			return service;
-		} catch (error) { service.dispose(); throw error; }
+		} catch (error) {
+			service.dispose();
+			throw error;
+		}
 	}
 
 	public get currentKeyboardLayout(): IKeyboardLayoutDefinition | undefined {
@@ -95,15 +100,17 @@ export class UserKeyboardLayoutMainService extends Disposable {
 	private startWatching(): void {
 		// Main supplies its isolated file watcher; native registration and close must
 		// not block Desktop while this model retains layout state and reload ordering.
-		this._register(this.watchFile(this.filePath, () => {
-			if (this.reloadTimer !== undefined) {
-				globalThis.clearTimeout(this.reloadTimer);
-			}
-			this.reloadTimer = globalThis.setTimeout(() => {
-				this.reloadTimer = undefined;
-				this.reloadQueue = this.reloadQueue.then(() => this.reload(true));
-			}, 75);
-		}));
+		this._register(
+			this.watchFile(this.filePath, () => {
+				if (this.reloadTimer !== undefined) {
+					globalThis.clearTimeout(this.reloadTimer);
+				}
+				this.reloadTimer = globalThis.setTimeout(() => {
+					this.reloadTimer = undefined;
+					this.reloadQueue = this.reloadQueue.then(() => this.reload(true));
+				}, 75);
+			}),
+		);
 	}
 
 	private async reload(notify: boolean): Promise<void> {
@@ -134,14 +141,26 @@ export function userKeyboardLayoutChannel(service: UserKeyboardLayoutMainService
 	return {
 		async call<T>(_context: string, command: string, arg?: unknown): Promise<T> {
 			switch (command) {
-				case 'readKeyboardLayout': validateUserKeyboardLayoutRead(arg); return await service.readKeyboardLayout() as T;
-				case 'openResource': validateUserKeyboardLayoutOpenResource(arg); return await service.openResource() as T;
-				default: throw new Error(`Unknown user keyboard layout command: ${command}`);
+				case 'readKeyboardLayout':
+					validateUserKeyboardLayoutRead(arg);
+					return (await service.readKeyboardLayout()) as T;
+				case 'openResource':
+					validateUserKeyboardLayoutOpenResource(arg);
+					return (await service.openResource()) as T;
+				default:
+					throw new Error(`Unknown user keyboard layout command: ${command}`);
 			}
 		},
 		listen<T>(_context: string, event: string, arg?: unknown): Event<T> {
-			if (event !== 'onDidChangeKeyboardLayout' || arg !== undefined) { throw new TypeError('Invalid user keyboard layout subscription'); }
-			return (listener, thisArgs, disposables) => service.onDidChangeKeyboardLayout(() => listener.call(thisArgs, service.currentKeyboardLayout as T), undefined, disposables);
+			if (event !== 'onDidChangeKeyboardLayout' || arg !== undefined) {
+				throw new TypeError('Invalid user keyboard layout subscription');
+			}
+			return (listener, thisArgs, disposables) =>
+				service.onDidChangeKeyboardLayout(
+					() => listener.call(thisArgs, service.currentKeyboardLayout as T),
+					undefined,
+					disposables,
+				);
 		},
 	};
 }
@@ -150,13 +169,19 @@ function keyboardLayoutDefinitionsEqual(
 	first: IKeyboardLayoutDefinition | undefined,
 	second: IKeyboardLayoutDefinition | undefined,
 ): boolean {
-	return first === second || Boolean(first && second &&
-		first.layout.id === second.layout.id &&
-		first.layout.label === second.layout.label &&
-		first.layout.source === second.layout.source &&
-		first.layout.operatingSystem === second.layout.operatingSystem &&
-		Boolean(first.layout.isUSStandard) === Boolean(second.layout.isUSStandard) &&
-		keyboardMappingsEqual(first.mapping, second.mapping));
+	return (
+		first === second ||
+		Boolean(
+			first &&
+			second &&
+			first.layout.id === second.layout.id &&
+			first.layout.label === second.layout.label &&
+			first.layout.source === second.layout.source &&
+			first.layout.operatingSystem === second.layout.operatingSystem &&
+			Boolean(first.layout.isUSStandard) === Boolean(second.layout.isUSStandard) &&
+			keyboardMappingsEqual(first.mapping, second.mapping),
+		)
+	);
 }
 
 function isFileNotFound(error: unknown): boolean {

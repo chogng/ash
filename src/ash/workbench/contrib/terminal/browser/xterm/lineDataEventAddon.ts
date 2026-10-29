@@ -3,8 +3,12 @@ import type { ITerminalAddon, Terminal } from '@xterm/xterm';
 /** Reads logical lines from the original parsed screen; wrapped rows have no newline. */
 export class LineDataEventAddon implements ITerminalAddon {
 	private terminal: Terminal | undefined;
-	activate(terminal: Terminal): void { this.terminal = terminal; }
-	dispose(): void { this.terminal = undefined; }
+	activate(terminal: Terminal): void {
+		this.terminal = terminal;
+	}
+	dispose(): void {
+		this.terminal = undefined;
+	}
 
 	getBufferText(maxCharacters: number): string | undefined {
 		const terminal = this.terminal;

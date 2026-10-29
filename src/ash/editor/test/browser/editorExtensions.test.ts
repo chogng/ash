@@ -16,18 +16,31 @@ suite('Admitted editor contribution batches', () => {
 		const baseline = unadmittedBaseline;
 		assert.deepEqual(EditorExtensionsRegistry.getEditorContributions(), baseline);
 		assert.ok(getEditorFeatures().contributions.some(value => value.id === 'editor.contrib.renameController'));
-		assert.ok(!baseline.some(value => value.id === 'editor.contrib.documentFormatting' || value.id === 'editor.contrib.folding'));
+		assert.ok(
+			!baseline.some(
+				value => value.id === 'editor.contrib.documentFormatting' || value.id === 'editor.contrib.folding',
+			),
+		);
 	});
 	test('batch conflicts roll back and retirement aborts the exact admitted instances', () => {
-		class Contribution extends Disposable { }
+		class Contribution extends Disposable {}
 		const baseline = EditorExtensionsRegistry.getEditorContributions();
-		const descriptions = [{ id: 'test.leased', ctor: Contribution, instantiation: EditorContributionInstantiation.Lazy }];
+		const descriptions = [
+			{ id: 'test.leased', ctor: Contribution, instantiation: EditorContributionInstantiation.Lazy },
+		];
 		let signal: AbortSignal;
 		{
 			using lease = EditorExtensionsRegistry.registerEditorContributions(descriptions);
 			signal = EditorExtensionsRegistry.getSomeEditorContributions(['test.leased'])[0].providerSignal!;
 			assert.equal(signal.aborted, false);
-			assert.throws(() => EditorExtensionsRegistry.registerEditorContributions([{ id: 'test.partial', install() { } }, ...descriptions]), /Duplicate/);
+			assert.throws(
+				() =>
+					EditorExtensionsRegistry.registerEditorContributions([
+						{ id: 'test.partial', install() {} },
+						...descriptions,
+					]),
+				/Duplicate/,
+			);
 			assert.equal(EditorExtensionsRegistry.getSomeEditorContributions(['test.partial']).length, 0);
 		}
 		assert.equal(signal.aborted, true);

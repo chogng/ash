@@ -1,9 +1,19 @@
 import { matchesSubString } from '../../../../../base/common/filters.js';
 import { onUnexpectedError } from '../../../../../base/common/errors.js';
 import { localize } from '../../../../../nls.js';
-import { PickerQuickAccessProvider, TriggerAction, type IPickerQuickAccessItem } from '../../../../../platform/quickinput/browser/pickerQuickAccess.js';
+import {
+	PickerQuickAccessProvider,
+	TriggerAction,
+	type IPickerQuickAccessItem,
+} from '../../../../../platform/quickinput/browser/pickerQuickAccess.js';
 import { TerminalLocation } from '../../../../../platform/terminal/common/terminal.js';
-import { ITerminalEditingService, ITerminalEditorService, ITerminalGroupService, ITerminalService, type ITerminalInstance } from '../../../terminal/browser/terminal.js';
+import {
+	ITerminalEditingService,
+	ITerminalEditorService,
+	ITerminalGroupService,
+	ITerminalService,
+	type ITerminalInstance,
+} from '../../../terminal/browser/terminal.js';
 
 /** Projects the window's existing instances; accepting never creates or moves a shell. */
 export class TerminalQuickAccessProvider extends PickerQuickAccessProvider<IPickerQuickAccessItem> {
@@ -28,14 +38,16 @@ export class TerminalQuickAccessProvider extends PickerQuickAccessProvider<IPick
 		for (const instance of this.picks.keys()) {
 			if (!instances.has(instance)) this.picks.delete(instance);
 		}
-		return [...instances].filter(instance => matchesSubString(filter, instance.title)).map(instance => {
-			let pick = this.picks.get(instance);
-			if (!pick) {
-				pick = this.createPick(instance);
-				this.picks.set(instance, pick);
-			}
-			return pick;
-		});
+		return [...instances]
+			.filter(instance => matchesSubString(filter, instance.title))
+			.map(instance => {
+				let pick = this.picks.get(instance);
+				if (!pick) {
+					pick = this.createPick(instance);
+					this.picks.set(instance, pick);
+				}
+				return pick;
+			});
 	}
 
 	private createPick(instance: ITerminalInstance): IPickerQuickAccessItem {
@@ -43,18 +55,32 @@ export class TerminalQuickAccessProvider extends PickerQuickAccessProvider<IPick
 		// The picker retains its browsed row by object identity when a preceding
 		// terminal disappears. Getters keep presentation current without copying state.
 		return {
-			get label() { return instance.title; },
+			get label() {
+				return instance.title;
+			},
 			get description() {
 				return instance.target === TerminalLocation.Editor
 					? localize('terminal.quickAccess.editor', 'Editor')
 					: localize('terminal.quickAccess.panel', 'Panel');
 			},
-			get picked() { return instance === terminals.activeInstance; },
+			get picked() {
+				return instance === terminals.activeInstance;
+			},
 			buttons: [
-				{ id: 'rename', label: localize('terminal.quickAccess.rename', 'Rename Terminal'), iconClass: 'lxicon lxicon-edit' },
-				{ id: 'close', label: localize('terminal.quickAccess.close', 'Close Terminal'), iconClass: 'lxicon lxicon-trash' },
+				{
+					id: 'rename',
+					label: localize('terminal.quickAccess.rename', 'Rename Terminal'),
+					iconClass: 'lxicon lxicon-edit',
+				},
+				{
+					id: 'close',
+					label: localize('terminal.quickAccess.close', 'Close Terminal'),
+					iconClass: 'lxicon lxicon-trash',
+				},
 			],
-			accept: () => { void this.reveal(instance).catch(onUnexpectedError); },
+			accept: () => {
+				void this.reveal(instance).catch(onUnexpectedError);
+			},
 			trigger: async index => {
 				// A displayed pick can outlive disposal or close confirmation. Identity is
 				// the instance object, never its reusable title, process ID or list index.

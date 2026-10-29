@@ -26,12 +26,23 @@ test('section headers scan only visible chunks and reuse text candidates on toke
 		root.append(line);
 	}
 	const view = { textModel: model, domNode: { domNode: root }, onDidChangeLayout: layout.event } as unknown as View;
-	const editor = { getOption: () => ({ enabled: false }), onDidChangeConfiguration: Event.None, createDecorationsCollection: () => ({ clear() { }, set() { } }) } as unknown as ICodeEditor;
+	const editor = {
+		getOption: () => ({ enabled: false }),
+		onDidChangeConfiguration: Event.None,
+		createDecorationsCollection: () => ({ clear() {}, set() {} }),
+	} as unknown as ICodeEditor;
 	const getLineContent = model.getLineContent;
 	let reads = 0;
-	model.getLineContent = line => { reads++; return getLineContent.call(model, line); };
+	model.getLineContent = line => {
+		reads++;
+		return getLineContent.call(model, line);
+	};
 	try {
-		using controller = new SectionHeadersController(view, model, editor, configurations, () => ({ findRegionSectionHeaders: true, findMarkSectionHeaders: false, markSectionHeaderRegex: '' }));
+		using controller = new SectionHeadersController(view, model, editor, configurations, () => ({
+			findRegionSectionHeaders: true,
+			findMarkSectionHeaders: false,
+			markSectionHeaderRegex: '',
+		}));
 		const header = root.children[4]!;
 		assert.equal(header.getAttribute('data-section-header'), 'true');
 		assert.ok(reads < 400, `${reads} line reads for a ten-line viewport`);
@@ -40,8 +51,14 @@ test('section headers scan only visible chunks and reuse text candidates on toke
 		model.tokenization.setSemanticTokens(null, false);
 		layout.fire();
 		assert.equal(reads, 0, 'unchanged text is not scanned again for token/layout notifications');
-		model.applyOperations([{ range: new Range(95_005, 1, 95_005, model.getLineMaxColumn(95_005)), text: '// ordinary comment' }]);
-		assert.equal(header.hasAttribute('data-section-header'), false, 'content edits invalidate the visible candidates');
+		model.applyOperations([
+			{ range: new Range(95_005, 1, 95_005, model.getLineMaxColumn(95_005)), text: '// ordinary comment' },
+		]);
+		assert.equal(
+			header.hasAttribute('data-section-header'),
+			false,
+			'content edits invalidate the visible candidates',
+		);
 		assert.ok(reads < 500);
 		reads = 0;
 		root.children[0]!.setAttribute('data-logical-line-index', '0');

@@ -14,11 +14,25 @@ export interface LanguageFilter {
 
 export type LanguageSelector = string | LanguageFilter | ReadonlyArray<string | LanguageFilter>;
 
-export function score(selector: LanguageSelector | undefined, candidateUri: URI, candidateLanguage: string, candidateIsSynchronized: boolean, candidateNotebookUri: URI | undefined, candidateNotebookType: string | undefined): number {
+export function score(
+	selector: LanguageSelector | undefined,
+	candidateUri: URI,
+	candidateLanguage: string,
+	candidateIsSynchronized: boolean,
+	candidateNotebookUri: URI | undefined,
+	candidateNotebookType: string | undefined,
+): number {
 	if (Array.isArray(selector)) {
 		let ret = 0;
 		for (const item of selector) {
-			const value = score(item, candidateUri, candidateLanguage, candidateIsSynchronized, candidateNotebookUri, candidateNotebookType);
+			const value = score(
+				item,
+				candidateUri,
+				candidateLanguage,
+				candidateIsSynchronized,
+				candidateNotebookUri,
+				candidateNotebookType,
+			);
 			if (value === 10) return value;
 			if (value > ret) ret = value;
 		}
@@ -75,6 +89,6 @@ export function selectLanguageIds(selector: LanguageSelector, into: Set<string>)
 
 /** Validates a provider selector, including the explicit all-languages selector. */
 export function assertLanguageSelector(value: unknown): asserts value is string {
-	if (value === "*") return;
+	if (value === '*') return;
 	assertLanguageId(value);
 }

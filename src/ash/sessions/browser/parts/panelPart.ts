@@ -23,6 +23,17 @@ export class PanelPart extends WorkbenchPanelPart {
 		@IInstantiationService instantiationService: IInstantiationService,
 		@IThemeService themeService: IThemeService,
 	) {
-		super(container, descriptors, contextKeys, storage, localization, menus, contextMenus, instantiationService, themeService, activityService);
+		super(
+			container,
+			descriptors,
+			contextKeys,
+			storage,
+			localization,
+			menus,
+			contextMenus,
+			instantiationService,
+			themeService,
+			activityService,
+		);
 	}
 }

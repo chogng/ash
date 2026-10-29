@@ -26,10 +26,22 @@ test('all eight parser languages use the default Tree-sitter backend', async ({ 
 		['shellscript', 'if true; then echo "hello"; fi', 'if', 'keyword'],
 	] as const;
 	for (const [languageId, text, lexeme, type] of samples) {
-		await page.evaluate(({ languageId, text }) => window.tokenizationIntegration.open(languageId, text), { languageId, text });
-		await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens), { message: languageId }).toContainEqual({ type, text: lexeme });
+		await page.evaluate(({ languageId, text }) => window.tokenizationIntegration.open(languageId, text), {
+			languageId,
+			text,
+		});
+		await expect
+			.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens), { message: languageId })
+			.toContainEqual({ type, text: lexeme });
 	}
-	expect(await page.evaluate(() => window.tokenizationIntegration.languageState())).toEqual({ initial: ['plaintext'], shell: 'shellscript', resource: 'shellscript', comment: '#', grammar: true, model: 'shellscript' });
+	expect(await page.evaluate(() => window.tokenizationIntegration.languageState())).toEqual({
+		initial: ['plaintext'],
+		shell: 'shellscript',
+		resource: 'shellscript',
+		comment: '#',
+		grammar: true,
+		model: 'shellscript',
+	});
 	const state = await page.evaluate(() => window.tokenizationIntegration.state());
 	expect(state.analyzeCalls).toBeGreaterThan(0);
 	expect(state.completedCalls).toBe(0);
@@ -52,9 +64,24 @@ test('Bazel files select Starlark or bazelrc and tokenize through the bundled gr
 		['bazel.rc', 'bazelrc', 'build --jobs=8', 'property', '--jobs=8'],
 	] as const;
 	for (const [filename, languageId, text, type, lexeme] of samples) {
-		const actualLanguage = await page.evaluate(({ filename, text }) => window.tokenizationIntegration.openResource(`/project/${filename}`, text), { filename, text });
+		const actualLanguage = await page.evaluate(
+			({ filename, text }) => window.tokenizationIntegration.openResource(`/project/${filename}`, text),
+			{ filename, text },
+		);
 		expect(actualLanguage, filename).toBe(languageId);
-		await expect.poll(() => page.evaluate(({ type, lexeme }) => window.tokenizationIntegration.state().tokens.some(token => token.type === type && token.text.includes(lexeme)), { type, lexeme }), { message: filename }).toBe(true);
+		await expect
+			.poll(
+				() =>
+					page.evaluate(
+						({ type, lexeme }) =>
+							window.tokenizationIntegration
+								.state()
+								.tokens.some(token => token.type === type && token.text.includes(lexeme)),
+						{ type, lexeme },
+					),
+				{ message: filename },
+			)
+			.toBe(true);
 	}
 	expect((await page.evaluate(() => window.tokenizationIntegration.state())).errors).toEqual([]);
 });
@@ -77,19 +104,40 @@ test('common project languages resolve from file names and paint bundled syntax'
 		['main.swift', 'swift', 'func greet() { return }', 'func', 'keyword'],
 		['main.dart', 'dart', 'void main() { return; }', 'return', 'keyword'],
 		['events.ndjson', 'jsonl', '{"count": 1}\n{"count": 42}\n', '42', 'number'],
-		['user.code-snippets', 'snippets', '// snippet\n{"demo":{"prefix":"d","body":["hello"]}}', '// snippet', 'comment'],
-		["analysis.R", "r", "greet <- function(name) {\n  return(\"你好🙂\")\n}\n", "function", "keyword"],
-		["main.jl", "julia", "function greet(name)\n  return \"你好🙂\"\nend\n", "function", "keyword"],
-		["src/main.clj", "clojure", "(defn greet [name]\n  (str \"你好🙂\" name))\n", "defn", "keyword"],
-		["build.gradle", "groovy", "def greet(name) {\n  return \"你好🙂\"\n}\n", "def", "keyword"],
-		["main.coffee", "coffeescript", "class Greeter\n  greet: (name) ->\n    \"你好🙂\"\n", "class", "keyword"],
-		["main.pl", "perl", "sub greet {\n  return \"你好🙂\";\n}\n", "return", "keyword"],
+		[
+			'user.code-snippets',
+			'snippets',
+			'// snippet\n{"demo":{"prefix":"d","body":["hello"]}}',
+			'// snippet',
+			'comment',
+		],
+		['analysis.R', 'r', 'greet <- function(name) {\n  return("你好🙂")\n}\n', 'function', 'keyword'],
+		['main.jl', 'julia', 'function greet(name)\n  return "你好🙂"\nend\n', 'function', 'keyword'],
+		['src/main.clj', 'clojure', '(defn greet [name]\n  (str "你好🙂" name))\n', 'defn', 'keyword'],
+		['build.gradle', 'groovy', 'def greet(name) {\n  return "你好🙂"\n}\n', 'def', 'keyword'],
+		['main.coffee', 'coffeescript', 'class Greeter\n  greet: (name) ->\n    "你好🙂"\n', 'class', 'keyword'],
+		['main.pl', 'perl', 'sub greet {\n  return "你好🙂";\n}\n', 'return', 'keyword'],
 		['server.log.12', 'log', '2026-10-16T10:30:00Z ERROR failed', 'ERROR', 'keyword'],
 	] as const;
 	for (const [filename, languageId, text, lexeme, type] of samples) {
-		const actual = await page.evaluate(({ filename, text }) => window.tokenizationIntegration.openResource(`/project/${filename}`, text), { filename, text });
+		const actual = await page.evaluate(
+			({ filename, text }) => window.tokenizationIntegration.openResource(`/project/${filename}`, text),
+			{ filename, text },
+		);
 		expect(actual, filename).toBe(languageId);
-		await expect.poll(() => page.evaluate(({ type, lexeme }) => window.tokenizationIntegration.state().tokens.some(token => token.type === type && token.text.includes(lexeme)), { type, lexeme }), { message: filename }).toBe(true);
+		await expect
+			.poll(
+				() =>
+					page.evaluate(
+						({ type, lexeme }) =>
+							window.tokenizationIntegration
+								.state()
+								.tokens.some(token => token.type === type && token.text.includes(lexeme)),
+						{ type, lexeme },
+					),
+				{ message: filename },
+			)
+			.toBe(true);
 	}
 	expect(await page.evaluate(() => window.tokenizationIntegration.state().errors)).toEqual([]);
 });
@@ -103,7 +151,13 @@ test('Git files select their bundled languages and tokenize through shared line 
 		['.git-blame-ignore-revs', 'ignore', '# formatting commit', 'comment', '# formatting commit'],
 		['COMMIT_EDITMSG', 'git-commit', 'Fix the build\n\n# Please enter a commit message', 'comment', '# Please'],
 		['MERGE_MSG', 'git-commit', 'Merge topic\n\n# Conflicts:', 'comment', '# Conflicts:'],
-		['git-rebase-todo', 'git-rebase', 'pick abc1234 Fix the build\nreword def5678 Rename\nexec echo "hello"', 'keyword', 'pick'],
+		[
+			'git-rebase-todo',
+			'git-rebase',
+			'pick abc1234 Fix the build\nreword def5678 Rename\nexec echo "hello"',
+			'keyword',
+			'pick',
+		],
 		['.git/rebase-merge/done', 'git-rebase', 'squash abc1234 Fix the build', 'constant', 'abc1234'],
 		['.gitconfig', 'properties', '[user]\nname = "Ash"', 'property', 'name'],
 		['gitconfig', 'properties', '[core]\neditor = "ash"', 'string', 'ash'],
@@ -115,9 +169,24 @@ test('Git files select their bundled languages and tokenize through shared line 
 		['changes.patch', 'diff', '@@ -1 +1 @@\n-old\n+new', 'keyword', '-'],
 	] as const;
 	for (const [filename, languageId, text, type, lexeme] of samples) {
-		const actualLanguage = await page.evaluate(({ filename, text }) => window.tokenizationIntegration.openResource(`/project/${filename}`, text), { filename, text });
+		const actualLanguage = await page.evaluate(
+			({ filename, text }) => window.tokenizationIntegration.openResource(`/project/${filename}`, text),
+			{ filename, text },
+		);
 		expect(actualLanguage, filename).toBe(languageId);
-		await expect.poll(() => page.evaluate(({ type, lexeme }) => window.tokenizationIntegration.state().tokens.some(token => token.type === type && token.text.includes(lexeme)), { type, lexeme }), { message: filename }).toBe(true);
+		await expect
+			.poll(
+				() =>
+					page.evaluate(
+						({ type, lexeme }) =>
+							window.tokenizationIntegration
+								.state()
+								.tokens.some(token => token.type === type && token.text.includes(lexeme)),
+						{ type, lexeme },
+					),
+				{ message: filename },
+			)
+			.toBe(true);
 	}
 });
 
@@ -131,19 +200,48 @@ prefix!literal
 **/*.log
 file[0-9]?.txt`;
 	await page.evaluate(text => window.tokenizationIntegration.openResource('/project/.gitignore', text), text);
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens.filter(token => token.type === 'operator').map(token => token.text))).toEqual(['!', '**', '*', '?']);
-	expect(await page.evaluate(() => window.tokenizationIntegration.state().tokens.filter(token => token.type === 'comment'))).toEqual([]);
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				window.tokenizationIntegration
+					.state()
+					.tokens.filter(token => token.type === 'operator')
+					.map(token => token.text),
+			),
+		)
+		.toEqual(['!', '**', '*', '?']);
+	expect(
+		await page.evaluate(() =>
+			window.tokenizationIntegration.state().tokens.filter(token => token.type === 'comment'),
+		),
+	).toEqual([]);
 	const input = page.locator('.stanza-editor-input');
 	await input.focus();
 	await page.keyboard.press('ControlOrMeta+Home');
 	await page.keyboard.press('ControlOrMeta+/');
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens.some(token => token.type === 'comment' && token.text.includes('literal')))).toBe(true);
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				window.tokenizationIntegration
+					.state()
+					.tokens.some(token => token.type === 'comment' && token.text.includes('literal')),
+			),
+		)
+		.toBe(true);
 	await page.keyboard.press('ControlOrMeta+/');
 	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text)).toBe(text);
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens.filter(token => token.type === 'comment'))).toEqual([]);
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				window.tokenizationIntegration.state().tokens.filter(token => token.type === 'comment'),
+			),
+		)
+		.toEqual([]);
 });
 
-test('Markdown Git fences, commit diffs and rebase Shell commands resolve their included grammars', async ({ page }) => {
+test('Markdown Git fences, commit diffs and rebase Shell commands resolve their included grammars', async ({
+	page,
+}) => {
 	const samples = [
 		['markdown', '```gitignore\n!keep.log\n```', 'operator', '!'],
 		['markdown', '```git-rebase-todo\npick abc1234 Fix\n```', 'keyword', 'pick'],
@@ -152,34 +250,77 @@ test('Markdown Git fences, commit diffs and rebase Shell commands resolve their 
 		['markdown', '```COMMIT_EDITMSG\nFix\n\n# message\n```', 'comment', '# message'],
 		['markdown', '```ini\n[core]\neditor = "ash"\n```', 'property', 'editor'],
 		['markdown', '```diff\n-old\n+new\n```', 'string', '+'],
-		['git-commit', 'Fix\n\n# message\ndiff --git a/file b/file\n--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new', 'string', '+'],
+		[
+			'git-commit',
+			'Fix\n\n# message\ndiff --git a/file b/file\n--- a/file\n+++ b/file\n@@ -1 +1 @@\n-old\n+new',
+			'string',
+			'+',
+		],
 		['git-rebase', 'exec if true; then echo "hello"; fi', 'keyword', 'if'],
 		['git-rebase', 'exec echo "unfinished\npick abc1234 Fix', 'keyword', 'pick'],
 	] as const;
 	for (const [languageId, text, type, lexeme] of samples) {
-		await page.evaluate(({ languageId, text }) => window.tokenizationIntegration.open(languageId, text), { languageId, text });
-		await expect.poll(() => page.evaluate(({ type, lexeme }) => window.tokenizationIntegration.state().tokens.some(token => token.type === type && token.text.includes(lexeme)), { type, lexeme }), { message: text }).toBe(true);
+		await page.evaluate(({ languageId, text }) => window.tokenizationIntegration.open(languageId, text), {
+			languageId,
+			text,
+		});
+		await expect
+			.poll(
+				() =>
+					page.evaluate(
+						({ type, lexeme }) =>
+							window.tokenizationIntegration
+								.state()
+								.tokens.some(token => token.type === type && token.text.includes(lexeme)),
+						{ type, lexeme },
+					),
+				{ message: text },
+			)
+			.toBe(true);
 	}
 	await page.evaluate(() => window.tokenizationIntegration.unloadExtensions());
-	expect(await page.evaluate(() => window.tokenizationIntegration.openResource('/project/.gitignore', '*.log'))).toBe('plaintext');
+	expect(await page.evaluate(() => window.tokenizationIntegration.openResource('/project/.gitignore', '*.log'))).toBe(
+		'plaintext',
+	);
 	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens)).toEqual([]);
 });
 
-test('Starlark editing indents blocks, closes brackets, toggles comments and folds by indentation', async ({ page }) => {
+test('Starlark editing indents blocks, closes brackets, toggles comments and folds by indentation', async ({
+	page,
+}) => {
 	await page.evaluate(() => window.tokenizationIntegration.openResource('/project/defs.bzl', 'def impl(ctx):'));
 	const input = page.locator('.stanza-editor-input');
 	await input.focus();
 	await page.keyboard.press('ControlOrMeta+End');
 	await page.keyboard.press('Enter');
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text)).toMatch(/^def impl\(ctx\):\n[\t ]+$/u);
+	await expect
+		.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text))
+		.toMatch(/^def impl\(ctx\):\n[\t ]+$/u);
 	await page.keyboard.type('return ');
 	await page.keyboard.type('(');
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text)).toMatch(/\n[\t ]+return \(\)$/u);
+	await expect
+		.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text))
+		.toMatch(/\n[\t ]+return \(\)$/u);
 	await page.keyboard.press('ControlOrMeta+/');
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text)).toMatch(/\n[\t ]+#\s*return \(\)$/u);
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens.some(token => token.type === 'comment' && token.text.includes('return')))).toBe(true);
+	await expect
+		.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text))
+		.toMatch(/\n[\t ]+#\s*return \(\)$/u);
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				window.tokenizationIntegration
+					.state()
+					.tokens.some(token => token.type === 'comment' && token.text.includes('return')),
+			),
+		)
+		.toBe(true);
 
-	await page.evaluate(() => window.tokenizationIntegration.openResource('/project/folding.bzl', 'def impl(ctx):\n    value = 42\n    return value\n'));
+	await page.evaluate(() =>
+		window.tokenizationIntegration.openResource(
+			'/project/folding.bzl',
+			'def impl(ctx):\n    value = 42\n    return value\n',
+		),
+	);
 	const returnToken = page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^return$/u });
 	await expect(returnToken).toBeVisible();
 	await page.locator('.ash-icon-folding-expanded').first().click();
@@ -190,8 +331,18 @@ test('Starlark editing indents blocks, closes brackets, toggles comments and fol
 	await page.evaluate(() => window.tokenizationIntegration.openResource('/project/.bazelrc', 'build --jobs=8'));
 	await input.focus();
 	await page.keyboard.press('ControlOrMeta+/');
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text)).toMatch(/^#\s*build --jobs=8$/u);
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens.some(token => token.type === 'comment' && token.text.includes('build')))).toBe(true);
+	await expect
+		.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text))
+		.toMatch(/^#\s*build --jobs=8$/u);
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				window.tokenizationIntegration
+					.state()
+					.tokens.some(token => token.type === 'comment' && token.text.includes('build')),
+			),
+		)
+		.toBe(true);
 });
 
 test('Force Retokenize action invalidates and refreshes visible tokens', async ({ page }) => {
@@ -199,11 +350,15 @@ test('Force Retokenize action invalidates and refreshes visible tokens', async (
 	const before = await page.evaluate(() => window.tokenizationIntegration.state());
 	const result = await page.evaluate(() => window.tokenizationIntegration.forceRetokenize());
 	expect(result.version).toBe(before.version);
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state())).toMatchObject({ tokenVersion: before.version, accurate: true });
+	await expect
+		.poll(() => page.evaluate(() => window.tokenizationIntegration.state()))
+		.toMatchObject({ tokenVersion: before.version, accurate: true });
 	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ })).toBeVisible();
 });
 
-test('typing, undo and preview tokenize while parser analysis is pending; stale diagnostics are discarded', async ({ page }) => {
+test('typing, undo and preview tokenize while parser analysis is pending; stale diagnostics are discarded', async ({
+	page,
+}) => {
 	const input = page.locator('.stanza-editor-input');
 	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ })).toBeVisible();
 	await input.focus();
@@ -211,16 +366,38 @@ test('typing, undo and preview tokenize while parser analysis is pending; stale 
 	await page.keyboard.insertText('/* 中文🙂');
 	await page.evaluate(() => window.tokenizationIntegration.stopUndo());
 	await page.keyboard.insertText(' */');
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens.some(token => token.type === 'comment' && token.text.includes('中文🙂')))).toBe(true);
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				window.tokenizationIntegration
+					.state()
+					.tokens.some(token => token.type === 'comment' && token.text.includes('中文🙂')),
+			),
+		)
+		.toBe(true);
 	await expect(page.locator('.stanza-editor-token.token-keyword').filter({ hasText: /^fn$/ })).toBeVisible();
-	await expect.poll(() => page.evaluate(() => {
-		const state = window.tokenizationIntegration.state();
-		return state.tokenVersion === state.version;
-	})).toBe(true);
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const state = window.tokenizationIntegration.state();
+				return state.tokenVersion === state.version;
+			}),
+		)
+		.toBe(true);
 	expect((await page.evaluate(() => window.tokenizationIntegration.state())).completedCalls).toBe(0);
 	await page.keyboard.press('ControlOrMeta+z');
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text)).toBe('/* 中文🙂fn main() {}\n');
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens.some(token => token.type === 'comment' && token.text.includes('fn main')))).toBe(true);
+	await expect
+		.poll(() => page.evaluate(() => window.tokenizationIntegration.state().text))
+		.toBe('/* 中文🙂fn main() {}\n');
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				window.tokenizationIntegration
+					.state()
+					.tokens.some(token => token.type === 'comment' && token.text.includes('fn main')),
+			),
+		)
+		.toBe(true);
 	await expect(page.locator('.stanza-editor-token.token-keyword')).toHaveCount(0);
 	const preview = await page.evaluate(() => window.tokenizationIntegration.preview());
 	expect(preview.hasString).toBe(true);
@@ -229,7 +406,9 @@ test('typing, undo and preview tokenize while parser analysis is pending; stale 
 	expect(before.diagnosticVersion).toBeNull();
 	let releasedCurrent = false;
 	for (let index = 0; index < before.version; index++) {
-		await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().pendingVersions.length)).toBeGreaterThan(0);
+		await expect
+			.poll(() => page.evaluate(() => window.tokenizationIntegration.state().pendingVersions.length))
+			.toBeGreaterThan(0);
 		const revision = await page.evaluate(() => window.tokenizationIntegration.state().pendingVersions[0]!);
 		expect(revision).toBeLessThanOrEqual(before.version);
 		await page.evaluate(() => window.tokenizationIntegration.releaseAnalysis());
@@ -237,18 +416,36 @@ test('typing, undo and preview tokenize while parser analysis is pending; stale 
 			releasedCurrent = true;
 			break;
 		}
-		await expect.poll(() => page.evaluate(revision => window.tokenizationIntegration.state().pendingVersions.some(value => value > revision), revision)).toBe(true);
+		await expect
+			.poll(() =>
+				page.evaluate(
+					revision => window.tokenizationIntegration.state().pendingVersions.some(value => value > revision),
+					revision,
+				),
+			)
+			.toBe(true);
 		expect((await page.evaluate(() => window.tokenizationIntegration.state())).diagnosticVersion).toBeNull();
 	}
 	expect(releasedCurrent).toBe(true);
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().diagnosticVersion)).toBe(before.version);
+	await expect
+		.poll(() => page.evaluate(() => window.tokenizationIntegration.state().diagnosticVersion))
+		.toBe(before.version);
 	expect((await page.evaluate(() => window.tokenizationIntegration.state())).errors).toEqual([]);
 });
 
 test('unloading extensions removes language associations, editing rules and grammars together', async ({ page }) => {
 	await page.evaluate(() => window.tokenizationIntegration.open('shellscript', 'if true; then echo hello; fi'));
-	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens)).toContainEqual({ type: 'keyword', text: 'if' });
+	await expect
+		.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens))
+		.toContainEqual({ type: 'keyword', text: 'if' });
 	await page.evaluate(() => window.tokenizationIntegration.unloadExtensions());
-	expect(await page.evaluate(() => window.tokenizationIntegration.languageState())).toEqual({ initial: ['plaintext'], shell: null, resource: 'plaintext', comment: null, grammar: false, model: 'plaintext' });
+	expect(await page.evaluate(() => window.tokenizationIntegration.languageState())).toEqual({
+		initial: ['plaintext'],
+		shell: null,
+		resource: 'plaintext',
+		comment: null,
+		grammar: false,
+		model: 'plaintext',
+	});
 	await expect.poll(() => page.evaluate(() => window.tokenizationIntegration.state().tokens)).toEqual([]);
 });

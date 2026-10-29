@@ -1,7 +1,17 @@
 import { type JSDOM } from 'jsdom';
 import { type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 
-type DomGlobalName = 'Node' | 'Element' | 'HTMLElement' | 'HTMLButtonElement' | 'HTMLCanvasElement' | 'Event' | 'InputEvent' | 'KeyboardEvent' | 'MouseEvent' | 'NodeFilter';
+type DomGlobalName =
+	| 'Node'
+	| 'Element'
+	| 'HTMLElement'
+	| 'HTMLButtonElement'
+	| 'HTMLCanvasElement'
+	| 'Event'
+	| 'InputEvent'
+	| 'KeyboardEvent'
+	| 'MouseEvent'
+	| 'NodeFilter';
 
 /** Measures explicit list heights in jsdom, which has no browser layout engine. */
 export function installTestElementHeights(document: Document): IDisposable {
@@ -46,7 +56,11 @@ export function installEditorTestGlobals(bindings: Record<string, unknown>): IDi
 }
 
 /** Keeps each test's DOM constructor set explicit so unrelated browser APIs do not change its behavior. */
-export function installEditorTestDom(dom: JSDOM, names: readonly DomGlobalName[], extras: Record<string, unknown> = {}): IDisposable {
+export function installEditorTestDom(
+	dom: JSDOM,
+	names: readonly DomGlobalName[],
+	extras: Record<string, unknown> = {},
+): IDisposable {
 	const bindings: Record<string, unknown> = { window: dom.window, document: dom.window.document };
 	for (const name of names) {
 		bindings[name] = dom.window[name];

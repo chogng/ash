@@ -1,10 +1,10 @@
-import assert from "node:assert/strict";
-import { readFileSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
-import { test } from "mocha";
-import { findDesktopRoot } from "./testPaths.js";
+import assert from 'node:assert/strict';
+import { readFileSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+import { test } from 'mocha';
+import { findDesktopRoot } from './testPaths.js';
 
-const editorRoot = resolve(findDesktopRoot(import.meta.dirname), "src/ash/editor");
+const editorRoot = resolve(findDesktopRoot(import.meta.dirname), 'src/ash/editor');
 
 function exists(file: string): boolean {
 	try {
@@ -30,7 +30,15 @@ test('plain-text entrypoints have no runtime dependency on editor capability pac
 			const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true);
 			for (const node of source.statements) {
 				if (!ts.isImportDeclaration(node) && !ts.isExportDeclaration(node)) continue;
-				if (ts.isImportDeclaration(node) && (node.importClause?.isTypeOnly || node.importClause?.namedBindings && ts.isNamedImports(node.importClause.namedBindings) && !node.importClause.name && node.importClause.namedBindings.elements.every(value => value.isTypeOnly))) continue;
+				if (
+					ts.isImportDeclaration(node) &&
+					(node.importClause?.isTypeOnly ||
+						(node.importClause?.namedBindings &&
+							ts.isNamedImports(node.importClause.namedBindings) &&
+							!node.importClause.name &&
+							node.importClause.namedBindings.elements.every(value => value.isTypeOnly)))
+				)
+					continue;
 				if (ts.isExportDeclaration(node) && node.isTypeOnly) continue;
 				if (!node.moduleSpecifier || !ts.isStringLiteral(node.moduleSpecifier)) continue;
 				const value = node.moduleSpecifier.text;

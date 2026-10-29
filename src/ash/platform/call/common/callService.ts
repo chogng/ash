@@ -1,7 +1,10 @@
 import type { Event } from '../../../base/common/event.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
-export type CallDeployment = { readonly type: 'local'; } | { readonly type: 'server'; readonly url: string; readonly administrator: string; } | { readonly type: 'invitation'; readonly url: string; readonly credential: string; };
+export type CallDeployment =
+	| { readonly type: 'local' }
+	| { readonly type: 'server'; readonly url: string; readonly administrator: string }
+	| { readonly type: 'invitation'; readonly url: string; readonly credential: string };
 /** A reference to an independently authorized document, without contents or credentials. */
 export interface CallDocument {
 	readonly serverUrl: string;
@@ -19,14 +22,26 @@ export interface CallState {
 	readonly canManage: boolean;
 	readonly screenSharing: boolean;
 	readonly screenAllowed: boolean;
-	readonly participants: readonly { readonly id: string; readonly muted: boolean; }[];
+	readonly participants: readonly { readonly id: string; readonly muted: boolean }[];
 	readonly documents: readonly CallDocument[];
 	readonly error: string | null;
 }
-export interface CallInvitation { readonly url: string; readonly credential: string; }
-export type ScreenTarget = { readonly type: 'display' | 'window'; readonly id: string; };
-export interface ScreenSource { readonly target: ScreenTarget; readonly title: string; readonly width: number; readonly height: number; }
-export interface ScreenFrame { readonly trackId: string; readonly participantId: string; readonly data: Uint8Array<ArrayBuffer>; }
+export interface CallInvitation {
+	readonly url: string;
+	readonly credential: string;
+}
+export type ScreenTarget = { readonly type: 'display' | 'window'; readonly id: string };
+export interface ScreenSource {
+	readonly target: ScreenTarget;
+	readonly title: string;
+	readonly width: number;
+	readonly height: number;
+}
+export interface ScreenFrame {
+	readonly trackId: string;
+	readonly participantId: string;
+	readonly data: Uint8Array<ArrayBuffer>;
+}
 export interface ICallService {
 	readonly canStart?: boolean;
 	readonly onDidChange: Event<void>;

@@ -1,6 +1,8 @@
 // Product hosts bind these exports to the admitted extension instance. Installing
 // the SDK in a standalone Node process does not grant product authority.
-function unavailable() { throw new Error('@ash/sdk requires an Ash extension host'); }
+function unavailable() {
+	throw new Error('@ash/sdk requires an Ash extension host');
+}
 const namespace = () => new Proxy(Object.freeze({}), { get: unavailable });
 
 export const LogLevel = unavailable;

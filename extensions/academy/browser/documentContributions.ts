@@ -38,7 +38,7 @@ export interface DocumentFormattingContribution extends IDisposable {
 export interface DocumentEditorContributionContext {
 	readonly kind: 'document';
 	readonly container: HTMLElement;
-	readonly documentActions: readonly { readonly id: string; readonly label: string; }[];
+	readonly documentActions: readonly { readonly id: string; readonly label: string }[];
 	readonly onToggleMark: (markType: 'strong' | 'em') => void;
 	readonly onSetTextStyle: (attrs: DocumentTextStyleAttributes) => void;
 	readonly onClearTextStyle: () => void;
@@ -46,14 +46,20 @@ export interface DocumentEditorContributionContext {
 	/** The Widget owns each control's mounting, state updates and disposal. */
 	readonly addFormattingContribution: (contribution: DocumentFormattingContribution) => void;
 	/** Resolve the current model/selection at invocation; contributors never retain a mutable model. */
-	readonly selectText: (blockId: string, selection: Extract<DocumentSelection, { kind: 'text'; }>) => void;
+	readonly selectText: (blockId: string, selection: Extract<DocumentSelection, { kind: 'text' }>) => void;
 	readonly invalidateView: () => void;
 	readonly setPageZoom: (zoom: number) => void;
 	readonly setReviewAuthor: (author: string) => void;
 	readonly focusEditor: () => void;
-	readonly runDocumentCommand: (create: (schema: DocumentSchema, document: DocumentNode, blockId: string, selection: DocumentSelection | undefined) => DocumentCommand | undefined) => void;
+	readonly runDocumentCommand: (
+		create: (
+			schema: DocumentSchema,
+			document: DocumentNode,
+			blockId: string,
+			selection: DocumentSelection | undefined,
+		) => DocumentCommand | undefined,
+	) => void;
 }
-
 
 /** A profile installs controls only into its own view lifetime. */
 export type DocumentContribution = (context: DocumentEditorContributionContext) => void;

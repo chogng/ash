@@ -7,15 +7,30 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
-import { DEVELOPMENT_DIR_PERMISSIONS, IWorkspaceTrustApi, READ_DIR_PERMISSIONS, type WorkspaceTrustPermission } from '../../../../../platform/workspace/common/workspaceTrust.js';
+import {
+	DEVELOPMENT_DIR_PERMISSIONS,
+	IWorkspaceTrustApi,
+	READ_DIR_PERMISSIONS,
+	type WorkspaceTrustPermission,
+} from '../../../../../platform/workspace/common/workspaceTrust.js';
 import { createDisconnectedWorkspaceTrustApi } from '../../../../../platform/workspace/browser/workspaceTrustApi.js';
 import { TestWorkspaceService } from '../../../configuration/test/common/testServices.js';
 import { WorkspaceTrustManagementService } from '../../common/workspaceTrust.js';
-import { IRemoteAuthorityResolverService, WebSocketRemoteConnection } from '../../../../../platform/remote/common/remoteAuthorityResolver.js';
+import {
+	IRemoteAuthorityResolverService,
+	WebSocketRemoteConnection,
+} from '../../../../../platform/remote/common/remoteAuthorityResolver.js';
 import { RemoteAuthorityResolverService } from '../../../../../platform/remote/browser/remoteAuthorityResolverService.js';
 import { RemoteAuthorityResolverService as DesktopRemoteAuthorityResolverService } from '../../../../../platform/remote/electron-browser/remoteAuthorityResolverService.js';
-import { IExtensionHostApi, type ExtensionHostFleetSnapshot, type JsonValue } from '../../../../../platform/agentHost/common/extensionHostApi.js';
-import { IRemoteSocketFactoryService, RemoteSocketFactoryService } from '../../../../../platform/remote/common/remoteSocketFactoryService.js';
+import {
+	IExtensionHostApi,
+	type ExtensionHostFleetSnapshot,
+	type JsonValue,
+} from '../../../../../platform/agentHost/common/extensionHostApi.js';
+import {
+	IRemoteSocketFactoryService,
+	RemoteSocketFactoryService,
+} from '../../../../../platform/remote/common/remoteSocketFactoryService.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { WorkspaceTrustRequestService } from '../../common/workspaceTrust.js';
 import { IWorkspaceTrustManagementService } from '../../../../../platform/workspace/common/workspaceTrust.js';
@@ -30,13 +45,29 @@ test('Workspace Trust reads current Rust permissions for each workspace folder',
 	const reads: string[] = [];
 	const permissions: IWorkspaceTrustApi = {
 		onDidChangeTrust: changes.event,
-		listDirectories: async () => { throw new Error('Unexpected directory management'); },
-		setDirectoryPermissions: async () => { throw new Error('Unexpected directory management'); },
-		forgetDirectory: async () => { throw new Error('Unexpected directory management'); },
-		readWorkspaceDirectory: async id => { const path = workspace.getWorkspace().folders.find(folder => folder.id === id)!.uri.fsPath; reads.push(path); return allowed.get(path); },
-		readDirectory: async () => { throw new Error('Current workspace trust must use effective permissions'); },
-		createGrant: async () => { throw new Error('Unexpected grant creation'); },
-		persistGrant: async () => { throw new Error('Unexpected grant persistence'); },
+		listDirectories: async () => {
+			throw new Error('Unexpected directory management');
+		},
+		setDirectoryPermissions: async () => {
+			throw new Error('Unexpected directory management');
+		},
+		forgetDirectory: async () => {
+			throw new Error('Unexpected directory management');
+		},
+		readWorkspaceDirectory: async id => {
+			const path = workspace.getWorkspace().folders.find(folder => folder.id === id)!.uri.fsPath;
+			reads.push(path);
+			return allowed.get(path);
+		},
+		readDirectory: async () => {
+			throw new Error('Current workspace trust must use effective permissions');
+		},
+		createGrant: async () => {
+			throw new Error('Unexpected grant creation');
+		},
+		persistGrant: async () => {
+			throw new Error('Unexpected grant persistence');
+		},
 	};
 	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
@@ -45,10 +76,23 @@ test('Workspace Trust reads current Rust permissions for each workspace folder',
 	services.registerInstance(IRemoteAuthorityResolverService, resolver);
 	using recovered = new Emitter<void>();
 	let recoveryStatus: 'recovering' | 'idle' = 'recovering';
-	services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [], recovery: { get status() { return recoveryStatus; }, error: undefined, onDidChange: recovered.event, reconnect: async () => { } } });
+	services.registerInstance(IAppServerApi, {
+		connectionGeneration: 1,
+		getConnectionState: async () => 'ready',
+		onConnectionState: () => Disposable.None,
+		getSlashCommands: async () => [],
+		recovery: {
+			get status() {
+				return recoveryStatus;
+			},
+			error: undefined,
+			onDidChange: recovered.event,
+			reconnect: async () => {},
+		},
+	});
 	using trust = services.createInstance(WorkspaceTrustManagementService);
 	let notifications = 0;
-	using listener = trust.onDidChangeTrustedFolders(() => notifications += 1);
+	using listener = trust.onDidChangeTrustedFolders(() => (notifications += 1));
 	assert.equal(await trust.getWorkspaceTrustInfo(), undefined);
 
 	const first = URI.file('/workspaces/first');
@@ -65,7 +109,9 @@ test('Workspace Trust reads current Rust permissions for each workspace folder',
 	changes.fire();
 	assert.deepEqual(await trust.getWorkspaceTrustInfo(), { isTrusted: false, isReadOnly: false });
 	assert.deepEqual(await trust.getUriTrustInfo(first), {
-		uri: first, trusted: false, permissions: [...READ_DIR_PERMISSIONS, 'executeCommands'],
+		uri: first,
+		trusted: false,
+		permissions: [...READ_DIR_PERMISSIONS, 'executeCommands'],
 	});
 	allowed.set(first.fsPath, [...READ_DIR_PERMISSIONS, 'writeFiles']);
 	changes.fire();
@@ -88,7 +134,11 @@ test('Workspace Trust reads current Rust permissions for each workspace folder',
 	assert.deepEqual(reads.slice(-2), [first.fsPath, second.fsPath]);
 	const beforeUnsupported = reads.length;
 	const unsupported = URI.parse('https://example.test/folder');
-	assert.deepEqual(await trust.getUriTrustInfo(unsupported), { uri: unsupported, trusted: false, permissions: undefined });
+	assert.deepEqual(await trust.getUriTrustInfo(unsupported), {
+		uri: unsupported,
+		trusted: false,
+		permissions: undefined,
+	});
 	assert.equal(reads.length, beforeUnsupported);
 	recovered.fire();
 	assert.equal(notifications, 6);
@@ -105,34 +155,101 @@ for (const prefix of ['ssh', 'team']) {
 	test(`remote trust uses ${prefix} resolver canonical identity without turning its hint into a directory grant`, async () => {
 		using changes = new Emitter<void>();
 		using fleetChanges = new Emitter<number>();
-		using workspace = new TestWorkspaceService({ id: 'remote', uri: URI.parse(`ash-remote://${prefix}+build/alias`) });
+		using workspace = new TestWorkspaceService({
+			id: 'remote',
+			uri: URI.parse(`ash-remote://${prefix}+build/alias`),
+		});
 		using services = new InstantiationService();
-		services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [] });
+		services.registerInstance(IAppServerApi, {
+			connectionGeneration: 1,
+			getConnectionState: async () => 'ready',
+			onConnectionState: () => Disposable.None,
+			getSlashCommands: async () => [],
+		});
 		using resolver = services.createInstance(DesktopRemoteAuthorityResolverService);
 		services.registerInstance(IRemoteAuthorityResolverService, resolver);
 		services.registerInstance(IWorkspaceContextService, workspace);
-		services.registerSingleton(IRemoteSocketFactoryService, () => services.createInstance(RemoteSocketFactoryService));
+		services.registerSingleton(IRemoteSocketFactoryService, () =>
+			services.createInstance(RemoteSocketFactoryService),
+		);
 		let trustHint = true;
 		let canonical = URI.parse(`ash-remote://${prefix}+build/canonical`);
 		let allowed: readonly WorkspaceTrustPermission[] = READ_DIR_PERMISSIONS;
 		const reads: string[] = [];
 		services.registerInstance(IWorkspaceTrustApi, {
 			onDidChangeTrust: changes.event,
-			listDirectories: async () => { throw new Error('Unexpected directory management'); },
-			setDirectoryPermissions: async () => { throw new Error('Unexpected directory management'); },
-			forgetDirectory: async () => { throw new Error('Unexpected directory management'); },
-			readWorkspaceDirectory: async id => { reads.push(id); return allowed; },
-			readDirectory: async () => { throw new Error('Saved remote grants cannot establish effective workspace trust'); },
-			createGrant: async () => { throw new Error('Resolver must not grant permissions'); },
-			persistGrant: async () => { throw new Error('Resolver must not persist permissions'); },
+			listDirectories: async () => {
+				throw new Error('Unexpected directory management');
+			},
+			setDirectoryPermissions: async () => {
+				throw new Error('Unexpected directory management');
+			},
+			forgetDirectory: async () => {
+				throw new Error('Unexpected directory management');
+			},
+			readWorkspaceDirectory: async id => {
+				reads.push(id);
+				return allowed;
+			},
+			readDirectory: async () => {
+				throw new Error('Saved remote grants cannot establish effective workspace trust');
+			},
+			createGrant: async () => {
+				throw new Error('Resolver must not grant permissions');
+			},
+			persistGrant: async () => {
+				throw new Error('Resolver must not persist permissions');
+			},
 		});
-		const fleet: ExtensionHostFleetSnapshot = { generation: 1, extensions: [{ id: 'local.resolver', version: '1.0.0', packageDigest: `sha256:${'a'.repeat(64)}`, runtimeApiVersion: 1, lifecycle: 'ready', incarnation: 1, activationGeneration: 1, failure: undefined, stderr: '', outputEvents: [], registrations: [{ kind: 'remoteAuthorityResolver', registrationId: 'resolve', authorityPrefix: prefix }] }] };
+		const fleet: ExtensionHostFleetSnapshot = {
+			generation: 1,
+			extensions: [
+				{
+					id: 'local.resolver',
+					version: '1.0.0',
+					packageDigest: `sha256:${'a'.repeat(64)}`,
+					runtimeApiVersion: 1,
+					lifecycle: 'ready',
+					incarnation: 1,
+					activationGeneration: 1,
+					failure: undefined,
+					stderr: '',
+					outputEvents: [],
+					registrations: [
+						{ kind: 'remoteAuthorityResolver', registrationId: 'resolve', authorityPrefix: prefix },
+					],
+				},
+			],
+		};
 		services.registerInstance(IExtensionHostApi, {
-			start: async () => { throw new Error('Startup is outside this fixture'); }, registerClientHandler: () => Disposable.None, isAvailable: async () => true, list: async () => fleet, reconcile: async () => fleet, activateByEvent: async () => fleet,
-			getConnectionState: async () => 'ready', onDidChange: fleetChanges.event, onConnectionState: () => Disposable.None,
-			invoke: async (request): Promise<JsonValue> => request.operation === 'resolveAuthority'
-				? { type: 'webSocket', host: 'localhost', port: 5000, connectionToken: null, options: { isTrusted: trustHint } }
-				: { scheme: canonical.scheme, authority: canonical.authority, path: canonical.path, query: canonical.query, fragment: canonical.fragment, external: canonical.toString() },
+			start: async () => {
+				throw new Error('Startup is outside this fixture');
+			},
+			registerClientHandler: () => Disposable.None,
+			isAvailable: async () => true,
+			list: async () => fleet,
+			reconcile: async () => fleet,
+			activateByEvent: async () => fleet,
+			getConnectionState: async () => 'ready',
+			onDidChange: fleetChanges.event,
+			onConnectionState: () => Disposable.None,
+			invoke: async (request): Promise<JsonValue> =>
+				request.operation === 'resolveAuthority'
+					? {
+							type: 'webSocket',
+							host: 'localhost',
+							port: 5000,
+							connectionToken: null,
+							options: { isTrusted: trustHint },
+						}
+					: {
+							scheme: canonical.scheme,
+							authority: canonical.authority,
+							path: canonical.path,
+							query: canonical.query,
+							fragment: canonical.fragment,
+							external: canonical.toString(),
+						},
 		});
 		using extensions = services.createInstance(NativeExtensionService);
 		using trust = services.createInstance(WorkspaceTrustManagementService);
@@ -141,7 +258,9 @@ for (const prefix of ['ssh', 'team']) {
 		assert.ok(reads.length > 0);
 		assert.deepEqual(new Set(reads), new Set(['remote']));
 		assert.deepEqual(await trust.getUriTrustInfo(workspace.getWorkspace().folders[0]!.uri), {
-			uri: canonical, trusted: false, permissions: READ_DIR_PERMISSIONS,
+			uri: canonical,
+			trusted: false,
+			permissions: READ_DIR_PERMISSIONS,
 		});
 		allowed = DEVELOPMENT_DIR_PERMISSIONS;
 		assert.deepEqual(await trust.getWorkspaceTrustInfo(), { isTrusted: true, isReadOnly: false });
@@ -166,7 +285,6 @@ for (const prefix of ['ssh', 'team']) {
 		resolver._clearResolvedAuthority(`${prefix}+build`);
 		assert.equal(await trust.getWorkspaceTrustInfo(), undefined);
 	});
-
 }
 
 for (const source of ['permissions', 'workspace', 'resolver', 'recovery', 'disposal'] as const) {
@@ -181,30 +299,58 @@ for (const source of ['permissions', 'workspace', 'resolver', 'recovery', 'dispo
 		const pending = new DeferredPromise<readonly WorkspaceTrustPermission[]>();
 		services.registerInstance(IWorkspaceTrustApi, {
 			onDidChangeTrust: changes.event,
-			readWorkspaceDirectory: async () => { await started.complete(); return pending.p; },
-			readDirectory: async () => { throw new Error('Unexpected saved grant read'); },
-			listDirectories: async () => { throw new Error('Unexpected directory management'); },
-			setDirectoryPermissions: async () => { throw new Error('Unexpected directory management'); },
-			forgetDirectory: async () => { throw new Error('Unexpected directory management'); },
-			createGrant: async () => { throw new Error('Unexpected grant creation'); },
-			persistGrant: async () => { throw new Error('Unexpected grant persistence'); },
+			readWorkspaceDirectory: async () => {
+				await started.complete();
+				return pending.p;
+			},
+			readDirectory: async () => {
+				throw new Error('Unexpected saved grant read');
+			},
+			listDirectories: async () => {
+				throw new Error('Unexpected directory management');
+			},
+			setDirectoryPermissions: async () => {
+				throw new Error('Unexpected directory management');
+			},
+			forgetDirectory: async () => {
+				throw new Error('Unexpected directory management');
+			},
+			createGrant: async () => {
+				throw new Error('Unexpected grant creation');
+			},
+			persistGrant: async () => {
+				throw new Error('Unexpected grant persistence');
+			},
 		});
 		using resolver = services.createInstance(RemoteAuthorityResolverService);
 		services.registerInstance(IRemoteAuthorityResolverService, resolver);
 		services.registerInstance(IAppServerApi, {
-			connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [],
-			recovery: { status: 'idle', error: undefined, onDidChange: recovered.event, reconnect: async () => { } },
+			connectionGeneration: 1,
+			getConnectionState: async () => 'ready',
+			onConnectionState: () => Disposable.None,
+			getSlashCommands: async () => [],
+			recovery: { status: 'idle', error: undefined, onDidChange: recovered.event, reconnect: async () => {} },
 		});
 		using trust = services.createInstance(WorkspaceTrustManagementService);
 		const uriResult = trust.getUriTrustInfo(folder);
 		const workspaceResult = trust.getWorkspaceTrustInfo();
 		await started.p;
 		switch (source) {
-			case 'permissions': changes.fire(); break;
-			case 'workspace': workspace.updateWorkspace({ id: 'second', uri: URI.file('/workspaces/second') }); break;
-			case 'resolver': resolver._clearResolvedAuthority('ssh+build'); break;
-			case 'recovery': recovered.fire(); break;
-			case 'disposal': trust.dispose(); break;
+			case 'permissions':
+				changes.fire();
+				break;
+			case 'workspace':
+				workspace.updateWorkspace({ id: 'second', uri: URI.file('/workspaces/second') });
+				break;
+			case 'resolver':
+				resolver._clearResolvedAuthority('ssh+build');
+				break;
+			case 'recovery':
+				recovered.fire();
+				break;
+			case 'disposal':
+				trust.dispose();
+				break;
 		}
 		await pending.complete(DEVELOPMENT_DIR_PERMISSIONS);
 		assert.deepEqual(await uriResult, { uri: folder, trusted: false, permissions: undefined });
@@ -217,15 +363,32 @@ test('empty remote Workspace Trust discards a resolver hint changed during canon
 	using workspace = new TestWorkspaceService({ id: 'remote', remoteAuthority: authority });
 	using services = new InstantiationService();
 	services.registerInstance(IWorkspaceContextService, workspace);
-	services.registerInstance(IWorkspaceTrustApi, createDisconnectedWorkspaceTrustApi(async () => { throw new Error('An empty window must not read directory grants'); }));
-	services.registerInstance(IAppServerApi, { connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [] });
+	services.registerInstance(
+		IWorkspaceTrustApi,
+		createDisconnectedWorkspaceTrustApi(async () => {
+			throw new Error('An empty window must not read directory grants');
+		}),
+	);
+	services.registerInstance(IAppServerApi, {
+		connectionGeneration: 1,
+		getConnectionState: async () => 'ready',
+		onConnectionState: () => Disposable.None,
+		getSlashCommands: async () => [],
+	});
 	using resolver = services.createInstance(DesktopRemoteAuthorityResolverService);
 	services.registerInstance(IRemoteAuthorityResolverService, resolver);
-	const address = { authority, connectTo: new WebSocketRemoteConnection('localhost', 5000), connectionToken: undefined };
+	const address = {
+		authority,
+		connectTo: new WebSocketRemoteConnection('localhost', 5000),
+		connectionToken: undefined,
+	};
 	resolver._setResolvedAuthority(address, { isTrusted: true });
 	const started = new DeferredPromise<void>();
 	const canonical = new DeferredPromise<URI>();
-	resolver._setCanonicalURIProvider(async () => { await started.complete(); return canonical.p; });
+	resolver._setCanonicalURIProvider(async () => {
+		await started.complete();
+		return canonical.p;
+	});
 	using trust = services.createInstance(WorkspaceTrustManagementService);
 	const result = trust.getWorkspaceTrustInfo();
 	await started.p;
@@ -240,10 +403,17 @@ test('initialization waits for directory recovery, effective permissions and tra
 	const read = new DeferredPromise<void>();
 	f.readGate = read;
 	let initialized = false;
-	void f.trust.workspaceTrustInitialized.then(() => { initialized = true; });
+	void f.trust.workspaceTrustInitialized.then(() => {
+		initialized = true;
+	});
 	const participantStarted = new DeferredPromise<void>();
 	const participantFinished = new DeferredPromise<void>();
-	using participant = f.trust.addWorkspaceTrustTransitionParticipant({ participate: async () => { await participantStarted.complete(); await participantFinished.p; } });
+	using participant = f.trust.addWorkspaceTrustTransitionParticipant({
+		participate: async () => {
+			await participantStarted.complete();
+			await participantFinished.p;
+		},
+	});
 	f.saved.set('first', DEVELOPMENT_DIR_PERMISSIONS);
 	f.active.set('first', DEVELOPMENT_DIR_PERMISSIONS);
 	const response = f.requests.requestWorkspaceTrust();
@@ -270,7 +440,10 @@ test('coalesced trust requests finish only after persistence, recovery and parti
 	await f.trust.workspaceTrustInitialized;
 	const initiated = new DeferredPromise<void>();
 	const events: unknown[] = [];
-	using requestListener = f.requests.onDidInitiateWorkspaceTrustRequest(options => { events.push(options); void initiated.complete(); });
+	using requestListener = f.requests.onDidInitiateWorkspaceTrustRequest(options => {
+		events.push(options);
+		void initiated.complete();
+	});
 	using trustListener = f.trust.onDidChangeTrust(trusted => f.effects.push(`trusted:${trusted}`));
 	const entered = new DeferredPromise<void>();
 	const release = new DeferredPromise<void>();
@@ -280,14 +453,16 @@ test('coalesced trust requests finish only after persistence, recovery and parti
 			f.effects.push('participant');
 			await entered.complete();
 			await release.p;
-		}
+		},
 	});
 	const first = f.requests.requestWorkspaceTrust({ message: 'Run workspace code?' });
 	const second = f.requests.requestWorkspaceTrust({ message: 'Second caller' });
 	assert.equal(first, second);
 	await initiated.p;
 	let completed = false;
-	void first.then(() => { completed = true; });
+	void first.then(() => {
+		completed = true;
+	});
 	const completing = f.requests.completeWorkspaceTrustRequest(true);
 	await entered.p;
 	assert.deepEqual(events, [{ message: 'Run workspace code?' }]);
@@ -311,7 +486,9 @@ test('declining, canceling, startup and disposal release pending trust requests 
 	f.requests.cancelWorkspaceTrustRequest();
 	assert.equal(await canceled, undefined);
 	const startup = new DeferredPromise<void>();
-	using listener = f.requests.onDidInitiateWorkspaceTrustRequestOnStartup(() => { void startup.complete(); });
+	using listener = f.requests.onDidInitiateWorkspaceTrustRequestOnStartup(() => {
+		void startup.complete();
+	});
 	f.requests.requestWorkspaceTrustOnStartup();
 	const joined = f.requests.requestWorkspaceTrust();
 	await startup.p;
@@ -325,7 +502,12 @@ test('an old trust completion cannot resolve a replacement workspace request', a
 	await f.trust.workspaceTrustInitialized;
 	const entered = new DeferredPromise<void>();
 	const release = new DeferredPromise<void>();
-	using participant = f.trust.addWorkspaceTrustTransitionParticipant({ participate: async () => { await entered.complete(); await release.p; } });
+	using participant = f.trust.addWorkspaceTrustTransitionParticipant({
+		participate: async () => {
+			await entered.complete();
+			await release.p;
+		},
+	});
 	const old = f.requests.requestWorkspaceTrust();
 	const completing = f.requests.completeWorkspaceTrustRequest(true);
 	await entered.p;
@@ -333,7 +515,9 @@ test('an old trust completion cannot resolve a replacement workspace request', a
 	assert.equal(await old, undefined);
 	const replacement = f.requests.requestWorkspaceTrust();
 	let replacementCompleted = false;
-	void replacement.then(() => { replacementCompleted = true; });
+	void replacement.then(() => {
+		replacementCompleted = true;
+	});
 	await release.complete();
 	await completing;
 	assert.equal(replacementCompleted, false);
@@ -371,7 +555,11 @@ test('a partially saved multi-root grant recovers effective permissions without 
 test('the permission editor revision and removed participants remain authoritative during transitions', async () => {
 	using f = createTrustFixture();
 	await f.trust.workspaceTrustInitialized;
-	const participant = f.trust.addWorkspaceTrustTransitionParticipant({ participate: async () => { throw new Error('Removed participant was called'); } });
+	const participant = f.trust.addWorkspaceTrustTransitionParticipant({
+		participate: async () => {
+			throw new Error('Removed participant was called');
+		},
+	});
 	participant.dispose();
 	await assert.rejects(f.trust.setUrisTrust([URI.file('/first')], true, 0), /Refresh before saving/);
 	assert.deepEqual(f.effects, []);
@@ -384,12 +572,19 @@ test('a request joining an editor transition cannot return trust before its part
 	await f.trust.workspaceTrustInitialized;
 	const entered = new DeferredPromise<void>();
 	const release = new DeferredPromise<void>();
-	using participant = f.trust.addWorkspaceTrustTransitionParticipant({ participate: async () => { await entered.complete(); await release.p; } });
+	using participant = f.trust.addWorkspaceTrustTransitionParticipant({
+		participate: async () => {
+			await entered.complete();
+			await release.p;
+		},
+	});
 	const transition = f.trust.setWorkspaceTrust(true);
 	await entered.p;
 	let finished = false;
 	const request = f.requests.requestWorkspaceTrust();
-	void request.then(() => { finished = true; });
+	void request.then(() => {
+		finished = true;
+	});
 	await new Promise<void>(resolve => setImmediate(resolve));
 	assert.equal(finished, false);
 	await release.complete();
@@ -402,7 +597,11 @@ test('a failed participant does not publish trust and can be retried after remov
 	await f.trust.workspaceTrustInitialized;
 	const events: boolean[] = [];
 	using listener = f.trust.onDidChangeTrust(trusted => events.push(trusted));
-	const participant = f.trust.addWorkspaceTrustTransitionParticipant({ participate: async () => { throw new Error('Integration failed'); } });
+	const participant = f.trust.addWorkspaceTrustTransitionParticipant({
+		participate: async () => {
+			throw new Error('Integration failed');
+		},
+	});
 	await assert.rejects(f.trust.setWorkspaceTrust(true), /Integration failed/);
 	assert.equal(f.trust.isWorkspaceTrusted(), false);
 	assert.deepEqual(events, []);
@@ -419,16 +618,32 @@ for (const destination of ['local', 'other-host', 'replaced-provider'] as const)
 		const authority = 'team+build';
 		const uri = URI.parse(`ash-remote://${authority}/first`);
 		f.workspace.updateWorkspace({ id: 'remote', uri });
-		const address = { authority, connectTo: new WebSocketRemoteConnection('localhost', 5000), connectionToken: undefined };
+		const address = {
+			authority,
+			connectTo: new WebSocketRemoteConnection('localhost', 5000),
+			connectionToken: undefined,
+		};
 		f.resolver._setResolvedAuthority(address, { isTrusted: true });
 		const entered = new DeferredPromise<void>();
 		const canonical = new DeferredPromise<URI>();
-		f.resolver._setCanonicalURIProvider(async () => { await entered.complete(); return canonical.p; });
+		f.resolver._setCanonicalURIProvider(async () => {
+			await entered.complete();
+			return canonical.p;
+		});
 		const mutation = f.trust.setUrisTrust([uri], true);
 		await entered.p;
 		if (destination === 'replaced-provider') f.resolver._setResolvedAuthority(address, { isTrusted: false });
-		await canonical.complete(destination === 'local' ? URI.file('/first') : destination === 'other-host' ? uri.with({ authority: 'team+other' }) : uri);
-		await assert.rejects(mutation, destination === 'replaced-provider' ? isCancellationError : /cannot manage directory permissions/);
+		await canonical.complete(
+			destination === 'local'
+				? URI.file('/first')
+				: destination === 'other-host'
+					? uri.with({ authority: 'team+other' })
+					: uri,
+		);
+		await assert.rejects(
+			mutation,
+			destination === 'replaced-provider' ? isCancellationError : /cannot manage directory permissions/,
+		);
 		assert.deepEqual(f.effects, []);
 	});
 }
@@ -472,7 +687,9 @@ function createTrustFixture(recovering = false, multiRoot = false) {
 	const changed = resources.add(new Emitter<void>());
 	const recovered = resources.add(new Emitter<void>());
 	const state = {
-		status: recovering ? 'recovering' as 'recovering' | 'idle' | 'failed' : 'idle' as 'recovering' | 'idle' | 'failed',
+		status: recovering
+			? ('recovering' as 'recovering' | 'idle' | 'failed')
+			: ('idle' as 'recovering' | 'idle' | 'failed'),
 		readGate: undefined as DeferredPromise<void> | undefined,
 		readStarted: undefined as DeferredPromise<void> | undefined,
 		failPath: undefined as string | undefined,
@@ -485,9 +702,16 @@ function createTrustFixture(recovering = false, multiRoot = false) {
 	services.registerInstance(IWorkspaceContextService, workspace);
 	services.registerInstance(IWorkspaceTrustApi, {
 		onDidChangeTrust: changed.event,
-		readWorkspaceDirectory: async id => { await state.readStarted?.complete(); await state.readGate?.p; return state.active.get(id) ?? READ_DIR_PERMISSIONS; },
+		readWorkspaceDirectory: async id => {
+			await state.readStarted?.complete();
+			await state.readGate?.p;
+			return state.active.get(id) ?? READ_DIR_PERMISSIONS;
+		},
 		readDirectory: async path => ({ dir: path.slice(1), permissions: state.saved.get(path.slice(1)) }),
-		listDirectories: async () => ({ revision, entries: [...state.saved].map(([dir, permissions]) => ({ dir, path: `/${dir}`, permissions })) }),
+		listDirectories: async () => ({
+			revision,
+			entries: [...state.saved].map(([dir, permissions]) => ({ dir, path: `/${dir}`, permissions })),
+		}),
 		setDirectoryPermissions: async (path, permissions, expectedRevision) => {
 			if (path === state.failPath || expectedRevision !== revision) throw new Error('Revision conflict');
 			state.effects.push(`save:${path}`);
@@ -495,19 +719,36 @@ function createTrustFixture(recovering = false, multiRoot = false) {
 			changed.fire();
 			return { revision: ++revision, generation: 1, disposition: 'updated' };
 		},
-		forgetDirectory: async () => { throw new Error('Unexpected forget'); },
-		createGrant: async () => { throw new Error('Unexpected grant creation'); },
-		persistGrant: async () => { throw new Error('Unexpected startup grant'); },
+		forgetDirectory: async () => {
+			throw new Error('Unexpected forget');
+		},
+		createGrant: async () => {
+			throw new Error('Unexpected grant creation');
+		},
+		persistGrant: async () => {
+			throw new Error('Unexpected startup grant');
+		},
 	});
 	const resolver = resources.add(services.createInstance(RemoteAuthorityResolverService));
 	services.registerInstance(IRemoteAuthorityResolverService, resolver);
 	services.registerInstance(IAppServerApi, {
-		connectionGeneration: 1, getConnectionState: async () => 'ready', onConnectionState: () => Disposable.None, getSlashCommands: async () => [],
+		connectionGeneration: 1,
+		getConnectionState: async () => 'ready',
+		onConnectionState: () => Disposable.None,
+		getSlashCommands: async () => [],
 		recovery: {
-			get status() { return state.status; }, error: undefined, onDidChange: recovered.event,
+			get status() {
+				return state.status;
+			},
+			error: undefined,
+			onDidChange: recovered.event,
 			reconnect: async () => {
-				state.effects.push('reconnect'); state.status = 'recovering'; recovered.fire();
-				state.active = new Map(state.saved); state.status = 'idle'; recovered.fire();
+				state.effects.push('reconnect');
+				state.status = 'recovering';
+				recovered.fire();
+				state.active = new Map(state.saved);
+				state.status = 'idle';
+				recovered.fire();
 			},
 		},
 	});
@@ -516,5 +757,13 @@ function createTrustFixture(recovering = false, multiRoot = false) {
 	const trust = resources.add(services.createInstance(WorkspaceTrustManagementService));
 	services.registerInstance(IWorkspaceTrustManagementService, trust);
 	const requests = resources.add(services.createInstance(WorkspaceTrustRequestService));
-	return Object.assign(state, { trust, requests, workspace, resolver, recovered, notifications, [Symbol.dispose]: () => resources.dispose() });
+	return Object.assign(state, {
+		trust,
+		requests,
+		workspace,
+		resolver,
+		recovered,
+		notifications,
+		[Symbol.dispose]: () => resources.dispose(),
+	});
 }

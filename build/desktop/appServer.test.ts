@@ -7,29 +7,54 @@ import { join, resolve } from 'node:path';
 import { PassThrough } from 'node:stream';
 import test, { type TestContext } from 'node:test';
 
-import { prepareAppServer, relativeWatchedDirectory, shouldRebuildAppServer, shouldRebuildWorkspaceManifest, watchAppServer } from './appServer.ts';
+import {
+	prepareAppServer,
+	relativeWatchedDirectory,
+	shouldRebuildAppServer,
+	shouldRebuildWorkspaceManifest,
+	watchAppServer,
+} from './appServer.ts';
 import { pythonCommand } from '../python.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '../..');
-const protocolDirectories = ['app-server-protocol', 'protocol', 'queue-contract'].map(name => join(repositoryRoot, 'crates', name));
+const protocolDirectories = ['app-server-protocol', 'protocol', 'queue-contract'].map(name =>
+	join(repositoryRoot, 'crates', name),
+);
 
 function mockProtocolDirectories(t: TestContext, directories = () => protocolDirectories) {
-	return t.mock.method(childProcess, 'execFile', (_command: string, args: readonly string[], _options: object, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
-		assert.deepEqual(args, pythonCommand(['-B', 'build/protocol/generate.py', '--source-directories']).args);
-		setImmediate(() => callback(null, JSON.stringify(directories()), ''));
-		return new ChildProcess();
-	});
+	return t.mock.method(
+		childProcess,
+		'execFile',
+		(
+			_command: string,
+			args: readonly string[],
+			_options: object,
+			callback: (error: Error | null, stdout: string, stderr: string) => void,
+		) => {
+			assert.deepEqual(args, pythonCommand(['-B', 'build/protocol/generate.py', '--source-directories']).args);
+			setImmediate(() => callback(null, JSON.stringify(directories()), ''));
+			return new ChildProcess();
+		},
+	);
 }
 
 function mockSourceChanges(t: TestContext) {
 	const listeners = new Map<string, (event: string, file: string) => void>();
 	let revision = 0;
-	t.mock.method(fs, 'statSync', () => ({ dev: 1, ino: 1, size: 1, mtimeMs: Date.now() + ++revision, ctimeMs: Date.now() + revision } as fs.Stats));
+	t.mock.method(
+		fs,
+		'statSync',
+		() =>
+			({ dev: 1, ino: 1, size: 1, mtimeMs: Date.now() + ++revision, ctimeMs: Date.now() + revision }) as fs.Stats,
+	);
 	t.mock.method(fs, 'watch', (...args: unknown[]) => {
 		listeners.set(args[0] as string, args.at(-1) as (event: string, file: string) => void);
-		return Object.assign(new EventEmitter(), { close() { } });
+		return Object.assign(new EventEmitter(), { close() {} });
 	});
-	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+	t.after(() => {
+		t.mock.restoreAll();
+		syncBuiltinESMExports();
+	});
 	return (file: string, workspaceManifest = false, sourceRoot = 'crates') => {
 		const directory = workspaceManifest ? repositoryRoot : join(repositoryRoot, sourceRoot);
 		const watched = workspaceManifest && process.platform === 'darwin' ? join(repositoryRoot, file) : directory;
@@ -47,28 +72,38 @@ function liveChild(reply: (id: number) => object): ChildProcess {
 		stdout.write(`${JSON.stringify({ protocol_version: 1, id: request.id, ...reply(request.id) })}\n`);
 	});
 	stdin.on('finish', () => setImmediate(() => child.emit('close', 0, null)));
-	setImmediate(() => stdout.write(`${JSON.stringify({ protocol_version: 1, id: null, result: { event: 'ready' } })}\n`));
+	setImmediate(() =>
+		stdout.write(`${JSON.stringify({ protocol_version: 1, id: null, result: { event: 'ready' } })}\n`),
+	);
 	return child;
 }
 
 for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const) {
 	for (const succeeds of [true, false]) {
 		test(`${javascriptRuntime} startup ${succeeds ? 'waits for preparation before selecting the runtime' : 'rejects failed preparation without selecting an old runtime'}`, async t => {
-			const commands: { command: string; args: string[]; }[] = [];
-			t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
-			t.mock.method(childProcess, 'spawn', (command: string, args: readonly string[], options: { stdio: unknown; }) => {
-				assert.deepEqual(options.stdio, ['ignore', 'inherit', 'inherit']);
-				commands.push({ command, args: [...args] });
-				const child = new ChildProcess();
-				setImmediate(() => child.emit('close', succeeds ? 0 : 1, null));
-				return child;
+			const commands: { command: string; args: string[] }[] = [];
+			t.after(() => {
+				t.mock.restoreAll();
+				syncBuiltinESMExports();
 			});
+			t.mock.method(
+				childProcess,
+				'spawn',
+				(command: string, args: readonly string[], options: { stdio: unknown }) => {
+					assert.deepEqual(options.stdio, ['ignore', 'inherit', 'inherit']);
+					commands.push({ command, args: [...args] });
+					const child = new ChildProcess();
+					setImmediate(() => child.emit('close', succeeds ? 0 : 1, null));
+					return child;
+				},
+			);
 			syncBuiltinESMExports();
 			const preparation = prepareAppServer(javascriptRuntime);
 			if (succeeds) await preparation;
 			else await assert.rejects(preparation, /backend preparation exited with status 1/);
 			const expected = [pythonCommand(['-B', 'build/prepare.py', '--javascript-runtime', javascriptRuntime])];
-			if (succeeds && javascriptRuntime === 'host-provided-node') expected.push(pythonCommand(['-B', 'build/desktop/develop.py', '--select-prepared']));
+			if (succeeds && javascriptRuntime === 'host-provided-node')
+				expected.push(pythonCommand(['-B', 'build/desktop/develop.py', '--select-prepared']));
 			assert.deepEqual(commands, expected);
 		});
 	}
@@ -78,8 +113,13 @@ test('cancelled preparation never starts a builder or selects a runtime', async 
 	const cancellation = new AbortController();
 	const reason = new Error('startup cancelled');
 	cancellation.abort(reason);
-	const spawn = t.mock.method(childProcess, 'spawn', () => { throw new Error('Cancelled preparation spawned a builder'); });
-	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+	const spawn = t.mock.method(childProcess, 'spawn', () => {
+		throw new Error('Cancelled preparation spawned a builder');
+	});
+	t.after(() => {
+		t.mock.restoreAll();
+		syncBuiltinESMExports();
+	});
 	syncBuiltinESMExports();
 	await assert.rejects(prepareAppServer('host-provided-node', cancellation.signal), error => error === reason);
 	assert.equal(spawn.mock.callCount(), 0);
@@ -114,19 +154,24 @@ for (const [source, javascriptRuntime, expected] of [
 		t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
 			commands.push(args[1]!);
 			assert.equal(args.includes('--serve'), args[1] === 'build/desktop/live.py');
-			if (args[1] === 'build/desktop/live.py') return liveChild(() => {
-				setImmediate(() => completed.resolve());
-				return { result: { kind: 'function' } };
-			});
+			if (args[1] === 'build/desktop/live.py')
+				return liveChild(() => {
+					setImmediate(() => completed.resolve());
+					return { result: { kind: 'function' } };
+				});
 			const child = new ChildProcess();
 			setImmediate(() => child.emit('close', 0, null));
 			return child;
 		});
 		syncBuiltinESMExports();
 		const stop = await watchAppServer({
-			skipInitial: true, javascriptRuntime,
+			skipInitial: true,
+			javascriptRuntime,
 			environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') },
-			onDidBuild: async () => { reloads++; completed.resolve(); }
+			onDidBuild: async () => {
+				reloads++;
+				completed.resolve();
+			},
 		});
 		t.after(stop);
 		save(source);
@@ -158,7 +203,9 @@ test('a failed live compilation retains the host and retries the next save', asy
 	const stop = await watchAppServer({
 		skipInitial: true,
 		environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') },
-		onDidBuild: async () => { reloads++; }
+		onDidBuild: async () => {
+			reloads++;
+		},
 	});
 	t.after(stop);
 	save('app-server-diff/src/lib.rs');
@@ -181,13 +228,16 @@ test('live edits retry an outstanding full build before enabling module updates'
 		assert.equal(args[1], 'build/desktop/develop.py');
 		const succeeds = ++builds === 2;
 		const child = new ChildProcess();
-		setImmediate(() => { child.emit('close', succeeds ? 0 : 1, null); if (succeeds) completed.resolve(); });
+		setImmediate(() => {
+			child.emit('close', succeeds ? 0 : 1, null);
+			if (succeeds) completed.resolve();
+		});
 		return child;
 	});
 	syncBuiltinESMExports();
 	const stop = await watchAppServer({
 		skipInitial: true,
-		environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') }
+		environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') },
 	});
 	t.after(stop);
 	save('app-server/src/server/operations.rs');
@@ -212,7 +262,9 @@ test('a dependency save retires the live session before rebuilding the backend',
 				setImmediate(() => served.resolve());
 				return { result: { kind: 'function' } };
 			});
-			session.once('close', () => { retired = true; });
+			session.once('close', () => {
+				retired = true;
+			});
 			return session;
 		}
 		assert.equal(retired, true, 'the semantic database must be retired first');
@@ -221,7 +273,11 @@ test('a dependency save retires the live session before rebuilding the backend',
 		return child;
 	});
 	syncBuiltinESMExports();
-	const stop = await watchAppServer({ skipInitial: true, environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') }, onDidBuild: async () => rebuilt.resolve() });
+	const stop = await watchAppServer({
+		skipInitial: true,
+		environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') },
+		onDidBuild: async () => rebuilt.resolve(),
+	});
 	t.after(stop);
 	save('app-server-diff/src/lib.rs');
 	await served.promise;
@@ -250,7 +306,10 @@ test('saves consumed by a queued live batch cannot later trigger an empty backen
 		return child;
 	});
 	syncBuiltinESMExports();
-	const stop = await watchAppServer({ skipInitial: true, environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') } });
+	const stop = await watchAppServer({
+		skipInitial: true,
+		environment: { ASH_RUST_LIVE_DIRECTORY: resolve(repositoryRoot, '.build/test-live') },
+	});
 	t.after(stop);
 	save('diff/src/lib.rs');
 	t.mock.timers.tick(250);
@@ -270,37 +329,45 @@ test('saves consumed by a queued live batch cannot later trigger an empty backen
 	assert.deepEqual(commands, ['build/desktop/develop.py', 'build/desktop/live.py']);
 });
 
-test('Windows access notifications do not rebuild, while a write with preserved size and mtime does', { skip: process.platform !== 'win32' }, async t => {
-	t.mock.timers.enable({ apis: ['setTimeout'] });
-	const completed = Promise.withResolvers<void>();
-	const commands: string[] = [];
-	mockProtocolDirectories(t);
-	const save = mockSourceChanges(t);
-	let changeTime = 1;
-	t.mock.method(fs, 'statSync', () => ({ dev: 1, ino: 1, size: 12, mtimeMs: 1, ctimeMs: changeTime } as fs.Stats));
-	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
-		commands.push(args[1]!);
-		const child = new ChildProcess();
-		setImmediate(() => child.emit('close', 0, null));
-		return child;
-	});
-	syncBuiltinESMExports();
-	const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => completed.resolve() });
-	t.after(stop);
-	save('diff/src/lib.rs');
-	t.mock.timers.tick(250);
-	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.deepEqual(commands, []);
-	changeTime = Date.now() + 1;
-	save('diff/src/lib.rs');
-	t.mock.timers.tick(250);
-	await completed.promise;
-	assert.deepEqual(commands, ['build/desktop/develop.py']);
-	save('diff/src/lib.rs');
-	t.mock.timers.tick(250);
-	await new Promise<void>(resolve => setImmediate(resolve));
-	assert.equal(commands.length, 1);
-});
+test(
+	'Windows access notifications do not rebuild, while a write with preserved size and mtime does',
+	{ skip: process.platform !== 'win32' },
+	async t => {
+		t.mock.timers.enable({ apis: ['setTimeout'] });
+		const completed = Promise.withResolvers<void>();
+		const commands: string[] = [];
+		mockProtocolDirectories(t);
+		const save = mockSourceChanges(t);
+		let changeTime = 1;
+		t.mock.method(
+			fs,
+			'statSync',
+			() => ({ dev: 1, ino: 1, size: 12, mtimeMs: 1, ctimeMs: changeTime }) as fs.Stats,
+		);
+		t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
+			commands.push(args[1]!);
+			const child = new ChildProcess();
+			setImmediate(() => child.emit('close', 0, null));
+			return child;
+		});
+		syncBuiltinESMExports();
+		const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => completed.resolve() });
+		t.after(stop);
+		save('diff/src/lib.rs');
+		t.mock.timers.tick(250);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.deepEqual(commands, []);
+		changeTime = Date.now() + 1;
+		save('diff/src/lib.rs');
+		t.mock.timers.tick(250);
+		await completed.promise;
+		assert.deepEqual(commands, ['build/desktop/develop.py']);
+		save('diff/src/lib.rs');
+		t.mock.timers.tick(250);
+		await new Promise<void>(resolve => setImmediate(resolve));
+		assert.equal(commands.length, 1);
+	},
+);
 
 test('app-server watcher excludes a custom Cargo target directory inside Rust sources', () => {
 	const sourceRoot = join('/workspace', 'ash', 'crates');
@@ -322,21 +389,35 @@ test('workspace-root watcher accepts only canonical root manifests', () => {
 	assert.equal(shouldRebuildWorkspaceManifest('crates/app-server/Cargo.toml'), false);
 });
 
-test('macOS backend watching does not subscribe to the repository or its build caches', { skip: process.platform !== 'darwin' }, async t => {
-	const paths: string[] = [];
-	let closed = 0;
-	t.mock.method(fs, 'watch', (file: string) => {
-		paths.push(file);
-		return Object.assign(new EventEmitter(), { close() { closed++; } });
-	});
-	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
-	syncBuiltinESMExports();
-	const stop = await watchAppServer({ skipInitial: true });
-	t.after(stop);
-	assert.deepEqual(new Set(paths), new Set(['crates', 'sdk/rust', 'Cargo.toml', 'Cargo.lock'].map(file => join(repositoryRoot, file))));
-	stop();
-	assert.equal(closed, paths.length);
-});
+test(
+	'macOS backend watching does not subscribe to the repository or its build caches',
+	{ skip: process.platform !== 'darwin' },
+	async t => {
+		const paths: string[] = [];
+		let closed = 0;
+		t.mock.method(fs, 'watch', (file: string) => {
+			paths.push(file);
+			return Object.assign(new EventEmitter(), {
+				close() {
+					closed++;
+				},
+			});
+		});
+		t.after(() => {
+			t.mock.restoreAll();
+			syncBuiltinESMExports();
+		});
+		syncBuiltinESMExports();
+		const stop = await watchAppServer({ skipInitial: true });
+		t.after(stop);
+		assert.deepEqual(
+			new Set(paths),
+			new Set(['crates', 'sdk/rust', 'Cargo.toml', 'Cargo.lock'].map(file => join(repositoryRoot, file))),
+		);
+		stop();
+		assert.equal(closed, paths.length);
+	},
+);
 
 test('a failed subscription closes previously registered source watches', async t => {
 	const failure = Object.assign(new Error('manifest unavailable'), { code: 'EACCES' });
@@ -344,23 +425,30 @@ test('a failed subscription closes previously registered source watches', async 
 	let closed = 0;
 	t.mock.method(fs, 'watch', () => {
 		if (++opened === 3) throw failure;
-		return Object.assign(new EventEmitter(), { close() { closed++; } });
+		return Object.assign(new EventEmitter(), {
+			close() {
+				closed++;
+			},
+		});
 	});
-	t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+	t.after(() => {
+		t.mock.restoreAll();
+		syncBuiltinESMExports();
+	});
 	syncBuiltinESMExports();
 	await assert.rejects(watchAppServer({ skipInitial: true }), error => error === failure);
 	assert.equal(closed, 2);
 });
 
-test('watcher stops before the backend build when protocol generation fails', async (t) => {
-	const commands: { command: string; args: string[]; }[] = [];
+test('watcher stops before the backend build when protocol generation fails', async t => {
+	const commands: { command: string; args: string[] }[] = [];
 	const failure = Promise.withResolvers<string>();
 	t.after(() => {
 		t.mock.restoreAll();
 		syncBuiltinESMExports();
 	});
 	mockProtocolDirectories(t);
-	t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() { } }));
+	t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() {} }));
 	t.mock.method(console, 'error', (message: string) => failure.resolve(message));
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
 		commands.push({ command: _command, args: [...args] });
@@ -375,7 +463,7 @@ test('watcher stops before the backend build when protocol generation fails', as
 	assert.deepEqual(commands, [pythonCommand(['-B', 'build/protocol/generate.py'])]);
 });
 
-test('watcher invokes the Python backend builder after protocol generation', async (t) => {
+test('watcher invokes the Python backend builder after protocol generation', async t => {
 	const commands: string[] = [];
 	const failure = Promise.withResolvers<string>();
 	t.after(() => {
@@ -383,7 +471,7 @@ test('watcher invokes the Python backend builder after protocol generation', asy
 		syncBuiltinESMExports();
 	});
 	mockProtocolDirectories(t);
-	t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() { } }));
+	t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() {} }));
 	t.mock.method(console, 'error', (message: string) => failure.resolve(message));
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
 		commands.push(args[1] ?? '');
@@ -403,9 +491,12 @@ for (const succeeds of [true, false]) {
 		const commands: string[][] = [];
 		const completed = Promise.withResolvers<void>();
 		let reloads = 0;
-		t.after(() => { t.mock.restoreAll(); syncBuiltinESMExports(); });
+		t.after(() => {
+			t.mock.restoreAll();
+			syncBuiltinESMExports();
+		});
 		mockProtocolDirectories(t);
-		t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() { } }));
+		t.mock.method(fs, 'watch', () => Object.assign(new EventEmitter(), { close() {} }));
 		t.mock.method(console, 'error', (message: string) => {
 			assert.match(message, /backend build exited with status 1/);
 			completed.resolve();
@@ -417,13 +508,25 @@ for (const succeeds of [true, false]) {
 			return child;
 		});
 		syncBuiltinESMExports();
-		const stop = await watchAppServer({ javascriptRuntime: 'packaged-node', onDidBuild: async () => { reloads++; completed.resolve(); } });
+		const stop = await watchAppServer({
+			javascriptRuntime: 'packaged-node',
+			onDidBuild: async () => {
+				reloads++;
+				completed.resolve();
+			},
+		});
 		t.after(stop);
 		await completed.promise;
-		assert.deepEqual({ commands, reloads }, {
-			commands: [pythonCommand(['-B', 'build/protocol/generate.py']).args, pythonCommand(['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']).args],
-			reloads: succeeds ? 1 : 0,
-		});
+		assert.deepEqual(
+			{ commands, reloads },
+			{
+				commands: [
+					pythonCommand(['-B', 'build/protocol/generate.py']).args,
+					pythonCommand(['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']).args,
+				],
+				reloads: succeeds ? 1 : 0,
+			},
+		);
 	});
 }
 
@@ -440,13 +543,18 @@ for (const javascriptRuntime of ['host-provided-node', 'packaged-node'] as const
 			return child;
 		});
 		syncBuiltinESMExports();
-		const stop = await watchAppServer({ skipInitial: true, javascriptRuntime, onDidBuild: async () => completed.resolve() });
+		const stop = await watchAppServer({
+			skipInitial: true,
+			javascriptRuntime,
+			onDidBuild: async () => completed.resolve(),
+		});
 		t.after(stop);
 		save('app-server/src/server/operations.rs');
 		await completed.promise;
-		const expected = javascriptRuntime === 'packaged-node'
-			? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
-			: ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
+		const expected =
+			javascriptRuntime === 'packaged-node'
+				? ['-B', 'build/prepare.py', '--javascript-runtime', 'packaged-node']
+				: ['-B', 'build/desktop/develop.py', '--protocol-prepared'];
 		assert.deepEqual(commands, [pythonCommand(expected).args]);
 	});
 }
@@ -505,7 +613,12 @@ test('a protocol save during an active backend build exports before the next bui
 		return child;
 	});
 	syncBuiltinESMExports();
-	const stop = await watchAppServer({ skipInitial: true, onDidBuild: async () => { if (++builds === 2) completed.resolve(); } });
+	const stop = await watchAppServer({
+		skipInitial: true,
+		onDidBuild: async () => {
+			if (++builds === 2) completed.resolve();
+		},
+	});
 	t.after(stop);
 	save('app-server/src/server/operations.rs');
 	const backend = await firstBuild.promise;
@@ -540,11 +653,20 @@ test('failed dependency discovery blocks the backend and is retried on the next 
 	const completed = Promise.withResolvers<void>();
 	let discoveries = 0;
 	const save = mockSourceChanges(t);
-	t.mock.method(childProcess, 'execFile', (_command: string, _args: readonly string[], _options: object, callback: (error: Error | null, stdout: string, stderr: string) => void) => {
-		const error = ++discoveries === 1 ? new Error('invalid Cargo manifest') : null;
-		setImmediate(() => callback(error, JSON.stringify(protocolDirectories), ''));
-		return new ChildProcess();
-	});
+	t.mock.method(
+		childProcess,
+		'execFile',
+		(
+			_command: string,
+			_args: readonly string[],
+			_options: object,
+			callback: (error: Error | null, stdout: string, stderr: string) => void,
+		) => {
+			const error = ++discoveries === 1 ? new Error('invalid Cargo manifest') : null;
+			setImmediate(() => callback(error, JSON.stringify(protocolDirectories), ''));
+			return new ChildProcess();
+		},
+	);
 	t.mock.method(console, 'error', () => failed.resolve());
 	t.mock.method(childProcess, 'spawn', (_command: string, args: readonly string[]) => {
 		commands.push(args[1]!);
@@ -586,7 +708,11 @@ test('failed protocol export is retried before a subsequent business build', asy
 	assert.deepEqual(commands, ['build/protocol/generate.py']);
 	save('app-server/src/server/operations.rs');
 	await completed.promise;
-	assert.deepEqual(commands, ['build/protocol/generate.py', 'build/protocol/generate.py', 'build/desktop/develop.py']);
+	assert.deepEqual(commands, [
+		'build/protocol/generate.py',
+		'build/protocol/generate.py',
+		'build/desktop/develop.py',
+	]);
 });
 
 test('manifest changes refresh the protocol graph before new dependency saves', async t => {
@@ -614,5 +740,11 @@ test('manifest changes refresh the protocol graph before new dependency saves', 
 	save('new-contract/src/lib.rs');
 	await completed.promise;
 	assert.equal(discovery.mock.callCount(), 2);
-	assert.deepEqual(commands, ['build/desktop/develop.py', 'build/protocol/generate.py', 'build/desktop/develop.py', 'build/protocol/generate.py', 'build/desktop/develop.py']);
+	assert.deepEqual(commands, [
+		'build/desktop/develop.py',
+		'build/protocol/generate.py',
+		'build/desktop/develop.py',
+		'build/protocol/generate.py',
+		'build/desktop/develop.py',
+	]);
 });

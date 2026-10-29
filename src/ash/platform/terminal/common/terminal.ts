@@ -1,13 +1,13 @@
-import type { IDisposable } from "../../../base/common/lifecycle.js";
+import type { IDisposable } from '../../../base/common/lifecycle.js';
 import type { Event } from '../../../base/common/event.js';
 import type { OperatingSystem } from '../../../base/common/platform.js';
 import type { ThemeIcon } from '../../../base/common/themables.js';
 import type { URI } from '../../../base/common/uri.js';
-import { createServiceIdentifier } from "../../instantiation/common/instantiation.js";
+import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 import type { ILogger } from '../../log/common/log.js';
 
 export const ITerminalLogService = createServiceIdentifier<ITerminalLogService>('terminalLogService');
-export interface ITerminalLogService extends ILogger { }
+export interface ITerminalLogService extends ILogger {}
 
 /** Main owns this window's lifetime pipe; the renderer receives only its opaque credential. */
 export const TERMINAL_WINDOW_LIFETIME_CHANNEL = 'ash:terminal:window-lifetime';
@@ -28,7 +28,8 @@ export const enum TerminalSettingId {
 	EnableMultiLinePasteWarning = 'terminal.integrated.enableMultiLinePasteWarning',
 }
 
-export type TerminalProcessConnectionState = "stopped" | "starting" | "initializing" | "ready" | "stopping" | "crashed" | "restarting";
+export type TerminalProcessConnectionState =
+	'stopped' | 'starting' | 'initializing' | 'ready' | 'stopping' | 'crashed' | 'restarting';
 
 export interface ITerminalProcessProfile {
 	readonly profileId: string;
@@ -38,27 +39,48 @@ export interface ITerminalProcessProfile {
 
 /** Arrays are literal argv; strings are pre-escaped Windows command-line tails. */
 export type TerminalArguments = string | readonly string[];
-export type TerminalIcon = ThemeIcon | URI | { light: URI; dark: URI; };
+export type TerminalIcon = ThemeIcon | URI | { light: URI; dark: URI };
 
 export const enum PosixShellType {
-	Bash = 'bash', Fish = 'fish', Sh = 'sh', Csh = 'csh', Ksh = 'ksh', Zsh = 'zsh',
+	Bash = 'bash',
+	Fish = 'fish',
+	Sh = 'sh',
+	Csh = 'csh',
+	Ksh = 'ksh',
+	Zsh = 'zsh',
 }
 
 export const enum WindowsShellType {
-	CommandPrompt = 'cmd', Wsl = 'wsl', GitBash = 'gitbash',
+	CommandPrompt = 'cmd',
+	Wsl = 'wsl',
+	GitBash = 'gitbash',
 }
 
 export const enum GeneralShellType {
-	Claude = 'claude', Codex = 'codex', CommandCode = 'commandcode', Copilot = 'copilot', Gemini = 'gemini',
-	PowerShell = 'pwsh', Python = 'python', Julia = 'julia', NuShell = 'nu', Node = 'node', Xonsh = 'xonsh',
+	Claude = 'claude',
+	Codex = 'codex',
+	CommandCode = 'commandcode',
+	Copilot = 'copilot',
+	Gemini = 'gemini',
+	PowerShell = 'pwsh',
+	Python = 'python',
+	Julia = 'julia',
+	NuShell = 'nu',
+	Node = 'node',
+	Xonsh = 'xonsh',
 }
 
 export type TerminalShellType = PosixShellType | WindowsShellType | GeneralShellType | undefined;
 
 export type TerminalProcessProfileSelection =
-	| { readonly type: "default"; }
-	| { readonly type: "profile"; readonly profileId: string; }
-	| { readonly type: 'custom'; readonly name: string; readonly path: readonly string[]; readonly args: TerminalArguments; };
+	| { readonly type: 'default' }
+	| { readonly type: 'profile'; readonly profileId: string }
+	| {
+			readonly type: 'custom';
+			readonly name: string;
+			readonly path: readonly string[];
+			readonly args: TerminalArguments;
+	  };
 
 export interface ITerminalResolvedProfile {
 	readonly profile: ITerminalProcessProfile;
@@ -89,7 +111,7 @@ export interface ITerminalProfile extends ITerminalProcessProfile {
 }
 
 export interface ICreateContributedTerminalProfileOptions {
-	readonly location?: TerminalLocation | { readonly viewColumn?: number; readonly preserveFocus?: boolean; };
+	readonly location?: TerminalLocation | { readonly viewColumn?: number; readonly preserveFocus?: boolean };
 	/** Carry background creation through the provider's recursive terminal creation. */
 	readonly preserveFocus?: boolean;
 	readonly cwd?: string | import('../../../base/common/uri.js').URI;
@@ -105,8 +127,8 @@ export interface IExtensionTerminalProfile {
 }
 
 export type TerminalProcessExecution =
-	| { readonly type: 'process'; readonly program: string; readonly args: TerminalArguments; }
-	| { readonly type: 'shell'; readonly commandLine: string; };
+	| { readonly type: 'process'; readonly program: string; readonly args: TerminalArguments }
+	| { readonly type: 'shell'; readonly commandLine: string };
 
 export interface ITerminalProcessCreateOptions {
 	/** Installed atomically before startup output is read. */
@@ -123,7 +145,7 @@ export interface ITerminalProcessCreateOptions {
 }
 
 /** Describes whether a terminal process survives replacement of its App Server connection. */
-export type TerminalProcessConnectionPersistence = "connectionOwned" | "reconnectable";
+export type TerminalProcessConnectionPersistence = 'connectionOwned' | 'reconnectable';
 
 /** Identity and directory confirmed by the backend when the shell was spawned. */
 export interface ITerminalProcessReady {
@@ -188,18 +210,48 @@ export interface ITerminalProcessReadOptions {
 
 /** Decoded by the execution owner and ordered with the screen's byte stream. */
 export type TerminalShellIntegrationEvent =
-	| { readonly type: 'outputGap'; }
-	| { readonly type: 'processReady'; readonly isWindowsPty: boolean; readonly shellType?: TerminalShellType; }
-	| { readonly type: 'promptStart' | 'commandStart' | 'continuationStart' | 'continuationEnd' | 'rightPromptStart' | 'rightPromptEnd' | 'commandStorageDisabled'; }
-	| { readonly type: 'commandExecuted'; readonly commandStorageDisabled?: boolean; readonly commandId: string; readonly command: string | undefined; readonly isTrusted: boolean; readonly cwd: string | undefined; readonly timestampMillis: number; }
-	| { readonly type: 'commandFinished'; readonly exitCode: number | undefined; readonly durationMillis: number | undefined; }
-	| { readonly type: 'commandLine' | 'cwd'; readonly value: string; readonly isTrusted: boolean; }
-	| { readonly type: 'hasRichCommandDetection'; readonly value: boolean; }
-	| { readonly type: 'promptType'; readonly value: string; }
-	| { readonly type: 'environment'; readonly values: import('../../../base/common/platform.js').IProcessEnvironment | undefined; readonly isTrusted: boolean; }
-	| { readonly type: 'environmentStart'; readonly clear: boolean; readonly isTrusted: boolean; }
-	| { readonly type: 'environmentEntry' | 'environmentDelete'; readonly key: string; readonly value: string | undefined; readonly isTrusted: boolean; }
-	| { readonly type: 'environmentEnd'; readonly isTrusted: boolean; };
+	| { readonly type: 'outputGap' }
+	| { readonly type: 'processReady'; readonly isWindowsPty: boolean; readonly shellType?: TerminalShellType }
+	| {
+			readonly type:
+				| 'promptStart'
+				| 'commandStart'
+				| 'continuationStart'
+				| 'continuationEnd'
+				| 'rightPromptStart'
+				| 'rightPromptEnd'
+				| 'commandStorageDisabled';
+	  }
+	| {
+			readonly type: 'commandExecuted';
+			readonly commandStorageDisabled?: boolean;
+			readonly commandId: string;
+			readonly command: string | undefined;
+			readonly isTrusted: boolean;
+			readonly cwd: string | undefined;
+			readonly timestampMillis: number;
+	  }
+	| {
+			readonly type: 'commandFinished';
+			readonly exitCode: number | undefined;
+			readonly durationMillis: number | undefined;
+	  }
+	| { readonly type: 'commandLine' | 'cwd'; readonly value: string; readonly isTrusted: boolean }
+	| { readonly type: 'hasRichCommandDetection'; readonly value: boolean }
+	| { readonly type: 'promptType'; readonly value: string }
+	| {
+			readonly type: 'environment';
+			readonly values: import('../../../base/common/platform.js').IProcessEnvironment | undefined;
+			readonly isTrusted: boolean;
+	  }
+	| { readonly type: 'environmentStart'; readonly clear: boolean; readonly isTrusted: boolean }
+	| {
+			readonly type: 'environmentEntry' | 'environmentDelete';
+			readonly key: string;
+			readonly value: string | undefined;
+			readonly isTrusted: boolean;
+	  }
+	| { readonly type: 'environmentEnd'; readonly isTrusted: boolean };
 
 export interface ITerminalProcessOutputChunk {
 	readonly sequence: number;
@@ -208,7 +260,7 @@ export interface ITerminalProcessOutputChunk {
 	readonly shellIntegration?: TerminalShellIntegrationEvent;
 }
 
-export type TerminalProcessCommandStatus = "running" | "completed" | "succeeded" | "failed" | "canceled";
+export type TerminalProcessCommandStatus = 'running' | 'completed' | 'succeeded' | 'failed' | 'canceled';
 
 export interface ITerminalProcessCommandStatusEvent {
 	readonly sequence: number;
@@ -242,7 +294,7 @@ export interface ITerminalProcessReadResult {
 	readonly commandEventGap: boolean;
 	readonly exited: boolean;
 	readonly exitCode: number | undefined;
-	readonly cwd?: { readonly value: string; readonly isTrusted?: boolean; readonly afterOutputSequence: number; };
+	readonly cwd?: { readonly value: string; readonly isTrusted?: boolean; readonly afterOutputSequence: number };
 	readonly shellIntegration?: ITerminalProcessShellIntegration;
 }
 
@@ -258,7 +310,6 @@ export interface ITerminalAutoReply {
 	readonly matchText: string;
 	readonly reply: string;
 }
-
 
 /** Permanent retirement of a process, rather than a temporary transport interruption. */
 export interface ITerminalProcessInvalidationEvent {
@@ -284,10 +335,16 @@ export interface ITerminalProcessService {
 	detach?(terminalId: string): Promise<ITerminalReconnectLease>;
 	/** Called only after every reload shutdown participant has completed successfully. */
 	prepareForReload?(): void;
-	attach?(lease: ITerminalReconnectLease, dimensions: { readonly rows: number; readonly cols: number; }, profile: ITerminalProcessProfile): Promise<ITerminalProcessCreation>;
+	attach?(
+		lease: ITerminalReconnectLease,
+		dimensions: { readonly rows: number; readonly cols: number },
+		profile: ITerminalProcessProfile,
+	): Promise<ITerminalProcessCreation>;
 	write(options: ITerminalProcessWriteOptions): Promise<void>;
-	sendSignal(options: ITerminalProcessCloseOptions & { readonly signal: TerminalProcessSignal; }): Promise<void>;
-	setAutoReplies(options: ITerminalProcessCloseOptions & { readonly rules: readonly ITerminalAutoReply[]; }): Promise<void>;
+	sendSignal(options: ITerminalProcessCloseOptions & { readonly signal: TerminalProcessSignal }): Promise<void>;
+	setAutoReplies(
+		options: ITerminalProcessCloseOptions & { readonly rules: readonly ITerminalAutoReply[] },
+	): Promise<void>;
 	resize(options: ITerminalProcessResizeOptions): Promise<void>;
 	read(options: ITerminalProcessReadOptions): Promise<ITerminalProcessReadResult>;
 	close(options: ITerminalProcessCloseOptions): Promise<void>;
@@ -295,7 +352,7 @@ export interface ITerminalProcessService {
 	onConnectionState(listener: (state: TerminalProcessConnectionState) => void): IDisposable;
 }
 
-export const ITerminalProcessService = createServiceIdentifier<ITerminalProcessService>("terminalProcessService");
+export const ITerminalProcessService = createServiceIdentifier<ITerminalProcessService>('terminalProcessService');
 
 export type WaitOnExitValue = boolean | string | ((exitCode: number) => string);
 
@@ -314,7 +371,7 @@ export interface IShellLaunchConfig {
 	color?: string;
 	readonly isFeatureTerminal?: boolean;
 	/** Displayed before process output; strings include a trailing newline. */
-	readonly initialText?: string | { text: string; trailingNewLine: boolean; };
+	readonly initialText?: string | { text: string; trailingNewLine: boolean };
 	/** Retain a completed terminal until a key press, optionally displaying a message. */
 	readonly waitOnExit?: WaitOnExitValue;
 	env?: Readonly<Record<string, string | null>>;
@@ -376,10 +433,20 @@ export interface ITerminalChildProcess extends IDisposable {
 }
 
 /** Workbench host for a terminal screen; moving it retains the process. */
-export enum TerminalLocation { Panel = 1, Editor = 2 }
+export enum TerminalLocation {
+	Panel = 1,
+	Editor = 2,
+}
 
-export interface IRawTerminalInstanceLayoutInfo<T> { terminal: T; relativeSize: number; }
-export interface IRawTerminalTabLayoutInfo<T> { isActive: boolean; activePersistentProcessId: number | undefined; terminals: IRawTerminalInstanceLayoutInfo<T>[]; }
+export interface IRawTerminalInstanceLayoutInfo<T> {
+	terminal: T;
+	relativeSize: number;
+}
+export interface IRawTerminalTabLayoutInfo<T> {
+	isActive: boolean;
+	activePersistentProcessId: number | undefined;
+	terminals: IRawTerminalInstanceLayoutInfo<T>[];
+}
 export type ITerminalTabLayoutInfoById = IRawTerminalTabLayoutInfo<number>;
 
 /** Parsed display text captured once; it cannot launch or write to a process. */
@@ -395,25 +462,34 @@ export interface ITerminalCommandBuffer {
 	readonly cursorY: number;
 	readonly cursorX: number;
 	readonly length: number;
-	getLine(line: number): {
-		readonly isWrapped: boolean;
-		readonly length: number;
-		translateToString(trimRight?: boolean, startColumn?: number, endColumn?: number): string;
-		getCell(column: number): { getChars(): string; getWidth(): number; isDim(): number; isItalic(): number; } | undefined;
-	} | undefined;
+	getLine(
+		line: number,
+	):
+		| {
+				readonly isWrapped: boolean;
+				readonly length: number;
+				translateToString(trimRight?: boolean, startColumn?: number, endColumn?: number): string;
+				getCell(
+					column: number,
+				): { getChars(): string; getWidth(): number; isDim(): number; isItalic(): number } | undefined;
+		  }
+		| undefined;
 }
 
 export interface ITerminalCommandScreen {
 	readonly cols: number;
 	readonly rows: number;
-	readonly buffer: { readonly active: ITerminalCommandBuffer; readonly normal: ITerminalCommandBuffer; };
+	readonly buffer: { readonly active: ITerminalCommandBuffer; readonly normal: ITerminalCommandBuffer };
 	registerMarker(offset?: number): import('./capabilities/capabilities.js').IMarkProperties['marker'];
-	onData(listener: (value: string) => void): { dispose(): void; };
-	onCursorMove(listener: () => void): { dispose(): void; };
-	onWriteParsed(listener: () => void): { dispose(): void; };
+	onData(listener: (value: string) => void): { dispose(): void };
+	onCursorMove(listener: () => void): { dispose(): void };
+	onWriteParsed(listener: () => void): { dispose(): void };
 }
 
-export interface ITerminalOutputMatch { regexMatch: RegExpMatchArray; outputLines: string[]; }
+export interface ITerminalOutputMatch {
+	regexMatch: RegExpMatchArray;
+	outputLines: string[];
+}
 export interface ITerminalOutputMatcher {
 	lineMatcher: string | RegExp;
 	anchor: 'top' | 'bottom';
@@ -422,7 +498,11 @@ export interface ITerminalOutputMatcher {
 	multipleMatches?: boolean;
 }
 
-export const enum ShellIntegrationStatus { Off = 0, FinalTerm = 1, VSCode = 2 }
+export const enum ShellIntegrationStatus {
+	Off = 0,
+	FinalTerm = 1,
+	VSCode = 2,
+}
 export interface IShellIntegration {
 	readonly capabilities: import('./capabilities/capabilities.js').ITerminalCapabilityStore;
 	readonly seenSequences: ReadonlySet<string>;

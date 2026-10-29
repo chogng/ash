@@ -1,10 +1,10 @@
-import { CancellationTokenSource } from "../../../base/common/cancellation.js";
-import { Emitter, type Event } from "../../../base/common/event.js";
-import { toError } from "../../../base/common/errors.js";
-import { Disposable, toDisposable } from "../../../base/common/lifecycle.js";
-import { type TextModel } from "../model/textModel.js";
-import { type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from "./documentDiffProvider.js";
-import { toLineDiff, type LineDiff } from "./lineDiff.js";
+import { CancellationTokenSource } from '../../../base/common/cancellation.js';
+import { Emitter, type Event } from '../../../base/common/event.js';
+import { toError } from '../../../base/common/errors.js';
+import { Disposable, toDisposable } from '../../../base/common/lifecycle.js';
+import { type TextModel } from '../model/textModel.js';
+import { type IDocumentDiffProvider, type IDocumentDiffProviderOptions } from './documentDiffProvider.js';
+import { toLineDiff, type LineDiff } from './lineDiff.js';
 
 export interface DiffModelOptions {
 	readonly original: TextModel;
@@ -14,13 +14,13 @@ export interface DiffModelOptions {
 }
 
 export interface DiffModelLoadingState {
-	readonly kind: "loading";
+	readonly kind: 'loading';
 	readonly originalVersion: number;
 	readonly modifiedVersion: number;
 }
 
 export interface DiffModelReadyState {
-	readonly kind: "ready";
+	readonly kind: 'ready';
 	readonly originalVersion: number;
 	readonly modifiedVersion: number;
 	readonly quitEarly: boolean;
@@ -28,7 +28,7 @@ export interface DiffModelReadyState {
 }
 
 export interface DiffModelErrorState {
-	readonly kind: "error";
+	readonly kind: 'error';
 	readonly originalVersion: number;
 	readonly modifiedVersion: number;
 	readonly error: Error;
@@ -58,7 +58,7 @@ export class DiffModel extends Disposable {
 		validateOptions(options);
 		this.diffOptions = options.diffOptions;
 		this._state = Object.freeze({
-			kind: "loading",
+			kind: 'loading',
 			originalVersion: options.original.version,
 			modifiedVersion: options.modified.version,
 		});
@@ -67,10 +67,12 @@ export class DiffModel extends Disposable {
 		this._register(options.original.onWillDispose(() => this.dispose()));
 		this._register(options.modified.onWillDispose(() => this.dispose()));
 		this._register(options.diffProvider.onDidChange(() => this.refresh()));
-		this._register(toDisposable(() => {
-			this.activeRequest?.dispose(true);
-			this.activeRequest = undefined;
-		}));
+		this._register(
+			toDisposable(() => {
+				this.activeRequest?.dispose(true);
+				this.activeRequest = undefined;
+			}),
+		);
 		this.refresh();
 	}
 
@@ -87,14 +89,17 @@ export class DiffModel extends Disposable {
 	}
 
 	get diff(): LineDiff | undefined {
-		return this._state.kind === "ready" ? this._state.diff : undefined;
+		return this._state.kind === 'ready' ? this._state.diff : undefined;
 	}
 
 	updateOptions(options: IDocumentDiffProviderOptions): void {
-		if (this.diffOptions.ignoreTrimWhitespace === options.ignoreTrimWhitespace
-			&& this.diffOptions.maxComputationTimeMs === options.maxComputationTimeMs
-			&& this.diffOptions.computeMoves === options.computeMoves
-			&& this.diffOptions.extendToSubwords === options.extendToSubwords) return;
+		if (
+			this.diffOptions.ignoreTrimWhitespace === options.ignoreTrimWhitespace &&
+			this.diffOptions.maxComputationTimeMs === options.maxComputationTimeMs &&
+			this.diffOptions.computeMoves === options.computeMoves &&
+			this.diffOptions.extendToSubwords === options.extendToSubwords
+		)
+			return;
 		this.diffOptions = options;
 		this.refresh();
 	}
@@ -108,15 +113,16 @@ export class DiffModel extends Disposable {
 		const source = new CancellationTokenSource();
 		this.activeRequest = source;
 		const generation = ++this.requestGeneration;
-		this.setState(Object.freeze({
-			kind: "loading",
-			originalVersion,
-			modifiedVersion,
-		}));
+		this.setState(Object.freeze({ kind: 'loading', originalVersion, modifiedVersion }));
 		void this.compute(generation, source, originalVersion, modifiedVersion);
 	}
 
-	private async compute(generation: number, source: CancellationTokenSource, originalVersion: number, modifiedVersion: number): Promise<void> {
+	private async compute(
+		generation: number,
+		source: CancellationTokenSource,
+		originalVersion: number,
+		modifiedVersion: number,
+	): Promise<void> {
 		try {
 			const result = await this.options.diffProvider.computeDiff(
 				this.original,
@@ -128,32 +134,34 @@ export class DiffModel extends Disposable {
 			const diff = toLineDiff(result, this.original.lineCount, this.modified.lineCount);
 			source.dispose();
 			this.activeRequest = undefined;
-			this.setState(Object.freeze({
-				kind: "ready",
-				originalVersion,
-				modifiedVersion,
-				quitEarly: result.quitEarly,
-				diff,
-			}));
+			this.setState(
+				Object.freeze({ kind: 'ready', originalVersion, modifiedVersion, quitEarly: result.quitEarly, diff }),
+			);
 		} catch (error) {
-			if (source.token.isCancellationRequested || !this.isCurrentRequest(generation, source, originalVersion, modifiedVersion)) return;
+			if (
+				source.token.isCancellationRequested ||
+				!this.isCurrentRequest(generation, source, originalVersion, modifiedVersion)
+			)
+				return;
 			source.dispose();
 			this.activeRequest = undefined;
-			this.setState(Object.freeze({
-				kind: "error",
-				originalVersion,
-				modifiedVersion,
-				error: toError(error),
-			}));
+			this.setState(Object.freeze({ kind: 'error', originalVersion, modifiedVersion, error: toError(error) }));
 		}
 	}
 
-	private isCurrentRequest(generation: number, source: CancellationTokenSource, originalVersion: number, modifiedVersion: number): boolean {
-		return !this.isDisposed &&
+	private isCurrentRequest(
+		generation: number,
+		source: CancellationTokenSource,
+		originalVersion: number,
+		modifiedVersion: number,
+	): boolean {
+		return (
+			!this.isDisposed &&
 			this.requestGeneration === generation &&
 			this.activeRequest === source &&
 			this.original.getVersionId() === originalVersion &&
-			this.modified.getVersionId() === modifiedVersion;
+			this.modified.getVersionId() === modifiedVersion
+		);
 	}
 
 	private setState(state: DiffModelState): void {
@@ -163,10 +171,10 @@ export class DiffModel extends Disposable {
 }
 
 function validateOptions(options: DiffModelOptions): void {
-	if (!options || typeof options !== "object" || !options.original || !options.modified) {
-		throw new TypeError("Diff model requires original and modified text models");
+	if (!options || typeof options !== 'object' || !options.original || !options.modified) {
+		throw new TypeError('Diff model requires original and modified text models');
 	}
-	if (!options.diffProvider || typeof options.diffProvider.computeDiff !== "function") {
-		throw new TypeError("Diff model requires a document diff provider");
+	if (!options.diffProvider || typeof options.diffProvider.computeDiff !== 'function') {
+		throw new TypeError('Diff model requires a document diff provider');
 	}
 }

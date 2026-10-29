@@ -1,4 +1,10 @@
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId, IAccessibleViewService } from '../../../platform/accessibility/browser/accessibleView.js';
+import {
+	AccessibleContentProvider,
+	AccessibleViewProviderId,
+	AccessibleViewType,
+	AccessibilityVerbositySettingId,
+	IAccessibleViewService,
+} from '../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
 import type { IAuxiliaryWindow } from '../../../workbench/services/auxiliaryWindow/browser/auxiliaryWindowService.js';
@@ -23,7 +29,7 @@ export interface ISessionsConversationPane extends IDisposable {
 	readonly element: HTMLElement;
 	readonly sessionId: SessionId | undefined;
 	readonly model: {
-		readonly inputState: { readonly mode: ChatMode; };
+		readonly inputState: { readonly mode: ChatMode };
 		selectThread(active: IActiveSessionThread): Promise<void>;
 		selectUntitledSession(session: IUntitledChatSession): void;
 	};
@@ -31,7 +37,9 @@ export interface ISessionsConversationPane extends IDisposable {
 	startVoiceConversation(): Promise<void>;
 	addContext(attachment: ChatContextAttachment): void;
 	appendToDraft(text: string): void;
-	captureDraft(): Promise<{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void; } | undefined>;
+	captureDraft(): Promise<
+		{ readonly draft: NonNullable<IOpenAgentsWindowOptions['draft']>; clear(): void } | undefined
+	>;
 	restoreDraft(draft: NonNullable<IOpenAgentsWindowOptions['draft']>): void;
 	setVisible(visible: boolean): void;
 }
@@ -39,7 +47,12 @@ export interface ISessionsConversationPane extends IDisposable {
 interface ISessionViewOptions {
 	readonly selection: SessionsViewSelection;
 	readonly kind: SessionsConversationKind;
-	readonly createPane: (kind: SessionsConversationKind, container: HTMLElement, panelId: string, selection: SessionsViewSelection) => ISessionsConversationPane;
+	readonly createPane: (
+		kind: SessionsConversationKind,
+		container: HTMLElement,
+		panelId: string,
+		selection: SessionsViewSelection,
+	) => ISessionsConversationPane;
 	readonly activateSelection: (selection: SessionsViewSelection) => void;
 }
 
@@ -58,7 +71,10 @@ export class SessionView extends Disposable implements IView {
 	private visible = true;
 	private selectionRevision = 0;
 
-	constructor(container: HTMLElement, private readonly options: ISessionViewOptions) {
+	constructor(
+		container: HTMLElement,
+		private readonly options: ISessionViewOptions,
+	) {
 		super();
 		this.selection = options.selection;
 		this.kind = options.kind;
@@ -73,13 +89,21 @@ export class SessionView extends Disposable implements IView {
 		this._register(toDisposable(() => this.element.remove()));
 	}
 
-	get currentSelection(): SessionsViewSelection { return this.selection; }
+	get currentSelection(): SessionsViewSelection {
+		return this.selection;
+	}
 
-	get activeChat(): ISessionsConversationPane { return this.panes.get(this.kind)!; }
+	get activeChat(): ISessionsConversationPane {
+		return this.panes.get(this.kind)!;
+	}
 
 	openSession(selection: SessionsViewSelection): void {
-		const previousThread = this.selection.kind === 'session' ? this.selection.active.threadId : this.selection.session.untitledSessionId;
-		const nextThread = selection.kind === 'session' ? selection.active.threadId : selection.session.untitledSessionId;
+		const previousThread =
+			this.selection.kind === 'session'
+				? this.selection.active.threadId
+				: this.selection.session.untitledSessionId;
+		const nextThread =
+			selection.kind === 'session' ? selection.active.threadId : selection.session.untitledSessionId;
 		if (previousThread !== nextThread) this.selectionRevision++;
 		this.selection = selection;
 		for (const pane of this.panes.values()) this.updatePane(pane);
@@ -108,8 +132,10 @@ export class SessionView extends Disposable implements IView {
 		if (focused && this.visible) next.focus();
 	}
 
-	focus(): void { this.activeChat.focus(); }
-	layout(_bounds: Parameters<IView['layout']>[0]): void { }
+	focus(): void {
+		this.activeChat.focus();
+	}
+	layout(_bounds: Parameters<IView['layout']>[0]): void {}
 
 	setVisible(visible: boolean): void {
 		this.visible = visible;
@@ -119,7 +145,14 @@ export class SessionView extends Disposable implements IView {
 	private getOrCreatePane(kind: SessionsConversationKind): ISessionsConversationPane {
 		let pane = this.panes.get(kind);
 		if (!pane) {
-			pane = this._register(this.options.createPane(kind, this.element, `ash-sessions-conversation-pane-${++nextChatPaneId}`, this.selection));
+			pane = this._register(
+				this.options.createPane(
+					kind,
+					this.element,
+					`ash-sessions-conversation-pane-${++nextChatPaneId}`,
+					this.selection,
+				),
+			);
 			pane.element.setAttribute('role', 'region');
 			pane.setVisible(false);
 			pane.element.remove();
@@ -137,12 +170,17 @@ export class SessionView extends Disposable implements IView {
 
 	private updatePane(pane: ISessionsConversationPane): void {
 		if (this.selection.kind === 'session') {
-			void pane.model.selectThread(this.selection.active).catch(error => console.error('Failed to select Sessions Chat thread', error));
+			void pane.model
+				.selectThread(this.selection.active)
+				.catch(error => console.error('Failed to select Sessions Chat thread', error));
 		} else {
 			pane.model.selectUntitledSession(this.selection.session);
 		}
 		const session = this.selection.kind === 'session' ? this.selection.active.session : this.selection.session;
-		pane.element.setAttribute('aria-label', session.title.trim() || localize('sessions.conversation.editorName', 'Session'));
+		pane.element.setAttribute(
+			'aria-label',
+			session.title.trim() || localize('sessions.conversation.editorName', 'Session'),
+		);
 	}
 }
 
@@ -167,37 +205,77 @@ export class SessionAuxiliaryWindow extends Disposable {
 		this.header.append(this.title, toolbar);
 		window.container.append(this.header);
 		this._register(toDisposable(() => this.header.remove()));
-		this._register(addDisposableListener<KeyboardEvent>(window.window, 'keydown', event => {
-			if (!isHTMLElement(event.target) || !window.container.contains(event.target)) return;
-			if (event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && (event.key === 'F1' || event.key === 'F2')) {
-				event.preventDefault(); event.stopPropagation();
-				accessibleViews.show(event.key === 'F1' ? AccessibleViewType.Help : AccessibleViewType.View, event.target);
-			}
-		}, { capture: true }));
-		this._register(AccessibleViewRegistry.register({
-			name: `sessions-window-${window.id}`, type: AccessibleViewType.Help, priority: 95,
-			getProvider: () => {
-				if (!window.window.document.hasFocus()) return undefined;
-				const focused = window.window.document.activeElement as HTMLElement | null;
-				if (!focused || !this.header.contains(focused)) return undefined;
-				return new AccessibleContentProvider(
-					AccessibleViewProviderId.SessionsChat, { type: AccessibleViewType.Help },
-					() => localize('sessions.window.help', 'A chat opened in a separate Agent window keeps its conversation and draft. Use Tab to reach Return to main window and Keep window on top in the title bar. Closing the window returns the chat to the IDE or Agent window that opened it.'),
-					() => focused.focus(), AccessibilityVerbositySettingId.Chat,
-				);
-			},
-		}));
-		this._register(new Button(toolbar, {
-			...defaultButtonStyles, presentation: 'quiet', icon: Lxicon.screenNormal, iconOnly: true,
-			label: localize('sessions.window.return', 'Return to main window'), onClick: () => window.window.close(),
-		}));
+		this._register(
+			addDisposableListener<KeyboardEvent>(
+				window.window,
+				'keydown',
+				event => {
+					if (!isHTMLElement(event.target) || !window.container.contains(event.target)) return;
+					if (
+						event.altKey &&
+						!event.ctrlKey &&
+						!event.metaKey &&
+						!event.shiftKey &&
+						(event.key === 'F1' || event.key === 'F2')
+					) {
+						event.preventDefault();
+						event.stopPropagation();
+						accessibleViews.show(
+							event.key === 'F1' ? AccessibleViewType.Help : AccessibleViewType.View,
+							event.target,
+						);
+					}
+				},
+				{ capture: true },
+			),
+		);
+		this._register(
+			AccessibleViewRegistry.register({
+				name: `sessions-window-${window.id}`,
+				type: AccessibleViewType.Help,
+				priority: 95,
+				getProvider: () => {
+					if (!window.window.document.hasFocus()) return undefined;
+					const focused = window.window.document.activeElement as HTMLElement | null;
+					if (!focused || !this.header.contains(focused)) return undefined;
+					return new AccessibleContentProvider(
+						AccessibleViewProviderId.SessionsChat,
+						{ type: AccessibleViewType.Help },
+						() =>
+							localize(
+								'sessions.window.help',
+								'A chat opened in a separate Agent window keeps its conversation and draft. Use Tab to reach Return to main window and Keep window on top in the title bar. Closing the window returns the chat to the IDE or Agent window that opened it.',
+							),
+						() => focused.focus(),
+						AccessibilityVerbositySettingId.Chat,
+					);
+				},
+			}),
+		);
+		this._register(
+			new Button(toolbar, {
+				...defaultButtonStyles,
+				presentation: 'quiet',
+				icon: Lxicon.screenNormal,
+				iconOnly: true,
+				label: localize('sessions.window.return', 'Return to main window'),
+				onClick: () => window.window.close(),
+			}),
+		);
 		const pin = window.alwaysOnTop;
 		if (pin) {
-			const button = this._register(new Button(toolbar, {
-				...defaultButtonStyles, presentation: 'quiet', iconOnly: true, icon: Lxicon.pinned,
-				label: localize('sessions.window.pin', 'Keep window on top'),
-				onClick: () => { void pin.set(!pin.value).catch(error => notifications.error(String(error))); },
-			}));
+			const button = this._register(
+				new Button(toolbar, {
+					...defaultButtonStyles,
+					presentation: 'quiet',
+					iconOnly: true,
+					icon: Lxicon.pinned,
+					label: localize('sessions.window.pin', 'Keep window on top'),
+					onClick: () => {
+						void pin.set(!pin.value).catch(error => notifications.error(String(error)));
+					},
+				}),
+			);
 			const update = (value: boolean) => button.domNode.setAttribute('aria-pressed', String(value));
 			update(pin.value);
 			this._register(pin.onDidChange(update));

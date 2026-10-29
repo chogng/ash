@@ -11,22 +11,28 @@ suite('ListView streamed row insertion', () => {
 				getId: item => item,
 				renderItem: item => Object.assign(dom.window.document.createElement('span'), { textContent: item }),
 			});
-			const observer = new dom.window.MutationObserver(() => { });
+			const observer = new dom.window.MutationObserver(() => {});
 			observer.observe(list.element, { childList: true, characterData: true, subtree: true });
 			list.items = Array.from({ length: 2_000 }, (_, index) => `line-${index}`);
 			const mutations = observer.takeRecords();
 			observer.disconnect();
 			assert.equal(mutations.length, 1);
 			assert.equal(mutations[0]!.addedNodes.length, 2_000);
-			assert.deepEqual([...list.element.children].map(row => row.textContent), list.items);
-		} finally { dom.window.close(); }
+			assert.deepEqual(
+				[...list.element.children].map(row => row.textContent),
+				list.items,
+			);
+		} finally {
+			dom.window.close();
+		}
 	});
 
 	test('appends a batch around retained controls without moving their DOM or focus', () => {
 		const dom = new JSDOM('<!doctype html><body></body>');
 		try {
 			using list = new ListView<string>(dom.window.document.body, {
-				getId: item => item, reuseRows: true,
+				getId: item => item,
+				reuseRows: true,
 				renderItem: item => Object.assign(dom.window.document.createElement('button'), { textContent: item }),
 			});
 			list.items = ['before', 'source', 'after'];
@@ -41,8 +47,13 @@ suite('ListView streamed row insertion', () => {
 			assert.equal(list.element.children[3], source);
 			assert.equal(list.element.children[4], after);
 			assert.equal(dom.window.document.activeElement, button);
-			assert.deepEqual([...list.element.children].map(row => row.textContent), ['before', 'new-1', 'new-2', 'source', 'after', 'tail-1', 'tail-2']);
-		} finally { dom.window.close(); }
+			assert.deepEqual(
+				[...list.element.children].map(row => row.textContent),
+				['before', 'new-1', 'new-2', 'source', 'after', 'tail-1', 'tail-2'],
+			);
+		} finally {
+			dom.window.close();
+		}
 	});
 
 	test('reorders and prepends rows while its container is detached from the document', () => {
@@ -50,7 +61,8 @@ suite('ListView streamed row insertion', () => {
 		try {
 			const container = dom.window.document.createElement('div');
 			using list = new ListView<string>(container, {
-				getId: item => item, reuseRows: true,
+				getId: item => item,
+				reuseRows: true,
 				renderItem: item => Object.assign(dom.window.document.createElement('span'), { textContent: item }),
 			});
 			list.items = ['a', 'b'];
@@ -60,10 +72,14 @@ suite('ListView streamed row insertion', () => {
 			list.items = ['b', 'a'];
 			assert.deepEqual([...list.element.children], [b, a]);
 			list.splice(0, 0, ['new-1', 'new-2']);
-			assert.deepEqual([...list.element.children].map(row => row.textContent), ['new-1', 'new-2', 'b', 'a']);
+			assert.deepEqual(
+				[...list.element.children].map(row => row.textContent),
+				['new-1', 'new-2', 'b', 'a'],
+			);
 			assert.equal(list.element.children[2], b);
 			assert.equal(list.element.children[3], a);
-		} finally { dom.window.close(); }
+		} finally {
+			dom.window.close();
+		}
 	});
-
 });

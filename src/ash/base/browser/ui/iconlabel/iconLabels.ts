@@ -50,11 +50,7 @@ export function renderLabelWithIcons(
 }
 
 /** Appends a semantic icon to a label container and applies a modifier class. */
-export function appendLabelIcon(
-	container: HTMLElement,
-	icon: Icon,
-	modifier?: string,
-): HTMLElement {
+export function appendLabelIcon(container: HTMLElement, icon: Icon, modifier?: string): HTMLElement {
 	const iconElement = h(container.ownerDocument, 'span');
 	iconElement.className = 'ash-icon-label-inline-icon';
 	iconElement.setAttribute('aria-hidden', 'true');

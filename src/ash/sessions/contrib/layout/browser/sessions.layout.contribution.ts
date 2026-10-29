@@ -11,19 +11,38 @@ import { SessionsLayoutService, documentEntry } from './sessionsLayoutService.js
 class SessionsLayoutContribution extends Disposable {
 	constructor(@ISessionsLayoutService layout: ISessionsLayoutService) {
 		super();
-		this._register(CommandsRegistry.register('sessions.open.code', (_accessor, source) => layout.openEntry(documentEntry, undefined, source === 'restore' ? { source } : undefined)));
+		this._register(
+			CommandsRegistry.register('sessions.open.code', (_accessor, source) =>
+				layout.openEntry(documentEntry, undefined, source === 'restore' ? { source } : undefined),
+			),
+		);
 		for (const [id, sidebar, focus] of [
 			['chat', SESSIONS_NAVIGATION_CONTAINER_ID, 'conversation'],
 			['teams', TEAMS_NAVIGATION_CONTAINER_ID, 'sidebar'],
 			['collaboration', COLLAB_CONTAINER_ID, 'sidebar'],
 		] as const) {
-			this._register(CommandsRegistry.register('sessions.open.' + id, (_accessor, source) => layout.openEntry({
-				id, workspaceMode: id === 'chat' ? 'chat' : 'code', sidebarContainerId: sidebar, content: 'conversation', focus,
-				activityContext: 'sessions.activity.' + id + 'Selected', restoreCommand: 'sessions.open.' + id,
-			}, undefined, source === 'restore' ? { source } : undefined)));
+			this._register(
+				CommandsRegistry.register('sessions.open.' + id, (_accessor, source) =>
+					layout.openEntry(
+						{
+							id,
+							workspaceMode: id === 'chat' ? 'chat' : 'code',
+							sidebarContainerId: sidebar,
+							content: 'conversation',
+							focus,
+							activityContext: 'sessions.activity.' + id + 'Selected',
+							restoreCommand: 'sessions.open.' + id,
+						},
+						undefined,
+						source === 'restore' ? { source } : undefined,
+					),
+				),
+			);
 		}
 	}
 }
 
 registerSingleton(ISessionsLayoutService, SessionsLayoutService, InstantiationType.Delayed);
-registerWorkbenchContribution('workbench.contrib.sessionsLayout', WorkbenchPhase.BlockRestore, accessor => accessor.get(IInstantiationService).createInstance(SessionsLayoutContribution));
+registerWorkbenchContribution('workbench.contrib.sessionsLayout', WorkbenchPhase.BlockRestore, accessor =>
+	accessor.get(IInstantiationService).createInstance(SessionsLayoutContribution),
+);

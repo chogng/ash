@@ -1,15 +1,15 @@
-import { chromium, type Browser } from "@playwright/test";
-import type { AppServerTestMode } from "./testTarget.js";
-import { PlaywrightDriver, WorkbenchDiagnostics } from "./playwrightDriver.js";
+import { chromium, type Browser } from '@playwright/test';
+import type { AppServerTestMode } from './testTarget.js';
+import { PlaywrightDriver, WorkbenchDiagnostics } from './playwrightDriver.js';
 
 export interface BrowserLaunchOptions {
 	readonly appServerMode: AppServerTestMode;
 	readonly baseURL: string;
-	readonly webSession?: { readonly endpoint: string; readonly token: string; };
+	readonly webSession?: { readonly endpoint: string; readonly token: string };
 	readonly headless?: boolean;
 	readonly recordVideo?: {
 		readonly directory: string;
-		readonly size: { readonly width: number; readonly height: number; };
+		readonly size: { readonly width: number; readonly height: number };
 	};
 }
 
@@ -30,7 +30,9 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 	try {
 		const context = await browser.newContext({
 			baseURL: options.baseURL,
-			recordVideo: options.recordVideo ? { dir: options.recordVideo.directory, size: options.recordVideo.size } : undefined,
+			recordVideo: options.recordVideo
+				? { dir: options.recordVideo.directory, size: options.recordVideo.size }
+				: undefined,
 			viewport: options.recordVideo?.size,
 		});
 		diagnostics = new WorkbenchDiagnostics(context);
@@ -38,18 +40,21 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 		const page = await context.newPage();
 		if (webSession) {
 			const { endpoint, token } = webSession;
-			await context.addInitScript(({ endpoint, token, origin }) => {
-				if (location.origin !== origin) return;
-				if (!sessionStorage.getItem('ash.appServer.endpoint')) {
-					sessionStorage.setItem('ash.appServer.endpoint', endpoint);
-					sessionStorage.setItem(`ash.appServer.session:${new URL(endpoint).origin}`, token);
-				}
-			}, { endpoint, token, origin: new URL(options.baseURL).origin });
+			await context.addInitScript(
+				({ endpoint, token, origin }) => {
+					if (location.origin !== origin) return;
+					if (!sessionStorage.getItem('ash.appServer.endpoint')) {
+						sessionStorage.setItem('ash.appServer.endpoint', endpoint);
+						sessionStorage.setItem(`ash.appServer.session:${new URL(endpoint).origin}`, token);
+					}
+				},
+				{ endpoint, token, origin: new URL(options.baseURL).origin },
+			);
 		}
-		await page.goto(options.baseURL, { waitUntil: "domcontentloaded" });
-		if (options.appServerMode === "required") {
+		await page.goto(options.baseURL, { waitUntil: 'domcontentloaded' });
+		if (options.appServerMode === 'required') {
 			await page.waitForFunction(
-				() => (globalThis as { ashWebWorkbenchHost?: unknown; }).ashWebWorkbenchHost !== undefined,
+				() => (globalThis as { ashWebWorkbenchHost?: unknown }).ashWebWorkbenchHost !== undefined,
 				undefined,
 				{ timeout: 30_000 },
 			);
@@ -59,7 +64,7 @@ export async function launchBrowser(options: BrowserLaunchOptions): Promise<Brow
 		await driver.workbench.waitForReady();
 		return { application: browser, driver, videoStartedAt };
 	} catch (error) {
-		const startupErrors = [...diagnostics?.pageErrors ?? [], ...diagnostics?.consoleErrors ?? []];
+		const startupErrors = [...(diagnostics?.pageErrors ?? []), ...(diagnostics?.consoleErrors ?? [])];
 		await browser.close();
 		if (startupErrors.length > 0) {
 			throw new Error(`Browser Workbench startup failed:\n${startupErrors.join('\n')}`, { cause: error });

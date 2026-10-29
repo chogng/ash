@@ -14,7 +14,10 @@ export async function inspectImage(bytes: Uint8Array): Promise<ImageMetadata> {
 		mediaType = 'image/png';
 	} else if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) {
 		mediaType = 'image/jpeg';
-	} else if (new TextDecoder().decode(bytes.subarray(0, 4)) === 'RIFF' && new TextDecoder().decode(bytes.subarray(8, 12)) === 'WEBP') {
+	} else if (
+		new TextDecoder().decode(bytes.subarray(0, 4)) === 'RIFF' &&
+		new TextDecoder().decode(bytes.subarray(8, 12)) === 'WEBP'
+	) {
 		mediaType = 'image/webp';
 	} else {
 		throw new TypeError(localize('media.image.unsupported', 'Choose a PNG, JPEG or WebP image.'));

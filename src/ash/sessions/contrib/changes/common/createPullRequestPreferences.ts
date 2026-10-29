@@ -20,13 +20,16 @@ export class CreatePullRequestPreferences {
 	constructor(
 		@IStorageService private readonly storage: IStorageService,
 		@ILogService private readonly log: ILogService,
-	) { }
+	) {}
 
 	public read(): ICreatePullRequestPreferences {
 		const raw = this.storage.get(CreatePullRequestPreferences.key, StorageScope.PROFILE);
-		if (!raw) { return {}; }
-		try { return this.validate(JSON.parse(raw)); }
-		catch {
+		if (!raw) {
+			return {};
+		}
+		try {
+			return this.validate(JSON.parse(raw));
+		} catch {
 			// Stored data may contain private text; report the operation without the input.
 			this.log.warn('Changes', 'Could not read pull request form preferences.');
 			return {};
@@ -35,17 +38,31 @@ export class CreatePullRequestPreferences {
 
 	public update(change: ICreatePullRequestPreferences): void {
 		const value = this.validate({ ...this.read(), ...change });
-		try { this.storage.store(CreatePullRequestPreferences.key, JSON.stringify(value), StorageScope.PROFILE, StorageTarget.MACHINE); }
-		catch { this.log.warn('Changes', 'Could not save pull request form preferences.'); }
+		try {
+			this.storage.store(
+				CreatePullRequestPreferences.key,
+				JSON.stringify(value),
+				StorageScope.PROFILE,
+				StorageTarget.MACHINE,
+			);
+		} catch {
+			this.log.warn('Changes', 'Could not save pull request form preferences.');
+		}
 	}
 
 	private validate(value: unknown): ICreatePullRequestPreferences {
-		if (!isRecord(value)) { return {}; }
+		if (!isRecord(value)) {
+			return {};
+		}
 		return {
 			...(typeof value.draft === 'boolean' ? { draft: value.draft } : {}),
 			...(value.mergeMode === 'manual' || value.mergeMode === 'auto' ? { mergeMode: value.mergeMode } : {}),
-			...(value.mergeMethod === 'MERGE' || value.mergeMethod === 'SQUASH' || value.mergeMethod === 'REBASE' ? { mergeMethod: value.mergeMethod } : {}),
-			...(value.primaryAction === 'create' || value.primaryAction === 'sendToChat' ? { primaryAction: value.primaryAction } : {}),
+			...(value.mergeMethod === 'MERGE' || value.mergeMethod === 'SQUASH' || value.mergeMethod === 'REBASE'
+				? { mergeMethod: value.mergeMethod }
+				: {}),
+			...(value.primaryAction === 'create' || value.primaryAction === 'sendToChat'
+				? { primaryAction: value.primaryAction }
+				: {}),
 		};
 	}
 }

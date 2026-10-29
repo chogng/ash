@@ -1,7 +1,16 @@
-import { APP_SERVER_METHODS, type AppServerMethod, type MethodParams, type MethodResult } from "../../../../../.build/protocol/typescript/index.js";
-import type { AppServerProtocolClient } from "./appServerProtocolClient.js";
+import {
+	APP_SERVER_METHODS,
+	type AppServerMethod,
+	type MethodParams,
+	type MethodResult,
+} from '../../../../../.build/protocol/typescript/index.js';
+import type { AppServerProtocolClient } from './appServerProtocolClient.js';
 
-export function appServerRequest<M extends AppServerMethod>(connection: AppServerProtocolClient, method: M, params: MethodParams<M>): Promise<MethodResult<M>> {
+export function appServerRequest<M extends AppServerMethod>(
+	connection: AppServerProtocolClient,
+	method: M,
+	params: MethodParams<M>,
+): Promise<MethodResult<M>> {
 	return connection.request(APP_SERVER_METHODS[method], params);
 }
 

@@ -10,41 +10,84 @@ export class OAuthCallbackHost extends Disposable {
 	private opening = 0;
 	constructor() {
 		super();
-		this._register(toDisposable(() => { for (const callback of this.callbacks.values()) { callback.close(); } this.callbacks.clear(); }));
+		this._register(
+			toDisposable(() => {
+				for (const callback of this.callbacks.values()) {
+					callback.close();
+				}
+				this.callbacks.clear();
+			}),
+		);
 	}
 	public routes(): readonly IpcRoute<unknown, unknown>[] {
 		const validate = (value: unknown): string => {
-			if (!isRecord(value) || typeof value.id !== 'string') { throw new Error('Invalid callback identity'); }
+			if (!isRecord(value) || typeof value.id !== 'string') {
+				throw new Error('Invalid callback identity');
+			}
 			return value.id;
 		};
-		return [{
-			channel: 'ash:oauth-callback:listen', validate: value => {
-				if (value === undefined) { return undefined; }
-				if (!isRecord(value) || typeof value.path !== 'string' || !/^\/mcp-oauth\/[a-f0-9]{64}\/callback$/.test(value.path)) { throw new Error('Invalid callback path'); }
-				return value.path;
-			}, invoke: async path => {
-				this.assertNotDisposed();
-				if (this.callbacks.size + this.opening >= 8) { throw new Error('Too many OAuth callbacks'); }
-				this.opening++;
-				try {
-					const id = randomUUID();
-					const callback = await LoopbackOAuthCallback.listen(typeof path === 'string' ? path : `/connector-oauth/${id}`);
-					if (this.isDisposed) { callback.close(); throw new Error('Window closed'); }
-					this.callbacks.set(id, callback);
-					return { id, redirectUri: callback.redirectUri };
-				} finally { this.opening--; }
-			}
-		}, {
-			channel: 'ash:oauth-callback:wait', validate, invoke: async value => {
-				const callback = this.callbacks.get(value as string);
-				if (!callback) { throw new Error('OAuth callback is unavailable'); }
-				try { return await callback.wait(); } finally { callback.close(); this.callbacks.delete(value as string); }
-			}
-		}, {
-			channel: 'ash:oauth-callback:close', validate, invoke: value => {
-				this.callbacks.get(value as string)?.close();
-				this.callbacks.delete(value as string);
-			}
-		}];
+		return [
+			{
+				channel: 'ash:oauth-callback:listen',
+				validate: value => {
+					if (value === undefined) {
+						return undefined;
+					}
+					if (
+						!isRecord(value) ||
+						typeof value.path !== 'string' ||
+						!/^\/mcp-oauth\/[a-f0-9]{64}\/callback$/.test(value.path)
+					) {
+						throw new Error('Invalid callback path');
+					}
+					return value.path;
+				},
+				invoke: async path => {
+					this.assertNotDisposed();
+					if (this.callbacks.size + this.opening >= 8) {
+						throw new Error('Too many OAuth callbacks');
+					}
+					this.opening++;
+					try {
+						const id = randomUUID();
+						const callback = await LoopbackOAuthCallback.listen(
+							typeof path === 'string' ? path : `/connector-oauth/${id}`,
+						);
+						if (this.isDisposed) {
+							callback.close();
+							throw new Error('Window closed');
+						}
+						this.callbacks.set(id, callback);
+						return { id, redirectUri: callback.redirectUri };
+					} finally {
+						this.opening--;
+					}
+				},
+			},
+			{
+				channel: 'ash:oauth-callback:wait',
+				validate,
+				invoke: async value => {
+					const callback = this.callbacks.get(value as string);
+					if (!callback) {
+						throw new Error('OAuth callback is unavailable');
+					}
+					try {
+						return await callback.wait();
+					} finally {
+						callback.close();
+						this.callbacks.delete(value as string);
+					}
+				},
+			},
+			{
+				channel: 'ash:oauth-callback:close',
+				validate,
+				invoke: value => {
+					this.callbacks.get(value as string)?.close();
+					this.callbacks.delete(value as string);
+				},
+			},
+		];
 	}
 }

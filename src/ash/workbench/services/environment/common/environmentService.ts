@@ -2,7 +2,8 @@ import type { LogLevel } from '../../../../platform/log/common/log.js';
 import type { URI } from '../../../../base/common/uri.js';
 import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
-export const IWorkbenchEnvironmentService = createServiceIdentifier<IWorkbenchEnvironmentService>('workbenchEnvironmentService');
+export const IWorkbenchEnvironmentService =
+	createServiceIdentifier<IWorkbenchEnvironmentService>('workbenchEnvironmentService');
 
 /** The host supplies a separate origin for each webview, with {{uuid}} as its identity. */
 export interface IWorkbenchEnvironmentService {

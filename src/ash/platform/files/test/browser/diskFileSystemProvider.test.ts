@@ -22,7 +22,9 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../base/test/c
 
 test('disk provider isolates native watching while retaining writes and owning subscription cleanup', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'ash-isolated-watch-'));
-	const nativeWatch = mock.method(fs, 'watch', () => { throw new Error('Native watcher reached the host loop'); });
+	const nativeWatch = mock.method(fs, 'watch', () => {
+		throw new Error('Native watcher reached the host loop');
+	});
 	syncBuiltinESMExports();
 	try {
 		const root = URI.file(directory);
@@ -39,7 +41,9 @@ test('disk provider isolates native watching while retaining writes and owning s
 			},
 		});
 		const delivered: string[][] = [];
-		using listener = disk.onDidChangeFiles(event => delivered.push(event.resources?.map(resource => resource.toString()) ?? []));
+		using listener = disk.onDidChangeFiles(event =>
+			delivered.push(event.resources?.map(resource => resource.toString()) ?? []),
+		);
 		const watch = disk.watch(file, { recursive: false, excludes: [] });
 		assert.deepEqual(subscriptions, [file.toString()]);
 		changes.fire({ resources: [file] });
@@ -66,17 +70,30 @@ test('disk file revisions serialize competing saves across window providers', as
 		const resource = URI.joinPath(root, 'user.jsonc');
 		using first = new DiskFileSystemProvider([root]);
 		using second = new DiskFileSystemProvider([root]);
-		const baseline = await first.writeFile(resource, new TextEncoder().encode('// initial\n[]'), { create: true, overwrite: true });
+		const baseline = await first.writeFile(resource, new TextEncoder().encode('// initial\n[]'), {
+			create: true,
+			overwrite: true,
+		});
 		const results = await Promise.allSettled([
-			first.writeFile(resource, new TextEncoder().encode('// first\n[]'), { create: true, overwrite: true, expectedRevision: baseline.revision }),
-			second.writeFile(resource, new TextEncoder().encode('// second\n[]'), { create: true, overwrite: true, expectedRevision: baseline.revision }),
+			first.writeFile(resource, new TextEncoder().encode('// first\n[]'), {
+				create: true,
+				overwrite: true,
+				expectedRevision: baseline.revision,
+			}),
+			second.writeFile(resource, new TextEncoder().encode('// second\n[]'), {
+				create: true,
+				overwrite: true,
+				expectedRevision: baseline.revision,
+			}),
 		]);
 		assert.equal(results.filter(result => result.status === 'fulfilled').length, 1);
 		const rejected = results.find(result => result.status === 'rejected');
 		assert.ok(rejected?.status === 'rejected' && rejected.reason instanceof FileRevisionConflictError);
 		assert.match(new TextDecoder().decode((await second.readFile(resource)).bytes), /first|second/u);
 		assert.equal((await first.readDirectory(root)).length, 1);
-	} finally { await rm(directory, { recursive: true, force: true }); }
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
 });
 
 test('profile files map root, content and exact changes while ignoring workspace writes', async () => {
@@ -90,14 +107,27 @@ test('profile files map root, content and exact changes while ignoring workspace
 		const profileRoot = URI.from({ scheme: Schemas.vscodeUserData, path: '/user' });
 		const resource = URI.joinPath(profileRoot, 'keybindings.json');
 		const changes: Array<readonly string[] | undefined> = [];
-		using listener = files.onDidChangeFiles(event => changes.push(event.resources?.map(resource => resource.toString())));
-		await files.writeFile(resource, new TextEncoder().encode('// shortcuts\n[]'), { create: true, overwrite: true });
-		await disk.writeFile(URI.joinPath(root, 'workspace/test.json'), new TextEncoder().encode('{}'), { create: true, overwrite: true });
+		using listener = files.onDidChangeFiles(event =>
+			changes.push(event.resources?.map(resource => resource.toString())),
+		);
+		await files.writeFile(resource, new TextEncoder().encode('// shortcuts\n[]'), {
+			create: true,
+			overwrite: true,
+		});
+		await disk.writeFile(URI.joinPath(root, 'workspace/test.json'), new TextEncoder().encode('{}'), {
+			create: true,
+			overwrite: true,
+		});
 		assert.deepEqual(changes, [[resource.toString()]]);
-		assert.deepEqual((await files.readDirectory(profileRoot)).map(entry => entry.resource.toString()), [resource.toString()]);
+		assert.deepEqual(
+			(await files.readDirectory(profileRoot)).map(entry => entry.resource.toString()),
+			[resource.toString()],
+		);
 		assert.equal(new TextDecoder().decode((await files.readFile(resource)).bytes), '// shortcuts\n[]');
 		await assert.rejects(files.readFile(resource.with({ path: '/user/../secret.json' })), /current-profile/u);
-	} finally { await rm(directory, { recursive: true, force: true }); }
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
 });
 
 suite('Disk provider byte publication and watch disposal', () => {
@@ -107,11 +137,16 @@ suite('Disk provider byte publication and watch disposal', () => {
 		const directory = await realpath(await mkdtemp(join(tmpdir(), 'ash-watch-startup-')));
 		const path = join(directory, 'settings.json');
 		await writeFile(path, 'before');
-		const handles: Array<EventEmitter & { closed: boolean; close(): void; }> = [];
-		const patched = mock.method(fs, 'watch', ((watchedPath) => {
+		const handles: Array<EventEmitter & { closed: boolean; close(): void }> = [];
+		const patched = mock.method(fs, 'watch', (watchedPath => {
 			// Change the file in the unobserved registration gap; deliver no OS hint.
 			if (String(watchedPath) === path) fs.writeFileSync(path, 'during registration');
-			const handle = Object.assign(new EventEmitter(), { closed: false, close() { this.closed = true; } });
+			const handle = Object.assign(new EventEmitter(), {
+				closed: false,
+				close() {
+					this.closed = true;
+				},
+			});
 			handles.push(handle);
 			return handle as unknown as FSWatcher;
 		}) as typeof fs.watch);
@@ -149,39 +184,53 @@ suite('Disk provider byte publication and watch disposal', () => {
 			const errors: string[] = [];
 			const changes: string[] = [];
 			using errorListener = files.onDidWatchError(error => errors.push(error));
-			using listener = files.onDidChangeFiles(event => changes.push(...event.resources?.map(item => item.toString()) ?? []));
+			using listener = files.onDidChangeFiles(event =>
+				changes.push(...(event.resources?.map(item => item.toString()) ?? [])),
+			);
 			const watcher = files.watch(resource, { recursive: false, excludes: [] });
 			try {
-				await files.writeFile(resource, new TextEncoder().encode('created'), { create: true, overwrite: false });
-				const observe = (action: () => Promise<void>, probeReadiness = false): Promise<void> => new Promise((resolve, reject) => {
-					let finished = false;
-					let observed = false;
-					let writing = false;
-					const finish = (error?: unknown): void => {
-						if (finished) return;
-						finished = true;
-						clearTimeout(deadline);
-						clearInterval(probe);
-						event.dispose();
-						if (error) reject(error); else resolve();
-					};
-					const event = files.onDidChangeFiles(event => {
-						if (event.resources?.some(item => item.toString() === resource.toString())) {
-							observed = true;
-							clearInterval(probe);
-							if (!writing) finish();
-						}
-					});
-					const deadline = setTimeout(() => finish(new Error(`No exact-file notification: ${JSON.stringify({ errors, changes })}`)), 10_000);
-					const run = (): void => {
-						if (finished || writing) return;
-						writing = true;
-						void action().then(() => { writing = false; if (observed) finish(); }, finish);
-					};
-					// The native watch binds asynchronously; establish readiness before the one-shot assertions.
-					const probe = probeReadiness ? setInterval(run, 20) : undefined;
-					run();
+				await files.writeFile(resource, new TextEncoder().encode('created'), {
+					create: true,
+					overwrite: false,
 				});
+				const observe = (action: () => Promise<void>, probeReadiness = false): Promise<void> =>
+					new Promise((resolve, reject) => {
+						let finished = false;
+						let observed = false;
+						let writing = false;
+						const finish = (error?: unknown): void => {
+							if (finished) return;
+							finished = true;
+							clearTimeout(deadline);
+							clearInterval(probe);
+							event.dispose();
+							if (error) reject(error);
+							else resolve();
+						};
+						const event = files.onDidChangeFiles(event => {
+							if (event.resources?.some(item => item.toString() === resource.toString())) {
+								observed = true;
+								clearInterval(probe);
+								if (!writing) finish();
+							}
+						});
+						const deadline = setTimeout(
+							() =>
+								finish(new Error(`No exact-file notification: ${JSON.stringify({ errors, changes })}`)),
+							10_000,
+						);
+						const run = (): void => {
+							if (finished || writing) return;
+							writing = true;
+							void action().then(() => {
+								writing = false;
+								if (observed) finish();
+							}, finish);
+						};
+						// The native watch binds asynchronously; establish readiness before the one-shot assertions.
+						const probe = probeReadiness ? setInterval(run, 20) : undefined;
+						run();
+					});
 				const path = join(physical, 'profile', 'settings.json');
 				await observe(() => writeFile(path, 'ready'), true);
 				await observe(() => writeFile(path, 'external'));
@@ -197,41 +246,72 @@ suite('Disk provider byte publication and watch disposal', () => {
 				assert.deepEqual(changes.slice(before), []);
 				assert.ok(changes.every(change => change === resource.toString()));
 				assert.deepEqual(errors, []);
-			} finally { watcher.dispose(); }
-		} finally { await rm(directory, { recursive: true, force: true }); }
-	});
-
-	(process.platform === 'win32' ? test : test.skip)('an occupied directory rename fails promptly after its child reports ready', async function () {
-		this.timeout(15_000);
-		const directory = await mkdtemp(join(tmpdir(), 'ash-held-directory-'));
-		const folder = join(directory, 'held');
-		await mkdir(folder);
-		const child = spawn(process.execPath, ['-e', "process.on('disconnect', () => process.exit()); process.send('ready'); setInterval(() => {}, 1000)"], {
-			cwd: folder, windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-		});
-		try {
-			await new Promise<void>((resolve, reject) => {
-				const cleanup = (): void => { child.off('message', ready); child.off('error', failed); child.off('exit', exited); };
-				const ready = (message: unknown): void => { if (message === 'ready') { cleanup(); resolve(); } };
-				const failed = (error: Error): void => { cleanup(); reject(error); };
-				const exited = (): void => { cleanup(); reject(new Error('Directory holder exited before readiness')); };
-				child.on('message', ready);
-				child.once('error', failed);
-				child.once('exit', exited);
-			});
-			using files = new DiskFileSystemProvider([URI.file(directory)]);
-			const started = performance.now();
-			await assert.rejects(files.rename(URI.file(folder), URI.file(join(directory, 'renamed')), 'error'), /EPERM|EACCES|EBUSY/u);
-			assert.ok(performance.now() - started < 10_000, 'A held directory must not use the file retry budget');
-		} finally {
-			if (child.pid && child.exitCode === null && child.signalCode === null) {
-				const exited = once(child, 'exit');
-				if (child.connected) child.disconnect(); else child.kill();
-				await exited;
+			} finally {
+				watcher.dispose();
 			}
+		} finally {
 			await rm(directory, { recursive: true, force: true });
 		}
 	});
+
+	(process.platform === 'win32' ? test : test.skip)(
+		'an occupied directory rename fails promptly after its child reports ready',
+		async function () {
+			this.timeout(15_000);
+			const directory = await mkdtemp(join(tmpdir(), 'ash-held-directory-'));
+			const folder = join(directory, 'held');
+			await mkdir(folder);
+			const child = spawn(
+				process.execPath,
+				[
+					'-e',
+					"process.on('disconnect', () => process.exit()); process.send('ready'); setInterval(() => {}, 1000)",
+				],
+				{ cwd: folder, windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] },
+			);
+			try {
+				await new Promise<void>((resolve, reject) => {
+					const cleanup = (): void => {
+						child.off('message', ready);
+						child.off('error', failed);
+						child.off('exit', exited);
+					};
+					const ready = (message: unknown): void => {
+						if (message === 'ready') {
+							cleanup();
+							resolve();
+						}
+					};
+					const failed = (error: Error): void => {
+						cleanup();
+						reject(error);
+					};
+					const exited = (): void => {
+						cleanup();
+						reject(new Error('Directory holder exited before readiness'));
+					};
+					child.on('message', ready);
+					child.once('error', failed);
+					child.once('exit', exited);
+				});
+				using files = new DiskFileSystemProvider([URI.file(directory)]);
+				const started = performance.now();
+				await assert.rejects(
+					files.rename(URI.file(folder), URI.file(join(directory, 'renamed')), 'error'),
+					/EPERM|EACCES|EBUSY/u,
+				);
+				assert.ok(performance.now() - started < 10_000, 'A held directory must not use the file retry budget');
+			} finally {
+				if (child.pid && child.exitCode === null && child.signalCode === null) {
+					const exited = once(child, 'exit');
+					if (child.connected) child.disconnect();
+					else child.kill();
+					await exited;
+				}
+				await rm(directory, { recursive: true, force: true });
+			}
+		},
+	);
 
 	test('directory watches recover without a recreation hint and ignore siblings', async () => {
 		const directory = await realpath(await mkdtemp(join(tmpdir(), 'ash-root-watch-')));
@@ -241,8 +321,15 @@ suite('Disk provider byte publication and watch disposal', () => {
 		let nextRoot = new DeferredPromise<NativeWatch>();
 		class NativeWatch extends EventEmitter {
 			readonly closed = new DeferredPromise<void>();
-			constructor(readonly path: string, readonly notify: (event: WatchEventType, filename: string) => void) { super(); }
-			close(): void { void this.closed.complete(); }
+			constructor(
+				readonly path: string,
+				readonly notify: (event: WatchEventType, filename: string) => void,
+			) {
+				super();
+			}
+			close(): void {
+				void this.closed.complete();
+			}
 		}
 		// Only control OS hints. Real stat/realpath calls still resolve the directory's
 		// replacement inode and the provider still owns every native handle and listener.
@@ -259,7 +346,9 @@ suite('Disk provider byte publication and watch disposal', () => {
 			const changes: string[][] = [];
 			const errors: string[] = [];
 			using errorListener = files.onDidWatchError(error => errors.push(error));
-			using listener = files.onDidChangeFiles(event => changes.push(event.resources?.map(item => item.toString()) ?? []));
+			using listener = files.onDidChangeFiles(event =>
+				changes.push(event.resources?.map(item => item.toString()) ?? []),
+			);
 			using watcher = files.watch(root, { recursive: true, excludes: [] });
 			const first = await nextRoot.p;
 			const parent = handles.find(handle => handle.path === directory)!;
@@ -284,7 +373,10 @@ suite('Disk provider byte publication and watch disposal', () => {
 			await rename(rootPath, join(directory, 'retired'));
 			await mkdir(rootPath);
 			nextRoot = new DeferredPromise<NativeWatch>();
-			recreated.emit('error', Object.assign(new Error('The retired directory is no longer watchable'), { code: 'EPERM' }));
+			recreated.emit(
+				'error',
+				Object.assign(new Error('The retired directory is no longer watchable'), { code: 'EPERM' }),
+			);
 			const replacement = await nextRoot.p;
 			assert.equal(recreated.closed.isSettled, true);
 			replacement.notify('rename', 'after-replacement.txt');
@@ -300,7 +392,9 @@ suite('Disk provider byte publication and watch disposal', () => {
 			assert.equal(changes.length, before);
 			assert.ok(handles.every(handle => handle.closed.isSettled && handle.listenerCount('error') === 0));
 			assert.deepEqual(errors, []);
-			assert.ok(changes.flat().every(value => extUriBiasedIgnorePathCase.isEqualOrParent(URI.parse(value), root)));
+			assert.ok(
+				changes.flat().every(value => extUriBiasedIgnorePathCase.isEqualOrParent(URI.parse(value), root)),
+			);
 		} finally {
 			patched.mock.restore();
 			syncBuiltinESMExports();
@@ -314,16 +408,38 @@ suite('Disk provider byte publication and watch disposal', () => {
 			const root = URI.file(directory);
 			using files = new DiskFileSystemProvider([root]);
 			const resource = URI.joinPath(root, 'bytes.bin');
-			await assert.rejects(files.writeFile(resource, new Uint8Array([255]), { create: false, overwrite: true }), FileNotFoundError);
+			await assert.rejects(
+				files.writeFile(resource, new Uint8Array([255]), { create: false, overwrite: true }),
+				FileNotFoundError,
+			);
 			await files.writeFile(resource, new Uint8Array(), { create: true, overwrite: false });
-			await assert.rejects(files.writeFile(resource, new Uint8Array([255]), { create: true, overwrite: false }), /already exists/);
+			await assert.rejects(
+				files.writeFile(resource, new Uint8Array([255]), { create: true, overwrite: false }),
+				/already exists/,
+			);
 			assert.deepEqual(Array.from((await files.readFile(resource)).bytes), []);
 			const initial = await files.readFile(resource);
-			await files.writeFile(resource, new Uint8Array([0, 255]), { create: false, overwrite: true, expectedRevision: initial.revision });
-			await assert.rejects(files.writeFile(resource, new Uint8Array([42]), { create: false, overwrite: true, expectedRevision: initial.revision }), FileRevisionConflictError);
+			await files.writeFile(resource, new Uint8Array([0, 255]), {
+				create: false,
+				overwrite: true,
+				expectedRevision: initial.revision,
+			});
+			await assert.rejects(
+				files.writeFile(resource, new Uint8Array([42]), {
+					create: false,
+					overwrite: true,
+					expectedRevision: initial.revision,
+				}),
+				FileRevisionConflictError,
+			);
 			assert.deepEqual(Array.from((await files.readFile(resource)).bytes), [0, 255]);
-			assert.deepEqual((await files.readDirectory(root)).map(entry => entry.name), ['bytes.bin']);
-		} finally { await rm(directory, { recursive: true, force: true }); }
+			assert.deepEqual(
+				(await files.readDirectory(root)).map(entry => entry.name),
+				['bytes.bin'],
+			);
+		} finally {
+			await rm(directory, { recursive: true, force: true });
+		}
 	});
 
 	test('disposing a watch before initialization suppresses late errors and releases its resources', async () => {

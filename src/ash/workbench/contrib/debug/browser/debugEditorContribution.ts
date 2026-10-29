@@ -50,7 +50,7 @@ export class DebugEditorContribution extends Disposable {
 		this._register(model.onDidChangeLanguage(invalidate));
 		this._register(editor.onDidScrollChange(() => this.refresh.schedule()));
 		this._register(
-			configuration.onDidChangeConfiguration((event) => {
+			configuration.onDidChangeConfiguration(event => {
 				if (event.affectsConfiguration('debug.inlineValues')) invalidate();
 			}),
 		);
@@ -113,11 +113,11 @@ export class DebugEditorContribution extends Disposable {
 		if (this.configuration.getValue<string>('debug.inlineValues') === 'off') return;
 		const ranges = this.editor.getVisibleRanges();
 		void session.inspectFrame(frame.id).then(
-			(scopes) => {
+			scopes => {
 				if (!current()) return;
 				const values = scopes
-					.flatMap((scope) => scope.variables)
-					.filter((value) => /^[A-Za-z_$][\w$]*$/.test(value.name) && !value.presentationHint?.lazy)
+					.flatMap(scope => scope.variables)
+					.filter(value => /^[A-Za-z_$][\w$]*$/.test(value.name) && !value.presentationHint?.lazy)
 					.slice(0, 100);
 				const annotations: Parameters<TextDecorationCollection<undefined>['deltaDecorations']>[1][number][] =
 					[];
@@ -129,11 +129,11 @@ export class DebugEditorContribution extends Disposable {
 					) {
 						const text = this.model.getLineContent(line).slice(0, 4096);
 						const labels = values
-							.filter((value) =>
+							.filter(value =>
 								new RegExp(`(?<![\\w$])${escapeRegExpCharacters(value.name)}(?![\\w$])`).test(text),
 							)
 							.slice(0, 8)
-							.map((value) => `${value.name} = ${value.value.slice(0, 120)}`);
+							.map(value => `${value.name} = ${value.value.slice(0, 120)}`);
 						if (!labels.length || annotations.length >= 100) continue;
 						const column = this.model.getLineMaxColumn(line);
 						annotations.push({

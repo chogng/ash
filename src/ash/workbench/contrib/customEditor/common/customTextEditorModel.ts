@@ -31,10 +31,18 @@ export class CustomTextEditorModel extends Disposable implements IWorkingCopy {
 		this._register(workingCopies.register(this));
 	}
 
-	public get isDirty(): boolean { return this.reference.isDirty; }
-	public get hasExternalChange(): boolean { return this.reference.hasExternalChange; }
-	public backup(): string { return this.reference.model.getText(); }
-	public restoreBackup(content: string): void { this.reference.model.reset(content); }
+	public get isDirty(): boolean {
+		return this.reference.isDirty;
+	}
+	public get hasExternalChange(): boolean {
+		return this.reference.hasExternalChange;
+	}
+	public backup(): string {
+		return this.reference.model.getText();
+	}
+	public restoreBackup(content: string): void {
+		this.reference.model.reset(content);
+	}
 	public async save(signal: AbortSignal, options?: ISaveOptions): Promise<void> {
 		signal.throwIfAborted();
 		if (this.resource.scheme === 'untitled') {
@@ -50,5 +58,7 @@ export class CustomTextEditorModel extends Disposable implements IWorkingCopy {
 	public async saveAs(resource: URI, signal: AbortSignal): Promise<void> {
 		await this.reference.saveAs(resource, signal);
 	}
-	public revert(signal: AbortSignal): Promise<void> { return this.reference.revert(signal); }
+	public revert(signal: AbortSignal): Promise<void> {
+		return this.reference.revert(signal);
+	}
 }

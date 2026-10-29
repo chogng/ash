@@ -4,8 +4,14 @@ import type { IConfigurationService } from '../../../../platform/configuration/c
 import type { IEditorService } from '../../../services/editor/common/editorService.js';
 
 /** Applies Debug's save policy through the editor owner before configuration resolution. */
-export async function saveAllBeforeDebugStart(configurationService: IConfigurationService, editorService: IEditorService): Promise<void> {
-	const policy = configurationService.getValue<string>('debug.saveBeforeStart', { overrideIdentifier: editorService.activeEditor?.languageId }) ?? 'allEditorsInActiveGroup';
+export async function saveAllBeforeDebugStart(
+	configurationService: IConfigurationService,
+	editorService: IEditorService,
+): Promise<void> {
+	const policy =
+		configurationService.getValue<string>('debug.saveBeforeStart', {
+			overrideIdentifier: editorService.activeEditor?.languageId,
+		}) ?? 'allEditorsInActiveGroup';
 	if (policy !== 'none') {
 		const saved = await editorService.saveAll();
 		if (!saved.success) {

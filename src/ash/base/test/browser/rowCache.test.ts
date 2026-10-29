@@ -17,9 +17,16 @@ test('RowCache reuses templates by type and disposes leased and released templat
 	for (const templateId of ['item', 'separator']) {
 		renderers.set(templateId, {
 			templateId,
-			renderTemplate: container => { created++; return container; },
-			renderElement: (value, _index, container) => { container.textContent = String(value); },
-			disposeTemplate: () => { disposed++; },
+			renderTemplate: container => {
+				created++;
+				return container;
+			},
+			renderElement: (value, _index, container) => {
+				container.textContent = String(value);
+			},
+			disposeTemplate: () => {
+				disposed++;
+			},
 		});
 	}
 	try {
@@ -35,7 +42,9 @@ test('RowCache reuses templates by type and disposes leased and released templat
 		assert.equal(disposed, 2);
 		cache.dispose();
 		assert.equal(disposed, 2);
-	} finally { dom.window.close(); }
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('RowCache transactions reuse attached rows and detach unused rows even if rendering throws', () => {
@@ -44,24 +53,32 @@ test('RowCache transactions reuse attached rows and detach unused rows even if r
 		const renderer: IListRenderer<number, HTMLElement> = {
 			templateId: 'item',
 			renderTemplate: container => container,
-			renderElement: (value, _index, container) => { container.textContent = String(value); },
+			renderElement: (value, _index, container) => {
+				container.textContent = String(value);
+			},
 			disposeTemplate: container => container.replaceChildren(),
 		};
 		using cache = new RowCache(new Map([[renderer.templateId, renderer]]), dom.window.document);
 		const first = cache.alloc('item').row;
 		const second = cache.alloc('item').row;
 		dom.window.document.body.append(first.domNode, second.domNode);
-		assert.throws(() => cache.transact(() => {
-			cache.release(first);
-			cache.release(second);
-			const reused = cache.alloc('item');
-			assert.equal(reused.row, second);
-			assert.equal(reused.isReusingConnectedDomNode, true);
-			throw new Error('Render failed');
-		}), /Render failed/);
+		assert.throws(
+			() =>
+				cache.transact(() => {
+					cache.release(first);
+					cache.release(second);
+					const reused = cache.alloc('item');
+					assert.equal(reused.row, second);
+					assert.equal(reused.isReusingConnectedDomNode, true);
+					throw new Error('Render failed');
+				}),
+			/Render failed/,
+		);
 		assert.equal(first.domNode.isConnected, false);
 		assert.equal(second.domNode.isConnected, true);
-	} finally { dom.window.close(); }
+	} finally {
+		dom.window.close();
+	}
 });
 
 test('ListView template allocation stabilizes across repeated scrolling and releases element resources', () => {
@@ -78,7 +95,9 @@ test('ListView template allocation stabilizes across repeated scrolling and rele
 				active.add(item);
 				return h(dom.window.document, 'span', undefined, `Item ${item}`);
 			},
-			onDidRemoveRow: row => { active.delete(Number(row.dataset.listId)); },
+			onDidRemoveRow: row => {
+				active.delete(Number(row.dataset.listId));
+			},
 		});
 		const viewport = view.scrollElement;
 		Object.defineProperties(viewport, {
@@ -101,5 +120,7 @@ test('ListView template allocation stabilizes across repeated scrolling and rele
 		for (const row of rows) assert.equal(row.textContent, `Item ${row.dataset.listId}`);
 		view.dispose();
 		assert.equal(active.size, 0);
-	} finally { dom.window.close(); }
+	} finally {
+		dom.window.close();
+	}
 });

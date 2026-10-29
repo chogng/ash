@@ -11,7 +11,9 @@ import { CancellationTokenSource } from '../../../../base/common/cancellation.js
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { PICK_WORKSPACE_FOLDER_COMMAND_ID } from '../../../browser/actions/workspaceCommands.js';
 
-interface ProfileItem extends IQuickPickItem { readonly profileId: string; }
+interface ProfileItem extends IQuickPickItem {
+	readonly profileId: string;
+}
 
 /** A command-owned selection lifetime; cancelling never acquires a terminal process. */
 export class TerminalProfileQuickpick extends Disposable {
@@ -30,7 +32,10 @@ export class TerminalProfileQuickpick extends Disposable {
 		this._register(toDisposable(() => this.cancellation.dispose(true)));
 		// Profile IDs and platform names can be reused by a different execution scope.
 		// Retire the selection permanently rather than accepting an item after it returns.
-		const retire = (): void => { this.cancellation.cancel(); this.selection.clear(); };
+		const retire = (): void => {
+			this.cancellation.cancel();
+			this.selection.clear();
+		};
 		this._register(this.workspace.onDidChangeWorkspace(retire));
 		this._register(processes.onConnectionState(retire));
 	}
@@ -41,8 +46,12 @@ export class TerminalProfileQuickpick extends Disposable {
 		const folders = this.workspace.getWorkspace().folders;
 		if (!dirId && folders.length > 1) {
 			const active = this.editors.activeEditor?.resource;
-			const folder = (active && this.workspace.getWorkspaceFolder(active))
-				|| await this.commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [{ placeHolder: localize('terminal.selectFolder', 'Select a workspace folder for the terminal.') }, this.cancellation.token]);
+			const folder =
+				(active && this.workspace.getWorkspaceFolder(active)) ||
+				(await this.commands.executeCommand<IWorkspaceFolder | undefined>(PICK_WORKSPACE_FOLDER_COMMAND_ID, [
+					{ placeHolder: localize('terminal.selectFolder', 'Select a workspace folder for the terminal.') },
+					this.cancellation.token,
+				]));
 			if (!folder || !isCurrent()) return undefined;
 			dirId = folder.id;
 		}
@@ -56,28 +65,55 @@ export class TerminalProfileQuickpick extends Disposable {
 			const lifetime = new DisposableStore();
 			this.selection.value = lifetime;
 			const picker = lifetime.add(this.quickInput.createQuickPick<ProfileItem>());
-			picker.ariaLabel = picker.placeholder = type === 'setDefault'
-				? localize('terminal.profile.selectDefault', 'Select the default terminal profile')
-				: localize('terminal.profile.select', 'Select a terminal profile');
+			picker.ariaLabel = picker.placeholder =
+				type === 'setDefault'
+					? localize('terminal.profile.selectDefault', 'Select the default terminal profile')
+					: localize('terminal.profile.select', 'Select a terminal profile');
 			const update = () => {
-				picker.items = [...this.profiles.getAvailableProfiles(dirId).map(profile => ({
-					profileId: profile.profileId, label: profile.title,
-					description: profile.isDefault ? localize('terminal.profile.default', 'Default') : undefined,
-				})), ...this.profiles.contributedProfiles.map(profile => ({ profileId: `extension:${profile.extensionIdentifier}/${profile.id}`, label: profile.title, description: profile.extensionIdentifier }))];
+				picker.items = [
+					...this.profiles
+						.getAvailableProfiles(dirId)
+						.map(profile => ({
+							profileId: profile.profileId,
+							label: profile.title,
+							description: profile.isDefault
+								? localize('terminal.profile.default', 'Default')
+								: undefined,
+						})),
+					...this.profiles.contributedProfiles.map(profile => ({
+						profileId: `extension:${profile.extensionIdentifier}/${profile.id}`,
+						label: profile.title,
+						description: profile.extensionIdentifier,
+					})),
+				];
 			};
 			update();
 			lifetime.add(this.profiles.onDidChangeAvailableProfiles(update));
 			let selected: string | undefined;
-			lifetime.add(picker.onDidAccept(() => {
-				const item = picker.selectedItems[0];
-				if (!item) return;
+			lifetime.add(
+				picker.onDidAccept(() => {
+					const item = picker.selectedItems[0];
+					if (!item) return;
 
-				if (!this.profiles.getAvailableProfiles(dirId).some(profile => profile.profileId === item.profileId) && !this.profiles.contributedProfiles.some(profile => item.profileId === `extension:${profile.extensionIdentifier}/${profile.id}`)) return;
-				selected = item.profileId;
-				picker.hide();
-
-			}));
-			lifetime.add(picker.onDidHide(() => { resolve(selected); this.selection.clear(); }));
+					if (
+						!this.profiles
+							.getAvailableProfiles(dirId)
+							.some(profile => profile.profileId === item.profileId) &&
+						!this.profiles.contributedProfiles.some(
+							profile => item.profileId === `extension:${profile.extensionIdentifier}/${profile.id}`,
+						)
+					)
+						return;
+					selected = item.profileId;
+					picker.hide();
+				}),
+			);
+			lifetime.add(
+				picker.onDidHide(() => {
+					resolve(selected);
+					this.selection.clear();
+				}),
+			);
 			lifetime.add(toDisposable(() => resolve(undefined)));
 			picker.show();
 		});
@@ -85,13 +121,20 @@ export class TerminalProfileQuickpick extends Disposable {
 		const currentPlatform = await this.profiles.getPlatformKey();
 		if (!isCurrent() || platform !== currentPlatform) return undefined;
 		const profile = this.profiles.getAvailableProfiles(dirId).find(profile => profile.profileId === profileId);
-		const contributed = this.profiles.contributedProfiles.find(profile => profileId === `extension:${profile.extensionIdentifier}/${profile.id}`);
+		const contributed = this.profiles.contributedProfiles.find(
+			profile => profileId === `extension:${profile.extensionIdentifier}/${profile.id}`,
+		);
 		if (!profile && !contributed) return undefined;
 		if (type === 'setDefault') {
-			if (contributed) await this.profiles.registerContributedProfile({ ...contributed, options: contributed.options ?? {} });
+			if (contributed)
+				await this.profiles.registerContributedProfile({ ...contributed, options: contributed.options ?? {} });
 			if (!isCurrent()) return undefined;
 			const title = profile?.profileName ?? contributed!.title;
-			await this.configuration.updateValue(`${TerminalSettingPrefix.DefaultProfile}${platform}`, title, ConfigurationTarget.USER);
+			await this.configuration.updateValue(
+				`${TerminalSettingPrefix.DefaultProfile}${platform}`,
+				title,
+				ConfigurationTarget.USER,
+			);
 			return title;
 		}
 		return profileId;

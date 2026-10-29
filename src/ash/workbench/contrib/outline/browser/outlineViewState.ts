@@ -12,22 +12,41 @@ export class OutlineViewState extends Disposable implements IOutlineViewState {
 	constructor(@IStorageService private readonly storage: IStorageService) {
 		super();
 		let value: unknown;
-		try { value = JSON.parse(storage.get('outline/state', StorageScope.WORKSPACE, '{}')); } catch { return; }
+		try {
+			value = JSON.parse(storage.get('outline/state', StorageScope.WORKSPACE, '{}'));
+		} catch {
+			return;
+		}
 		if (!value || typeof value !== 'object' || Array.isArray(value)) return;
 		const saved = value as Record<string, unknown>;
 		this.state = {
 			followCursor: typeof saved.followCursor === 'boolean' ? saved.followCursor : false,
 			filterOnType: typeof saved.filterOnType === 'boolean' ? saved.filterOnType : true,
-			sortBy: saved.sortBy === OutlineSortOrder.ByName || saved.sortBy === OutlineSortOrder.ByKind ? saved.sortBy : OutlineSortOrder.ByPosition,
+			sortBy:
+				saved.sortBy === OutlineSortOrder.ByName || saved.sortBy === OutlineSortOrder.ByKind
+					? saved.sortBy
+					: OutlineSortOrder.ByPosition,
 		};
 	}
 
-	public get followCursor(): boolean { return this.state.followCursor; }
-	public set followCursor(value: boolean) { this.update('followCursor', value); }
-	public get filterOnType(): boolean { return this.state.filterOnType; }
-	public set filterOnType(value: boolean) { this.update('filterOnType', value); }
-	public get sortBy(): OutlineSortOrder { return this.state.sortBy; }
-	public set sortBy(value: OutlineSortOrder) { this.update('sortBy', value); }
+	public get followCursor(): boolean {
+		return this.state.followCursor;
+	}
+	public set followCursor(value: boolean) {
+		this.update('followCursor', value);
+	}
+	public get filterOnType(): boolean {
+		return this.state.filterOnType;
+	}
+	public set filterOnType(value: boolean) {
+		this.update('filterOnType', value);
+	}
+	public get sortBy(): OutlineSortOrder {
+		return this.state.sortBy;
+	}
+	public set sortBy(value: OutlineSortOrder) {
+		this.update('sortBy', value);
+	}
 
 	private update<K extends keyof IOutlineViewState>(key: K, value: IOutlineViewState[K]): void {
 		if (this.state[key] === value) return;

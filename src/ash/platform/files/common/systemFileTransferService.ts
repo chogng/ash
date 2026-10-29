@@ -6,4 +6,5 @@ export interface ISystemFileTransferService {
 	pasteSystemFiles(directory: URI, moveRequested: boolean): Promise<boolean>;
 }
 
-export const ISystemFileTransferService = createServiceIdentifier<ISystemFileTransferService>('systemFileTransferService');
+export const ISystemFileTransferService =
+	createServiceIdentifier<ISystemFileTransferService>('systemFileTransferService');

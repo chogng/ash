@@ -1,8 +1,8 @@
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
 
 export type McpServerRuntimeState =
-	| { readonly status: 'disabled' | 'disconnected' | 'connected' | 'stale'; }
-	| { readonly status: 'unavailable'; readonly reason: string; };
+	| { readonly status: 'disabled' | 'disconnected' | 'connected' | 'stale' }
+	| { readonly status: 'unavailable'; readonly reason: string };
 
 export interface McpServerStatus {
 	readonly id: string;

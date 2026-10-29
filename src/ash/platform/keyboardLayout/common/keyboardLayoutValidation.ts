@@ -39,10 +39,7 @@ export function validateKeyboardMapping(value: unknown): IKeyboardMapping {
 	return Object.freeze(mapping);
 }
 
-function validateLayoutInfo(
-	value: unknown,
-	expectedSource: KeyboardLayoutSource,
-): IKeyboardLayoutInfo {
+function validateLayoutInfo(value: unknown, expectedSource: KeyboardLayoutSource): IKeyboardLayoutInfo {
 	const layout = expectRecord(value, 'keyboard layout info');
 	expectKeys(layout, ['id', 'isUSStandard', 'label', 'operatingSystem', 'source'], 'keyboard layout info');
 	if (typeof layout.id !== 'string' || layout.id.length === 0 || layout.id.length > 256) {
@@ -71,17 +68,21 @@ function validateLayoutInfo(
 
 function validateMappingEntry(value: unknown, code: string): IKeyboardMappingEntry {
 	const entry = expectRecord(value, `keyboard mapping ${code}`);
-	expectKeys(entry, [
-		'value',
-		'valueIsDeadKey',
-		'vkey',
-		'withAltGr',
-		'withAltGrIsDeadKey',
-		'withShift',
-		'withShiftAltGr',
-		'withShiftAltGrIsDeadKey',
-		'withShiftIsDeadKey',
-	], `keyboard mapping ${code}`);
+	expectKeys(
+		entry,
+		[
+			'value',
+			'valueIsDeadKey',
+			'vkey',
+			'withAltGr',
+			'withAltGrIsDeadKey',
+			'withShift',
+			'withShiftAltGr',
+			'withShiftAltGrIsDeadKey',
+			'withShiftIsDeadKey',
+		],
+		`keyboard mapping ${code}`,
+	);
 	return Object.freeze({
 		value: expectOutput(entry.value, `${code}.value`),
 		withShift: expectOutput(entry.withShift, `${code}.withShift`),
@@ -90,7 +91,10 @@ function validateMappingEntry(value: unknown, code: string): IKeyboardMappingEnt
 		valueIsDeadKey: expectOptionalBoolean(entry.valueIsDeadKey, `${code}.valueIsDeadKey`),
 		withShiftIsDeadKey: expectOptionalBoolean(entry.withShiftIsDeadKey, `${code}.withShiftIsDeadKey`),
 		withAltGrIsDeadKey: expectOptionalBoolean(entry.withAltGrIsDeadKey, `${code}.withAltGrIsDeadKey`),
-		withShiftAltGrIsDeadKey: expectOptionalBoolean(entry.withShiftAltGrIsDeadKey, `${code}.withShiftAltGrIsDeadKey`),
+		withShiftAltGrIsDeadKey: expectOptionalBoolean(
+			entry.withShiftAltGrIsDeadKey,
+			`${code}.withShiftAltGrIsDeadKey`,
+		),
 		vkey: entry.vkey === undefined ? undefined : expectOutput(entry.vkey, `${code}.vkey`),
 	});
 }
@@ -116,7 +120,7 @@ function expectRecord(value: unknown, name: string): Record<string, unknown> {
 
 function expectKeys(value: Record<string, unknown>, allowed: readonly string[], name: string): void {
 	const allowedKeys = new Set(allowed);
-	if (Object.keys(value).some((key) => !allowedKeys.has(key))) {
+	if (Object.keys(value).some(key => !allowedKeys.has(key))) {
 		throw new TypeError(`${name} contains unknown fields`);
 	}
 }
@@ -139,7 +143,5 @@ function expectOptionalBoolean(value: unknown, name: string): boolean | undefine
 }
 
 function isOperatingSystem(value: unknown): value is OperatingSystem {
-	return value === OperatingSystem.Windows ||
-		value === OperatingSystem.Macintosh ||
-		value === OperatingSystem.Linux;
+	return value === OperatingSystem.Windows || value === OperatingSystem.Macintosh || value === OperatingSystem.Linux;
 }

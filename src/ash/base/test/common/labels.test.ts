@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
-import { getPathLabel, shorten, splitRecentLabel, template, tildify, type IRelativePathProvider } from '../../common/labels.js';
+import {
+	getPathLabel,
+	shorten,
+	splitRecentLabel,
+	template,
+	tildify,
+	type IRelativePathProvider,
+} from '../../common/labels.js';
 import { OperatingSystem } from '../../common/platform.js';
 import { URI } from '../../common/uri.js';
 
@@ -9,27 +16,40 @@ test('getPathLabel uses target separators, home shortening, and workspace-relati
 	const resource = URI.file('/workspace/src/index.ts');
 	const relative: IRelativePathProvider = {
 		getWorkspace: () => ({ folders: [{ uri: root, name: 'project' }] }),
-		getWorkspaceFolder: candidate => candidate.toString().startsWith(root.toString()) ? { uri: root, name: 'project' } : null,
+		getWorkspaceFolder: candidate =>
+			candidate.toString().startsWith(root.toString()) ? { uri: root, name: 'project' } : null,
 	};
 
 	assert.equal(getPathLabel(resource, { os: OperatingSystem.Linux, relative }), 'src/index.ts');
 	assert.equal(getPathLabel(resource, { os: OperatingSystem.Windows }), '\\workspace\\src\\index.ts');
-	assert.equal(getPathLabel(URI.file('/home/ash/file.ts'), {
-		os: OperatingSystem.Linux,
-		tildify: { userHome: URI.file('/home/ash') },
-	}), '~/file.ts');
+	assert.equal(
+		getPathLabel(URI.file('/home/ash/file.ts'), {
+			os: OperatingSystem.Linux,
+			tildify: { userHome: URI.file('/home/ash') },
+		}),
+		'~/file.ts',
+	);
 });
 
 test('absolute path labels normalize Windows drive letters without changing URI or UNC identity', () => {
 	const resource = URI.from({ scheme: 'file', path: '/e:/workspace/a.ts' });
 	const networkResource = resource.with({ authority: 'build-host' });
-	assert.deepEqual([
-		getPathLabel(resource, { os: OperatingSystem.Windows }),
-		getPathLabel(resource, { os: OperatingSystem.Macintosh }),
-		getPathLabel(resource, { os: OperatingSystem.Linux }),
-		getPathLabel(networkResource, { os: OperatingSystem.Windows }),
-		resource.path,
-	], ['E:\\workspace\\a.ts', '/e:/workspace/a.ts', '/e:/workspace/a.ts', '\\\\build-host\\e:\\workspace\\a.ts', '/e:/workspace/a.ts']);
+	assert.deepEqual(
+		[
+			getPathLabel(resource, { os: OperatingSystem.Windows }),
+			getPathLabel(resource, { os: OperatingSystem.Macintosh }),
+			getPathLabel(resource, { os: OperatingSystem.Linux }),
+			getPathLabel(networkResource, { os: OperatingSystem.Windows }),
+			resource.path,
+		],
+		[
+			'E:\\workspace\\a.ts',
+			'/e:/workspace/a.ts',
+			'/e:/workspace/a.ts',
+			'\\\\build-host\\e:\\workspace\\a.ts',
+			'/e:/workspace/a.ts',
+		],
+	);
 });
 
 test('tildify is case-sensitive on Linux and case-insensitive on macOS', () => {
@@ -46,11 +66,14 @@ test('POSIX labels preserve backslashes in absolute, relative, and home paths', 
 		getWorkspaceFolder: () => ({ uri: root }),
 	};
 	for (const os of [OperatingSystem.Linux, OperatingSystem.Macintosh]) {
-		assert.deepEqual([
-			getPathLabel(resource, { os }),
-			getPathLabel(resource, { os, relative }),
-			tildify('/home/ash\\/part\\name.txt', '/home/ash\\', os),
-		], ['/workspace/part\\name.txt', 'part\\name.txt', '~/part\\name.txt']);
+		assert.deepEqual(
+			[
+				getPathLabel(resource, { os }),
+				getPathLabel(resource, { os, relative }),
+				tildify('/home/ash\\/part\\name.txt', '/home/ash\\', os),
+			],
+			['/workspace/part\\name.txt', 'part\\name.txt', '~/part\\name.txt'],
+		);
 	}
 });
 
@@ -62,8 +85,14 @@ test('shorten retains root context and distinguishes common suffixes', () => {
 });
 
 test('template omits conditional separators beside empty values', () => {
-	assert.equal(template('${left}${separator}${right}', { left: '', right: 'ash', separator: { label: ' — ' } }), 'ash');
-	assert.equal(template('${left}${separator}${right}', { left: 'Ash', right: 'Code', separator: { label: ' — ' } }), 'Ash — Code');
+	assert.equal(
+		template('${left}${separator}${right}', { left: '', right: 'ash', separator: { label: ' — ' } }),
+		'ash',
+	);
+	assert.equal(
+		template('${left}${separator}${right}', { left: 'Ash', right: 'Code', separator: { label: ' — ' } }),
+		'Ash — Code',
+	);
 });
 
 test('mnemonic and recent labels retain VS Code-compatible semantics', () => {

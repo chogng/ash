@@ -1,6 +1,11 @@
 import type { Event } from '../../base/common/event.js';
 import type { DisposableStore } from '../../base/common/lifecycle.js';
-import type { IStorageService, IStorageValueChangeEvent, StorageScope, StorageTarget } from '../../platform/storage/common/storage.js';
+import type {
+	IStorageService,
+	IStorageValueChangeEvent,
+	StorageScope,
+	StorageTarget,
+} from '../../platform/storage/common/storage.js';
 import { Themable, type IThemeService } from '../../platform/theme/common/themeService.js';
 import { Memento } from './memento.js';
 
@@ -16,11 +21,13 @@ export class Component<MementoType extends object = object> extends Themable {
 		const state = new Memento<MementoType>(componentId, storageService);
 		super(themeService);
 		this.componentState = state;
-		this._register(storageService.onWillSaveState(() => {
-			// Collect live control state before serializing; the storage owner flushes afterwards.
-			this.saveState();
-			this.componentState.saveMemento();
-		}));
+		this._register(
+			storageService.onWillSaveState(() => {
+				// Collect live control state before serializing; the storage owner flushes afterwards.
+				this.saveState();
+				this.componentState.saveMemento();
+			}),
+		);
 	}
 
 	public getId(): string {
@@ -35,9 +42,12 @@ export class Component<MementoType extends object = object> extends Themable {
 		this.componentState.reloadMemento(scope);
 	}
 
-	protected onDidChangeMementoValue(scope: StorageScope, disposables: DisposableStore): Event<IStorageValueChangeEvent> {
+	protected onDidChangeMementoValue(
+		scope: StorageScope,
+		disposables: DisposableStore,
+	): Event<IStorageValueChangeEvent> {
 		return this.componentState.onDidChangeValue(scope, disposables);
 	}
 
-	protected saveState(): void { }
+	protected saveState(): void {}
 }

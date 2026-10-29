@@ -6,7 +6,11 @@ import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../base/test/comm
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { InstantiationService } from '../../../platform/instantiation/common/instantiationService.js';
 import { CodeEditorContributions } from '../../browser/widget/codeEditor/codeEditorContributions.js';
-import { EditorContributionInstantiation, type TextEditorContributionConfigurationContext, type TextEditorContributionContext } from '../../browser/editorExtensions.js';
+import {
+	EditorContributionInstantiation,
+	type TextEditorContributionConfigurationContext,
+	type TextEditorContributionContext,
+} from '../../browser/editorExtensions.js';
 import type { ICodeEditor } from '../../browser/editorBrowser.js';
 
 suite('Code editor first-interaction lifetime', () => {
@@ -19,27 +23,50 @@ suite('Code editor first-interaction lifetime', () => {
 			const listeners = new Set<EventListenerOrEventListenerObject>();
 			const add = target.addEventListener.bind(target);
 			const remove = target.removeEventListener.bind(target);
-			target.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => {
+			target.addEventListener = ((
+				type: string,
+				listener: EventListenerOrEventListenerObject,
+				options?: boolean | AddEventListenerOptions,
+			) => {
 				listeners.add(listener);
 				add(type, listener, options);
 			}) as typeof target.addEventListener;
-			target.removeEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) => {
+			target.removeEventListener = ((
+				type: string,
+				listener: EventListenerOrEventListenerObject,
+				options?: boolean | EventListenerOptions,
+			) => {
 				listeners.delete(listener);
 				remove(type, listener, options);
 			}) as typeof target.removeEventListener;
 			const idle = new Map<number, IdleRequestCallback>();
 			let nextIdleId = 0;
 			Object.assign(dom.window, {
-				requestIdleCallback: (callback: IdleRequestCallback) => { idle.set(++nextIdleId, callback); return nextIdleId; },
-				cancelIdleCallback: (id: number) => { idle.delete(id); },
+				requestIdleCallback: (callback: IdleRequestCallback) => {
+					idle.set(++nextIdleId, callback);
+					return nextIdleId;
+				},
+				cancelIdleCallback: (id: number) => {
+					idle.delete(id);
+				},
 			});
 			let created = 0;
 			let disposed = 0;
 			class Contribution extends Disposable {
-				constructor() { super(); created++; }
-				protected override disposeCore(): void { disposed++; super.disposeCore(); }
+				constructor() {
+					super();
+					created++;
+				}
+				protected override disposeCore(): void {
+					disposed++;
+					super.disposeCore();
+				}
 			}
-			const first = { id: 'first', ctor: Contribution, instantiation: EditorContributionInstantiation.BeforeFirstInteraction };
+			const first = {
+				id: 'first',
+				ctor: Contribution,
+				instantiation: EditorContributionInstantiation.BeforeFirstInteraction,
+			};
 			using services = new InstantiationService();
 			using contributions = services.createInstance(CodeEditorContributions);
 			contributions.configure([first], {} as TextEditorContributionConfigurationContext);

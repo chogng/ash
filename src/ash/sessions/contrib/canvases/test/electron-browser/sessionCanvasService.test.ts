@@ -26,27 +26,51 @@ suite('Sessions Canvas ownership', () => {
 		const services = resources.add(new InstantiationService());
 		const changed = resources.add(new Emitter<void>());
 		const registry = new ConfigurationRegistry();
-		registry.registerConfiguration({ key: CanvasesEnabledSettingId, defaultValue: true, parse: value => value as boolean });
+		registry.registerConfiguration({
+			key: CanvasesEnabledSettingId,
+			defaultValue: true,
+			parse: value => value as boolean,
+		});
 		const configuration = resources.add(new InMemoryConfigurationService(registry));
-		const selection = { kind: 'session', active: { session: { sessionId: 'source-session' }, threadId: 'source-thread' } } as SessionsViewSelection;
+		const selection = {
+			kind: 'session',
+			active: { session: { sessionId: 'source-session' }, threadId: 'source-thread' },
+		} as SessionsViewSelection;
 		const visibleSelections = [selection];
-		services.registerInstance(ISessionsService, { onDidChange: changed.event, visibleSelections } as unknown as ISessionsService);
+		services.registerInstance(ISessionsService, {
+			onDidChange: changed.event,
+			visibleSelections,
+		} as unknown as ISessionsService);
 		services.registerInstance(IEditorPart, { groups: [] } as unknown as IEditorPart);
 		services.registerInstance(IConfigurationService, configuration);
-		services.registerInstance(IAgentHostCanvasCollection, { createContext: (owner: ICanvasOwner) => ({ owner, canvases: constObservable([]) }) } as unknown as IAgentHostCanvasCollection);
-		services.registerInstance(ISessionsLayoutService, { editorWorkingSetState: constObservable({ owner: undefined, restoring: false, applying: false }) } as unknown as ISessionsLayoutService);
-		services.registerInstance(ISessionsManagementService, { onDidChange: Event.None, state: 'loading', sessions: [] } as unknown as ISessionsManagementService);
+		services.registerInstance(IAgentHostCanvasCollection, {
+			createContext: (owner: ICanvasOwner) => ({ owner, canvases: constObservable([]) }),
+		} as unknown as IAgentHostCanvasCollection);
+		services.registerInstance(ISessionsLayoutService, {
+			editorWorkingSetState: constObservable({ owner: undefined, restoring: false, applying: false }),
+		} as unknown as ISessionsLayoutService);
+		services.registerInstance(ISessionsManagementService, {
+			onDidChange: Event.None,
+			state: 'loading',
+			sessions: [],
+		} as unknown as ISessionsManagementService);
 		const context = resources.add(services.createInstance(SessionCanvasContextService));
-		const owner: ICanvasOwner = { providerId: 'local-agent-host', session: URI.parse('ash-session:/source-session'), chat: URI.parse('ash-thread:/source-thread') };
+		const owner: ICanvasOwner = {
+			providerId: 'local-agent-host',
+			session: URI.parse('ash-session:/source-session'),
+			chat: URI.parse('ash-thread:/source-thread'),
+		};
 		assert.equal(context.isOwnerVisible(owner), true);
 		assert.equal(context.isOwnerVisible({ ...owner, session: URI.parse('ash-session:/other-session') }), false);
 		assert.equal(context.isOwnerVisible({ ...owner, providerId: 'remote-provider' }), false);
 		assert.equal(context.isOwnerVisible({ ...owner, chat: URI.parse('ash-thread:/other-thread') }), false);
 		let notifications = 0;
 		resources.add(context.onDidChangeVisibility(() => notifications++));
-		visibleSelections.splice(0); changed.fire();
+		visibleSelections.splice(0);
+		changed.fire();
 		assert.equal(context.isOwnerVisible(owner), false);
-		visibleSelections.push(selection); changed.fire();
+		visibleSelections.push(selection);
+		changed.fire();
 		await configuration.updateValue(CanvasesEnabledSettingId, false);
 		assert.equal(context.isOwnerVisible(owner), false);
 		assert.equal(notifications, 3);

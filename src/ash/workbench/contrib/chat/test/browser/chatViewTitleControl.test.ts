@@ -18,13 +18,18 @@ test('Conversation title keeps one history picker open and restores focus when d
 	const dom = new JSDOM('<!doctype html><body></body>');
 	try {
 		using services = createTestEditorServices();
-		services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined } as IChatSessionNavigationService);
+		services.registerInstance(IChatSessionNavigationService, {
+			getActiveConversation: () => undefined,
+		} as IChatSessionNavigationService);
 		using commands = new CommandService(services);
 		services.registerInstance(IMenuService, new MenuService(commands, services.get(IContextKeyService)));
-		services.registerInstance(IContextMenuService, { showContextMenu: () => { } } as unknown as IContextMenuService);
+		services.registerInstance(IContextMenuService, { showContextMenu: () => {} } as unknown as IContextMenuService);
 		const dismissed = new DeferredPromise<void>();
 		let opened = 0;
-		using control = services.createInstance(ChatViewTitleControl, dom.window.document.body, 'chat', () => { opened++; return dismissed.p; });
+		using control = services.createInstance(ChatViewTitleControl, dom.window.document.body, 'chat', () => {
+			opened++;
+			return dismissed.p;
+		});
 		control.update('Working conversation', 'chat-panel');
 		const button = dom.window.document.querySelector<HTMLButtonElement>('.ash-chat-view-title-button')!;
 		button.focus();
@@ -54,11 +59,13 @@ test('Conversation title and actions use the client language', () => {
 		const chinese = productLanguagePackCatalogs.find(catalog => catalog.locale === 'zh-CN')!;
 		setNlsMessages('zh-CN', chinese.bundles);
 		using services = createTestEditorServices();
-		services.registerInstance(IChatSessionNavigationService, { getActiveConversation: () => undefined } as IChatSessionNavigationService);
+		services.registerInstance(IChatSessionNavigationService, {
+			getActiveConversation: () => undefined,
+		} as IChatSessionNavigationService);
 		using commands = new CommandService(services);
 		services.registerInstance(IMenuService, new MenuService(commands, services.get(IContextKeyService)));
-		services.registerInstance(IContextMenuService, { showContextMenu: () => { } } as unknown as IContextMenuService);
-		using control = services.createInstance(ChatViewTitleControl, dom.window.document.body, 'chat', async () => { });
+		services.registerInstance(IContextMenuService, { showContextMenu: () => {} } as unknown as IContextMenuService);
+		using control = services.createInstance(ChatViewTitleControl, dom.window.document.body, 'chat', async () => {});
 		const button = dom.window.document.querySelector<HTMLButtonElement>('.ash-chat-view-title-button')!;
 		assert.equal(button.textContent, '聊天');
 		assert.equal(button.getAttribute('aria-label'), '切换会话：聊天');

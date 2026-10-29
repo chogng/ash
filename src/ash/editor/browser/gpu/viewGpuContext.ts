@@ -41,10 +41,14 @@ export class ViewGpuContext extends Disposable {
 	public readonly rectangleRenderer: RectangleRenderer;
 
 	private static readonly _decorationCssRuleExtractor = new DecorationCssRuleExtractor();
-	public static get decorationCssRuleExtractor(): DecorationCssRuleExtractor { return ViewGpuContext._decorationCssRuleExtractor; }
+	public static get decorationCssRuleExtractor(): DecorationCssRuleExtractor {
+		return ViewGpuContext._decorationCssRuleExtractor;
+	}
 
 	private static readonly _decorationStyleCache = new DecorationStyleCache();
-	public static get decorationStyleCache(): DecorationStyleCache { return ViewGpuContext._decorationStyleCache; }
+	public static get decorationStyleCache(): DecorationStyleCache {
+		return ViewGpuContext._decorationStyleCache;
+	}
 
 	private static readonly _colorMap: string[] = [];
 	private static _atlas: TextureAtlas | undefined;
@@ -54,16 +58,26 @@ export class ViewGpuContext extends Disposable {
 		return ViewGpuContext._atlas;
 	}
 
-	public get atlas(): TextureAtlas { return ViewGpuContext.atlas; }
+	public get atlas(): TextureAtlas {
+		return ViewGpuContext.atlas;
+	}
 
-	public readonly canvasDevicePixelDimensions: IObservable<{ width: number; height: number; }>;
+	public readonly canvasDevicePixelDimensions: IObservable<{ width: number; height: number }>;
 	public readonly devicePixelRatio: IObservable<number>;
 	public readonly contentLeft: IObservable<number>;
 	private semanticStyleResolver: SemanticTokenStyleResolver;
 
-	constructor(context: ViewContext, private readonly semanticTokensForLine: (lineNumber: number) => readonly ResolvedSemanticToken[] = () => [], private readonly semanticHighlightingEnabled: (theme: IColorTheme) => boolean = theme => theme.semanticHighlighting === true) {
+	constructor(
+		context: ViewContext,
+		private readonly semanticTokensForLine: (lineNumber: number) => readonly ResolvedSemanticToken[] = () => [],
+		private readonly semanticHighlightingEnabled: (theme: IColorTheme) => boolean = theme =>
+			theme.semanticHighlighting === true,
+	) {
 		super();
-		this.semanticStyleResolver = new SemanticTokenStyleResolver(context.theme.value, semanticHighlightingEnabled(context.theme.value));
+		this.semanticStyleResolver = new SemanticTokenStyleResolver(
+			context.theme.value,
+			semanticHighlightingEnabled(context.theme.value),
+		);
 		const ownerWindow = getActiveWindow();
 		this.canvas = createFastDomNode(h(ownerWindow.document, 'canvas'));
 		// Acquire the surface before registering view resources: unsupported contexts
@@ -74,15 +88,19 @@ export class ViewGpuContext extends Disposable {
 			this.canvas.setAttribute('aria-hidden', 'true');
 			this._register(toDisposable(() => this.canvas.domNode.remove()));
 			this.updateCanvasPadding(context);
-			this._register(context.configuration.onDidChange(event => {
-				if (event.hasChanged(EditorOption.scrollbar)) this.updateCanvasPadding(context);
-			}));
+			this._register(
+				context.configuration.onDidChange(event => {
+					if (event.hasChanged(EditorOption.scrollbar)) this.updateCanvasPadding(context);
+				}),
+			);
 
 			ViewGpuContext.updateTheme(context.theme.value);
-			this._register(new GpuThemeListener(context, theme => {
-				ViewGpuContext.updateTheme(theme);
-				this.refreshSemanticStyles(theme);
-			}));
+			this._register(
+				new GpuThemeListener(context, theme => {
+					ViewGpuContext.updateTheme(theme);
+					this.refreshSemanticStyles(theme);
+				}),
+			);
 
 			if (!ViewGpuContext.device) {
 				const generation = ViewGpuContext.deviceGeneration;
@@ -108,15 +126,23 @@ export class ViewGpuContext extends Disposable {
 				void ViewGpuContext.device.catch(() => {
 					if (generation === ViewGpuContext.deviceGeneration) ViewGpuContext.disposeSharedResources();
 				});
-				sharedDevicePagehideListener = addDisposableListener(ownerWindow, 'pagehide', () => ViewGpuContext.disposeSharedResources(), { once: true });
+				sharedDevicePagehideListener = addDisposableListener(
+					ownerWindow,
+					'pagehide',
+					() => ViewGpuContext.disposeSharedResources(),
+					{ once: true },
+				);
 			}
 			const view = new WeakRef(this);
 			// A view joining an already-ready shared device can render synchronously.
 			this.activeDevice = ViewGpuContext.deviceSync;
-			void ViewGpuContext.device.then(device => {
-				const context = view.deref();
-				if (context && !context.isDisposed) context.activeDevice = device;
-			}, () => undefined);
+			void ViewGpuContext.device.then(
+				device => {
+					const context = view.deref();
+					if (context && !context.isDisposed) context.activeDevice = device;
+				},
+				() => undefined,
+			);
 
 			const pixelRatio = PixelRatio.getInstance(ownerWindow);
 			const devicePixelRatio = observableValue(this, pixelRatio.value);
@@ -128,27 +154,37 @@ export class ViewGpuContext extends Disposable {
 				width: this.canvas.domNode.width,
 				height: this.canvas.domNode.height,
 			});
-			this._register(observeDevicePixelDimensions(this.canvas.domNode, ownerWindow, (width, height) => {
-				this.canvas.domNode.width = width;
-				this.canvas.domNode.height = height;
-				canvasDevicePixelDimensions.set({ width, height });
-			}));
+			this._register(
+				observeDevicePixelDimensions(this.canvas.domNode, ownerWindow, (width, height) => {
+					this.canvas.domNode.width = width;
+					this.canvas.domNode.height = height;
+					canvasDevicePixelDimensions.set({ width, height });
+				}),
+			);
 			this.canvasDevicePixelDimensions = canvasDevicePixelDimensions;
 
-			const contentLeft = observableValue(this, context.configuration.options.get(EditorOption.layoutInfo).contentLeft);
-			this._register(context.configuration.onDidChange(event => {
-				if (event.hasChanged(EditorOption.layoutInfo)) contentLeft.set(context.configuration.options.get(EditorOption.layoutInfo).contentLeft);
-			}));
+			const contentLeft = observableValue(
+				this,
+				context.configuration.options.get(EditorOption.layoutInfo).contentLeft,
+			);
+			this._register(
+				context.configuration.onDidChange(event => {
+					if (event.hasChanged(EditorOption.layoutInfo))
+						contentLeft.set(context.configuration.options.get(EditorOption.layoutInfo).contentLeft);
+				}),
+			);
 			this.contentLeft = contentLeft;
 
-			this.rectangleRenderer = this._register(new RectangleRenderer(
-				context,
-				this.contentLeft,
-				this.devicePixelRatio,
-				this.canvas.domNode,
-				this.ctx,
-				ViewGpuContext.device,
-			));
+			this.rectangleRenderer = this._register(
+				new RectangleRenderer(
+					context,
+					this.contentLeft,
+					this.devicePixelRatio,
+					this.canvas.domNode,
+					this.ctx,
+					ViewGpuContext.device,
+				),
+			);
 		} catch (error) {
 			this.dispose();
 			throw error;
@@ -166,7 +202,10 @@ export class ViewGpuContext extends Disposable {
 		super.dispose();
 	}
 
-	public resolveSemanticStyle(token: ResolvedSemanticToken | undefined, tokenMetadata: number): ReturnType<SemanticTokenStyleResolver['resolve']> {
+	public resolveSemanticStyle(
+		token: ResolvedSemanticToken | undefined,
+		tokenMetadata: number,
+	): ReturnType<SemanticTokenStyleResolver['resolve']> {
 		return this.semanticStyleResolver.resolve(token, tokenMetadata);
 	}
 
@@ -175,8 +214,11 @@ export class ViewGpuContext extends Disposable {
 	}
 
 	public canRender(options: ViewLineOptions, viewportData: ViewportData, lineNumber: number): boolean {
-		return this.activeDevice !== undefined && this.activeDevice === ViewGpuContext.deviceSync
-			&& this.canRenderDetailed(options, viewportData, lineNumber).length === 0;
+		return (
+			this.activeDevice !== undefined &&
+			this.activeDevice === ViewGpuContext.deviceSync &&
+			this.canRenderDetailed(options, viewportData, lineNumber).length === 0
+		);
 	}
 
 	public canRenderDetailed(options: ViewLineOptions, viewportData: ViewportData, lineNumber: number): string[] {
@@ -189,13 +231,17 @@ export class ViewGpuContext extends Disposable {
 				reasons.push(`unsupported inline decoration type: ${decoration.type}`);
 				continue;
 			}
-			for (const rule of ViewGpuContext.decorationCssRuleExtractor.getStyleRules(this.canvas.domNode, decoration.inlineClassName)) {
+			for (const rule of ViewGpuContext.decorationCssRuleExtractor.getStyleRules(
+				this.canvas.domNode,
+				decoration.inlineClassName,
+			)) {
 				if (rule.selectorText.includes(':')) {
 					reasons.push(`unsupported inline decoration selector: ${rule.selectorText}`);
 					continue;
 				}
 				for (const property of rule.style) {
-					if (!supportsDecorationCssRule(property, rule.style)) reasons.push(`unsupported inline decoration CSS: ${property}`);
+					if (!supportsDecorationCssRule(property, rule.style))
+						reasons.push(`unsupported inline decoration CSS: ${property}`);
 				}
 			}
 		}
@@ -211,7 +257,8 @@ export class ViewGpuContext extends Disposable {
 	private static updateTheme(theme: IColorTheme): void {
 		const foreground = theme.getColor(editorForeground);
 		const background = theme.getColor(editorBackground);
-		if (!foreground || !background) throw new Error('The editor theme must define GPU foreground and background colors');
+		if (!foreground || !background)
+			throw new Error('The editor theme must define GPU foreground and background colors');
 		const nextForeground = foreground.toString();
 		const nextBackground = background.toString();
 		ViewGpuContext._colorMap[ColorId.DefaultForeground] = nextForeground;
@@ -235,7 +282,10 @@ export class ViewGpuContext extends Disposable {
 }
 
 class GpuThemeListener extends ViewEventHandler {
-	constructor(private readonly context: ViewContext, private readonly update: (theme: IColorTheme) => void) {
+	constructor(
+		private readonly context: ViewContext,
+		private readonly update: (theme: IColorTheme) => void,
+	) {
 		super();
 		this.context.addEventHandler(this);
 		this._register(toDisposable(() => this.context.removeEventHandler(this)));
@@ -263,10 +313,15 @@ function supportsDecorationCssRule(property: string, style: CSSStyleDeclaration)
 	const value = style.getPropertyValue(property).trim();
 	switch (property) {
 		case 'text-decoration':
-		case 'text-decoration-line': return value === 'line-through';
-		case 'text-decoration-color': return /^var\(--[^,)]+(?:,[^)]+)?\)$/.test(value) || Color.Format.CSS.parse(value) !== null;
-		case 'text-decoration-style': return value === 'initial' || value === 'solid';
-		case 'text-decoration-thickness': return value === 'initial' || /^\d+(?:\.\d+)?px$/.test(value);
-		default: return true;
+		case 'text-decoration-line':
+			return value === 'line-through';
+		case 'text-decoration-color':
+			return /^var\(--[^,)]+(?:,[^)]+)?\)$/.test(value) || Color.Format.CSS.parse(value) !== null;
+		case 'text-decoration-style':
+			return value === 'initial' || value === 'solid';
+		case 'text-decoration-thickness':
+			return value === 'initial' || /^\d+(?:\.\d+)?px$/.test(value);
+		default:
+			return true;
 	}
 }

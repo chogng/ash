@@ -16,7 +16,10 @@ export class MultiplexPolicyService extends AbstractPolicyService {
 		for (const name of Object.keys(this.policyDefinitions)) {
 			for (const source of this.sources) {
 				const value = source.getPolicyValue(name);
-				if (value !== undefined) { Object.defineProperty(values, name, { value, enumerable: true }); break; }
+				if (value !== undefined) {
+					Object.defineProperty(values, name, { value, enumerable: true });
+					break;
+				}
 			}
 		}
 		this.accept(values);

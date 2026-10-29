@@ -1,57 +1,76 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('Memories can be created, edited, authorized and deleted through the product backend', { tag: ['@electron-app-server'] }, async ({ target, workbench, application }) => {
-	const page = workbench.page;
-	await page.keyboard.press('ControlOrMeta+Shift+P');
-	await page.getByPlaceholder('Type the name of a command to run').fill('Open memories');
-	await page.keyboard.press('Enter');
-	const view = page.locator('.ash-memories');
-	await expect(view).toBeVisible();
-	await expect(view.getByLabel('Memory scope', { exact: true })).toBeEnabled();
-	await expect(view.getByLabel('Allow memory reading', { exact: true })).not.toBeChecked();
-	await view.getByLabel('Allow memory reading', { exact: true }).check();
-	await expect(view.getByLabel('Allow model saving', { exact: true })).toBeEnabled();
-	await view.getByLabel('Allow model saving', { exact: true }).check();
-	await expect(view.getByLabel('Allow model saving', { exact: true })).toBeEnabled();
-	await view.getByRole('button', { name: 'New memory', exact: true }).click();
-	await view.getByLabel('Memory title', { exact: true }).fill('Playwright fixture');
-	await view.getByLabel('Memory content', { exact: true }).fill('Use Rust\n保留  两个空格');
-	await page.keyboard.press('ControlOrMeta+s');
-	await expect(view.getByRole('status')).toHaveText('Memory saved.');
-	await expect(view.getByLabel('Saved memories', { exact: true })).toContainText('Playwright fixture');
-	await view.getByLabel('Memory content', { exact: true }).fill('Updated fixture\n中文正文');
-	await view.getByRole('button', { name: 'Save memory', exact: true }).click();
-	await expect(view.getByRole('status')).toHaveText('Memory saved.');
-	await view.getByRole('button', { name: 'Refresh', exact: true }).click();
-	await expect(view.getByLabel('Saved memories', { exact: true })).toBeEnabled();
-	await view.getByLabel('Saved memories', { exact: true }).selectOption({ label: 'Playwright fixture' });
-	await expect(view.getByLabel('Memory content', { exact: true })).toHaveValue('Updated fixture\n中文正文');
-	const memoryId = await view.getByLabel('Saved memories', { exact: true }).inputValue();
-	const reference = 'memory:' + Buffer.from(JSON.stringify({ memoryId, scope: { type: 'profile' }, revision: 2, startByte: 0, endByte: Buffer.byteLength('Updated fixture\n中文正文') })).toString('base64url');
-	await view.getByLabel('Memory reference', { exact: true }).fill(reference);
-	await view.getByRole('button', { name: 'Open reference', exact: true }).click();
-	await expect(view.getByLabel('Memory content', { exact: true })).toHaveJSProperty('readOnly', true);
-	await expect(view.getByRole('button', { name: 'Save memory', exact: true })).toBeDisabled();
-	await view.getByLabel('Saved memories', { exact: true }).selectOption({ label: 'Playwright fixture' });
-	await expect(view.getByLabel('Memory content', { exact: true })).toHaveJSProperty('readOnly', false);
-	await view.getByLabel('Memory content', { exact: true }).focus();
-	await page.keyboard.press('Alt+F1');
-	const help = page.getByRole('dialog', { name: 'Accessibility Help' });
-	await expect(help).toBeVisible();
-	await page.keyboard.press('Escape');
-	await expect(help).toBeHidden();
-	await expect(view.getByLabel('Memory content', { exact: true })).toBeFocused();
-	await workbench.dialogs.confirm(application, 'Delete memory', 'Delete', () => view.getByRole('button', { name: 'Delete memory', exact: true }).click());
-	await expect(view.getByLabel('Saved memories', { exact: true })).not.toContainText('Playwright fixture');
-});
+test(
+	'Memories can be created, edited, authorized and deleted through the product backend',
+	{ tag: ['@electron-app-server'] },
+	async ({ target, workbench, application }) => {
+		const page = workbench.page;
+		await page.keyboard.press('ControlOrMeta+Shift+P');
+		await page.getByPlaceholder('Type the name of a command to run').fill('Open memories');
+		await page.keyboard.press('Enter');
+		const view = page.locator('.ash-memories');
+		await expect(view).toBeVisible();
+		await expect(view.getByLabel('Memory scope', { exact: true })).toBeEnabled();
+		await expect(view.getByLabel('Allow memory reading', { exact: true })).not.toBeChecked();
+		await view.getByLabel('Allow memory reading', { exact: true }).check();
+		await expect(view.getByLabel('Allow model saving', { exact: true })).toBeEnabled();
+		await view.getByLabel('Allow model saving', { exact: true }).check();
+		await expect(view.getByLabel('Allow model saving', { exact: true })).toBeEnabled();
+		await view.getByRole('button', { name: 'New memory', exact: true }).click();
+		await view.getByLabel('Memory title', { exact: true }).fill('Playwright fixture');
+		await view.getByLabel('Memory content', { exact: true }).fill('Use Rust\n保留  两个空格');
+		await page.keyboard.press('ControlOrMeta+s');
+		await expect(view.getByRole('status')).toHaveText('Memory saved.');
+		await expect(view.getByLabel('Saved memories', { exact: true })).toContainText('Playwright fixture');
+		await view.getByLabel('Memory content', { exact: true }).fill('Updated fixture\n中文正文');
+		await view.getByRole('button', { name: 'Save memory', exact: true }).click();
+		await expect(view.getByRole('status')).toHaveText('Memory saved.');
+		await view.getByRole('button', { name: 'Refresh', exact: true }).click();
+		await expect(view.getByLabel('Saved memories', { exact: true })).toBeEnabled();
+		await view.getByLabel('Saved memories', { exact: true }).selectOption({ label: 'Playwright fixture' });
+		await expect(view.getByLabel('Memory content', { exact: true })).toHaveValue('Updated fixture\n中文正文');
+		const memoryId = await view.getByLabel('Saved memories', { exact: true }).inputValue();
+		const reference =
+			'memory:' +
+			Buffer.from(
+				JSON.stringify({
+					memoryId,
+					scope: { type: 'profile' },
+					revision: 2,
+					startByte: 0,
+					endByte: Buffer.byteLength('Updated fixture\n中文正文'),
+				}),
+			).toString('base64url');
+		await view.getByLabel('Memory reference', { exact: true }).fill(reference);
+		await view.getByRole('button', { name: 'Open reference', exact: true }).click();
+		await expect(view.getByLabel('Memory content', { exact: true })).toHaveJSProperty('readOnly', true);
+		await expect(view.getByRole('button', { name: 'Save memory', exact: true })).toBeDisabled();
+		await view.getByLabel('Saved memories', { exact: true }).selectOption({ label: 'Playwright fixture' });
+		await expect(view.getByLabel('Memory content', { exact: true })).toHaveJSProperty('readOnly', false);
+		await view.getByLabel('Memory content', { exact: true }).focus();
+		await page.keyboard.press('Alt+F1');
+		const help = page.getByRole('dialog', { name: 'Accessibility Help' });
+		await expect(help).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(help).toBeHidden();
+		await expect(view.getByLabel('Memory content', { exact: true })).toBeFocused();
+		await workbench.dialogs.confirm(application, 'Delete memory', 'Delete', () =>
+			view.getByRole('button', { name: 'Delete memory', exact: true }).click(),
+		);
+		await expect(view.getByLabel('Saved memories', { exact: true })).not.toContainText('Playwright fixture');
+	},
+);
 
-
-test('Browser Memories keeps authorization and saving disabled when the backend requires a desktop host', { tag: ['@browser-app-server'] }, async ({ target, workbench }) => {
-	await workbench.quickaccess.runCommand('ash.memories.open');
-	const view = workbench.page.locator('.ash-memories');
-	await expect(view.getByRole('status')).toHaveText('PermissionRequired');
-	await expect(view.getByLabel('Allow memory reading', { exact: true })).toBeDisabled();
-	await expect(view.getByLabel('Allow model saving', { exact: true })).toBeDisabled();
-	await expect(view.getByRole('button', { name: 'Save memory', exact: true })).toBeDisabled();
-	await expect(view.getByRole('button', { name: 'Delete memory', exact: true })).toBeDisabled();
-});
+test(
+	'Browser Memories keeps authorization and saving disabled when the backend requires a desktop host',
+	{ tag: ['@browser-app-server'] },
+	async ({ target, workbench }) => {
+		await workbench.quickaccess.runCommand('ash.memories.open');
+		const view = workbench.page.locator('.ash-memories');
+		await expect(view.getByRole('status')).toHaveText('PermissionRequired');
+		await expect(view.getByLabel('Allow memory reading', { exact: true })).toBeDisabled();
+		await expect(view.getByLabel('Allow model saving', { exact: true })).toBeDisabled();
+		await expect(view.getByRole('button', { name: 'Save memory', exact: true })).toBeDisabled();
+		await expect(view.getByRole('button', { name: 'Delete memory', exact: true })).toBeDisabled();
+	},
+);

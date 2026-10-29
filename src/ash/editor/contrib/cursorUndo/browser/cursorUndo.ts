@@ -3,17 +3,25 @@ import { Disposable } from '../../../../base/common/lifecycle.js';
 import * as nls from '../../../../nls.js';
 import { KeybindingWeight } from '../../../../platform/keybinding/common/keybindingsRegistry.js';
 import { type ICodeEditor } from '../../../browser/editorBrowser.js';
-import { EditorAction, EditorContributionInstantiation, registerEditorAction, registerEditorContribution, type ServicesAccessor } from '../../../browser/editorFeatureRegistration.js';
+import {
+	EditorAction,
+	EditorContributionInstantiation,
+	registerEditorAction,
+	registerEditorContribution,
+	type ServicesAccessor,
+} from '../../../browser/editorFeatureRegistration.js';
 import { Selection } from '../../../common/core/selection.js';
 import { type IEditorContribution } from '../../../common/editorCommon.js';
 import { EditorContextKeys } from '../../../common/editorContextKeys.js';
 
 class CursorState {
-	constructor(readonly selections: readonly Selection[]) { }
+	constructor(readonly selections: readonly Selection[]) {}
 
 	equals(other: CursorState): boolean {
-		return this.selections.length === other.selections.length
-			&& this.selections.every((selection, index) => selection.equalsSelection(other.selections[index]!));
+		return (
+			this.selections.length === other.selections.length &&
+			this.selections.every((selection, index) => selection.equalsSelection(other.selections[index]!))
+		);
 	}
 }
 
@@ -22,7 +30,7 @@ class StackElement {
 		readonly cursorState: CursorState,
 		readonly scrollTop: number,
 		readonly scrollLeft: number,
-	) { }
+	) {}
 }
 
 /** Owns bounded cursor-only undo and redo for one editor instance. */
@@ -39,7 +47,11 @@ export class CursorUndoRedoController extends Disposable implements IEditorContr
 
 	constructor(private readonly editor: ICodeEditor) {
 		super();
-		this._register(editor.onDidChangeCursorSelection(event => this.recordCursorState(event.oldSelections, event.oldModelVersionId, event.modelVersionId)));
+		this._register(
+			editor.onDidChangeCursorSelection(event =>
+				this.recordCursorState(event.oldSelections, event.oldModelVersionId, event.modelVersionId),
+			),
+		);
 		const model = editor.getModel();
 		if (model) this._register(model.onDidChangeContent(() => this.clearHistory()));
 	}
@@ -56,7 +68,11 @@ export class CursorUndoRedoController extends Disposable implements IEditorContr
 		this.applyState(this.redoStack.pop()!);
 	}
 
-	private recordCursorState(oldSelections: readonly Selection[] | null, oldModelVersionId: number, modelVersionId: number): void {
+	private recordCursorState(
+		oldSelections: readonly Selection[] | null,
+		oldModelVersionId: number,
+		modelVersionId: number,
+	): void {
 		if (this.isCursorUndoRedo || !oldSelections || oldModelVersionId !== modelVersionId) return;
 		const previous = new CursorState(oldSelections);
 		if (this.undoStack[this.undoStack.length - 1]?.cursorState.equals(previous)) return;
@@ -114,6 +130,10 @@ export class CursorRedo extends EditorAction {
 	}
 }
 
-registerEditorContribution(CursorUndoRedoController.ID, CursorUndoRedoController, EditorContributionInstantiation.Eager);
+registerEditorContribution(
+	CursorUndoRedoController.ID,
+	CursorUndoRedoController,
+	EditorContributionInstantiation.Eager,
+);
 registerEditorAction(CursorUndo);
 registerEditorAction(CursorRedo);

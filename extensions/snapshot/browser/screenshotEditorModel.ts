@@ -21,7 +21,7 @@ export function screenshotRectangle(start: ScreenshotPoint, end: ScreenshotPoint
 		x,
 		y,
 		width: Math.max(1, Math.round(Math.max(start.x, end.x)) - x),
-		height: Math.max(1, Math.round(Math.max(start.y, end.y)) - y)
+		height: Math.max(1, Math.round(Math.max(start.y, end.y)) - y),
 	};
 }
 
@@ -32,7 +32,7 @@ export function clampScreenshotRectangle(rect: IRectangle, width: number, height
 		x,
 		y,
 		width: Math.max(1, Math.min(width - x, Math.round(rect.width))),
-		height: Math.max(1, Math.min(height - y, Math.round(rect.height)))
+		height: Math.max(1, Math.min(height - y, Math.round(rect.height))),
 	};
 }
 
@@ -74,12 +74,12 @@ export function paintScreenshotAnnotation(context: CanvasRenderingContext2D, ann
 			context.beginPath();
 			context.moveTo(
 				end.x - length * Math.cos(angle - Math.PI / 6),
-				end.y - length * Math.sin(angle - Math.PI / 6)
+				end.y - length * Math.sin(angle - Math.PI / 6),
 			);
 			context.lineTo(end.x, end.y);
 			context.lineTo(
 				end.x - length * Math.cos(angle + Math.PI / 6),
-				end.y - length * Math.sin(angle + Math.PI / 6)
+				end.y - length * Math.sin(angle + Math.PI / 6),
 			);
 			context.stroke();
 		}

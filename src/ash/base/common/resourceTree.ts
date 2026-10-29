@@ -23,11 +23,17 @@ class ResourceNode<T, C> implements IResourceNode<T, C> {
 		public readonly context: C,
 		public readonly parent: ResourceNode<T, C> | undefined,
 		private readonly identity: IExtUri,
-	) { }
+	) {}
 
-	public get name(): string { return this.parent ? basename(this.uri) : ''; }
-	public get children(): Iterable<ResourceNode<T, C>> { return this.entries.values(); }
-	public get childrenCount(): number { return this.entries.size; }
+	public get name(): string {
+		return this.parent ? basename(this.uri) : '';
+	}
+	public get children(): Iterable<ResourceNode<T, C>> {
+		return this.entries.values();
+	}
+	public get childrenCount(): number {
+		return this.entries.size;
+	}
 
 	public get(childName: string): ResourceNode<T, C> | undefined {
 		for (const child of this.entries.values()) {
@@ -45,7 +51,11 @@ export class ResourceTree<T extends NonNullable<unknown>, C> {
 	private readonly rootNode: ResourceNode<T, C>;
 	public readonly root: IResourceNode<T, C>;
 
-	constructor(context: C, rootURI: URI = URI.file('/'), private readonly identity: IExtUri = extUri) {
+	constructor(
+		context: C,
+		rootURI: URI = URI.file('/'),
+		private readonly identity: IExtUri = extUri,
+	) {
 		this.rootNode = new ResourceNode(rootURI, '', context, undefined, identity);
 		this.root = this.rootNode;
 	}

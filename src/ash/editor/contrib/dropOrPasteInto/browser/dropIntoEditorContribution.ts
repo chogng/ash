@@ -16,30 +16,34 @@ registerEditorContribution(
 	EditorContributionInstantiation.BeforeFirstInteraction,
 );
 
-registerEditorCommand(new class extends EditorCommand {
-	constructor() {
-		super({
-			id: changeDropTypeCommandId,
-			precondition: dropWidgetVisibleCtx.isEqualTo(true),
-			kbOpts: { weight: KeybindingWeight.EditorContrib, primary: KeyMod.CtrlCmd | KeyCode.Period },
-		});
-	}
-	runEditorCommand(_accessor: ServicesAccessor, editor: ICodeEditor): void {
-		DropIntoEditorController.get(editor)?.changeDropType();
-	}
-});
+registerEditorCommand(
+	new (class extends EditorCommand {
+		constructor() {
+			super({
+				id: changeDropTypeCommandId,
+				precondition: dropWidgetVisibleCtx.isEqualTo(true),
+				kbOpts: { weight: KeybindingWeight.EditorContrib, primary: KeyMod.CtrlCmd | KeyCode.Period },
+			});
+		}
+		runEditorCommand(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+			DropIntoEditorController.get(editor)?.changeDropType();
+		}
+	})(),
+);
 
-registerEditorCommand(new class extends EditorCommand {
-	constructor() {
-		super({
-			id: 'editor.hideDropWidget',
-			precondition: dropWidgetVisibleCtx.isEqualTo(true),
-			kbOpts: { weight: KeybindingWeight.EditorContrib, primary: KeyCode.Escape },
-		});
-	}
-	runEditorCommand(_accessor: ServicesAccessor, editor: ICodeEditor): void {
-		DropIntoEditorController.get(editor)?.clearWidgets();
-	}
-});
+registerEditorCommand(
+	new (class extends EditorCommand {
+		constructor() {
+			super({
+				id: 'editor.hideDropWidget',
+				precondition: dropWidgetVisibleCtx.isEqualTo(true),
+				kbOpts: { weight: KeybindingWeight.EditorContrib, primary: KeyCode.Escape },
+			});
+		}
+		runEditorCommand(_accessor: ServicesAccessor, editor: ICodeEditor): void {
+			DropIntoEditorController.get(editor)?.clearWidgets();
+		}
+	})(),
+);
 
 export type PreferredDropConfiguration = string;

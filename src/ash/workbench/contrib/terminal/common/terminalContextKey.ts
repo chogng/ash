@@ -1,9 +1,9 @@
 import { RawContextKey } from '../../../../platform/contextkey/common/contextkey.js';
 
-export const TerminalCreatingContext = new RawContextKey<boolean>("terminalCreating", false);
-export const TerminalHasActiveInstanceContext = new RawContextKey<boolean>("terminalHasActiveInstance", false);
-export const TerminalActiveInstanceInTitleContext = new RawContextKey<boolean>("terminalActiveInstanceInTitle", false);
-export const TerminalActiveInstanceStateContext = new RawContextKey<string>("terminalActiveInstanceState", "none");
+export const TerminalCreatingContext = new RawContextKey<boolean>('terminalCreating', false);
+export const TerminalHasActiveInstanceContext = new RawContextKey<boolean>('terminalHasActiveInstance', false);
+export const TerminalActiveInstanceInTitleContext = new RawContextKey<boolean>('terminalActiveInstanceInTitle', false);
+export const TerminalActiveInstanceStateContext = new RawContextKey<string>('terminalActiveInstanceState', 'none');
 export const TerminalViewInlineActionsContext = new RawContextKey<boolean>('terminalViewInlineActions', false);
 
 export namespace TerminalContextKeys {

@@ -9,11 +9,22 @@ export function createAppServerNetworkDiagnosticsApi(connection: AppServerProtoc
 	return {
 		read: async () => snapshot(await appServerRequest(connection, 'network/read', {})),
 		configureHttp: async (httpMode, expectedRevision) => {
-			await appServerRequest(connection, 'network/http/configure', { commandId: generateUuid(), expectedRevision, httpMode });
+			await appServerRequest(connection, 'network/http/configure', {
+				commandId: generateUuid(),
+				expectedRevision,
+				httpMode,
+			});
 		},
 		run: async () => {
 			const result = await appServerRequest(connection, 'network/diagnostics/run', {});
-			return { network: snapshot(result.network), checks: result.checks.map(check => ({ connection: check.connection, targetId: check.targetId, outcome: { ...check.outcome } })) };
+			return {
+				network: snapshot(result.network),
+				checks: result.checks.map(check => ({
+					connection: check.connection,
+					targetId: check.targetId,
+					outcome: { ...check.outcome },
+				})),
+			};
 		},
 	};
 }
@@ -27,5 +38,9 @@ export function createDisconnectedNetworkDiagnosticsApi(unavailable: Unavailable
 }
 
 function snapshot(result: NetworkReadResult): NetworkSnapshot {
-	return { revision: result.revision, httpMode: result.httpMode, targets: result.targets.map(target => ({ ...target, route: { ...target.route } })) };
+	return {
+		revision: result.revision,
+		httpMode: result.httpMode,
+		targets: result.targets.map(target => ({ ...target, route: { ...target.route } })),
+	};
 }

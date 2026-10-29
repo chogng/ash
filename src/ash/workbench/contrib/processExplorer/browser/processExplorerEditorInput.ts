@@ -10,5 +10,7 @@ export class ProcessExplorerEditorInput implements IResourceEditorInput {
 	public readonly resource = ProcessExplorerEditorInput.RESOURCE;
 	public readonly readOnly = true;
 	public readonly showBreadcrumbs = false;
-	public get label(): string { return localize('processExplorer.title', 'Process Explorer'); }
+	public get label(): string {
+		return localize('processExplorer.title', 'Process Explorer');
+	}
 }

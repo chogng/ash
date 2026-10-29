@@ -3,7 +3,12 @@ import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { getVariableNameValidator } from './lib/stylelint/validateVariableNames.ts';
 import type { IValidator } from './lib/stylelint/validateVariableNames.ts';
-import { findClassAttributeSubstringSelector, findRootAnchoredHas, findSessionsReference, findWorkbenchSelector } from './lib/stylelint/validateHasSelectors.ts';
+import {
+	findClassAttributeSubstringSelector,
+	findRootAnchoredHas,
+	findSessionsReference,
+	findWorkbenchSelector,
+} from './lib/stylelint/validateHasSelectors.ts';
 import { validateDesignTokens } from './lib/stylelint/validateDesignTokens.ts';
 
 const repositoryRoot = resolve(import.meta.dirname, '..');
@@ -23,7 +28,9 @@ export function resolveStylelintMatches(sources: readonly string[], root = repos
 		} else {
 			matches = [source];
 		}
-		const selected = matches.map(match => resolve(root, match)).filter(file => file.endsWith('.css') && !testPath.test(file));
+		const selected = matches
+			.map(match => resolve(root, match))
+			.filter(file => file.endsWith('.css') && !testPath.test(file));
 		if (selected.length === 0) {
 			throw new Error(`No production CSS files matched: ${source}`);
 		}
@@ -38,7 +45,11 @@ export function resolveStylelintMatches(sources: readonly string[], root = repos
 	return [...files].sort();
 }
 
-export function checkStyles(files: readonly string[], validator: IValidator = getVariableNameValidator(), root = repositoryRoot): string[] {
+export function checkStyles(
+	files: readonly string[],
+	validator: IValidator = getVariableNameValidator(),
+	root = repositoryRoot,
+): string[] {
 	const errors: string[] = [];
 	for (const file of files) {
 		const content = readFileSync(file, 'utf8');
@@ -50,16 +61,33 @@ export function checkStyles(files: readonly string[], validator: IValidator = ge
 		};
 		validator(content, (variable, offset) => report(offset, `Unknown CSS variable ${variable}`));
 		const rootHas = findRootAnchoredHas(content);
-		if (rootHas !== undefined) { report(rootHas, 'Root-anchored :has() causes page-wide style invalidation; project state through a class owned by the component.'); }
+		if (rootHas !== undefined) {
+			report(
+				rootHas,
+				'Root-anchored :has() causes page-wide style invalidation; project state through a class owned by the component.',
+			);
+		}
 		const classSubstring = findClassAttributeSubstringSelector(content);
-		if (classSubstring !== undefined) { report(classSubstring, 'Class attribute substring selectors react to unrelated class changes; select a stable class.'); }
+		if (classSubstring !== undefined) {
+			report(
+				classSubstring,
+				'Class attribute substring selectors react to unrelated class changes; select a stable class.',
+			);
+		}
 		if (/^src\/ash\/(?:base|platform|editor)\//.test(name)) {
 			const workbenchRoot = findWorkbenchSelector(content);
-			if (workbenchRoot !== undefined) { report(workbenchRoot, 'Lower-layer CSS must not depend on the .ash-workbench root owned by Workbench.'); }
+			if (workbenchRoot !== undefined) {
+				report(workbenchRoot, 'Lower-layer CSS must not depend on the .ash-workbench root owned by Workbench.');
+			}
 		}
 		if (/^src\/ash\/(?:base|platform|editor|workbench)\//.test(name)) {
 			const sessionsReference = findSessionsReference(content);
-			if (sessionsReference !== undefined) { report(sessionsReference, 'Shared CSS must not depend on Sessions classes or variables; put Agent Window presentations in src/ash/sessions.'); }
+			if (sessionsReference !== undefined) {
+				report(
+					sessionsReference,
+					'Shared CSS must not depend on Sessions classes or variables; put Agent Window presentations in src/ash/sessions.',
+				);
+			}
 		}
 	}
 	return errors;
@@ -85,14 +113,20 @@ export function stylelint(sources?: readonly string[]): number {
 	for (const error of errors) {
 		console.error(error);
 	}
-	const suggestionFiles = sources ? files : files.filter(file => relative(repositoryRoot, file).replaceAll('\\', '/').startsWith('src/ash/sessions/'));
+	const suggestionFiles = sources
+		? files
+		: files.filter(file => relative(repositoryRoot, file).replaceAll('\\', '/').startsWith('src/ash/sessions/'));
 	const suggestions = checkStyleSuggestions(suggestionFiles);
 	for (const suggestion of suggestions) {
 		console.warn(suggestion);
 	}
-	console.log(`Stylelint: checked ${files.length} CSS files; ${errors.length} errors; ${suggestions.length} design suggestions.`);
+	console.log(
+		`Stylelint: checked ${files.length} CSS files; ${errors.length} errors; ${suggestions.length} design suggestions.`,
+	);
 	if (errors.some(error => error.includes('Unknown CSS variable'))) {
-		console.error('Registered colors and sizes belong in build/lib/stylelint/ash-known-variables.json. Run pnpm stylelint:update after changing token registrations; review other variables against their defining owner.');
+		console.error(
+			'Registered colors and sizes belong in build/lib/stylelint/ash-known-variables.json. Run pnpm stylelint:update after changing token registrations; review other variables against their defining owner.',
+		);
 	}
 	return errors.length ? 1 : 0;
 }

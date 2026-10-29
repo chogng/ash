@@ -2,7 +2,6 @@ import { Disposable } from '../../base/common/lifecycle.js';
 import * as viewEvents from './viewEvents.js';
 
 export class ViewEventHandler extends Disposable {
-
 	private _shouldRender: boolean;
 
 	constructor() {
@@ -86,14 +85,12 @@ export class ViewEventHandler extends Disposable {
 	// --- end event handlers
 
 	public handleEvents(events: viewEvents.ViewEvent[]): void {
-
 		let shouldRender = false;
 
 		for (let i = 0, len = events.length; i < len; i++) {
 			const e = events[i];
 
 			switch (e.type) {
-
 				case viewEvents.ViewEventType.ViewCompositionStart:
 					if (this.onCompositionStart(e)) {
 						shouldRender = true;
@@ -213,5 +210,3 @@ export class ViewEventHandler extends Disposable {
 		}
 	}
 }
-
-

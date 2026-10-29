@@ -1,33 +1,37 @@
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
-import "./media/editorTitleControl.css";
-import { Disposable, MutableDisposable, toDisposable } from "../../../../base/common/lifecycle.js";
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from "../../../../platform/configuration/common/configurationRegistry.js";
-import { Registry } from "../../../../platform/registry/common/platform.js";
+import './media/editorTitleControl.css';
+import { Disposable, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import {
+	Extensions as ConfigurationExtensions,
+	type IConfigurationRegistry,
+	type IRegisteredConfiguration,
+} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
 import {
 	EditorTabsModeConfiguration,
 	type EditorTabsMode,
-} from "../../../services/editor/common/editorConfiguration.js";
+} from '../../../services/editor/common/editorConfiguration.js';
 
-import type { FileElement } from "./breadcrumbsModel.js";
-import { EditorHeaderControl, type EditorHeaderActions } from "./editorHeaderControl.js";
-import type { IBreadcrumbsService } from "./breadcrumbs.js";
-import type { EditorGroupId } from "../../../services/editor/common/editorState.js";
-import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageFeatures.js";
-import type { LanguageDocumentSymbol } from "../../../../editor/common/languages.js";
-import type { Range } from "../../../../editor/common/core/range.js";
+import type { FileElement } from './breadcrumbsModel.js';
+import { EditorHeaderControl, type EditorHeaderActions } from './editorHeaderControl.js';
+import type { IBreadcrumbsService } from './breadcrumbs.js';
+import type { EditorGroupId } from '../../../services/editor/common/editorState.js';
+import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import type { LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
+import type { Range } from '../../../../editor/common/core/range.js';
 
-import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from "./editorTabsControl.js";
-import { MultiRowEditorControl } from "./multiRowEditorTabsControl.js";
-import { NoEditorTabsControl } from "./noEditorTabsControl.js";
-import { SingleEditorTabsControl } from "./singleEditorTabsControl.js";
-import { h } from "../../../../base/browser/dom.js";
-import { localize } from "../../../../nls.js";
+import { EditorTabsControl, type EditorTabDescriptor, type EditorTabsDelegate } from './editorTabsControl.js';
+import { MultiRowEditorControl } from './multiRowEditorTabsControl.js';
+import { NoEditorTabsControl } from './noEditorTabsControl.js';
+import { SingleEditorTabsControl } from './singleEditorTabsControl.js';
+import { h } from '../../../../base/browser/dom.js';
+import { localize } from '../../../../nls.js';
 import type { EditorGroupModel } from '../../../common/editor/editorGroupModel.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 
-import { IInstantiationService } from "../../../../platform/instantiation/common/instantiation.js";
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 
 /** Hosts one group's Editor tabs and header in their shared title layout. */
 export class EditorTitleControl extends Disposable {
@@ -57,45 +61,60 @@ export class EditorTitleControl extends Disposable {
 		group: EditorGroupId | undefined,
 		breadcrumbsService: IBreadcrumbsService | undefined,
 		languageFeatures: ILanguageFeaturesService | undefined,
-		showSymbolPicker: ((symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void) | undefined,
+		showSymbolPicker:
+			| ((
+					symbols: readonly LanguageDocumentSymbol[],
+					selected: LanguageDocumentSymbol,
+					reveal: (range: Range) => void,
+			  ) => void)
+			| undefined,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 	) {
 		super();
 		this.delegate = delegate;
-		this.tabsMode = model.editorLimit === 1 ? 'single' : configurationService?.getValue<EditorTabsMode>(EditorTabsModeConfiguration) ?? configurationDefault<EditorTabsMode>(EditorTabsModeConfiguration);
+		this.tabsMode =
+			model.editorLimit === 1
+				? 'single'
+				: (configurationService?.getValue<EditorTabsMode>(EditorTabsModeConfiguration) ??
+					configurationDefault<EditorTabsMode>(EditorTabsModeConfiguration));
 		const ownerDocument = container.ownerDocument;
-		this.domNode = h(ownerDocument, "div");
-		this.domNode.className = "ash-editor-title-control";
+		this.domNode = h(ownerDocument, 'div');
+		this.domNode.className = 'ash-editor-title-control';
 		container.append(this.domNode);
-		this.tabsAndActionsDomNode = h(ownerDocument, "div");
-		this.tabsAndActionsDomNode.className = "ash-editor-tabs-and-actions";
+		this.tabsAndActionsDomNode = h(ownerDocument, 'div');
+		this.tabsAndActionsDomNode.className = 'ash-editor-tabs-and-actions';
 		this.domNode.append(this.tabsAndActionsDomNode);
 		this.tabsSlot.value = this.createTabsControl(this.tabsMode);
-		this.header = this._register(this.instantiationService.createInstance(EditorHeaderControl,
-			this.domNode,
-			this.tabsAndActionsDomNode,
-			titleActions,
-			configurationService,
-			onSelectBreadcrumb,
-			group,
-			breadcrumbsService,
-			languageFeatures,
-			showSymbolPicker,
-		));
-		this.lockIndicator = h(ownerDocument, "span");
-		this.lockIndicator.className = "ash-editor-group-lock-indicator";
+		this.header = this._register(
+			this.instantiationService.createInstance(
+				EditorHeaderControl,
+				this.domNode,
+				this.tabsAndActionsDomNode,
+				titleActions,
+				configurationService,
+				onSelectBreadcrumb,
+				group,
+				breadcrumbsService,
+				languageFeatures,
+				showSymbolPicker,
+			),
+		);
+		this.lockIndicator = h(ownerDocument, 'span');
+		this.lockIndicator.className = 'ash-editor-group-lock-indicator';
 		this.lockIndicator.hidden = true;
 		this.tabsAndActionsDomNode.append(this.lockIndicator);
 		this._register(this.header.onDidChangeHeight(() => this.heightEmitter.fire()));
 		if (configurationService) {
-			this._register(configurationService.onDidChangeConfiguration(event => {
-				if (model.editorLimit !== 1 && event.affectsConfiguration(EditorTabsModeConfiguration)) {
-					this.tabsMode = configurationService.getValue<EditorTabsMode>(EditorTabsModeConfiguration);
-					this.tabsSlot.value = this.createTabsControl(this.tabsMode);
-					this.tabs.setEditors(this.editors, this.activeInput, this.selectedIds);
-					this.heightEmitter.fire();
-				}
-			}));
+			this._register(
+				configurationService.onDidChangeConfiguration(event => {
+					if (model.editorLimit !== 1 && event.affectsConfiguration(EditorTabsModeConfiguration)) {
+						this.tabsMode = configurationService.getValue<EditorTabsMode>(EditorTabsModeConfiguration);
+						this.tabsSlot.value = this.createTabsControl(this.tabsMode);
+						this.tabs.setEditors(this.editors, this.activeInput, this.selectedIds);
+						this.heightEmitter.fire();
+					}
+				}),
+			);
 		}
 		this.domNode.hidden = model.editorLimit !== 1;
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -113,7 +132,7 @@ export class EditorTitleControl extends Disposable {
 
 	setLocked(locked: boolean): void {
 		this.lockIndicator.hidden = !locked;
-		this.lockIndicator.textContent = locked ? localize("workbench.editorGroupLocked", "Locked") : "";
+		this.lockIndicator.textContent = locked ? localize('workbench.editorGroupLocked', 'Locked') : '';
 	}
 
 	setEditors(
@@ -129,39 +148,57 @@ export class EditorTitleControl extends Disposable {
 		this.tabs.setEditors(editors, activeInput, selectedIds);
 		this.header.setInput(activeInput, activePane);
 		// Single-content hosts retain their group controls even without an editor.
-		this.domNode.hidden = (this.model.editorLimit !== 1 && editors.length === 0)
-			|| (editors.length === 1 && activePane?.prefersEditorTitleHidden === true);
+		this.domNode.hidden =
+			(this.model.editorLimit !== 1 && editors.length === 0) ||
+			(editors.length === 1 && activePane?.prefersEditorTitleHidden === true);
 		if (this.domNode.hidden !== wasHidden) this.heightEmitter.fire();
 	}
 
 	private createTabsControl(mode: EditorTabsMode): EditorTabsControl {
-		this.tabsAndActionsDomNode.classList.toggle("multiple", mode === "multiple");
-		const firstAction = this.tabsAndActionsDomNode.querySelector(":scope > .ash-editor-title-actions");
-		const control = mode === "single"
-			? this.instantiationService.createInstance(SingleEditorTabsControl, this.tabsAndActionsDomNode, this.delegate, this.model)
-			: mode === "none"
-				? new NoEditorTabsControl(this.tabsAndActionsDomNode)
-				: this.instantiationService.createInstance(MultiRowEditorControl, this.tabsAndActionsDomNode, this.delegate, this.model);
-		this.rowsListener.value = control instanceof MultiRowEditorControl
-			? control.onDidChangeRows(() => {
-				this.domNode.style.setProperty("--ash-editor-tab-rows", String(control.rowCount));
-				this.heightEmitter.fire();
-			})
-			: undefined;
-		this.domNode.style.setProperty("--ash-editor-tab-rows", control instanceof MultiRowEditorControl ? String(control.rowCount) : "1");
+		this.tabsAndActionsDomNode.classList.toggle('multiple', mode === 'multiple');
+		const firstAction = this.tabsAndActionsDomNode.querySelector(':scope > .ash-editor-title-actions');
+		const control =
+			mode === 'single'
+				? this.instantiationService.createInstance(
+						SingleEditorTabsControl,
+						this.tabsAndActionsDomNode,
+						this.delegate,
+						this.model,
+					)
+				: mode === 'none'
+					? new NoEditorTabsControl(this.tabsAndActionsDomNode)
+					: this.instantiationService.createInstance(
+							MultiRowEditorControl,
+							this.tabsAndActionsDomNode,
+							this.delegate,
+							this.model,
+						);
+		this.rowsListener.value =
+			control instanceof MultiRowEditorControl
+				? control.onDidChangeRows(() => {
+						this.domNode.style.setProperty('--ash-editor-tab-rows', String(control.rowCount));
+						this.heightEmitter.fire();
+					})
+				: undefined;
+		this.domNode.style.setProperty(
+			'--ash-editor-tab-rows',
+			control instanceof MultiRowEditorControl ? String(control.rowCount) : '1',
+		);
 		if (firstAction) this.tabsAndActionsDomNode.insertBefore(control.domNode, firstAction);
 		return control;
 	}
 
 	private get tabs(): EditorTabsControl {
 		const tabs = this.tabsSlot.value;
-		if (!tabs) throw new ReferenceError("Editor tabs control is not available");
+		if (!tabs) throw new ReferenceError('Editor tabs control is not available');
 		return tabs;
 	}
 }
 
 function configurationDefault<T>(key: string): T {
-	const configuration = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(key) as IRegisteredConfiguration<T> | undefined;
+	const configuration = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration).getConfiguration(
+		key,
+	) as IRegisteredConfiguration<T> | undefined;
 	if (!configuration) throw new RangeError(`Unknown configuration: ${key}`);
 	return configuration.defaultValue;
 }

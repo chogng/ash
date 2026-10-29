@@ -17,38 +17,84 @@ class MakeWorkspace extends CreatorCanvasWorkspace {
 	private previewDomNode!: HTMLIFrameElement;
 	private promptDomNode!: HTMLTextAreaElement;
 	private visible = false;
-	constructor(ownerDocument: Document, mode: CreatorMode, @IInstantiationService instantiation: IInstantiationService, @IContextMenuService contextMenus: IContextMenuService, @ICommandService private readonly commandService: ICommandService) { super(ownerDocument, mode, instantiation, contextMenus); }
+	constructor(
+		ownerDocument: Document,
+		mode: CreatorMode,
+		@IInstantiationService instantiation: IInstantiationService,
+		@IContextMenuService contextMenus: IContextMenuService,
+		@ICommandService private readonly commandService: ICommandService,
+	) {
+		super(ownerDocument, mode, instantiation, contextMenus);
+	}
 	protected override createModeContent(): void {
 		this.editor.setMode(DesignMode.Code);
 		this.domNode.classList.add('ash-creator-make');
-		this.promptDomNode = h(this.ownerDocument, 'textarea', { className: 'ash-creator-make-prompt', attributes: { 'aria-label': localize('sessions.creator.make.prompt', 'Describe what to build'), placeholder: localize('sessions.creator.make.prompt', 'Describe what to build'), rows: '2' } });
+		this.promptDomNode = h(this.ownerDocument, 'textarea', {
+			className: 'ash-creator-make-prompt',
+			attributes: {
+				'aria-label': localize('sessions.creator.make.prompt', 'Describe what to build'),
+				placeholder: localize('sessions.creator.make.prompt', 'Describe what to build'),
+				rows: '2',
+			},
+		});
 		this.domNode.insertBefore(this.promptDomNode, this.contentDomNode);
-		this.previewDomNode = h(this.ownerDocument, 'iframe', { className: 'ash-creator-make-preview', attributes: { title: localize('sessions.creator.make.preview', 'Running preview'), sandbox: 'allow-scripts' } });
+		this.previewDomNode = h(this.ownerDocument, 'iframe', {
+			className: 'ash-creator-make-preview',
+			attributes: {
+				title: localize('sessions.creator.make.preview', 'Running preview'),
+				sandbox: 'allow-scripts',
+			},
+		});
 		this.contentDomNode.append(this.previewDomNode);
-		const refresh = (): void => { if (this.visible) { this.previewDomNode.srcdoc = generateDesignCode(this.document.model.value, this.document.getEmbeddedImageSources()); } };
+		const refresh = (): void => {
+			if (this.visible) {
+				this.previewDomNode.srcdoc = generateDesignCode(
+					this.document.model.value,
+					this.document.getEmbeddedImageSources(),
+				);
+			}
+		};
 		this._register(this.document.model.onDidChange(refresh));
 		refresh();
 	}
 	protected override getModeActions(): readonly IAction[] {
 		return [
-			this.action('agent', localize('sessions.creator.make.agent', 'Build with Agent'), () => this.commandService.executeCommand('sessions.creator.buildWithAgent', { prompt: this.promptDomNode.value, content: generateDesignCode(this.document.model.value, this.document.getEmbeddedImageSources()) })),
-			this.action('edit', localize('sessions.creator.make.edit', 'Edit canvas'), () => this.editor.setMode(DesignMode.Design)),
-			this.action('code', localize('sessions.creator.make.code', 'View code'), () => this.editor.setMode(DesignMode.Code)),
+			this.action('agent', localize('sessions.creator.make.agent', 'Build with Agent'), () =>
+				this.commandService.executeCommand('sessions.creator.buildWithAgent', {
+					prompt: this.promptDomNode.value,
+					content: generateDesignCode(this.document.model.value, this.document.getEmbeddedImageSources()),
+				}),
+			),
+			this.action('edit', localize('sessions.creator.make.edit', 'Edit canvas'), () =>
+				this.editor.setMode(DesignMode.Design),
+			),
+			this.action('code', localize('sessions.creator.make.code', 'View code'), () =>
+				this.editor.setMode(DesignMode.Code),
+			),
 		];
 	}
 	public override setVisible(visible: boolean): void {
 		this.visible = visible;
 		super.setVisible(visible);
 		// Hidden previews release their execution context; source and the unsent prompt stay in the workspace.
-		this.previewDomNode.srcdoc = visible ? generateDesignCode(this.document.model.value, this.document.getEmbeddedImageSources()) : '';
+		this.previewDomNode.srcdoc = visible
+			? generateDesignCode(this.document.model.value, this.document.getEmbeddedImageSources())
+			: '';
 	}
 }
 
 registerCreatorMode({
 	id: CreatorMode.Make,
 	title: getCreatorModeTitle(CreatorMode.Make),
-	description: localize('sessions.creator.make.description', 'View generated code, run a preview and continue with an Agent.'),
+	description: localize(
+		'sessions.creator.make.description',
+		'View generated code, run a preview and continue with an Agent.',
+	),
 	icon: Lxicon.code,
-	help: localize('sessions.creator.make.help', 'View code shows generated HTML, CSS and scene JSON. Edit canvas returns to visual editing and updates the running preview. Describe what to build and choose Build with Agent to prepare a Code conversation with the current HTML attached; review and send the request there.'),
-	create: (instantiation, ownerDocument) => instantiation.createInstance(MakeWorkspace, ownerDocument, CreatorMode.Make),
+	help: localize(
+		'sessions.creator.make.help',
+		'View code shows generated HTML, CSS and scene JSON. Edit canvas returns to visual editing and updates the running preview. Describe what to build and choose Build with Agent to prepare a Code conversation with the current HTML attached; review and send the request there.',
+	),
+	create: (instantiation, ownerDocument) =>
+		instantiation.createInstance(MakeWorkspace, ownerDocument, CreatorMode.Make),
 });

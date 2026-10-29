@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test';
-import type { } from './fixtures/composite.page.js';
+import type {} from './fixtures/composite.page.js';
 import { suite, test } from 'mocha';
 import { useBrowserTests } from '../../../../../../test/unit/browser/context.js';
 
@@ -23,20 +23,29 @@ suite('viewpaneLayout browser component', () => {
 			await inputs.nth(2).fill('Retain keyboard access');
 			const create = body.getByRole('button').last();
 			await inputs.nth(2).focus();
-			for (let step = 0; step < 3 && !(await create.evaluate(element => element === element.ownerDocument.activeElement)); step++) {
+			for (
+				let step = 0;
+				step < 3 && !(await create.evaluate(element => element === element.ownerDocument.activeElement));
+				step++
+			) {
 				await page.keyboard.press('Tab');
 			}
 			await expect(create).toBeFocused();
 			await expect(create).toBeInViewport({ ratio: 1 });
 			await create.press('Enter');
-			await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.submissions)).toEqual([{ title: 'Layout fixture', prompt: 'Retain keyboard access' }]);
+			await expect
+				.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.submissions))
+				.toEqual([{ title: 'Layout fixture', prompt: 'Retain keyboard access' }]);
 			const header = page.locator('.ash-pane-view-header-button');
 			await header.press('ArrowLeft');
 			expect(await page.evaluate(() => window.viewpaneLayoutIntegration.watchers())).toBe(0);
 			await header.press('ArrowRight');
 			expect(await page.evaluate(() => window.viewpaneLayoutIntegration.watchers())).toBe(1);
 			await create.focus();
-			await testInfo.attach('short-symphony-pane', { body: await page.locator('#root').screenshot(), contentType: 'image/png' });
+			await testInfo.attach('short-symphony-pane', {
+				body: await page.locator('#root').screenshot(),
+				contentType: 'image/png',
+			});
 			await page.evaluate(() => window.viewpaneLayoutIntegration.dispose());
 			expect(await page.evaluate(() => window.viewpaneLayoutIntegration.watchers())).toBe(0);
 			expect(errors).toEqual([]);
@@ -72,12 +81,20 @@ suite('viewpaneLayout browser component', () => {
 		await page.keyboard.insertText('fixture');
 		await input.press('Enter');
 		await expect(body.getByRole('status')).toContainText('Evaluation failed.');
-		await expect.poll(() => body.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
-		await expect.poll(() => body.getByRole('log').evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(60);
+		await expect
+			.poll(() => body.evaluate(element => element.scrollHeight - element.clientHeight))
+			.toBeLessThanOrEqual(1);
+		await expect
+			.poll(() => body.getByRole('log').evaluate(element => element.clientHeight))
+			.toBeGreaterThanOrEqual(60);
 		expect(errors).toEqual([]);
 	});
 
-	for (const [view, content] of [['problems', '.ash-problems-results'], ['bulk', '.ash-bulk-edit-list'], ['ports', '.ash-remote-ports-list']]) {
+	for (const [view, content] of [
+		['problems', '.ash-problems-results'],
+		['bulk', '.ash-bulk-edit-list'],
+		['ports', '.ash-remote-ports-list'],
+	]) {
 		test(`${view} retains a usable list beside wrapping controls or discovery errors`, async function () {
 			const { page } = browserTests;
 
@@ -86,13 +103,17 @@ suite('viewpaneLayout browser component', () => {
 			await page.goto(`/viewpaneLayout.html?view=${view}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			const list = page.locator(content);
-			await expect.poll(() => list.locator('..').evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
+			await expect
+				.poll(() => list.locator('..').evaluate(element => element.scrollHeight - element.clientHeight))
+				.toBeLessThanOrEqual(1);
 			if (view === 'problems') {
 				await expect(list).toContainText('Fixture problem');
 				await expect.poll(() => list.evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(22);
 			} else {
 				await expect(list.locator(':scope > *')).toHaveCount(0);
-				await expect(page.getByRole('status')).toContainText(view === 'bulk' ? 'No bulk edit is awaiting approval.' : 'Port discovery failed.');
+				await expect(page.getByRole('status')).toContainText(
+					view === 'bulk' ? 'No bulk edit is awaiting approval.' : 'Port discovery failed.',
+				);
 			}
 			expect(errors).toEqual([]);
 		});
@@ -127,7 +148,13 @@ suite('viewpaneLayout browser component', () => {
 		expect(await body.evaluate(element => element.scrollHeight - element.clientHeight)).toBeLessThanOrEqual(1);
 	});
 
-	for (const [locale, theme] of [['en', 'ash-light'], ['zh-CN', 'ash-light'], ['zh-CN', 'ash-dark'], ['zh-CN', 'ash-high-contrast-dark'], ['zh-CN', 'ash-high-contrast-light']]) {
+	for (const [locale, theme] of [
+		['en', 'ash-light'],
+		['zh-CN', 'ash-light'],
+		['zh-CN', 'ash-dark'],
+		['zh-CN', 'ash-high-contrast-dark'],
+		['zh-CN', 'ash-high-contrast-light'],
+	]) {
 		test(`Problems keeps compact filters and keyboard menu access (${locale}, ${theme})`, async function () {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
@@ -150,13 +177,21 @@ suite('viewpaneLayout browser component', () => {
 			const bounds = await title.locator('.ash-problems-controls').evaluate(element => {
 				const input = element.querySelector('input')!.getBoundingClientRect();
 				const menu = element.querySelector('button')!.getBoundingClientRect();
-				return { overflow: element.scrollWidth - element.clientWidth, sameRow: Math.abs(input.top - menu.top) < 4, inputWidth: input.width, embedded: element.querySelector('.ash-problems-filter')!.contains(element.querySelector('button')) };
+				return {
+					overflow: element.scrollWidth - element.clientWidth,
+					sameRow: Math.abs(input.top - menu.top) < 4,
+					inputWidth: input.width,
+					embedded: element.querySelector('.ash-problems-filter')!.contains(element.querySelector('button')),
+				};
 			});
 			expect(bounds.overflow).toBeLessThanOrEqual(1);
 			expect(bounds.sameRow).toBe(true);
 			expect(bounds.embedded).toBe(true);
 			expect(bounds.inputWidth).toBeGreaterThan(80);
-			const collapse = title.getByRole('button', { name: locale === 'en' ? 'Collapse All' : '全部折叠', exact: true });
+			const collapse = title.getByRole('button', {
+				name: locale === 'en' ? 'Collapse All' : '全部折叠',
+				exact: true,
+			});
 			await collapse.press('Enter');
 			const heading = pane.locator('.ash-problems-file-heading').first();
 			await expect(heading).toHaveAttribute('aria-expanded', 'false');
@@ -167,21 +202,32 @@ suite('viewpaneLayout browser component', () => {
 			await expect(heading).toHaveAttribute('aria-expanded', 'true');
 			await collapse.focus();
 			await page.keyboard.press('ArrowRight');
-			const copy = title.getByRole('button', { name: locale === 'en' ? 'Copy Problems' : '复制问题', exact: true });
+			const copy = title.getByRole('button', {
+				name: locale === 'en' ? 'Copy Problems' : '复制问题',
+				exact: true,
+			});
 			await expect(copy).toBeFocused();
 			await copy.press('Enter');
 			await expect.poll(() => page.evaluate(() => window.ashCompositeIntegration.copiedProblems.length)).toBe(1);
-			expect(await page.evaluate(() => window.ashCompositeIntegration.copiedProblems[0])).toContain("Type 'string' is not assignable to type 'number'.");
+			expect(await page.evaluate(() => window.ashCompositeIntegration.copiedProblems[0])).toContain(
+				"Type 'string' is not assignable to type 'number'.",
+			);
 			await input.focus();
 			await page.keyboard.press('Tab');
 			await expect(filter).toBeFocused();
 			await filter.press('ArrowDown');
-			const errorOption = page.getByRole('menuitemcheckbox', { name: locale === 'en' ? 'Errors' : '错误', exact: true });
+			const errorOption = page.getByRole('menuitemcheckbox', {
+				name: locale === 'en' ? 'Errors' : '错误',
+				exact: true,
+			});
 			await expect(errorOption).toHaveAttribute('aria-checked', 'true');
 			await errorOption.press('Enter');
 			await expect(pane.locator('.ash-problems-item')).toHaveCount(1);
 			await expect(filter).toBeFocused();
-			const clear = pane.getByRole('button', { name: locale === 'en' ? 'Clear Filters' : '清除筛选', exact: true });
+			const clear = pane.getByRole('button', {
+				name: locale === 'en' ? 'Clear Filters' : '清除筛选',
+				exact: true,
+			});
 			await clear.press('Enter');
 			await expect(input).toBeFocused();
 			await expect(pane.locator('.ash-problems-item')).toHaveCount(2);
@@ -218,7 +264,12 @@ suite('viewpaneLayout browser component', () => {
 				const filename = header.locator('.ash-view-pane-header-description');
 				const tree = pane.getByRole('tree');
 				await expect(filename).toHaveText('file.txt');
-				await expect(header.getByRole('button', { name: `${locale === 'en' ? 'Timeline' : '时间线'} file.txt`, exact: true })).toBeVisible();
+				await expect(
+					header.getByRole('button', {
+						name: `${locale === 'en' ? 'Timeline' : '时间线'} file.txt`,
+						exact: true,
+					}),
+				).toBeVisible();
 				await expect(tree.getByRole('treeitem').first()).toBeVisible();
 				const headerBounds = (await header.boundingBox())!;
 				const treeBounds = (await tree.boundingBox())!;
@@ -230,14 +281,24 @@ suite('viewpaneLayout browser component', () => {
 				await tree.focus();
 				await tree.press('Home');
 				await tree.press('Enter');
-				await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.commands)).toEqual(['fixture.open']);
-				await testInfo.attach(`timeline-${locale}-${theme || 'light'}`, { body: await pane.screenshot(), contentType: 'image/png' });
+				await expect
+					.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.commands))
+					.toEqual(['fixture.open']);
+				await testInfo.attach(`timeline-${locale}-${theme || 'light'}`, {
+					body: await pane.screenshot(),
+					contentType: 'image/png',
+				});
 				const longName = 'a-very-long-filename-that-must-not-push-the-view-title-out-of-the-header.txt';
-				await page.evaluate(name => window.viewpaneLayoutIntegration.timeline.setFile(`/fixture/${name}`), longName);
+				await page.evaluate(
+					name => window.viewpaneLayoutIntegration.timeline.setFile(`/fixture/${name}`),
+					longName,
+				);
 				await expect(filename).toHaveText(longName);
 				await expect(filename).toHaveCSS('text-overflow', 'ellipsis');
 				expect(await filename.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
-				expect(await header.locator('h3').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+				expect(await header.locator('h3').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(
+					true,
+				);
 				await filename.hover();
 				await expect(page.getByRole('tooltip')).toContainText(`/fixture/${longName}`);
 			}
@@ -250,7 +311,13 @@ suite('viewpaneLayout browser component', () => {
 			const tree = page.locator('.ash-timeline-tree');
 			const size = () => tree.getByRole('treeitem').first().getAttribute('aria-setsize');
 			await expect.poll(size).toBe('9');
-			await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0]);
+			await expect
+				.poll(() =>
+					page.evaluate(() =>
+						window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor),
+					),
+				)
+				.toEqual([0]);
 			await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.setMode('hold'));
 			await tree.hover();
 			await page.mouse.wheel(0, 1000);
@@ -258,23 +325,43 @@ suite('viewpaneLayout browser component', () => {
 			await expect(tree).toContainText(locale === 'en' ? 'Loading…' : '正在加载…');
 			await page.mouse.wheel(0, 1000);
 			await page.mouse.wheel(0, 1000);
-			await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 8]);
+			await expect
+				.poll(() =>
+					page.evaluate(() =>
+						window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor),
+					),
+				)
+				.toEqual([0, 8]);
 			await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.release());
 			await expect.poll(size).toBe('17');
 			await expect(tree).toHaveAttribute('aria-busy', 'false');
-			await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 8]);
+			await expect
+				.poll(() =>
+					page.evaluate(() =>
+						window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor),
+					),
+				)
+				.toEqual([0, 8]);
 			await page.mouse.wheel(0, 1000);
 			await expect.poll(size).toBe('25');
 			await page.mouse.wheel(0, 1000);
 			await expect(tree).toHaveAttribute('aria-busy', 'false');
-			await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 8, 16, 24]);
+			await expect
+				.poll(() =>
+					page.evaluate(() =>
+						window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor),
+					),
+				)
+				.toEqual([0, 8, 16, 24]);
 			await expect(tree).not.toContainText(locale === 'en' ? 'Load More' : '加载更多');
 			const content = await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.content());
 			expect(content.match(/Entry \d+/gu)).toHaveLength(25);
 			expect(content).toContain('Entry 24');
 			await tree.press('Home');
 			await tree.press('Enter');
-			await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.commands)).toEqual(['fixture.open']);
+			await expect
+				.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.commands))
+				.toEqual(['fixture.open']);
 		});
 	}
 
@@ -292,12 +379,24 @@ suite('viewpaneLayout browser component', () => {
 			await expect(tree).toHaveAttribute('aria-busy', 'false');
 			await page.mouse.wheel(0, -1000);
 			await page.mouse.wheel(0, 1000);
-			await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 8]);
+			await expect
+				.poll(() =>
+					page.evaluate(() =>
+						window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor),
+					),
+				)
+				.toEqual([0, 8]);
 			await tree.press('End');
 			await tree.press('Enter');
 			await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '17');
 			await expect(tree).not.toContainText('重试加载');
-			await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 8, 8]);
+			await expect
+				.poll(() =>
+					page.evaluate(() =>
+						window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor),
+					),
+				)
+				.toEqual([0, 8, 8]);
 		});
 	}
 
@@ -308,7 +407,9 @@ suite('viewpaneLayout browser component', () => {
 		page.on('pageerror', error => errors.push(error.message));
 		await page.goto('/viewpaneLayout.html?view=timeline&shortPages');
 		const tree = page.locator('.ash-timeline-tree');
-		await expect.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.length)).toBeGreaterThan(1);
+		await expect
+			.poll(() => page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.length))
+			.toBeGreaterThan(1);
 		await expect.poll(() => tree.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
 		await expect(tree).toHaveAttribute('aria-busy', 'false');
 		await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.setMode('hold'));
@@ -362,10 +463,18 @@ suite('viewpaneLayout browser component', () => {
 		await expect(tree).toBeHidden();
 		await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.release());
 		await expect(tree).toHaveAttribute('aria-busy', 'false');
-		expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 8]);
+		expect(
+			await page.evaluate(() =>
+				window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor),
+			),
+		).toEqual([0, 8]);
 		await header.click();
 		await expect(tree.getByRole('treeitem').first()).toHaveAttribute('aria-setsize', '17');
-		expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 8]);
+		expect(
+			await page.evaluate(() =>
+				window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor),
+			),
+		).toEqual([0, 8]);
 	});
 
 	test('Timeline retains loaded pages, scroll and selection across repeated collapse and expand', async function () {
@@ -406,18 +515,30 @@ suite('viewpaneLayout browser component', () => {
 		const header = page.locator('[data-view-id="fixture.timeline"] .ash-pane-view-header-button');
 		await header.press('ArrowLeft');
 		await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.invalidate('/fixture/file.txt'));
-		expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0]);
+		expect(
+			await page.evaluate(() =>
+				window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor),
+			),
+		).toEqual([0]);
 		await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.setMode('hold'));
 		await header.press('ArrowRight');
 		await expect(tree).toHaveAttribute('aria-busy', 'true');
 		await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.release());
 		await expect(tree).toHaveAttribute('aria-busy', 'false');
 		await expect(tree.getByRole('treeitem').first()).toBeVisible();
-		expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 0]);
+		expect(
+			await page.evaluate(() =>
+				window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor),
+			),
+		).toEqual([0, 0]);
 		await header.hover();
 		await page.getByRole('button', { name: 'Refresh', exact: true }).click();
 		await expect(tree).toHaveAttribute('aria-busy', 'false');
-		expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0, 0, 0]);
+		expect(
+			await page.evaluate(() =>
+				window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor),
+			),
+		).toEqual([0, 0, 0]);
 	});
 
 	test('Timeline caches an empty source across collapse and expand', async function () {
@@ -431,6 +552,10 @@ suite('viewpaneLayout browser component', () => {
 			await header.press('ArrowRight');
 			await expect(page.getByRole('status')).toHaveText('No timeline information was provided.');
 		}
-		expect(await page.evaluate(() => window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor))).toEqual([0]);
+		expect(
+			await page.evaluate(() =>
+				window.viewpaneLayoutIntegration.timeline.requests.map(request => request.cursor),
+			),
+		).toEqual([0]);
 	});
 });

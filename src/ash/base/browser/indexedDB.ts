@@ -10,11 +10,19 @@ export class IndexedDB {
 	private readonly transactions = new Set<IDBTransaction>();
 	private closed = false;
 
-	constructor(private readonly database: IDBDatabase, private readonly name: string) {
+	constructor(
+		private readonly database: IDBDatabase,
+		private readonly name: string,
+	) {
 		database.onversionchange = () => this.close();
 	}
 
-	public static create(name: string, version: number | undefined, stores: string[], factory: IDBFactory = indexedDB): Promise<IndexedDB> {
+	public static create(
+		name: string,
+		version: number | undefined,
+		stores: string[],
+		factory: IDBFactory = indexedDB,
+	): Promise<IndexedDB> {
 		return new Promise((resolve, reject) => {
 			const request = factory.open(name, version);
 			let blocked = false;
@@ -57,14 +65,30 @@ export class IndexedDB {
 		this.closed = true;
 		this.database.onversionchange = null;
 		for (const transaction of this.transactions) {
-			try { transaction.abort(); } catch { /* A commit may have finished before its completion event is delivered. */ }
+			try {
+				transaction.abort();
+			} catch {
+				/* A commit may have finished before its completion event is delivered. */
+			}
 		}
 		this.database.close();
 	}
 
-	public runInTransaction<T>(store: string, mode: IDBTransactionMode, requests: (store: IDBObjectStore) => IDBRequest<T>[]): Promise<T[]>;
-	public runInTransaction<T>(store: string, mode: IDBTransactionMode, requests: (store: IDBObjectStore) => IDBRequest<T>): Promise<T>;
-	public runInTransaction<T>(store: string, mode: IDBTransactionMode, requests: (store: IDBObjectStore) => IDBRequest<T> | IDBRequest<T>[]): Promise<T | T[]> {
+	public runInTransaction<T>(
+		store: string,
+		mode: IDBTransactionMode,
+		requests: (store: IDBObjectStore) => IDBRequest<T>[],
+	): Promise<T[]>;
+	public runInTransaction<T>(
+		store: string,
+		mode: IDBTransactionMode,
+		requests: (store: IDBObjectStore) => IDBRequest<T>,
+	): Promise<T>;
+	public runInTransaction<T>(
+		store: string,
+		mode: IDBTransactionMode,
+		requests: (store: IDBObjectStore) => IDBRequest<T> | IDBRequest<T>[],
+	): Promise<T | T[]> {
 		if (this.closed) {
 			return Promise.reject(new DBClosedError(this.name));
 		}

@@ -1,7 +1,7 @@
-import { type Event } from "../../../../base/common/event.js";
-import { type IDisposable } from "../../../../base/common/lifecycle.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
-import { type ITaskRun } from "../../../contrib/tasks/common/tasks.js";
+import { type Event } from '../../../../base/common/event.js';
+import { type IDisposable } from '../../../../base/common/lifecycle.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
+import { type ITaskRun } from '../../../contrib/tasks/common/tasks.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { TestItem, TestResult } from '../../../../platform/testing/common/testExecutionService.js';
 
@@ -15,7 +15,7 @@ export interface ITestCaseResult extends TestResult {
 	readonly key: string;
 }
 
-export type TestRunStatus = "running" | "completed" | "passed" | "failed" | "canceled";
+export type TestRunStatus = 'running' | 'completed' | 'passed' | 'failed' | 'canceled';
 
 export interface ITestProfile {
 	readonly id: string;
@@ -35,7 +35,9 @@ export interface TestProfileContribution {
 
 export interface TestProfileProvider {
 	readonly id: string;
-	provideTestProfiles(signal: AbortSignal): readonly TestProfileContribution[] | PromiseLike<readonly TestProfileContribution[]>;
+	provideTestProfiles(
+		signal: AbortSignal,
+	): readonly TestProfileContribution[] | PromiseLike<readonly TestProfileContribution[]>;
 }
 
 /** One caller-owned Test Profile provider set that can be atomically replaced. */
@@ -78,4 +80,4 @@ export interface ITestingService extends IDisposable {
 	cancel(run: ITestRun): Promise<void>;
 }
 
-export const ITestingService = createServiceIdentifier<ITestingService>("testingService");
+export const ITestingService = createServiceIdentifier<ITestingService>('testingService');

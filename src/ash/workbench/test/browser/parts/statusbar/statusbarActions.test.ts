@@ -13,7 +13,9 @@ import { StatusbarPart, StatusbarService } from '../../../../browser/parts/statu
 import { createTestComponentServices } from '../../../common/testEditorServices.js';
 
 class StatusbarFixture extends Disposable {
-	readonly browser = new JSDOM('<!doctype html><body><textarea aria-label="Editor"></textarea></body>', { url: 'https://ash.test' });
+	readonly browser = new JSDOM('<!doctype html><body><textarea aria-label="Editor"></textarea></body>', {
+		url: 'https://ash.test',
+	});
 	readonly document = this.browser.window.document;
 	readonly services = this._register(createTestComponentServices(undefined, undefined, this.document));
 	readonly entries = this._register(new StatusbarService());
@@ -26,15 +28,35 @@ class StatusbarFixture extends Disposable {
 		super();
 		this._register(toDisposable(() => this.browser.window.close()));
 		this.services.registerInstance(IStatusbarService, this.entries);
-		this.services.registerInstance(ILayoutService, this._register(new BrowserLayoutService({ root: this.document.body, focus: () => this.editor.focus() })));
+		this.services.registerInstance(
+			ILayoutService,
+			this._register(new BrowserLayoutService({ root: this.document.body, focus: () => this.editor.focus() })),
+		);
 		this.services.registerInstance(IContextKeyService, this._register(new ContextKeyService()));
 		this.services.registerInstance(IContextMenuService, {
-			contextMenuStyle: 'custom', onDidShowContextMenu: Event.None, onDidHideContextMenu: Event.None,
-			showContextMenu: delegate => { this.menus.push(delegate as IContextMenuDelegate); }, hideContextMenu() { },
+			contextMenuStyle: 'custom',
+			onDidShowContextMenu: Event.None,
+			onDidHideContextMenu: Event.None,
+			showContextMenu: delegate => {
+				this.menus.push(delegate as IContextMenuDelegate);
+			},
+			hideContextMenu() {},
 		});
-		this._register(this.entries.addEntry({ text: 'branch', run() { } }, { id: 'branch', alignment: StatusbarAlignment.Left }));
-		this._register(this.entries.addEntry({ text: 'language', run() { } }, { id: 'language', alignment: StatusbarAlignment.Right, priority: 80 }));
-		this._register(this.entries.addEntry({ text: 'cursor', run() { } }, { id: 'cursor', alignment: StatusbarAlignment.Right, priority: 40 }));
+		this._register(
+			this.entries.addEntry({ text: 'branch', run() {} }, { id: 'branch', alignment: StatusbarAlignment.Left }),
+		);
+		this._register(
+			this.entries.addEntry(
+				{ text: 'language', run() {} },
+				{ id: 'language', alignment: StatusbarAlignment.Right, priority: 80 },
+			),
+		);
+		this._register(
+			this.entries.addEntry(
+				{ text: 'cursor', run() {} },
+				{ id: 'cursor', alignment: StatusbarAlignment.Right, priority: 40 },
+			),
+		);
 		this.part = this._register(this.services.createInstance(StatusbarPart, this.document.body));
 	}
 }
@@ -65,7 +87,9 @@ test('status bar menus derive their checked state from the model, restore entrie
 	const { part, document, browser, menus } = fixture;
 	part.focusNextEntry();
 	const branch = document.activeElement!;
-	branch.dispatchEvent(new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }));
+	branch.dispatchEvent(
+		new browser.window.KeyboardEvent('keydown', { key: 'F10', shiftKey: true, bubbles: true, cancelable: true }),
+	);
 	const menu = menus[0]!;
 	const actions = menu.getActions();
 	const toggle = actions[0]!;
@@ -104,10 +128,16 @@ test('status bar construction requires the registered entry and context menu own
 	const browser = new JSDOM('<!doctype html><body></body>', { url: 'https://ash.test' });
 	try {
 		using services = createTestComponentServices(undefined, undefined, browser.window.document);
-		assert.throws(() => services.createInstance(StatusbarPart, browser.window.document.body), /Unknown service: statusbarService/);
+		assert.throws(
+			() => services.createInstance(StatusbarPart, browser.window.document.body),
+			/Unknown service: statusbarService/,
+		);
 		using entries = new StatusbarService();
 		services.registerInstance(IStatusbarService, entries);
-		assert.throws(() => services.createInstance(StatusbarPart, browser.window.document.body), /Unknown service: contextMenuService/);
+		assert.throws(
+			() => services.createInstance(StatusbarPart, browser.window.document.body),
+			/Unknown service: contextMenuService/,
+		);
 	} finally {
 		browser.window.close();
 	}

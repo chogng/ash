@@ -23,16 +23,13 @@ const { TestView: View } = await import('../../../../test/browser/viewModel/test
 const { ViewController } = await import('../../../../browser/view/viewController.js');
 const { LinkedEditingContribution } = await import('../../browser/linkedEditing.js');
 
-
 test('linked editing applies one input transaction to every provider range', async () => {
-	const calls: Array<{ readonly model: TextModel; readonly position: Position; readonly token: CancellationToken; }> = [];
+	const calls: Array<{ readonly model: TextModel; readonly position: Position; readonly token: CancellationToken }> =
+		[];
 	using fixture = createFixture({
 		provideLinkedEditingRanges: (model, position, token) => {
 			calls.push({ model: model as TextModel, position, token });
-			return {
-				ranges: [new Range(1, 1, 1, 4), new Range(1, 5, 1, 8)],
-				wordPattern: /^[a-z]+$/,
-			};
+			return { ranges: [new Range(1, 1, 1, 4), new Range(1, 5, 1, 8)], wordPattern: /^[a-z]+$/ };
 		},
 	});
 	await waitFor(() => fixture.viewport.domNode.domNode.classList.contains('linked-editing-active'));
@@ -55,7 +52,7 @@ test('linked editing cancels stale and disposed provider requests', async () => 
 	const fixture = createFixture({
 		provideLinkedEditingRanges: (_model, _position, token) => {
 			tokens.push(token);
-			return new Promise(() => { });
+			return new Promise(() => {});
 		},
 	});
 	await waitFor(() => tokens.length === 1);
@@ -69,15 +66,31 @@ test('linked editing cancels stale and disposed provider requests', async () => 
 });
 
 test('linked editing uses F2 without consuming select-all-occurrences', async () => {
-	using fixture = createFixture({ provideLinkedEditingRanges: () => ({ ranges: [new Range(1, 1, 1, 4), new Range(1, 5, 1, 8)] }) });
+	using fixture = createFixture({
+		provideLinkedEditingRanges: () => ({ ranges: [new Range(1, 1, 1, 4), new Range(1, 5, 1, 8)] }),
+	});
 	const active = () => fixture.viewport.domNode.domNode.classList.contains('linked-editing-active');
 	await waitFor(active);
-	fixture.input.element.dispatchEvent(new fixture.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+	fixture.input.element.dispatchEvent(
+		new fixture.dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+	);
 	assert.equal(active(), false);
-	const occurrences = new fixture.dom.window.KeyboardEvent('keydown', { key: 'L', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true });
+	const occurrences = new fixture.dom.window.KeyboardEvent('keydown', {
+		key: 'L',
+		ctrlKey: true,
+		shiftKey: true,
+		bubbles: true,
+		cancelable: true,
+	});
 	fixture.input.element.dispatchEvent(occurrences);
 	assert.equal(occurrences.defaultPrevented, false);
-	const linked = new fixture.dom.window.KeyboardEvent('keydown', { key: 'F2', ctrlKey: true, shiftKey: true, bubbles: true, cancelable: true });
+	const linked = new fixture.dom.window.KeyboardEvent('keydown', {
+		key: 'F2',
+		ctrlKey: true,
+		shiftKey: true,
+		bubbles: true,
+		cancelable: true,
+	});
 	fixture.input.element.dispatchEvent(linked);
 	assert.equal(linked.defaultPrevented, true);
 	await waitFor(active);
@@ -108,7 +121,14 @@ function createFixture(provider: LinkedEditingRangeProvider): Fixture {
 	});
 	viewport.layout({ width: 300, height: 40 });
 	const input = viewport.controller;
-	const contribution = new LinkedEditingContribution(input, editorFor(model, selections), input.element, viewport, registry, () => /^[a-z]+$/);
+	const contribution = new LinkedEditingContribution(
+		input,
+		editorFor(model, selections),
+		input.element,
+		viewport,
+		registry,
+		() => /^[a-z]+$/,
+	);
 	viewport.focus();
 	return {
 		dom,
@@ -132,16 +152,18 @@ function editorFor(model: TextModel, selections: CursorsController): ICodeEditor
 		getModel: () => model,
 		getSelection: () => selections.getSelection(),
 		getSelections: () => selections.getSelections(),
-		onDidChangeCursorPosition: (listener: (event: ICursorPositionChangedEvent) => void) => selections.onDidChange(change => {
-			const [primary, ...secondary] = change.selections;
-			listener({
-				position: primary!.getPosition(),
-				secondaryPositions: secondary.map(selection => selection.getPosition()),
-				reason: change.reason,
-				source: 'test',
-			});
-		}),
-		executeCommands: (source: string | null | undefined, commands: (ICommand | null)[]) => selections.executeCommands(commands, source),
+		onDidChangeCursorPosition: (listener: (event: ICursorPositionChangedEvent) => void) =>
+			selections.onDidChange(change => {
+				const [primary, ...secondary] = change.selections;
+				listener({
+					position: primary!.getPosition(),
+					secondaryPositions: secondary.map(selection => selection.getPosition()),
+					reason: change.reason,
+					source: 'test',
+				});
+			}),
+		executeCommands: (source: string | null | undefined, commands: (ICommand | null)[]) =>
+			selections.executeCommands(commands, source),
 	} as unknown as ICodeEditor;
 }
 
@@ -171,8 +193,12 @@ function requiredElement<T extends Element = HTMLElement>(root: ParentNode, sele
 class FixedTextMeasurer implements TextMeasurer {
 	readonly horizontalPadding = 24;
 	readonly contentLeftPadding = 12;
-	refresh(): boolean { return false; }
-	measureLineWidth(text: string): number { return text.length * 10; }
+	refresh(): boolean {
+		return false;
+	}
+	measureLineWidth(text: string): number {
+		return text.length * 10;
+	}
 }
 
 const codeFeatures = registerTestCodeEditorFeatures();

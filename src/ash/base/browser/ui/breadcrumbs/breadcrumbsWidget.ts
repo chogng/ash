@@ -62,13 +62,19 @@ export class BreadcrumbsWidget extends Disposable {
 		private readonly scheduleMeasure: typeof measure = measure,
 	) {
 		super();
-		this.scrollable = this._register(new ScrollableElement(container, {
-			direction: 'horizontal',
-			horizontal: horizontalScrollbarVisibility === ScrollbarVisibility.Hidden ? 'hidden'
-				: horizontalScrollbarVisibility === ScrollbarVisibility.Visible ? 'visible' : 'auto',
-			scrollbarSize: horizontalScrollbarSize,
-			tabIndex: -1,
-		}));
+		this.scrollable = this._register(
+			new ScrollableElement(container, {
+				direction: 'horizontal',
+				horizontal:
+					horizontalScrollbarVisibility === ScrollbarVisibility.Hidden
+						? 'hidden'
+						: horizontalScrollbarVisibility === ScrollbarVisibility.Visible
+							? 'visible'
+							: 'auto',
+				scrollbarSize: horizontalScrollbarSize,
+				tabIndex: -1,
+			}),
+		);
 		this.scrollable.element.classList.add('ash-breadcrumbs-widget');
 		this.listDomNode = h(container.ownerDocument, 'div');
 		this.listDomNode.className = 'ash-breadcrumbs-list';
@@ -86,48 +92,71 @@ export class BreadcrumbsWidget extends Disposable {
 				this.scrollable.element.style.setProperty(property, value);
 			}
 		}
-		this._register(addDisposableListener(this.listDomNode, 'click', (event: MouseEvent) => {
-			const entry = this.entries.find(candidate => candidate.button.contains(event.target as Node));
-			if (this.enabled && entry) {
-				this.setFocused(entry.item, event);
-				this.setSelection(entry.item, event);
-			}
-		}));
-		this._register(addDisposableListener(this.listDomNode, 'focusin', (event: FocusEvent) => {
-			const entry = this.entries.find(candidate => candidate.button === event.target);
-			if (entry && entry.item !== this.focused) {
-				this.setFocused(entry.item, event);
-			}
-			if (!this.listDomNode.contains(event.relatedTarget as Node | null)) {
-				this.domFocusEmitter.fire(true);
-			}
-		}));
-		this._register(addDisposableListener(this.listDomNode, 'focusout', (event: FocusEvent) => {
-			if (!this.listDomNode.contains(event.relatedTarget as Node | null)) {
-				this.domFocusEmitter.fire(false);
-			}
-		}));
-		this._register(addDisposableListener(this.listDomNode, 'keydown', (event: KeyboardEvent) => {
-			if (!this.enabled || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
-				return;
-			}
-			if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' || event.key === 'Home' || event.key === 'End') {
-				event.preventDefault();
-				event.stopPropagation();
-				switch (event.key) {
-					case 'ArrowLeft': this.focusPrev(event); break;
-					case 'ArrowRight': this.focusNext(event); break;
-					case 'Home': this.setFocused(this.entries[0]?.item, event); break;
-					case 'End': this.setFocused(this.entries.at(-1)?.item, event); break;
+		this._register(
+			addDisposableListener(this.listDomNode, 'click', (event: MouseEvent) => {
+				const entry = this.entries.find(candidate => candidate.button.contains(event.target as Node));
+				if (this.enabled && entry) {
+					this.setFocused(entry.item, event);
+					this.setSelection(entry.item, event);
 				}
-			}
-		}));
-		this._register(toDisposable(() => {
-			for (const entry of this.entries) {
-				entry.item.dispose();
-			}
-			this.entries = [];
-		}));
+			}),
+		);
+		this._register(
+			addDisposableListener(this.listDomNode, 'focusin', (event: FocusEvent) => {
+				const entry = this.entries.find(candidate => candidate.button === event.target);
+				if (entry && entry.item !== this.focused) {
+					this.setFocused(entry.item, event);
+				}
+				if (!this.listDomNode.contains(event.relatedTarget as Node | null)) {
+					this.domFocusEmitter.fire(true);
+				}
+			}),
+		);
+		this._register(
+			addDisposableListener(this.listDomNode, 'focusout', (event: FocusEvent) => {
+				if (!this.listDomNode.contains(event.relatedTarget as Node | null)) {
+					this.domFocusEmitter.fire(false);
+				}
+			}),
+		);
+		this._register(
+			addDisposableListener(this.listDomNode, 'keydown', (event: KeyboardEvent) => {
+				if (!this.enabled || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
+					return;
+				}
+				if (
+					event.key === 'ArrowLeft' ||
+					event.key === 'ArrowRight' ||
+					event.key === 'Home' ||
+					event.key === 'End'
+				) {
+					event.preventDefault();
+					event.stopPropagation();
+					switch (event.key) {
+						case 'ArrowLeft':
+							this.focusPrev(event);
+							break;
+						case 'ArrowRight':
+							this.focusNext(event);
+							break;
+						case 'Home':
+							this.setFocused(this.entries[0]?.item, event);
+							break;
+						case 'End':
+							this.setFocused(this.entries.at(-1)?.item, event);
+							break;
+					}
+				}
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				for (const entry of this.entries) {
+					entry.item.dispose();
+				}
+				this.entries = [];
+			}),
+		);
 	}
 
 	public getItems(): readonly BreadcrumbsItem[] {
@@ -139,7 +168,11 @@ export class BreadcrumbsWidget extends Disposable {
 	}
 
 	public setHorizontalScrollbarVisibility(visibility: ScrollbarVisibility): void {
-		const values = { [ScrollbarVisibility.Auto]: 'auto', [ScrollbarVisibility.Visible]: 'visible', [ScrollbarVisibility.Hidden]: 'hidden' } as const;
+		const values = {
+			[ScrollbarVisibility.Auto]: 'auto',
+			[ScrollbarVisibility.Visible]: 'visible',
+			[ScrollbarVisibility.Hidden]: 'hidden',
+		} as const;
 		this.scrollable.updateOptions({ horizontal: values[visibility] });
 	}
 
@@ -193,9 +226,15 @@ export class BreadcrumbsWidget extends Disposable {
 		}
 	}
 
-	public getFocused(): BreadcrumbsItem | undefined { return this.focused; }
-	public getSelection(): BreadcrumbsItem | undefined { return this.selected; }
-	public isDOMFocused(): boolean { return this.listDomNode.contains(this.listDomNode.ownerDocument.activeElement); }
+	public getFocused(): BreadcrumbsItem | undefined {
+		return this.focused;
+	}
+	public getSelection(): BreadcrumbsItem | undefined {
+		return this.selected;
+	}
+	public isDOMFocused(): boolean {
+		return this.listDomNode.contains(this.listDomNode.ownerDocument.activeElement);
+	}
 
 	public domFocus(): void {
 		if (this.enabled) {

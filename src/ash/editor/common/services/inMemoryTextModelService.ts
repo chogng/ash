@@ -15,11 +15,11 @@ export class InMemoryTextModelService implements ITextModelService {
 	private readonly contentProviders = new Map<string, ITextModelContentProvider>();
 	private readonly providerModelReferences = new Map<ITextModel, number>();
 
-	constructor(@IModelService private readonly models: IModelServiceContract) { }
+	constructor(@IModelService private readonly models: IModelServiceContract) {}
 
 	async createModelReference(resource: URI): Promise<IReference<IResolvedTextEditorModel>> {
 		const existing = this.models.getModel(resource);
-		if (existing) return createResolvedTextEditorModelReference(existing, () => { });
+		if (existing) return createResolvedTextEditorModelReference(existing, () => {});
 		const provider = this.contentProviders.get(resource.scheme);
 		if (!provider) throw new ReferenceError(`Text model not found: ${resource.toString()}`);
 		const model = await provider.provideTextContent(resource);
@@ -29,7 +29,8 @@ export class InMemoryTextModelService implements ITextModelService {
 	}
 
 	registerTextModelContentProvider(scheme: string, provider: ITextModelContentProvider): IDisposable {
-		if (this.contentProviders.has(scheme)) throw new Error(`Text model content provider already registered: ${scheme}`);
+		if (this.contentProviders.has(scheme))
+			throw new Error(`Text model content provider already registered: ${scheme}`);
 		this.contentProviders.set(scheme, provider);
 		return toDisposable(() => {
 			if (this.contentProviders.get(scheme) === provider) this.contentProviders.delete(scheme);

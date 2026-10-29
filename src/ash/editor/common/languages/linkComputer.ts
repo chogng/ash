@@ -6,7 +6,11 @@ export interface ILinkComputerTarget {
 	getLineContent(lineNumber: number): string;
 }
 
-const closingBrackets = new Map([['(', ')'], ['[', ']'], ['{', '}']]);
+const closingBrackets = new Map([
+	['(', ')'],
+	['[', ']'],
+	['{', '}'],
+]);
 
 /** Finds explicit HTTP(S) and file URLs without resolving or opening their targets. */
 export function computeLinks(model: ILinkComputerTarget | null): ILink[] {
@@ -18,7 +22,11 @@ export function computeLinks(model: ILinkComputerTarget | null): ILink[] {
 		const line = model.getLineContent(lineNumber);
 		for (const match of line.matchAll(/\b(?:https?|file):\/\/[^\s<>"'`\u0000-\u001f\u007f“”‘’《》【】|]+/giu)) {
 			let url = match[0];
-			const balance = new Map<string, number>([[')', 0], [']', 0], ['}', 0]]);
+			const balance = new Map<string, number>([
+				[')', 0],
+				[']', 0],
+				['}', 0],
+			]);
 			for (const character of url) {
 				const closing = closingBrackets.get(character);
 				if (closing) {
@@ -41,7 +49,10 @@ export function computeLinks(model: ILinkComputerTarget | null): ILink[] {
 			if (!/^(?:https?|file):\/\/.+/iu.test(url)) {
 				continue;
 			}
-			links.push({ range: new Range(lineNumber, match.index + 1, lineNumber, match.index + url.length + 1), url });
+			links.push({
+				range: new Range(lineNumber, match.index + 1, lineNumber, match.index + url.length + 1),
+				url,
+			});
 		}
 	}
 	return links;

@@ -81,7 +81,10 @@ export class EditorPaneInstance extends Disposable {
 	readonly panelId: string;
 	readonly tabId: string;
 
-	constructor(container: HTMLElement, readonly pane: EditorPane) {
+	constructor(
+		container: HTMLElement,
+		readonly pane: EditorPane,
+	) {
 		super();
 		const ownerDocument = container.ownerDocument;
 		const id = ++editorPaneId;
@@ -119,7 +122,12 @@ export class EditorPaneInstance extends Disposable {
 		};
 		observe();
 		if (this.pane.onDidChangeWorkingCopies) {
-			this._register(this.pane.onDidChangeWorkingCopies(() => { observe(); listener(); }));
+			this._register(
+				this.pane.onDidChangeWorkingCopies(() => {
+					observe();
+					listener();
+				}),
+			);
 		}
 	}
 }

@@ -49,7 +49,7 @@ abstract class TransferProvider implements DocumentPasteEditProvider, DocumentDr
 		token: CancellationToken,
 	): Promise<DocumentPasteEditsSession | undefined> {
 		const edit = await this.getEdit(transfer, token);
-		return edit && !token.isCancellationRequested ? { edits: [edit], dispose() { } } : undefined;
+		return edit && !token.isCancellationRequested ? { edits: [edit], dispose() {} } : undefined;
 	}
 
 	async provideDocumentDropEdits(
@@ -59,10 +59,13 @@ abstract class TransferProvider implements DocumentPasteEditProvider, DocumentDr
 		token: CancellationToken,
 	): Promise<DocumentDropEditsSession | undefined> {
 		const edit = await this.getEdit(transfer, token);
-		return edit && !token.isCancellationRequested ? { edits: [edit as DocumentDropEdit], dispose() { } } : undefined;
+		return edit && !token.isCancellationRequested ? { edits: [edit as DocumentDropEdit], dispose() {} } : undefined;
 	}
 
-	protected abstract getEdit(transfer: IReadonlyVSDataTransfer, token: CancellationToken): Promise<TransferEdit | undefined>;
+	protected abstract getEdit(
+		transfer: IReadonlyVSDataTransfer,
+		token: CancellationToken,
+	): Promise<TransferEdit | undefined>;
 }
 
 export class DefaultTextPasteOrDropEditProvider extends TransferProvider {
@@ -106,7 +109,7 @@ class AbsolutePathProvider extends TransferProvider {
 				: localize('dropOrPaste.uris', 'Insert URIs'),
 			kind: this.kind,
 			handledMimeType: Mimes.uriList,
-			insertText: uris.map(({ uri, source }) => uri.scheme === 'file' ? uri.fsPath : source).join(' '),
+			insertText: uris.map(({ uri, source }) => (uri.scheme === 'file' ? uri.fsPath : source)).join(' '),
 		};
 	}
 }
@@ -125,9 +128,11 @@ class RelativePathProvider extends TransferProvider {
 			const uriPath = uri.toEncodedComponents().path;
 			const folder = this.workspace.getWorkspace().folders.find(candidate => {
 				const folderPath = candidate.uri.toEncodedComponents().path.replace(/\/$/u, '');
-				return candidate.uri.scheme === uri.scheme
-					&& candidate.uri.authority === uri.authority
-					&& uriPath.startsWith(`${folderPath}/`);
+				return (
+					candidate.uri.scheme === uri.scheme &&
+					candidate.uri.authority === uri.authority &&
+					uriPath.startsWith(`${folderPath}/`)
+				);
 			});
 			if (!folder) return [];
 			const folderPath = folder.uri.toEncodedComponents().path.replace(/\/$/u, '');
@@ -155,20 +160,28 @@ class HtmlPasteProvider implements DocumentPasteEditProvider {
 		context: DocumentPasteContext,
 		token: CancellationToken,
 	): Promise<DocumentPasteEditsSession | undefined> {
-		if (context.triggerKind !== DocumentPasteTriggerKind.PasteAs && !context.only?.contains(htmlKind)) return undefined;
+		if (context.triggerKind !== DocumentPasteTriggerKind.PasteAs && !context.only?.contains(htmlKind))
+			return undefined;
 		const markup = await transfer.get(Mimes.html)?.asString();
 		if (!markup || token.isCancellationRequested) return undefined;
 		return {
-			edits: [{ title: localize('dropOrPaste.html', 'Insert HTML'), kind: htmlKind, insertText: markup, yieldTo: [{ mimeType: Mimes.text }] }],
-			dispose() { },
+			edits: [
+				{
+					title: localize('dropOrPaste.html', 'Insert HTML'),
+					kind: htmlKind,
+					insertText: markup,
+					yieldTo: [{ mimeType: Mimes.text }],
+				},
+			],
+			dispose() {},
 		};
 	}
 }
 
-async function readUris(transfer: IReadonlyVSDataTransfer): Promise<{ uri: URI; source: string; }[]> {
+async function readUris(transfer: IReadonlyVSDataTransfer): Promise<{ uri: URI; source: string }[]> {
 	const value = await transfer.get(Mimes.uriList)?.asString();
 	if (!value) return [];
-	const result: { uri: URI; source: string; }[] = [];
+	const result: { uri: URI; source: string }[] = [];
 	for (const source of UriList.parse(value)) {
 		if (!source.trim()) continue;
 		try {
@@ -183,7 +196,12 @@ async function readUris(transfer: IReadonlyVSDataTransfer): Promise<{ uri: URI; 
 export class DefaultPasteProvidersFeature extends Disposable {
 	constructor(features: ILanguageFeaturesService, workspace: IWorkspaceContextService) {
 		super();
-		for (const provider of [new DefaultTextPasteOrDropEditProvider(), new AbsolutePathProvider(), new RelativePathProvider(workspace), new HtmlPasteProvider()]) {
+		for (const provider of [
+			new DefaultTextPasteOrDropEditProvider(),
+			new AbsolutePathProvider(),
+			new RelativePathProvider(workspace),
+			new HtmlPasteProvider(),
+		]) {
 			this._register(features.documentPasteEditProvider.register(allModels, provider));
 		}
 	}
@@ -192,7 +210,11 @@ export class DefaultPasteProvidersFeature extends Disposable {
 export class DefaultDropProvidersFeature extends Disposable {
 	constructor(features: ILanguageFeaturesService, workspace: IWorkspaceContextService) {
 		super();
-		for (const provider of [new DefaultTextPasteOrDropEditProvider(), new AbsolutePathProvider(), new RelativePathProvider(workspace)]) {
+		for (const provider of [
+			new DefaultTextPasteOrDropEditProvider(),
+			new AbsolutePathProvider(),
+			new RelativePathProvider(workspace),
+		]) {
 			this._register(features.documentDropEditProvider.register(allModels, provider));
 		}
 	}

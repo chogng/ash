@@ -60,23 +60,40 @@ export class ConfigurationResolverExpression<T> {
 		for (const reference of this.variables(value)) {
 			if (this.replacements.has(reference.id)) continue;
 			if (this.replacements.size >= 4096) throw expansionLimitError();
-			this.replacements.set(reference.id, Object.freeze({ id: reference.id, inner: reference.inner, name: reference.name, ...(reference.arg === undefined ? {} : { arg: reference.arg }) }));
+			this.replacements.set(
+				reference.id,
+				Object.freeze({
+					id: reference.id,
+					inner: reference.inner,
+					name: reference.name,
+					...(reference.arg === undefined ? {} : { arg: reference.arg }),
+				}),
+			);
 		}
 	}
 
-	private *variables(value: string): Iterable<Replacement & { readonly start: number; readonly end: number; }> {
+	private *variables(value: string): Iterable<Replacement & { readonly start: number; readonly end: number }> {
 		for (let start = value.indexOf('${'); start >= 0; start = value.indexOf('${', start)) {
 			let depth = 1;
 			let end = start + 2;
 			for (; end < value.length && depth; end++) {
-				if (value[end] === '$' && value[end + 1] === '{') { depth++; end++; }
-				else if (value[end] === '}') depth--;
+				if (value[end] === '$' && value[end + 1] === '{') {
+					depth++;
+					end++;
+				} else if (value[end] === '}') depth--;
 			}
 			if (depth) return;
 			const inner = value.slice(start + 2, end - 1);
 			if (inner) {
 				const separator = inner.indexOf(':');
-				yield Object.freeze({ id: value.slice(start, end), inner, name: separator < 0 ? inner : inner.slice(0, separator), ...(separator < 0 ? {} : { arg: inner.slice(separator + 1) }), start, end });
+				yield Object.freeze({
+					id: value.slice(start, end),
+					inner,
+					name: separator < 0 ? inner : inner.slice(0, separator),
+					...(separator < 0 ? {} : { arg: inner.slice(separator + 1) }),
+					start,
+					end,
+				});
 			}
 			start = end;
 		}
@@ -89,10 +106,17 @@ export class ConfigurationResolverExpression<T> {
 		for (const reference of this.variables(value)) {
 			const replacement = this.values.get(reference.id)?.value;
 			// A cyclic reference remains visible instead of repeatedly calling its producer.
-			const resolved = replacement === undefined || trail.has(reference.id) ? reference.id : reference.name === 'selectedText' ? replacement : cache.get(reference.id) ?? this.substitute(replacement, new Set([...trail, reference.id]), cache);
+			const resolved =
+				replacement === undefined || trail.has(reference.id)
+					? reference.id
+					: reference.name === 'selectedText'
+						? replacement
+						: (cache.get(reference.id) ??
+							this.substitute(replacement, new Set([...trail, reference.id]), cache));
 			// Cache completed expansions; unresolved cycles depend on the current trail.
 			if (!resolved.includes('${')) cache.set(reference.id, resolved);
-			if (result.length + reference.start - position + resolved.length > 4 * 1024 * 1024) throw expansionLimitError();
+			if (result.length + reference.start - position + resolved.length > 4 * 1024 * 1024)
+				throw expansionLimitError();
 			result += value.slice(position, reference.start) + resolved;
 			position = reference.end;
 		}
@@ -104,7 +128,9 @@ export class ConfigurationResolverExpression<T> {
 		if (typeof value === 'string') return transform(value);
 		if (Array.isArray(value)) return value.map(item => this.map(item, transform));
 		if (value !== null && typeof value === 'object') {
-			return Object.fromEntries(Object.entries(value).map(([key, item]) => [transform(key), this.map(item, transform)]));
+			return Object.fromEntries(
+				Object.entries(value).map(([key, item]) => [transform(key), this.map(item, transform)]),
+			);
 		}
 		// CustomExecution callbacks retain their owner and callable identity.
 		return value;
@@ -112,5 +138,10 @@ export class ConfigurationResolverExpression<T> {
 }
 
 function expansionLimitError(): RangeError {
-	return new RangeError(localize('configurationResolver.expansionLimit', 'The configuration variable expansion exceeds the supported limit.'));
+	return new RangeError(
+		localize(
+			'configurationResolver.expansionLimit',
+			'The configuration variable expansion exceeds the supported limit.',
+		),
+	);
 }

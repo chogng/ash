@@ -20,35 +20,51 @@ function mount(webview: WebviewElement): void {
 
 function message(webview: WebviewElement, data: unknown, source: Window | null = webview.element.contentWindow): void {
 	const url = new URL(webview.element.src);
-	mainWindow.dispatchEvent(new mainWindow.MessageEvent('message', { source, data, origin: `${url.protocol}//${url.host}` }));
+	mainWindow.dispatchEvent(
+		new mainWindow.MessageEvent('message', { source, data, origin: `${url.protocol}//${url.host}` }),
+	);
 }
 
-function lifecycle(webview: WebviewElement, type: string, channel = webview.element.getAttribute('data-ash-webview-channel')): void {
+function lifecycle(
+	webview: WebviewElement,
+	type: string,
+	channel = webview.element.getAttribute('data-ash-webview-channel'),
+): void {
 	message(webview, { channel: channel + ':lifecycle', type });
 }
 
 suite('Webview element', () => {
 	teardown(() => services.dispose());
 	ensureNoDisposablesAreLeakedInTestSuite();
-	setup(() => { services = createTestComponentServices(); });
+	setup(() => {
+		services = createTestComponentServices();
+	});
 
 	test('creates an isolated sandbox origin and releases it on disposal', () => {
 		using webview = createWebview({ title: 'Markdown preview', options: {} });
 		webview.setHtml('<h1>Preview</h1>');
 		mount(webview);
-		assert.deepEqual({
-			sandbox: webview.element.getAttribute('sandbox'),
-			referrer: webview.element.getAttribute('referrerpolicy'),
-			title: webview.element.title,
-			connected: webview.element.isConnected,
-		}, {
-			sandbox: 'allow-scripts allow-same-origin', referrer: 'no-referrer',
-			title: 'Markdown preview', connected: true,
-		});
+		assert.deepEqual(
+			{
+				sandbox: webview.element.getAttribute('sandbox'),
+				referrer: webview.element.getAttribute('referrerpolicy'),
+				title: webview.element.title,
+				connected: webview.element.isConnected,
+			},
+			{
+				sandbox: 'allow-scripts allow-same-origin',
+				referrer: 'no-referrer',
+				title: 'Markdown preview',
+				connected: true,
+			},
+		);
 		assert.match(new URL(webview.element.src).hostname, /^[\w-]+\.localhost$/);
 		assert.notEqual(new URL(webview.element.src).origin, mainWindow.location.origin);
 		webview.dispose();
-		assert.deepEqual({ connected: webview.element.isConnected, html: webview.element.srcdoc }, { connected: false, html: '' });
+		assert.deepEqual(
+			{ connected: webview.element.isConnected, html: webview.element.srcdoc },
+			{ connected: false, html: '' },
+		);
 	});
 
 	test('accepts only the owned iframe source and current document channel', () => {
@@ -69,23 +85,44 @@ suite('Webview element', () => {
 
 	test('declared source origins apply to each owned document while frames and permissions remain denied by default', () => {
 		for (const messageProtocol of ['mcp', undefined] as const) {
-			using webview = createWebview({ title: 'CSP', options: {}, contentOptions: { messageProtocol, allowScripts: true, contentSecurityPolicy: { connectDomains: ['https://api.example.com'], resourceDomains: ['https://cdn.example.com'], frameDomains: [], baseUriDomains: [] } } });
+			using webview = createWebview({
+				title: 'CSP',
+				options: {},
+				contentOptions: {
+					messageProtocol,
+					allowScripts: true,
+					contentSecurityPolicy: {
+						connectDomains: ['https://api.example.com'],
+						resourceDomains: ['https://cdn.example.com'],
+						frameDomains: [],
+						baseUriDomains: [],
+					},
+				},
+			});
 			webview.setHtml('<p>Document</p>');
 			mount(webview);
 			let documentHtml = '';
 			const target = webview.element.contentWindow!;
 			const original = target.postMessage;
-			target.postMessage = (value: { type?: string; html?: string; }) => { if (value.type === 'document') documentHtml = value.html!; };
+			target.postMessage = (value: { type?: string; html?: string }) => {
+				if (value.type === 'document') documentHtml = value.html!;
+			};
 			try {
-				message(webview, { channel: new URLSearchParams(new URL(webview.element.src).hash.slice(1)).get('channel'), type: 'bootstrap-ready' });
+				message(webview, {
+					channel: new URLSearchParams(new URL(webview.element.src).hash.slice(1)).get('channel'),
+					type: 'bootstrap-ready',
+				});
 				assert.ok(documentHtml);
 				assert.equal(documentHtml.includes('https://api.example.com'), true);
 				assert.equal(documentHtml.includes('https://cdn.example.com'), true);
 				assert.ok(documentHtml.includes("frame-src 'none'"));
 				assert.equal(documentHtml.includes("'wasm-unsafe-eval'"), false);
 				assert.ok(!documentHtml.includes("'unsafe-eval'"));
-				if (messageProtocol === 'mcp') assert.ok(webview.element.getAttribute('allow')!.includes("microphone 'none'"));
-			} finally { target.postMessage = original; }
+				if (messageProtocol === 'mcp')
+					assert.ok(webview.element.getAttribute('allow')!.includes("microphone 'none'"));
+			} finally {
+				target.postMessage = original;
+			}
 		}
 	});
 
@@ -97,7 +134,9 @@ suite('Webview element', () => {
 		const sent: unknown[] = [];
 		const target = webview.element.contentWindow!;
 		const original = target.postMessage;
-		target.postMessage = value => { sent.push(value.message); };
+		target.postMessage = value => {
+			sent.push(value.message);
+		};
 		try {
 			const second = webview.postMessage('second');
 			assert.deepEqual(sent, []);
@@ -123,7 +162,9 @@ suite('Webview element', () => {
 		const sent: unknown[] = [];
 		const target = webview.element.contentWindow!;
 		const original = target.postMessage;
-		target.postMessage = value => { sent.push(value.message); };
+		target.postMessage = value => {
+			sent.push(value.message);
+		};
 		try {
 			const current = webview.postMessage('current');
 			lifecycle(webview, 'ready', oldChannel);
@@ -155,11 +196,15 @@ suite('Webview element', () => {
 		const original = target.postMessage;
 		const buffer = new ArrayBuffer(4);
 		const sent: unknown[] = [];
-		target.postMessage = (value: unknown, origin?: string | WindowPostMessageOptions, transfer?: Transferable[]) => {
-			if ((value as { message: unknown; }).message === 'invalid') {
+		target.postMessage = (
+			value: unknown,
+			origin?: string | WindowPostMessageOptions,
+			transfer?: Transferable[],
+		) => {
+			if ((value as { message: unknown }).message === 'invalid') {
 				throw new mainWindow.DOMException('Cannot clone message', 'DataCloneError');
 			}
-			sent.push({ value: (value as { message: unknown; }).message, origin, transfer });
+			sent.push({ value: (value as { message: unknown }).message, origin, transfer });
 		};
 		try {
 			const rejected = assert.rejects(webview.postMessage('invalid'), { name: 'DataCloneError' });
@@ -167,7 +212,9 @@ suite('Webview element', () => {
 			lifecycle(webview, 'ready');
 			await rejected;
 			assert.equal(await transferred, true);
-			assert.deepEqual(sent, [{ value: buffer, origin: new URL(webview.element.src).origin, transfer: [buffer] }]);
+			assert.deepEqual(sent, [
+				{ value: buffer, origin: new URL(webview.element.src).origin, transfer: [buffer] },
+			]);
 			await assert.rejects(webview.postMessage('invalid'), { name: 'DataCloneError' });
 		} finally {
 			target.postMessage = original;
@@ -188,10 +235,14 @@ suite('Webview element', () => {
 		lifecycle(webview, 'focus');
 		const pending = webview.postMessage('unsent');
 		webview.dispose();
-		mainWindow.dispatchEvent(new mainWindow.MessageEvent('message', { source: target, data: { channel, message: 'late' } }));
+		mainWindow.dispatchEvent(
+			new mainWindow.MessageEvent('message', { source: target, data: { channel, message: 'late' } }),
+		);
 		webview.element.dispatchEvent(new mainWindow.Event('focus'));
-		assert.deepEqual({ events, focused: webview.isFocused, sent: await pending, late: await webview.postMessage('late') },
-			{ events: ['focus', 'blur', 'dispose'], focused: false, sent: false, late: false });
+		assert.deepEqual(
+			{ events, focused: webview.isFocused, sent: await pending, late: await webview.postMessage('late') },
+			{ events: ['focus', 'blur', 'dispose'], focused: false, sent: false, late: false },
+		);
 		assert.throws(() => webview.setHtml('late'), /already disposed/);
 	});
 
@@ -201,13 +252,26 @@ suite('Webview element', () => {
 		const events: string[] = [];
 		using listener = webview.onDidKeyboardEvent(event => events.push(event.key));
 		const channel = webview.element.getAttribute('data-ash-webview-channel') + ':keyboard';
-		const event = { channel, type: 'keydown', key: 'F1', code: 'F1', altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, repeat: false };
+		const event = {
+			channel,
+			type: 'keydown',
+			key: 'F1',
+			code: 'F1',
+			altKey: false,
+			ctrlKey: false,
+			metaKey: false,
+			shiftKey: false,
+			repeat: false,
+		};
 		message(webview, { ...event, ctrlKey: 'invalid' });
 		message(webview, event);
 		using disabled = createWebview({ title: 'No forwarding', options: {} });
 		mount(disabled);
 		using disabledListener = disabled.onDidKeyboardEvent(() => events.push('disabled'));
-		message(disabled, { ...event, channel: disabled.element.getAttribute('data-ash-webview-channel') + ':keyboard' });
+		message(disabled, {
+			...event,
+			channel: disabled.element.getAttribute('data-ash-webview-channel') + ':keyboard',
+		});
 		assert.deepEqual(events, ['F1']);
 	});
 });

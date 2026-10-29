@@ -6,7 +6,11 @@ import { ProviderAutomationService } from './providerAutomationService.js';
 import { AutomationRunner } from './automationRunner.js';
 import { AutomationDialogService } from './automationDialogService.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
-import { ConfigurationScope, Extensions, type IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import {
+	ConfigurationScope,
+	Extensions,
+	type IConfigurationRegistry,
+} from '../../../../platform/configuration/common/configurationRegistry.js';
 import { localize } from '../../../../nls.js';
 
 Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfiguration({
@@ -14,14 +18,20 @@ Registry.as<IConfigurationRegistry>(Extensions.Configuration).registerConfigurat
 	scope: ConfigurationScope.APPLICATION,
 	defaultValue: false,
 	parse: value => {
-		if (typeof value !== 'boolean') throw new TypeError(localize('automations.notificationBoolean', 'Automation completion notifications must be a boolean.'));
+		if (typeof value !== 'boolean')
+			throw new TypeError(
+				localize('automations.notificationBoolean', 'Automation completion notifications must be a boolean.'),
+			);
 		return value;
 	},
 	setting: {
 		valueType: 'boolean',
 		title: localize('automations.notifySuccess', 'Notify when an automation completes'),
-		description: localize('automations.notifyDescription', 'Show successful automation results in this window. Failures and requests for input are always notified while the window is open.')
-	}
+		description: localize(
+			'automations.notifyDescription',
+			'Show successful automation results in this window. Failures and requests for input are always notified while the window is open.',
+		),
+	},
 });
 
 registerSingleton(IAutomationService, ProviderAutomationService, InstantiationType.Delayed);

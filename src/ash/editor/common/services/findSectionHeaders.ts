@@ -26,9 +26,13 @@ const trimDashesRegex = /^-+|-+$/g;
 const CHUNK_SIZE = 100;
 const MAX_SECTION_LINES = 5;
 
-export function findSectionHeaders(model: ISectionHeaderFinderTarget, options: FindSectionHeaderOptions): SectionHeader[] {
+export function findSectionHeaders(
+	model: ISectionHeaderFinderTarget,
+	options: FindSectionHeaderOptions,
+): SectionHeader[] {
 	let headers: SectionHeader[] = [];
-	if (options.findRegionSectionHeaders && options.foldingRules?.markers) headers = headers.concat(collectRegionHeaders(model, options));
+	if (options.findRegionSectionHeaders && options.foldingRules?.markers)
+		headers = headers.concat(collectRegionHeaders(model, options));
 	if (options.findMarkSectionHeaders) headers = headers.concat(collectMarkHeaders(model, options));
 	return headers;
 }
@@ -47,7 +51,10 @@ function collectRegionHeaders(model: ISectionHeaderFinderTarget, options: FindSe
 	return headers;
 }
 
-export function collectMarkHeaders(model: ISectionHeaderFinderTarget, options: FindSectionHeaderOptions): SectionHeader[] {
+export function collectMarkHeaders(
+	model: ISectionHeaderFinderTarget,
+	options: FindSectionHeaderOptions,
+): SectionHeader[] {
 	const headers: SectionHeader[] = [];
 	if (!options.markSectionHeaderRegex?.trim()) return headers;
 	const multiline = isMultilineRegexSource(options.markSectionHeaderRegex);
@@ -56,7 +63,9 @@ export function collectMarkHeaders(model: ISectionHeaderFinderTarget, options: F
 	const endLineNumber = model.getLineCount();
 	for (let startLine = 1; startLine <= endLineNumber; startLine += CHUNK_SIZE - MAX_SECTION_LINES) {
 		const endLine = Math.min(startLine + CHUNK_SIZE - 1, endLineNumber);
-		const lines = Array.from({ length: endLine - startLine + 1 }, (_, index) => model.getLineContent(startLine + index));
+		const lines = Array.from({ length: endLine - startLine + 1 }, (_, index) =>
+			model.getLineContent(startLine + index),
+		);
 		const text = lines.join('\n');
 		regex.lastIndex = 0;
 		let match: RegExpExecArray | null;
@@ -82,14 +91,18 @@ export function collectMarkHeaders(model: ISectionHeaderFinderTarget, options: F
 				hasSeparatorLine: ((match.groups ?? {})['separator'] ?? '') !== '',
 				shouldBeInComments: true,
 			};
-			if ((header.text || header.hasSeparatorLine) && (headers.at(-1)?.range.endLineNumber ?? -1) < header.range.startLineNumber) headers.push(header);
+			if (
+				(header.text || header.hasSeparatorLine) &&
+				(headers.at(-1)?.range.endLineNumber ?? -1) < header.range.startLineNumber
+			)
+				headers.push(header);
 			regex.lastIndex = match.index + match[0].length;
 		}
 	}
 	return headers;
 }
 
-function getHeaderText(text: string): { text: string; hasSeparatorLine: boolean; } {
+function getHeaderText(text: string): { text: string; hasSeparatorLine: boolean } {
 	text = text.trim();
 	const hasSeparatorLine = text.startsWith('-');
 	return { text: text.replace(trimDashesRegex, ''), hasSeparatorLine };

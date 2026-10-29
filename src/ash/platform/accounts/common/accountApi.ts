@@ -1,4 +1,12 @@
-import type { AccountLoginCancelParams, AccountLoginCancelResult, AccountLoginStartParams, AccountLoginStartResult, AccountLogoutParams, AccountLogoutResult, AccountReadResult } from '../../../../../.build/protocol/typescript/index.js';
+import type {
+	AccountLoginCancelParams,
+	AccountLoginCancelResult,
+	AccountLoginStartParams,
+	AccountLoginStartResult,
+	AccountLogoutParams,
+	AccountLogoutResult,
+	AccountReadResult,
+} from '../../../../../.build/protocol/typescript/index.js';
 
 /** Transport-only account authentication operations. */
 export interface IAccountApi {

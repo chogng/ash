@@ -1,12 +1,21 @@
 import { addDisposableListener, h } from '../../../../base/browser/dom.js';
 import { isReducedMotion } from '../../../../base/browser/ui/animations/animations.js';
-import { AnchorAlignment, AnchorPosition, ContextViewFocusRestore } from '../../../../base/browser/ui/contextview/contextview.js';
+import {
+	AnchorAlignment,
+	AnchorPosition,
+	ContextViewFocusRestore,
+} from '../../../../base/browser/ui/contextview/contextview.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { localize } from '../../../../nls.js';
-import { AccessibleContentProvider, AccessibleViewProviderId, AccessibleViewType, AccessibilityVerbositySettingId } from '../../../../platform/accessibility/browser/accessibleView.js';
+import {
+	AccessibleContentProvider,
+	AccessibleViewProviderId,
+	AccessibleViewType,
+	AccessibilityVerbositySettingId,
+} from '../../../../platform/accessibility/browser/accessibleView.js';
 import { AccessibleViewRegistry } from '../../../../platform/accessibility/browser/accessibleViewRegistry.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextViewService } from '../../../../platform/contextview/browser/contextView.js';
@@ -15,11 +24,11 @@ import './media/modelPickerWidget.css';
 
 /** Provider-owned values and actions. Unknown thinking capabilities are omitted. */
 export interface ModelPickerPresentation {
-	readonly models: readonly { readonly id: string; readonly title: string; }[];
+	readonly models: readonly { readonly id: string; readonly title: string }[];
 	readonly selectedModel: string;
 	readonly disabled: boolean;
 	readonly thinking?: {
-		readonly levels: readonly { readonly id: string; readonly label: string; }[];
+		readonly levels: readonly { readonly id: string; readonly label: string }[];
 		readonly selectedLevel: string;
 		/** A distinct provider mode; neither the label nor the final stop implies emphasis. */
 		readonly emphasized?: boolean;
@@ -52,19 +61,34 @@ export class ModelPickerWidget extends Disposable {
 		this.button.append(this.label);
 		appendIcon(Lxicon.chevronDown, this.button);
 		container.append(this.button);
-		this._register(addDisposableListener(this.button, 'pointerdown', event => {
-			// Preserve the open popup until click toggles it; moving focus first would
-			// dismiss it on focusout and immediately reopen it on the same click.
-			if (this.popup) { event.preventDefault(); }
-		}));
-		this._register(addDisposableListener(this.button, 'click', event => this.popup ? this.hide() : this.show(event.detail === 0)));
-		this._register(addDisposableListener(this.button, 'keydown', event => {
-			if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-				event.preventDefault();
-				this.show(true);
-			}
-		}));
-		this._register(toDisposable(() => { this.hide(); this.button.remove(); }));
+		this._register(
+			addDisposableListener(this.button, 'pointerdown', event => {
+				// Preserve the open popup until click toggles it; moving focus first would
+				// dismiss it on focusout and immediately reopen it on the same click.
+				if (this.popup) {
+					event.preventDefault();
+				}
+			}),
+		);
+		this._register(
+			addDisposableListener(this.button, 'click', event =>
+				this.popup ? this.hide() : this.show(event.detail === 0),
+			),
+		);
+		this._register(
+			addDisposableListener(this.button, 'keydown', event => {
+				if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+					event.preventDefault();
+					this.show(true);
+				}
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				this.hide();
+				this.button.remove();
+			}),
+		);
 		this.update(this.presentation);
 	}
 
@@ -74,10 +98,26 @@ export class ModelPickerWidget extends Disposable {
 		const model = presentation.models.find(model => model.id === presentation.selectedModel);
 		const thinking = this.thinking;
 		const level = thinking?.levels.find(level => level.id === thinking.selectedLevel);
-		const modelLabel = localize('sessions.modelPicker.chooseModel', 'Choose model: {0}', model?.title ?? localize('sessions.modelPicker.model', 'Model'));
+		const modelLabel = localize(
+			'sessions.modelPicker.chooseModel',
+			'Choose model: {0}',
+			model?.title ?? localize('sessions.modelPicker.model', 'Model'),
+		);
 		this.label.textContent = level?.label ?? model?.title ?? localize('sessions.modelPicker.model', 'Model');
-		this.button.title = thinking ? localize('sessions.modelPicker.modelAndThinking', '{0} · {1}', model?.title ?? '', this.label.textContent) : modelLabel;
-		this.button.setAttribute('aria-label', thinking ? localize('sessions.modelPicker.chooseThinking', 'Thinking level: {0}. Model: {1}', this.label.textContent, model?.title ?? '') : modelLabel);
+		this.button.title = thinking
+			? localize('sessions.modelPicker.modelAndThinking', '{0} · {1}', model?.title ?? '', this.label.textContent)
+			: modelLabel;
+		this.button.setAttribute(
+			'aria-label',
+			thinking
+				? localize(
+						'sessions.modelPicker.chooseThinking',
+						'Thinking level: {0}. Model: {1}',
+						this.label.textContent,
+						model?.title ?? '',
+					)
+				: modelLabel,
+		);
 		this.button.setAttribute('aria-haspopup', this.popup?.getAttribute('role') ?? (thinking ? 'dialog' : 'menu'));
 		this.button.disabled = presentation.disabled || !presentation.models.length;
 		if (this.button.disabled || previous.models !== presentation.models) {
@@ -88,16 +128,24 @@ export class ModelPickerWidget extends Disposable {
 	}
 
 	public hide(): void {
-		if (this.popup) { this.views.hide(); }
+		if (this.popup) {
+			this.views.hide();
+		}
 	}
 
 	private get thinking(): ModelPickerPresentation['thinking'] {
 		const thinking = this.presentation.thinking;
-		return thinking && thinking.levels.length > 0 && thinking.levels.some(level => level.id === thinking.selectedLevel) ? thinking : undefined;
+		return thinking &&
+			thinking.levels.length > 0 &&
+			thinking.levels.some(level => level.id === thinking.selectedLevel)
+			? thinking
+			: undefined;
 	}
 
 	private show(keyboard: boolean): void {
-		if (this.button.disabled || this.popup) { return; }
+		if (this.button.disabled || this.popup) {
+			return;
+		}
 		this.button.focus();
 		const popup = h(this.button.ownerDocument, 'div');
 		popup.id = `sessions-model-picker-${createUuid()}`;
@@ -122,11 +170,18 @@ export class ModelPickerWidget extends Disposable {
 		const setView = (next: typeof view, focus: boolean): void => {
 			// Keep both pages mounted: selection changes update their existing controls,
 			// and an interrupted transition can continue from its current visual state.
-			if (popup.isConnected) { popup.focus({ preventScroll: true }); }
+			if (popup.isConnected) {
+				popup.focus({ preventScroll: true });
+			}
 			view = next;
 			popup.dataset.view = next;
 			popup.setAttribute('role', next === 'thinking' ? 'dialog' : 'menu');
-			popup.setAttribute('aria-label', next === 'thinking' ? localize('sessions.modelPicker.thinking', 'Thinking level') : localize('sessions.modelPicker.models', 'Choose model'));
+			popup.setAttribute(
+				'aria-label',
+				next === 'thinking'
+					? localize('sessions.modelPicker.thinking', 'Thinking level')
+					: localize('sessions.modelPicker.models', 'Choose model'),
+			);
 			this.button.setAttribute('aria-haspopup', popup.getAttribute('role')!);
 			thinkingPage.inert = next !== 'thinking';
 			modelsPage.inert = next !== 'models';
@@ -137,45 +192,70 @@ export class ModelPickerWidget extends Disposable {
 			if (popup.isConnected) {
 				pages.style.height = `${(next === 'thinking' ? thinkingPage : modelsPage).offsetHeight}px`;
 				this.views.layout();
-				if (focus) { (next === 'thinking' ? thinking.focus() : models.focus()).focus({ preventScroll: true }); }
+				if (focus) {
+					(next === 'thinking' ? thinking.focus() : models.focus()).focus({ preventScroll: true });
+				}
 			}
 		};
 		const thinking = this.renderThinking(thinkingPage, event => setView('models', event.detail === 0));
 		const models = this.renderModels(modelsPage, (model, keyboard) => {
 			this.selectModel(model);
-			if (this.thinking) { setView('thinking', keyboard); }
-			else { this.hide(); }
+			if (this.thinking) {
+				setView('thinking', keyboard);
+			} else {
+				this.hide();
+			}
 		});
-		this.popupResources.add(addDisposableListener(popup, 'keydown', event => {
-			if (event.target !== popup || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) { return; }
-			const controls = (view === 'thinking' ? thinkingPage : modelsPage).querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled)');
-			event.preventDefault();
-			(event.key === 'ArrowUp' || event.key === 'End' ? controls[controls.length - 1] : controls[0])?.focus();
-		}));
+		this.popupResources.add(
+			addDisposableListener(popup, 'keydown', event => {
+				if (event.target !== popup || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+					return;
+				}
+				const controls = (view === 'thinking' ? thinkingPage : modelsPage).querySelectorAll<HTMLElement>(
+					'button:not(:disabled), input:not(:disabled)',
+				);
+				event.preventDefault();
+				(event.key === 'ArrowUp' || event.key === 'End' ? controls[controls.length - 1] : controls[0])?.focus();
+			}),
+		);
 		this.refreshPopup = () => {
 			thinking.refresh();
 			models.refresh();
-			if (!this.thinking && view === 'thinking') { setView('models', true); }
-			else { pages.style.height = `${(view === 'thinking' ? thinkingPage : modelsPage).offsetHeight}px`; }
+			if (!this.thinking && view === 'thinking') {
+				setView('models', true);
+			} else {
+				pages.style.height = `${(view === 'thinking' ? thinkingPage : modelsPage).offsetHeight}px`;
+			}
 		};
 		setView(view, false);
 		this.closeOnFocusOut(popup);
-		if (this.views.show({
-			anchor: this.button, content: popup, presentation: 'plain', gap: 8,
-			anchorAlignment: AnchorAlignment.Right, anchorPosition: AnchorPosition.Above,
-			focusRestore: ContextViewFocusRestore.Previous,
-			onHide: () => {
-				this.popup = undefined;
-				this.refreshPopup = undefined;
-				this.button.setAttribute('aria-expanded', 'false');
-				this.button.setAttribute('aria-haspopup', this.thinking ? 'dialog' : 'menu');
-				this.button.removeAttribute('aria-controls');
-				this.popupResources.clear();
-			},
-		})) { setView(view, keyboard); }
+		if (
+			this.views.show({
+				anchor: this.button,
+				content: popup,
+				presentation: 'plain',
+				gap: 8,
+				anchorAlignment: AnchorAlignment.Right,
+				anchorPosition: AnchorPosition.Above,
+				focusRestore: ContextViewFocusRestore.Previous,
+				onHide: () => {
+					this.popup = undefined;
+					this.refreshPopup = undefined;
+					this.button.setAttribute('aria-expanded', 'false');
+					this.button.setAttribute('aria-haspopup', this.thinking ? 'dialog' : 'menu');
+					this.button.removeAttribute('aria-controls');
+					this.popupResources.clear();
+				},
+			})
+		) {
+			setView(view, keyboard);
+		}
 	}
 
-	private renderThinking(popup: HTMLElement, openModels: (event: MouseEvent) => void): { focus(): HTMLElement; refresh(): void; } {
+	private renderThinking(
+		popup: HTMLElement,
+		openModels: (event: MouseEvent) => void,
+	): { focus(): HTMLElement; refresh(): void } {
 		const models = h(popup.ownerDocument, 'button');
 		models.type = 'button';
 		models.className = 'ash-sessions-model-picker-heading';
@@ -201,7 +281,7 @@ export class ModelPickerWidget extends Disposable {
 		for (let index = 0; index < 12; index++) {
 			const particle = h(popup.ownerDocument, 'span');
 			particle.style.left = `${6 + index * 7.5}%`;
-			particle.style.top = `${25 + (index * 19 % 50)}%`;
+			particle.style.top = `${25 + ((index * 19) % 50)}%`;
 			particle.style.animationDelay = `${-index * 230}ms`;
 			particle.style.animationDuration = `${1800 + (index % 5) * 270}ms`;
 			effects.append(particle);
@@ -242,57 +322,95 @@ export class ModelPickerWidget extends Disposable {
 				ticks.replaceChildren(...levels.map(() => h(popup.ownerDocument, 'span')));
 			}
 			Array.from(ticks.children).forEach((tick, i) => tick.setAttribute('data-selected', String(i <= index)));
-			if (pointer === undefined) { track.style.setProperty('--ash-model-picker-position', String(levels.length > 1 ? index / (levels.length - 1) : 0)); }
+			if (pointer === undefined) {
+				track.style.setProperty(
+					'--ash-model-picker-position',
+					String(levels.length > 1 ? index / (levels.length - 1) : 0),
+				);
+			}
 		};
 		refresh();
-		this.popupResources.add(addDisposableListener(slider, 'input', () => {
-			const level = this.thinking?.levels[slider.valueAsNumber];
-			if (level) { this.thinking!.select(level.id); }
-		}));
+		this.popupResources.add(
+			addDisposableListener(slider, 'input', () => {
+				const level = this.thinking?.levels[slider.valueAsNumber];
+				if (level) {
+					this.thinking!.select(level.id);
+				}
+			}),
+		);
 		const selectAt = (clientX: number): void => {
 			const current = this.thinking;
-			if (!current || slider.disabled) { return; }
+			if (!current || slider.disabled) {
+				return;
+			}
 			const bounds = rail.getBoundingClientRect();
 			const position = Math.max(0, Math.min(1, (clientX - bounds.left) / bounds.width));
 			track.style.setProperty('--ash-model-picker-position', String(position));
 			const level = current.levels[Math.round(position * (current.levels.length - 1))]!;
-			if (level.id !== current.selectedLevel) { current.select(level.id); }
+			if (level.id !== current.selectedLevel) {
+				current.select(level.id);
+			}
 		};
-		this.popupResources.add(addDisposableListener(slider, 'pointerdown', event => {
-			if (event.button !== 0 || slider.disabled) { return; }
-			event.preventDefault();
-			pointer = event.pointerId;
-			track.dataset.dragging = 'true';
-			slider.focus({ preventScroll: true });
-			slider.setPointerCapture(pointer);
-			selectAt(event.clientX);
-		}));
-		this.popupResources.add(addDisposableListener(slider, 'pointermove', event => {
-			if (pointer === event.pointerId) { selectAt(event.clientX); }
-		}));
+		this.popupResources.add(
+			addDisposableListener(slider, 'pointerdown', event => {
+				if (event.button !== 0 || slider.disabled) {
+					return;
+				}
+				event.preventDefault();
+				pointer = event.pointerId;
+				track.dataset.dragging = 'true';
+				slider.focus({ preventScroll: true });
+				slider.setPointerCapture(pointer);
+				selectAt(event.clientX);
+			}),
+		);
+		this.popupResources.add(
+			addDisposableListener(slider, 'pointermove', event => {
+				if (pointer === event.pointerId) {
+					selectAt(event.clientX);
+				}
+			}),
+		);
 		const endDrag = (event: PointerEvent): void => {
-			if (pointer !== event.pointerId) { return; }
-			if (event.type === 'pointerup') { selectAt(event.clientX); }
+			if (pointer !== event.pointerId) {
+				return;
+			}
+			if (event.type === 'pointerup') {
+				selectAt(event.clientX);
+			}
 			pointer = undefined;
 			track.dataset.dragging = 'false';
-			if (slider.hasPointerCapture(event.pointerId)) { slider.releasePointerCapture(event.pointerId); }
+			if (slider.hasPointerCapture(event.pointerId)) {
+				slider.releasePointerCapture(event.pointerId);
+			}
 			refresh();
 		};
 		for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
 			this.popupResources.add(addDisposableListener(slider, type, endDrag));
 		}
-		this.popupResources.add(toDisposable(() => {
-			if (pointer !== undefined && slider.hasPointerCapture(pointer)) { slider.releasePointerCapture(pointer); }
-		}));
-		this.popupResources.add(addDisposableListener(popup, 'keydown', event => {
-			if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') { return; }
-			event.preventDefault();
-			(popup.ownerDocument.activeElement === models && !slider.disabled ? slider : models).focus();
-		}));
+		this.popupResources.add(
+			toDisposable(() => {
+				if (pointer !== undefined && slider.hasPointerCapture(pointer)) {
+					slider.releasePointerCapture(pointer);
+				}
+			}),
+		);
+		this.popupResources.add(
+			addDisposableListener(popup, 'keydown', event => {
+				if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+					return;
+				}
+				event.preventDefault();
+				(popup.ownerDocument.activeElement === models && !slider.disabled ? slider : models).focus();
+			}),
+		);
 		return { focus: () => models, refresh };
 	}
 
-	private renderModels(popup: HTMLElement, select: (model: string, keyboard: boolean) => void): { focus(): HTMLElement; refresh(): void; } {
+	private renderModels(
+		popup: HTMLElement,
+		select: (model: string, keyboard: boolean) => void,
+	): { focus(): HTMLElement; refresh(): void } {
 		const buttons: HTMLButtonElement[] = [];
 		for (const model of this.presentation.models) {
 			const button = h(popup.ownerDocument, 'button');
@@ -312,62 +430,115 @@ export class ModelPickerWidget extends Disposable {
 			check.style.visibility = checked ? 'visible' : 'hidden';
 			popup.append(button);
 			buttons.push(button);
-			this.popupResources.add(addDisposableListener(button, 'click', event => select(model.id, event.detail === 0)));
+			this.popupResources.add(
+				addDisposableListener(button, 'click', event => select(model.id, event.detail === 0)),
+			);
 		}
-		this.popupResources.add(addDisposableListener(popup, 'keydown', event => {
-			const index = buttons.indexOf(popup.ownerDocument.activeElement as HTMLButtonElement);
-			let next: number;
-			switch (event.key) {
-				case 'ArrowDown': next = (index + 1) % buttons.length; break;
-				case 'ArrowUp': next = index < 0 ? buttons.length - 1 : (index - 1 + buttons.length) % buttons.length; break;
-				case 'Home': next = 0; break;
-				case 'End': next = buttons.length - 1; break;
-				default: return;
-			}
-			event.preventDefault();
-			buttons.forEach((button, i) => button.tabIndex = i === next ? 0 : -1);
-			buttons[next]!.focus();
-		}));
+		this.popupResources.add(
+			addDisposableListener(popup, 'keydown', event => {
+				const index = buttons.indexOf(popup.ownerDocument.activeElement as HTMLButtonElement);
+				let next: number;
+				switch (event.key) {
+					case 'ArrowDown':
+						next = (index + 1) % buttons.length;
+						break;
+					case 'ArrowUp':
+						next = index < 0 ? buttons.length - 1 : (index - 1 + buttons.length) % buttons.length;
+						break;
+					case 'Home':
+						next = 0;
+						break;
+					case 'End':
+						next = buttons.length - 1;
+						break;
+					default:
+						return;
+				}
+				event.preventDefault();
+				buttons.forEach((button, i) => (button.tabIndex = i === next ? 0 : -1));
+				buttons[next]!.focus();
+			}),
+		);
 		return {
 			focus: () => buttons.find(button => button.getAttribute('aria-checked') === 'true') ?? buttons[0]!,
-			refresh: () => buttons.forEach((button, index) => {
-				const checked = this.presentation.models[index]!.id === this.presentation.selectedModel;
-				button.setAttribute('aria-checked', String(checked));
-				button.classList.toggle('checked', checked);
-				button.tabIndex = checked ? 0 : -1;
-				(button.lastElementChild as HTMLElement).style.visibility = checked ? 'visible' : 'hidden';
-			}),
+			refresh: () =>
+				buttons.forEach((button, index) => {
+					const checked = this.presentation.models[index]!.id === this.presentation.selectedModel;
+					button.setAttribute('aria-checked', String(checked));
+					button.classList.toggle('checked', checked);
+					button.tabIndex = checked ? 0 : -1;
+					(button.lastElementChild as HTMLElement).style.visibility = checked ? 'visible' : 'hidden';
+				}),
 		};
 	}
 
 	private closeOnFocusOut(popup: HTMLElement): void {
-		this.popupResources.add(addDisposableListener(popup, 'focusout', event => {
-			if (event.relatedTarget && !popup.contains(event.relatedTarget as Node)) { this.hide(); }
-		}));
+		this.popupResources.add(
+			addDisposableListener(popup, 'focusout', event => {
+				if (event.relatedTarget && !popup.contains(event.relatedTarget as Node)) {
+					this.hide();
+				}
+			}),
+		);
 	}
 
 	private registerAccessibility(popup: HTMLElement): void {
-		const help = localize('sessions.modelPicker.help', 'Up and Down Arrow move between the model heading and thinking slider. Left and Right Arrow adjust the focused slider; Home and End select its first and last levels. Activate the heading to open the model list, then use Up and Down Arrow, Home or End, and Enter or Space to choose a model. Selection returns to its thinking slider when available. Tab moves between controls. Escape closes the popup and returns to the picker.');
+		const help = localize(
+			'sessions.modelPicker.help',
+			'Up and Down Arrow move between the model heading and thinking slider. Left and Right Arrow adjust the focused slider; Home and End select its first and last levels. Activate the heading to open the model list, then use Up and Down Arrow, Home or End, and Enter or Space to choose a model. Selection returns to its thinking slider when available. Tab moves between controls. Escape closes the popup and returns to the picker.',
+		);
 		if (this.configuration.getValue<boolean>(AccessibilityVerbositySettingId.ChatModelConfiguration) !== false) {
 			popup.setAttribute('aria-description', help);
 		}
 		for (const type of [AccessibleViewType.Help, AccessibleViewType.View]) {
-			this.popupResources.add(AccessibleViewRegistry.register({
-				type, priority: 115, name: popup.id,
-				getProvider: () => {
-					const focused = popup.ownerDocument.activeElement as HTMLElement;
-					if (!popup.contains(focused)) { return undefined; }
-					return new AccessibleContentProvider(AccessibleViewProviderId.ChatModelConfiguration, { type },
-						() => type === AccessibleViewType.Help ? help : [
-							...this.presentation.models.map(model => model.id === this.presentation.selectedModel
-								? localize('sessions.modelPicker.selected', '{0}, selected', model.title) : model.title),
-							...this.thinking?.levels.map(level => level.id === this.thinking?.selectedLevel
-								? localize('sessions.modelPicker.selected', '{0}, selected', level.label) : level.label) ?? [],
-						].join('\n'),
-						() => { if (focused.isConnected) { focused.focus(); } else { this.button.focus(); } },
-						AccessibilityVerbositySettingId.ChatModelConfiguration);
-				},
-			}));
+			this.popupResources.add(
+				AccessibleViewRegistry.register({
+					type,
+					priority: 115,
+					name: popup.id,
+					getProvider: () => {
+						const focused = popup.ownerDocument.activeElement as HTMLElement;
+						if (!popup.contains(focused)) {
+							return undefined;
+						}
+						return new AccessibleContentProvider(
+							AccessibleViewProviderId.ChatModelConfiguration,
+							{ type },
+							() =>
+								type === AccessibleViewType.Help
+									? help
+									: [
+											...this.presentation.models.map(model =>
+												model.id === this.presentation.selectedModel
+													? localize(
+															'sessions.modelPicker.selected',
+															'{0}, selected',
+															model.title,
+														)
+													: model.title,
+											),
+											...(this.thinking?.levels.map(level =>
+												level.id === this.thinking?.selectedLevel
+													? localize(
+															'sessions.modelPicker.selected',
+															'{0}, selected',
+															level.label,
+														)
+													: level.label,
+											) ?? []),
+										].join('\n'),
+							() => {
+								if (focused.isConnected) {
+									focused.focus();
+								} else {
+									this.button.focus();
+								}
+							},
+							AccessibilityVerbositySettingId.ChatModelConfiguration,
+						);
+					},
+				}),
+			);
 		}
 	}
 }

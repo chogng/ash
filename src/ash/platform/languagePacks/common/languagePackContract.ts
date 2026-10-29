@@ -1,5 +1,5 @@
 /** Version of the static catalog contract consumed by Ash clients. */
-export const ASH_LOCALIZATION_CATALOG_VERSION = "ash-1";
+export const ASH_LOCALIZATION_CATALOG_VERSION = 'ash-1';
 
 export interface LanguagePackCatalog {
 	readonly schemaVersion: 1;
@@ -8,7 +8,12 @@ export interface LanguagePackCatalog {
 	readonly localizedLanguageName: string;
 	readonly catalogVersion: string;
 	readonly bundles: Readonly<Record<string, Readonly<Record<string, string>>>>;
-	readonly extensionTranslations?: Readonly<Record<string, { readonly package: Readonly<Record<string, string>>; readonly bundle: Readonly<Record<string, string>>; }>>;
+	readonly extensionTranslations?: Readonly<
+		Record<
+			string,
+			{ readonly package: Readonly<Record<string, string>>; readonly bundle: Readonly<Record<string, string>> }
+		>
+	>;
 }
 
 export interface PreinstalledLanguagePack {

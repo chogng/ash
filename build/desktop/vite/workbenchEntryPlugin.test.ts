@@ -1,33 +1,30 @@
-import assert from "node:assert/strict";
-import type { IncomingMessage, ServerResponse } from "node:http";
-import test from "node:test";
+import assert from 'node:assert/strict';
+import type { IncomingMessage, ServerResponse } from 'node:http';
+import test from 'node:test';
 import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { build, createServer, type Connect } from "vite";
+import { build, createServer, type Connect } from 'vite';
 
-import { workbenchEntryPlugin } from "./workbenchEntryPlugin.ts";
+import { workbenchEntryPlugin } from './workbenchEntryPlugin.ts';
 import { CSSDevelopmentService } from '../../../src/ash/platform/cssDev/node/cssDevService.ts';
 
-test("Workbench entry redirects root requests to the shared Workbench", () => {
+test('Workbench entry redirects root requests to the shared Workbench', () => {
 	const middleware = configuredMiddleware();
-	const result = invoke(middleware, { method: "GET", url: "/?theme=dark" });
+	const result = invoke(middleware, { method: 'GET', url: '/?theme=dark' });
 	assert.deepEqual(result, {
 		ended: true,
-		headers: {
-			"Cache-Control": "no-store",
-			Location: "/browser/workbench/workbench.html?theme=dark",
-		},
+		headers: { 'Cache-Control': 'no-store', Location: '/browser/workbench/workbench.html?theme=dark' },
 		nextCalled: false,
 		statusCode: 302,
 	});
 });
 
-test("Workbench entry leaves non-root and mutating requests to Vite", () => {
+test('Workbench entry leaves non-root and mutating requests to Vite', () => {
 	const middleware = configuredMiddleware();
 	for (const request of [
-		{ method: "GET", url: "/browser/workbench/workbench.html" },
-		{ method: "POST", url: "/" },
+		{ method: 'GET', url: '/browser/workbench/workbench.html' },
+		{ method: 'POST', url: '/' },
 	]) {
 		assert.deepEqual(invoke(middleware, request), {
 			ended: false,
@@ -40,7 +37,10 @@ test("Workbench entry leaves non-root and mutating requests to Vite", () => {
 
 test('Sessions development opens its page directly and preserves workspace parameters', () => {
 	const middleware = configuredMiddleware('/browser/sessions/sessions.html');
-	assert.equal(invoke(middleware, { method: 'HEAD', url: '/?folder=project' }).headers.Location, '/browser/sessions/sessions.html?folder=project');
+	assert.equal(
+		invoke(middleware, { method: 'HEAD', url: '/?folder=project' }).headers.Location,
+		'/browser/sessions/sessions.html?folder=project',
+	);
 });
 
 test('Sessions HTML is served and built from its owning layer with working module URLs', async () => {
@@ -57,7 +57,12 @@ test('Sessions HTML is served and built from its owning layer with working modul
 	const page = { url, inputFile: input, sourceFile: source };
 	let server: Awaited<ReturnType<typeof createServer>> | undefined;
 	try {
-		server = await createServer({ configFile: false, root, plugins: [workbenchEntryPlugin(undefined, [page])], server: { host: '127.0.0.1', port: 0 } });
+		server = await createServer({
+			configFile: false,
+			root,
+			plugins: [workbenchEntryPlugin(undefined, [page])],
+			server: { host: '127.0.0.1', port: 0 },
+		});
 		await server.listen();
 		const address = server.httpServer!.address();
 		assert.ok(address && typeof address !== 'string');
@@ -74,12 +79,21 @@ test('Sessions HTML is served and built from its owning layer with working modul
 		await server.close();
 		server = undefined;
 		assert.equal(dirname(resolve(output)), resolve(directory));
-		await build({ configFile: false, root, base: './', plugins: [workbenchEntryPlugin(undefined, [page])], build: { outDir: output, emptyOutDir: true, rolldownOptions: { input } } });
+		await build({
+			configFile: false,
+			root,
+			base: './',
+			plugins: [workbenchEntryPlugin(undefined, [page])],
+			build: { outDir: output, emptyOutDir: true, rolldownOptions: { input } },
+		});
 		const builtHtml = await readFile(join(output, url.slice(1)), 'utf8');
 		const builtModule = /src="([^"]+\.js)"/u.exec(builtHtml)?.[1];
 		assert.ok(builtModule, builtHtml);
 		assert.doesNotMatch(builtHtml, /@fs\/|sessions\.ts/u);
-		assert.match(await readFile(resolve(output, dirname(url.slice(1)), builtModule), 'utf8'), /sessionsEntryLoaded/);
+		assert.match(
+			await readFile(resolve(output, dirname(url.slice(1)), builtModule), 'utf8'),
+			/sessionsEntryLoaded/,
+		);
 	} finally {
 		await server?.close();
 		assert.equal(dirname(resolve(directory)), resolve(tmpdir()));
@@ -99,13 +113,22 @@ for (const preserveSymlinks of [false, true]) {
 		await symlink(source, linkedSource, process.platform === 'win32' ? 'junction' : 'dir');
 		await mkdir(dirname(css));
 		await writeFile(css, '.css-test { color: red; }');
-		await writeFile(join(root, 'index.html'), '<html><head></head><body><script type="module" src="./entry.ts"></script></body></html>');
+		await writeFile(
+			join(root, 'index.html'),
+			'<html><head></head><body><script type="module" src="./entry.ts"></script></body></html>',
+		);
 		await writeFile(join(root, 'entry.ts'), 'import "../shared/style.css";');
 		const service = new CSSDevelopmentService({ sourceRoot: linkedSource, isBuilt: false });
 		const plugin = () => workbenchEntryPlugin(undefined, undefined, { service, sourceRoot: linkedSource });
 		let server: Awaited<ReturnType<typeof createServer>> | undefined;
 		try {
-			server = await createServer({ configFile: false, root, resolve: { preserveSymlinks }, plugins: [plugin()], server: { host: '127.0.0.1', port: 0 } });
+			server = await createServer({
+				configFile: false,
+				root,
+				resolve: { preserveSymlinks },
+				plugins: [plugin()],
+				server: { host: '127.0.0.1', port: 0 },
+			});
 			await server.listen();
 			const address = server.httpServer!.address();
 			assert.ok(address && typeof address !== 'string');
@@ -114,14 +137,22 @@ for (const preserveSymlinks of [false, true]) {
 			assert.match(html, /ash-workbench-css-modules/u);
 			const data = /type="application\/json">\s*([^<]+)<\/script>/u.exec(html)?.[1];
 			assert.ok(data, html);
-			const modules = JSON.parse(data) as { specifiers: string[]; stylesheet: string; }[];
+			const modules = JSON.parse(data) as { specifiers: string[]; stylesheet: string }[];
 			assert.equal(modules.length, 1);
 			const transformed = await (await fetch(`${origin}/entry.ts`)).text();
-			assert.ok(modules[0].specifiers.some(specifier => transformed.includes(specifier)), transformed);
+			assert.ok(
+				modules[0].specifiers.some(specifier => transformed.includes(specifier)),
+				transformed,
+			);
 			assert.match(await (await fetch(new URL(modules[0].stylesheet, origin))).text(), /color: red/u);
 			await server.close();
 			server = undefined;
-			await build({ configFile: false, root: await realpath(join(source, 'code')), plugins: [plugin()], build: { outDir: output, emptyOutDir: true } });
+			await build({
+				configFile: false,
+				root: await realpath(join(source, 'code')),
+				plugins: [plugin()],
+				build: { outDir: output, emptyOutDir: true },
+			});
 			const built = await readFile(join(output, 'index.html'), 'utf8');
 			assert.doesNotMatch(built, /ash-workbench-css-modules|_ASH_CSS_LOAD|importmap/u);
 			assert.match(built, /rel="stylesheet"/u);
@@ -149,7 +180,10 @@ test('CSS discovery shares concurrent scans, refreshes paths and skips filesyste
 		const built = new CSSDevelopmentService({ sourceRoot: join(directory, 'missing'), isBuilt: true });
 		assert.equal(built.isEnabled, false);
 		assert.deepEqual(await built.getCssModules(), []);
-		await assert.rejects(new CSSDevelopmentService({ sourceRoot: join(directory, 'missing'), isBuilt: false }).getCssModules(), { code: 'ENOENT' });
+		await assert.rejects(
+			new CSSDevelopmentService({ sourceRoot: join(directory, 'missing'), isBuilt: false }).getCssModules(),
+			{ code: 'ENOENT' },
+		);
 	} finally {
 		assert.equal(dirname(directory), tmpdir());
 		await rm(directory, { recursive: true, force: true });
@@ -170,7 +204,7 @@ function configuredMiddleware(entryPath?: string): Connect.NextHandleFunction {
 	return middleware;
 }
 
-function invoke(middleware: Connect.NextHandleFunction, request: { readonly method: string; readonly url: string; }) {
+function invoke(middleware: Connect.NextHandleFunction, request: { readonly method: string; readonly url: string }) {
 	const headers: Record<string, string | readonly string[] | number> = {};
 	let ended = false;
 	let nextCalled = false;

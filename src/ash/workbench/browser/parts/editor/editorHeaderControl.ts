@@ -1,35 +1,52 @@
 import { DiffEditorWidget } from '../../../../editor/browser/widget/diffEditor/diffEditorWidget.js';
 import type { IResourceEditorInput, IEditorPane } from '../../../common/editor.js';
-import { h } from "../../../../base/browser/dom.js";
+import { h } from '../../../../base/browser/dom.js';
 import { localize } from '../../../../nls.js';
-import { Emitter, type Event } from "../../../../base/common/event.js";
-import { RunOnceScheduler } from "../../../../base/common/async.js";
-import { Disposable, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
-import type { Position } from "../../../../editor/common/core/position.js";
-import type { Range } from "../../../../editor/common/core/range.js";
-import type { LanguageDocumentSymbol } from "../../../../editor/common/languages.js";
-import type { TextModel } from "../../../../editor/common/model/textModel.js";
-import type { ILanguageFeaturesService } from "../../../../editor/common/services/languageFeatures.js";
-import { OutlineModel } from "../../../../editor/contrib/documentSymbols/browser/outlineModel.js";
-import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.js";
-import { AnchorPosition } from "../../../../base/browser/ui/contextview/contextview.js";
-import { MenuWorkbenchToolBar, WorkbenchToolBar } from "../../../../platform/actions/browser/toolbar.js";
-import { type IMenuService, MenuId } from "../../../../platform/actions/common/actions.js";
-import type { IContextKeyService } from "../../../../platform/contextkey/browser/contextKeyService.js";
-import type { IConfigurationService } from "../../../../platform/configuration/common/configuration.js";
+import { Emitter, type Event } from '../../../../base/common/event.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
+import {
+	Disposable,
+	DisposableStore,
+	MutableDisposable,
+	toDisposable,
+	type IDisposable,
+} from '../../../../base/common/lifecycle.js';
+import type { Position } from '../../../../editor/common/core/position.js';
+import type { Range } from '../../../../editor/common/core/range.js';
+import type { LanguageDocumentSymbol } from '../../../../editor/common/languages.js';
+import type { TextModel } from '../../../../editor/common/model/textModel.js';
+import type { ILanguageFeaturesService } from '../../../../editor/common/services/languageFeatures.js';
+import { OutlineModel } from '../../../../editor/contrib/documentSymbols/browser/outlineModel.js';
+import type { IContextMenuProvider } from '../../../../base/browser/contextmenu.js';
+import { AnchorPosition } from '../../../../base/browser/ui/contextview/contextview.js';
+import { MenuWorkbenchToolBar, WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
+import { type IMenuService, MenuId } from '../../../../platform/actions/common/actions.js';
+import type { IContextKeyService } from '../../../../platform/contextkey/browser/contextKeyService.js';
+import type { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import {
 	Extensions as ConfigurationExtensions,
 	type IConfigurationRegistry,
 	type IRegisteredConfiguration,
-} from "../../../../platform/configuration/common/configurationRegistry.js";
-import { Registry } from "../../../../platform/registry/common/platform.js";
-import { BreadcrumbsEnabledConfiguration, BreadcrumbsFilePathConfiguration, BreadcrumbsSymbolPathConfiguration, type BreadcrumbsPathMode, type IBreadcrumbsService } from "./breadcrumbs.js";
-import type { EditorGroupId } from "../../../services/editor/common/editorState.js";
-import { EditorBreadcrumbsControl } from "./breadcrumbsControl.js";
-import { BreadcrumbsModel, type FileElement, type SymbolElement } from "./breadcrumbsModel.js";
+} from '../../../../platform/configuration/common/configurationRegistry.js';
+import { Registry } from '../../../../platform/registry/common/platform.js';
+import {
+	BreadcrumbsEnabledConfiguration,
+	BreadcrumbsFilePathConfiguration,
+	BreadcrumbsSymbolPathConfiguration,
+	type BreadcrumbsPathMode,
+	type IBreadcrumbsService,
+} from './breadcrumbs.js';
+import type { EditorGroupId } from '../../../services/editor/common/editorState.js';
+import { EditorBreadcrumbsControl } from './breadcrumbsControl.js';
+import { BreadcrumbsModel, type FileElement, type SymbolElement } from './breadcrumbsModel.js';
 
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { EditorTitleScrollbarSizingConfiguration, EditorTitleScrollbarVisibilityConfiguration, type EditorTitleScrollbarSizing, type EditorTitleScrollbarVisibility } from '../../../services/editor/common/editorConfiguration.js';
+import {
+	EditorTitleScrollbarSizingConfiguration,
+	EditorTitleScrollbarVisibilityConfiguration,
+	type EditorTitleScrollbarSizing,
+	type EditorTitleScrollbarVisibility,
+} from '../../../services/editor/common/editorConfiguration.js';
 import type { IEditorPaneDescriptor } from '../../editor.js';
 import { createEditorTypeActions } from './editorTypePicker.js';
 import { BreadcrumbsShowEditorTypeConfiguration } from './breadcrumbs.js';
@@ -69,71 +86,105 @@ export class EditorHeaderControl extends Disposable {
 		group: EditorGroupId | undefined,
 		breadcrumbsService: IBreadcrumbsService | undefined,
 		private readonly languageFeatures: ILanguageFeaturesService | undefined,
-		private readonly showSymbolPicker: ((symbols: readonly LanguageDocumentSymbol[], selected: LanguageDocumentSymbol, reveal: (range: Range) => void) => void) | undefined,
+		private readonly showSymbolPicker:
+			| ((
+					symbols: readonly LanguageDocumentSymbol[],
+					selected: LanguageDocumentSymbol,
+					reveal: (range: Range) => void,
+			  ) => void)
+			| undefined,
 		@IInstantiationService instantiationService: IInstantiationService,
 	) {
 		super();
-		const actionsContainer = h(titleContainer.ownerDocument, "div");
-		actionsContainer.className = "ash-editor-title-actions";
+		const actionsContainer = h(titleContainer.ownerDocument, 'div');
+		actionsContainer.className = 'ash-editor-title-actions';
 		tabsRow.append(actionsContainer);
-		this.toolbar = this._register(actions
-			? new MenuWorkbenchToolBar(
-				actionsContainer,
-				actions.menuService,
-				actions.contextMenuProvider,
-				MenuId.EditorTitle,
-				{
-					highlightToggledItems: true,
-					hoverAnchorPosition: AnchorPosition.Below,
-					contextKeyService: actions.contextKeyService,
-					menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
-				},
-			)
-			: new WorkbenchToolBar(
-				actionsContainer,
-				emptyEditorToolbarContextMenuProvider,
-				{
-					ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
-					highlightToggledItems: true,
-					hoverAnchorPosition: AnchorPosition.Below,
-				},
-			));
+		this.toolbar = this._register(
+			actions
+				? new MenuWorkbenchToolBar(
+						actionsContainer,
+						actions.menuService,
+						actions.contextMenuProvider,
+						MenuId.EditorTitle,
+						{
+							highlightToggledItems: true,
+							hoverAnchorPosition: AnchorPosition.Below,
+							contextKeyService: actions.contextKeyService,
+							menuOptions: group === undefined ? undefined : { arg: { groupId: group } },
+						},
+					)
+				: new WorkbenchToolBar(actionsContainer, emptyEditorToolbarContextMenuProvider, {
+						ariaLabel: localize({ bundle: 'ash.regions', key: 'editorActions' }, 'Editor actions'),
+						highlightToggledItems: true,
+						hoverAnchorPosition: AnchorPosition.Below,
+					}),
+		);
 		this._register(toDisposable(() => actionsContainer.remove()));
-		this.breadcrumbs = this._register(instantiationService.createInstance(EditorBreadcrumbsControl, titleContainer, onSelectBreadcrumb, (element: SymbolElement) => this.selectSymbol(element)));
-		if (group !== undefined && breadcrumbsService) this._register(breadcrumbsService.register(group, this.breadcrumbs));
-		const configuration = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
-			.getConfiguration(BreadcrumbsEnabledConfiguration) as IRegisteredConfiguration<boolean> | undefined;
+		this.breadcrumbs = this._register(
+			instantiationService.createInstance(
+				EditorBreadcrumbsControl,
+				titleContainer,
+				onSelectBreadcrumb,
+				(element: SymbolElement) => this.selectSymbol(element),
+			),
+		);
+		if (group !== undefined && breadcrumbsService)
+			this._register(breadcrumbsService.register(group, this.breadcrumbs));
+		const configuration = Registry.as<IConfigurationRegistry>(
+			ConfigurationExtensions.Configuration,
+		).getConfiguration(BreadcrumbsEnabledConfiguration) as IRegisteredConfiguration<boolean> | undefined;
 		if (!configuration) throw new RangeError(`Unknown configuration: ${BreadcrumbsEnabledConfiguration}`);
-		this.breadcrumbsEnabled = configurationService?.getValue<boolean>(BreadcrumbsEnabledConfiguration)
-			?? configuration.defaultValue;
-		this.filePath = configurationService?.getValue<BreadcrumbsPathMode>(BreadcrumbsFilePathConfiguration) ?? "on";
-		this.symbolPath = configurationService?.getValue<BreadcrumbsPathMode>(BreadcrumbsSymbolPathConfiguration) ?? "on";
+		this.breadcrumbsEnabled =
+			configurationService?.getValue<boolean>(BreadcrumbsEnabledConfiguration) ?? configuration.defaultValue;
+		this.filePath = configurationService?.getValue<BreadcrumbsPathMode>(BreadcrumbsFilePathConfiguration) ?? 'on';
+		this.symbolPath =
+			configurationService?.getValue<BreadcrumbsPathMode>(BreadcrumbsSymbolPathConfiguration) ?? 'on';
 		this.showEditorType = configurationService?.getValue<boolean>(BreadcrumbsShowEditorTypeConfiguration) ?? true;
 		this.breadcrumbs.setPathModes(this.filePath, this.symbolPath);
 		this.updateBreadcrumbVisibility();
 		if (configurationService) {
-			const updateScrollbar = (): void => this.breadcrumbs.setScrollbarOptions(
-				configurationService.getValue<EditorTitleScrollbarSizing>(EditorTitleScrollbarSizingConfiguration),
-				configurationService.getValue<EditorTitleScrollbarVisibility>(EditorTitleScrollbarVisibilityConfiguration),
-			);
+			const updateScrollbar = (): void =>
+				this.breadcrumbs.setScrollbarOptions(
+					configurationService.getValue<EditorTitleScrollbarSizing>(EditorTitleScrollbarSizingConfiguration),
+					configurationService.getValue<EditorTitleScrollbarVisibility>(
+						EditorTitleScrollbarVisibilityConfiguration,
+					),
+				);
 			updateScrollbar();
-			this._register(configurationService.onDidChangeConfiguration(event => {
-				if (event.affectsConfiguration(BreadcrumbsShowEditorTypeConfiguration)) {
-					this.showEditorType = configurationService.getValue<boolean>(BreadcrumbsShowEditorTypeConfiguration);
-					this.updateEditorType();
-				}
-				if (event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) || event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)) updateScrollbar();
-				if (event.affectsConfiguration(BreadcrumbsEnabledConfiguration)) {
-					this.breadcrumbsEnabled = configurationService.getValue<boolean>(BreadcrumbsEnabledConfiguration);
-					this.updateBreadcrumbVisibility();
-				}
-				if (event.affectsConfiguration(BreadcrumbsFilePathConfiguration) || event.affectsConfiguration(BreadcrumbsSymbolPathConfiguration)) {
-					this.filePath = configurationService.getValue<BreadcrumbsPathMode>(BreadcrumbsFilePathConfiguration);
-					this.symbolPath = configurationService.getValue<BreadcrumbsPathMode>(BreadcrumbsSymbolPathConfiguration);
-					this.breadcrumbs.setPathModes(this.filePath, this.symbolPath);
-					this.updateBreadcrumbVisibility();
-				}
-			}));
+			this._register(
+				configurationService.onDidChangeConfiguration(event => {
+					if (event.affectsConfiguration(BreadcrumbsShowEditorTypeConfiguration)) {
+						this.showEditorType = configurationService.getValue<boolean>(
+							BreadcrumbsShowEditorTypeConfiguration,
+						);
+						this.updateEditorType();
+					}
+					if (
+						event.affectsConfiguration(EditorTitleScrollbarSizingConfiguration) ||
+						event.affectsConfiguration(EditorTitleScrollbarVisibilityConfiguration)
+					)
+						updateScrollbar();
+					if (event.affectsConfiguration(BreadcrumbsEnabledConfiguration)) {
+						this.breadcrumbsEnabled = configurationService.getValue<boolean>(
+							BreadcrumbsEnabledConfiguration,
+						);
+						this.updateBreadcrumbVisibility();
+					}
+					if (
+						event.affectsConfiguration(BreadcrumbsFilePathConfiguration) ||
+						event.affectsConfiguration(BreadcrumbsSymbolPathConfiguration)
+					) {
+						this.filePath = configurationService.getValue<BreadcrumbsPathMode>(
+							BreadcrumbsFilePathConfiguration,
+						);
+						this.symbolPath = configurationService.getValue<BreadcrumbsPathMode>(
+							BreadcrumbsSymbolPathConfiguration,
+						);
+						this.breadcrumbs.setPathModes(this.filePath, this.symbolPath);
+						this.updateBreadcrumbVisibility();
+					}
+				}),
+			);
 		}
 	}
 
@@ -151,16 +202,20 @@ export class EditorHeaderControl extends Disposable {
 		const current = this.editorTypes.find(choice => choice.id === this.activePane?.id);
 		const choices = this.editorTypes;
 		const select = this.selectEditorType;
-		this.breadcrumbs.setEditorType(this.showEditorType && choices.length > 1 ? current?.name : undefined,
-			this.actions && current && select ? anchor => {
-				this.actions!.contextMenuProvider.showContextMenu({
-					getAnchor: () => anchor,
-					getActions: () => createEditorTypeActions(choices, current.id, select),
-					getCheckedActionsRepresentation: () => 'radio',
-					autoSelectFirstItem: true,
-					onHide: () => anchor.focus(),
-				});
-			} : undefined);
+		this.breadcrumbs.setEditorType(
+			this.showEditorType && choices.length > 1 ? current?.name : undefined,
+			this.actions && current && select
+				? anchor => {
+						this.actions!.contextMenuProvider.showContextMenu({
+							getAnchor: () => anchor,
+							getActions: () => createEditorTypeActions(choices, current.id, select),
+							getCheckedActionsRepresentation: () => 'radio',
+							autoSelectFirstItem: true,
+							onHide: () => anchor.focus(),
+						});
+					}
+				: undefined,
+		);
 	}
 
 	setInput(input: IResourceEditorInput | undefined, pane?: IEditorPane): void {
@@ -187,32 +242,52 @@ export class EditorHeaderControl extends Disposable {
 
 	private watchSymbols(pane: IEditorPane): void {
 		const paneControl = pane.getControl?.();
-		const control = (paneControl instanceof DiffEditorWidget ? paneControl.modifiedEditor : paneControl) as Partial<{
-			getModel(): TextModel | null;
-			getPosition(): Position | null;
-			onDidChangeCursorSelection: Event<unknown>;
-		}> | undefined;
-		if (!control || typeof control.getModel !== "function" || typeof control.getPosition !== "function" || typeof control.onDidChangeCursorSelection !== "function") return;
+		const control = (paneControl instanceof DiffEditorWidget ? paneControl.modifiedEditor : paneControl) as
+			| Partial<{
+					getModel(): TextModel | null;
+					getPosition(): Position | null;
+					onDidChangeCursorSelection: Event<unknown>;
+			  }>
+			| undefined;
+		if (
+			!control ||
+			typeof control.getModel !== 'function' ||
+			typeof control.getPosition !== 'function' ||
+			typeof control.onDidChangeCursorSelection !== 'function'
+		)
+			return;
 		const model = control.getModel();
 		if (!model) return;
-		const scheduler = this.symbolListeners.add(new RunOnceScheduler(() => void this.loadSymbols(model, control), 150));
+		const scheduler = this.symbolListeners.add(
+			new RunOnceScheduler(() => void this.loadSymbols(model, control), 150),
+		);
 		this.symbolListeners.add(model.onDidChangeContent(() => scheduler.schedule()));
 		this.symbolListeners.add(model.onDidChangeLanguage(() => scheduler.schedule()));
 		this.symbolListeners.add(this.languageFeatures!.documentSymbolProvider.onDidChange(() => scheduler.schedule()));
-		this.symbolListeners.add(control.onDidChangeCursorSelection(() => this.updateCurrentSymbol(control.getPosition?.() ?? null)));
+		this.symbolListeners.add(
+			control.onDidChangeCursorSelection(() => this.updateCurrentSymbol(control.getPosition?.() ?? null)),
+		);
 		void this.loadSymbols(model, control);
 	}
 
-	private async loadSymbols(model: TextModel, control: { getModel?: () => TextModel | null; getPosition?: () => Position | null; }): Promise<void> {
+	private async loadSymbols(
+		model: TextModel,
+		control: { getModel?: () => TextModel | null; getPosition?: () => Position | null },
+	): Promise<void> {
 		const controller = new AbortController();
 		this.symbolRequest.value = toDisposable(() => controller.abort());
 		try {
-			const outline = await OutlineModel.create(this.languageFeatures!.documentSymbolProvider, model, controller.signal, error => console.error("Could not load editor breadcrumb symbols", error));
+			const outline = await OutlineModel.create(
+				this.languageFeatures!.documentSymbolProvider,
+				model,
+				controller.signal,
+				error => console.error('Could not load editor breadcrumb symbols', error),
+			);
 			if (controller.signal.aborted || control.getModel?.() !== model) return;
 			this.outline = outline;
 			this.updateCurrentSymbol(control.getPosition?.() ?? null);
 		} catch (error) {
-			if (!controller.signal.aborted) console.error("Could not build editor breadcrumbs", error);
+			if (!controller.signal.aborted) console.error('Could not build editor breadcrumbs', error);
 		}
 	}
 
@@ -230,16 +305,20 @@ export class EditorHeaderControl extends Disposable {
 	}
 
 	private updateBreadcrumbVisibility(): void {
-		const wasVisible = this.titleContainer.classList.contains("ash-editor-title-with-breadcrumbs");
-		const visible = this.breadcrumbsEnabled && !!this.activeInput && this.activeInput.showBreadcrumbs !== false && !this.breadcrumbs.domNode.classList.contains("empty");
+		const wasVisible = this.titleContainer.classList.contains('ash-editor-title-with-breadcrumbs');
+		const visible =
+			this.breadcrumbsEnabled &&
+			!!this.activeInput &&
+			this.activeInput.showBreadcrumbs !== false &&
+			!this.breadcrumbs.domNode.classList.contains('empty');
 		this.breadcrumbs.domNode.hidden = !visible;
-		this.titleContainer.classList.toggle("ash-editor-title-with-breadcrumbs", visible);
+		this.titleContainer.classList.toggle('ash-editor-title-with-breadcrumbs', visible);
 		if (visible !== wasVisible) this.heightEmitter.fire();
 	}
 }
 
 const emptyEditorToolbarContextMenuProvider: IContextMenuProvider = {
 	showContextMenu(): never {
-		throw new Error("The empty Editor toolbar cannot present secondary actions");
+		throw new Error('The empty Editor toolbar cannot present secondary actions');
 	},
 };

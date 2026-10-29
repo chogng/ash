@@ -33,7 +33,11 @@ export class TrimTrailingWhitespaceCommand implements ICommand {
 	}
 }
 
-export function trimTrailingWhitespace(model: ITextModel, cursors: Position[], trimInRegexesAndStrings: boolean): ISingleEditOperation[] {
+export function trimTrailingWhitespace(
+	model: ITextModel,
+	cursors: Position[],
+	trimInRegexesAndStrings: boolean,
+): ISingleEditOperation[] {
 	cursors.sort((left, right) => {
 		if (left.lineNumber === right.lineNumber) return left.column - right.column;
 		return left.lineNumber - right.lineNumber;

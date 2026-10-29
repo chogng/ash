@@ -1,9 +1,13 @@
-import { readFile } from "node:fs/promises";
-import { relative, resolve, sep, win32 } from "node:path";
-import { normalizePath, type HtmlTagDescriptor, type Plugin } from "vite";
-import { analyzeHotReloadModule, type HotReloadModuleAnalysis, unsafeHotReloadChangeReason } from "./hotReloadAnalysis.ts";
+import { readFile } from 'node:fs/promises';
+import { relative, resolve, sep, win32 } from 'node:path';
+import { normalizePath, type HtmlTagDescriptor, type Plugin } from 'vite';
+import {
+	analyzeHotReloadModule,
+	type HotReloadModuleAnalysis,
+	unsafeHotReloadChangeReason,
+} from './hotReloadAnalysis.ts';
 
-const hotExportsName = "__ashViteHotReloadExports";
+const hotExportsName = '__ashViteHotReloadExports';
 
 export interface HotReloadPluginOptions {
 	readonly desktopRoot?: string;
@@ -14,65 +18,76 @@ interface HotReloadContext {
 	readonly file: string;
 	readonly read?: () => string | Promise<string>;
 	readonly server: {
-		readonly config: { readonly logger: { info(message: string): void; }; };
-		readonly ws: { send(payload: { readonly type: "full-reload"; readonly path: "*"; }): void; };
+		readonly config: { readonly logger: { info(message: string): void } };
+		readonly ws: { send(payload: { readonly type: 'full-reload'; readonly path: '*' }): void };
 	};
 }
 
 export interface AshHotReloadPlugin extends Plugin {
-	readonly transformIndexHtml: { readonly order: "pre"; readonly handler: () => HtmlTagDescriptor[]; };
-	readonly transform: { readonly order: "pre"; readonly handler: (code: string, id: string) => string | undefined; };
+	readonly transformIndexHtml: { readonly order: 'pre'; readonly handler: () => HtmlTagDescriptor[] };
+	readonly transform: { readonly order: 'pre'; readonly handler: (code: string, id: string) => string | undefined };
 	readonly handleHotUpdate: (context: HotReloadContext) => Promise<[] | undefined>;
 }
 
 /** Owns Vite's development-only bridge to the generic Renderer hot-reload runtime. */
 export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotReloadPlugin {
-	const desktopRoot = resolveHostPath(options.desktopRoot ?? resolve(import.meta.dirname, "../../.."));
-	const setupPath = resolveHostPath(options.setupPath ?? resolve(import.meta.dirname, "setup-dev.ts"));
+	const desktopRoot = resolveHostPath(options.desktopRoot ?? resolve(import.meta.dirname, '../../..'));
+	const setupPath = resolveHostPath(options.setupPath ?? resolve(import.meta.dirname, 'setup-dev.ts'));
 	const analyses = new Map<string, HotReloadModuleAnalysis>();
 	return {
-		name: "ash-hot-reload",
-		apply: "serve",
+		name: 'ash-hot-reload',
+		apply: 'serve',
 		// Chokidar suppresses change events within 50 ms; completed-write delivery preserves rapid saves.
 		config: () => ({
 			server: {
 				watch: {
 					// Chokidar reads this override after selecting FSEvents. Pass an
 					// explicit opt-in before backend selection, preserving native defaults.
-					...(process.env.CHOKIDAR_USEPOLLING && !/^(?:false|0)$/iu.test(process.env.CHOKIDAR_USEPOLLING) ? { usePolling: true } : {}),
+					...(process.env.CHOKIDAR_USEPOLLING && !/^(?:false|0)$/iu.test(process.env.CHOKIDAR_USEPOLLING)
+						? { usePolling: true }
+						: {}),
 					awaitWriteFinish: { stabilityThreshold: 75, pollInterval: 10 },
 				},
 			},
 		}),
 		configureServer(server) {
 			// Entry roots cover only HTML hosts; watch shared source before first-load transforms can race with a save.
-			server.watcher.add(resolveHostPath(resolve(desktopRoot, "src")));
+			server.watcher.add(resolveHostPath(resolve(desktopRoot, 'src')));
 		},
 		transformIndexHtml: {
-			order: "pre",
-			handler: () => [{ tag: "script", attrs: { type: "module", src: viteFileUrl(setupPath) }, injectTo: "head-prepend" }],
+			order: 'pre',
+			handler: () => [
+				{ tag: 'script', attrs: { type: 'module', src: viteFileUrl(setupPath) }, injectTo: 'head-prepend' },
+			],
 		},
 		transform: {
-			order: "pre",
+			order: 'pre',
 			handler(code, id) {
 				const file = cleanModuleId(id);
-				if (!file.endsWith(".ts")) return undefined;
+				if (!file.endsWith('.ts')) return undefined;
 				const analysis = analyzeHotReloadModule(code, file);
 				if (!analysis.syntaxValid || analysis.exportNames.length === 0) return undefined;
-				if (code.includes(hotExportsName)) throw new Error(`Reserved hot-reload export is already declared: ${hotExportsName}`);
+				if (code.includes(hotExportsName))
+					throw new Error(`Reserved hot-reload export is already declared: ${hotExportsName}`);
 				analyses.set(file, analysis);
 				// Unmarked services can share module-local state with a persistent view.
 				// Replacing their methods would bind live instances to the replacement
 				// module's empty registries even though only the view opted into patching.
 				const boundaryExports = analysis.classNames.length > 0 ? analysis.classNames : analysis.exportNames;
-				return injectHotReloadBoundary(code, boundaryExports, neutralModuleId(file, desktopRoot), analysis.classNames.some(name => !analysis.widgetClassNames.includes(name)), analysis.widgetClassNames);
+				return injectHotReloadBoundary(
+					code,
+					boundaryExports,
+					neutralModuleId(file, desktopRoot),
+					analysis.classNames.some(name => !analysis.widgetClassNames.includes(name)),
+					analysis.widgetClassNames,
+				);
 			},
 		},
 		async handleHotUpdate(context) {
 			const file = cleanModuleId(context.file);
 			const previous = analyses.get(file);
 			if (!previous) return undefined;
-			const code = context.read ? await context.read() : await readFile(file, "utf8");
+			const code = context.read ? await context.read() : await readFile(file, 'utf8');
 			const next = analyzeHotReloadModule(code, file);
 			if (!next.syntaxValid) return undefined;
 			if (previous.classNames.length === 0) {
@@ -84,17 +99,28 @@ export function hotReloadPlugin(options: HotReloadPluginOptions = {}): AshHotRel
 			if (!reason) return undefined;
 			const moduleId = neutralModuleId(file, desktopRoot);
 			context.server.config.logger.info(`[hot-reload] Full reload: ${moduleId}: ${reason}`);
-			context.server.ws.send({ type: "full-reload", path: "*" });
+			context.server.ws.send({ type: 'full-reload', path: '*' });
 			return [];
 		},
 	};
 }
 
-function injectHotReloadBoundary(code: string, exportNames: readonly string[], moduleId: string, patchPrototype: boolean, widgetClassNames: readonly string[]): string {
-	const exports = exportNames.join(", ");
-	const config = patchPrototype ? '{ mode: "patch-prototype" }' : "{}";
-	const widgetRegistrations = widgetClassNames.map(name => `${name}.registerWidgetHotReplacement(${JSON.stringify(`${moduleId}#${name}`)});`).join('\n');
-	const widgetAcceptance = widgetClassNames.length > 0 ? ` || ${JSON.stringify(widgetClassNames)}.every(name => typeof newExports[name] === "function")` : '';
+function injectHotReloadBoundary(
+	code: string,
+	exportNames: readonly string[],
+	moduleId: string,
+	patchPrototype: boolean,
+	widgetClassNames: readonly string[],
+): string {
+	const exports = exportNames.join(', ');
+	const config = patchPrototype ? '{ mode: "patch-prototype" }' : '{}';
+	const widgetRegistrations = widgetClassNames
+		.map(name => `${name}.registerWidgetHotReplacement(${JSON.stringify(`${moduleId}#${name}`)});`)
+		.join('\n');
+	const widgetAcceptance =
+		widgetClassNames.length > 0
+			? ` || ${JSON.stringify(widgetClassNames)}.every(name => typeof newExports[name] === "function")`
+			: '';
 	return `${code}
 
 ${widgetRegistrations}
@@ -121,7 +147,7 @@ if (import.meta.hot) {
 }
 
 function cleanModuleId(id: string): string {
-	return id.split("?", 1)[0];
+	return id.split('?', 1)[0];
 }
 
 function resolveHostPath(path: string): string {
@@ -129,11 +155,11 @@ function resolveHostPath(path: string): string {
 }
 
 function viteFileUrl(file: string): string {
-	return `/@fs/${normalizePath(file).replaceAll("\\", "/").replace(/^\/+/, "")}`;
+	return `/@fs/${normalizePath(file).replaceAll('\\', '/').replace(/^\/+/, '')}`;
 }
 
 function neutralModuleId(file: string, root: string): string {
 	const path = relative(root, file);
-	const normalized = path.split(sep).join("/");
-	return normalized.startsWith("../") ? `external/${normalized.replace(/^\.\.\//u, "")}` : normalized;
+	const normalized = path.split(sep).join('/');
+	return normalized.startsWith('../') ? `external/${normalized.replace(/^\.\.\//u, '')}` : normalized;
 }

@@ -1,7 +1,11 @@
 import { Position } from '../../../common/core/position.js';
 import { Range } from '../../../common/core/range.js';
 import { Selection } from '../../../common/core/selection.js';
-import { type ICommand, type ICursorStateComputerData, type IEditOperationBuilder } from '../../../common/editorCommon.js';
+import {
+	type ICommand,
+	type ICursorStateComputerData,
+	type IEditOperationBuilder,
+} from '../../../common/editorCommon.js';
 import { type ITextModel } from '../../../common/model.js';
 
 /** Duplicates the physical lines covered by one selection. */
@@ -10,7 +14,7 @@ export class CopyLinesCommand implements ICommand {
 		private readonly selection: Selection,
 		private readonly isCopyingDown: boolean,
 		private readonly noop = false,
-	) { }
+	) {}
 
 	getEditOperations(model: ITextModel, builder: IEditOperationBuilder): void {
 		if (this.noop) return;
@@ -29,10 +33,11 @@ export class CopyLinesCommand implements ICommand {
 	}
 }
 
-function selectedLines(selection: Selection): { readonly startLineNumber: number; readonly endLineNumber: number; } {
-	const endLineNumber = !selection.isEmpty() && selection.endColumn === 1
-		? Math.max(selection.startLineNumber, selection.endLineNumber - 1)
-		: selection.endLineNumber;
+function selectedLines(selection: Selection): { readonly startLineNumber: number; readonly endLineNumber: number } {
+	const endLineNumber =
+		!selection.isEmpty() && selection.endColumn === 1
+			? Math.max(selection.startLineNumber, selection.endLineNumber - 1)
+			: selection.endLineNumber;
 	return { startLineNumber: selection.startLineNumber, endLineNumber };
 }
 

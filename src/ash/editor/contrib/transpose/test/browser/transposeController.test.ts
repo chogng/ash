@@ -14,7 +14,6 @@ const { EditorExtensionsRegistry } = await import('../../../../browser/editorExt
 await import('../../../caretOperations/browser/transpose.js');
 await import('../../../linesOperations/browser/linesOperations.js');
 
-
 test('Transpose Letters runs directly through its canonical action', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
@@ -22,7 +21,9 @@ test('Transpose Letters runs directly through its canonical action', () => {
 	using model = new TextModel('a😊b');
 	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(1, 2)));
-	const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.transposeLetters');
+	const action = [...EditorExtensionsRegistry.getEditorActions()].find(
+		candidate => candidate.id === 'editor.action.transposeLetters',
+	);
 	assert.ok(action);
 
 	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
@@ -49,7 +50,9 @@ test('Transpose Action runs directly at a line end', () => {
 	using model = new TextModel('hello\nworld');
 	using editor = createTestCodeEditor({ container, model, lineHeight: 20 });
 	editor.setSelection(Selection.fromPositions(new Position(1, 6)));
-	const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.transpose');
+	const action = [...EditorExtensionsRegistry.getEditorActions()].find(
+		candidate => candidate.id === 'editor.action.transpose',
+	);
 	assert.ok(action);
 
 	editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
@@ -65,17 +68,26 @@ for (const primary of [new Selection(1, 3, 1, 1), new Selection(1, 1, 1, 1)]) {
 		dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 		try {
 			using model = new TextModel('keep\na😊b');
-			using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model });
+			using editor = createTestCodeEditor({
+				container: dom.window.document.querySelector<HTMLElement>('main')!,
+				model,
+			});
 			const initial = [primary, new Selection(2, 2, 2, 2)];
 			editor.setSelections(initial);
-			const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.transposeLetters');
+			const action = [...EditorExtensionsRegistry.getEditorActions()].find(
+				candidate => candidate.id === 'editor.action.transposeLetters',
+			);
 			assert.ok(action);
 			editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
-			assert.deepEqual({ value: model.getValue(), selections: editor.getSelections() }, {
-				value: 'keep\n😊ab', selections: [primary, new Selection(2, 4, 2, 4)],
-			});
+			assert.deepEqual(
+				{ value: model.getValue(), selections: editor.getSelections() },
+				{ value: 'keep\n😊ab', selections: [primary, new Selection(2, 4, 2, 4)] },
+			);
 			model.undo();
-			assert.deepEqual({ value: model.getValue(), selections: editor.getSelections() }, { value: 'keep\na😊b', selections: initial });
+			assert.deepEqual(
+				{ value: model.getValue(), selections: editor.getSelections() },
+				{ value: 'keep\na😊b', selections: initial },
+			);
 			model.redo();
 			assert.deepEqual(editor.getSelections(), [primary, new Selection(2, 4, 2, 4)]);
 		} finally {
@@ -89,14 +101,22 @@ test('Transpose Letters leaves a single emoji unchanged without publishing an ed
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;
 	try {
 		using model = new TextModel('😊');
-		using editor = createTestCodeEditor({ container: dom.window.document.querySelector<HTMLElement>('main')!, model });
+		using editor = createTestCodeEditor({
+			container: dom.window.document.querySelector<HTMLElement>('main')!,
+			model,
+		});
 		const selection = new Selection(1, 3, 1, 3);
 		editor.setSelection(selection);
 		const version = model.getVersionId();
-		const action = [...EditorExtensionsRegistry.getEditorActions()].find(candidate => candidate.id === 'editor.action.transposeLetters');
+		const action = [...EditorExtensionsRegistry.getEditorActions()].find(
+			candidate => candidate.id === 'editor.action.transposeLetters',
+		);
 		assert.ok(action);
 		editor.invokeWithinContext(accessor => action.run(accessor, editor, {}));
-		assert.deepEqual({ value: model.getValue(), version: model.getVersionId(), selections: editor.getSelections() }, { value: '😊', version, selections: [selection] });
+		assert.deepEqual(
+			{ value: model.getValue(), version: model.getVersionId(), selections: editor.getSelections() },
+			{ value: '😊', version, selections: [selection] },
+		);
 	} finally {
 		dom.window.close();
 	}

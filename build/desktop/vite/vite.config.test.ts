@@ -28,7 +28,12 @@ test('Web development and builds use only browser entries and preserve Desktop o
 	const desktop = (await loadConfigFromFile({ command: 'build', mode: 'production' }, path))!.config;
 	const inputs = web.build!.rolldownOptions!.input as Record<string, string>;
 	const desktopInputs = desktop.build!.rolldownOptions!.input as Record<string, string>;
-	assert.deepEqual(Object.keys(inputs), ['browser/workbench/workbench', 'browser/sessions/sessions', 'browser/theme-preview/themePreview', 'browser/theme-preview/sessionsThemePreview']);
+	assert.deepEqual(Object.keys(inputs), [
+		'browser/workbench/workbench',
+		'browser/sessions/sessions',
+		'browser/theme-preview/themePreview',
+		'browser/theme-preview/sessionsThemePreview',
+	]);
 	assert.deepEqual(web.server!.warmup!.clientFiles, [
 		inputs['browser/workbench/workbench'],
 		resolve(import.meta.dirname, '../../../src/ash/sessions/sessions.web.main.internal.ts'),
@@ -39,7 +44,13 @@ test('Web development and builds use only browser entries and preserve Desktop o
 	assert.match(desktop.build!.outDir!, /[\\/]renderer[\\/]ash$/);
 	assert.ok(Object.keys(desktopInputs).some(entry => entry.startsWith('electron-browser/')));
 	assert.ok(Object.hasOwn(desktopInputs, 'sessions/electron-browser/sessions'));
-	assert.equal(desktop.define!['import.meta.env.ASH_SESSIONS_PROFILE'], JSON.stringify({
-		id: 'code-sessions', label: 'Code Sessions', titlebarActionId: 'ash.code.open-sessions', workbenchRelativePath: '../workbench/workbench.html',
-	}));
+	assert.equal(
+		desktop.define!['import.meta.env.ASH_SESSIONS_PROFILE'],
+		JSON.stringify({
+			id: 'code-sessions',
+			label: 'Code Sessions',
+			titlebarActionId: 'ash.code.open-sessions',
+			workbenchRelativePath: '../workbench/workbench.html',
+		}),
+	);
 });

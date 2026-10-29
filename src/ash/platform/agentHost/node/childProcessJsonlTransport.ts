@@ -1,10 +1,5 @@
-import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import {
-	type IDisposable,
-	markAsDisposed,
-	trackDisposable,
-	toDisposable,
-} from "../../../base/common/lifecycle.js";
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { type IDisposable, markAsDisposed, trackDisposable, toDisposable } from '../../../base/common/lifecycle.js';
 
 export const DEFAULT_MAX_JSONL_FRAME_BYTES = 320 * 1024 * 1024;
 export const DEFAULT_MAX_STDERR_BYTES = 65_536;
@@ -52,31 +47,23 @@ export class ChildProcessJsonlTransport implements IDisposable {
 		options: ChildProcessJsonlTransportOptions = {},
 	) {
 		this.stdoutMode = options.stdoutMode ?? 'jsonl';
-		this.maxFrameBytes = positiveInteger(
-			options.maxFrameBytes,
-			DEFAULT_MAX_JSONL_FRAME_BYTES,
-			"maxFrameBytes",
-		);
-		this.maxStderrBytes = positiveInteger(
-			options.maxStderrBytes,
-			DEFAULT_MAX_STDERR_BYTES,
-			"maxStderrBytes",
-		);
+		this.maxFrameBytes = positiveInteger(options.maxFrameBytes, DEFAULT_MAX_JSONL_FRAME_BYTES, 'maxFrameBytes');
+		this.maxStderrBytes = positiveInteger(options.maxStderrBytes, DEFAULT_MAX_STDERR_BYTES, 'maxStderrBytes');
 		this.maxPendingWrites = positiveInteger(
 			options.maxPendingWrites,
 			DEFAULT_MAX_PENDING_WRITES,
-			"maxPendingWrites",
+			'maxPendingWrites',
 		);
-		this.closeTimeoutMs = positiveInteger(options.closeTimeoutMs, 2_000, "closeTimeoutMs");
+		this.closeTimeoutMs = positiveInteger(options.closeTimeoutMs, 2_000, 'closeTimeoutMs');
 
-		process.stdout.on("data", this.onStdoutData);
-		process.stderr.on("data", this.onStderrData);
-		process.stdout.once("end", this.onStdoutEnd);
-		process.stdout.once("error", this.onStdoutError);
-		process.stderr.once("error", this.onStderrError);
-		process.stdin.once("error", this.onStdinError);
-		process.once("error", this.onProcessError);
-		process.once("exit", this.onProcessExit);
+		process.stdout.on('data', this.onStdoutData);
+		process.stderr.on('data', this.onStderrData);
+		process.stdout.once('end', this.onStdoutEnd);
+		process.stdout.once('error', this.onStdoutError);
+		process.stderr.once('error', this.onStderrError);
+		process.stdin.once('error', this.onStdinError);
+		process.once('error', this.onProcessError);
+		process.once('exit', this.onProcessExit);
 		trackDisposable(this);
 	}
 
@@ -113,10 +100,10 @@ export class ChildProcessJsonlTransport implements IDisposable {
 
 	send(frame: string): Promise<void> {
 		if (this.terminalError) return Promise.reject(this.terminalError);
-		if (frame.includes("\n") || frame.includes("\r")) {
-			return Promise.reject(new Error("JSONL frame must not contain CR or LF"));
+		if (frame.includes('\n') || frame.includes('\r')) {
+			return Promise.reject(new Error('JSONL frame must not contain CR or LF'));
 		}
-		if (Buffer.byteLength(frame, "utf8") > this.maxFrameBytes) {
+		if (Buffer.byteLength(frame, 'utf8') > this.maxFrameBytes) {
 			return Promise.reject(new Error(`JSONL frame exceeds ${this.maxFrameBytes} bytes`));
 		}
 		return this.sendBytes(Buffer.from(`${frame}\n`, 'utf8'));
@@ -143,7 +130,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 		this.pendingWrites += 1;
 		this.pendingWriteBytes += owned.byteLength;
 		const write = this.writeTail.then(() => this.writeFrame(owned));
-		this.writeTail = write.catch(() => { });
+		this.writeTail = write.catch(() => {});
 		return write.finally(() => {
 			this.pendingWrites -= 1;
 			this.pendingWriteBytes -= owned.byteLength;
@@ -151,18 +138,18 @@ export class ChildProcessJsonlTransport implements IDisposable {
 	}
 
 	diagnostics(): string {
-		return redactSecrets([this.terminalError?.message, this.stderr.toString("utf8")].filter(Boolean).join('\n'));
+		return redactSecrets([this.terminalError?.message, this.stderr.toString('utf8')].filter(Boolean).join('\n'));
 	}
 
 	close(): Promise<void> {
 		if (this.closePromise) return this.closePromise;
 		if (this.process.exitCode !== null || this.process.signalCode !== null) {
-			this.finish(new Error("Ash app-server connection closed"));
+			this.finish(new Error('Ash app-server connection closed'));
 			this.closePromise = Promise.resolve();
 			return this.closePromise;
 		}
 
-		this.closePromise = new Promise<void>((resolve) => {
+		this.closePromise = new Promise<void>(resolve => {
 			let settled = false;
 			const finish = (): void => {
 				if (settled) return;
@@ -171,13 +158,13 @@ export class ChildProcessJsonlTransport implements IDisposable {
 				resolve();
 			};
 			const timeout = setTimeout(() => {
-				this.process.kill("SIGKILL");
+				this.process.kill('SIGKILL');
 				finish();
 			}, this.closeTimeoutMs);
 			timeout.unref();
-			this.process.once("exit", finish);
-			this.finish(new Error("Ash app-server connection closed"));
-			if (!this.process.kill("SIGTERM")) finish();
+			this.process.once('exit', finish);
+			this.finish(new Error('Ash app-server connection closed'));
+			if (!this.process.kill('SIGTERM')) finish();
 		});
 		return this.closePromise;
 	}
@@ -194,7 +181,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 
 	private readonly onStdoutData = (chunk: Buffer | string): void => {
 		if (this.terminalError) return;
-		const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, "utf8");
+		const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, 'utf8');
 		if (this.stdoutMode === 'bytes') {
 			if (bytes.byteLength > this.maxFrameBytes) {
 				this.fail(new Error('App Server byte chunk exceeds transport capacity'));
@@ -226,7 +213,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 	};
 
 	private readonly onStderrData = (chunk: Buffer | string): void => {
-		const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, "utf8");
+		const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk, 'utf8');
 		if (bytes.length >= this.maxStderrBytes) {
 			this.stderr = Buffer.from(bytes.subarray(bytes.length - this.maxStderrBytes));
 			return;
@@ -240,36 +227,33 @@ export class ChildProcessJsonlTransport implements IDisposable {
 		if (this.terminalError) return;
 		const message =
 			this.frameBytes === 0
-				? "App Server stdout ended"
-				: "App Server stdout ended with an unterminated JSONL frame";
+				? 'App Server stdout ended'
+				: 'App Server stdout ended with an unterminated JSONL frame';
 		this.fail(new Error(message));
 	};
 
 	private readonly onStdoutError = (error: Error): void => {
-		this.fail(streamError("stdout", error));
+		this.fail(streamError('stdout', error));
 	};
 
 	private readonly onStderrError = (error: Error): void => {
-		this.fail(streamError("stderr", error));
+		this.fail(streamError('stderr', error));
 	};
 
 	private readonly onStdinError = (error: Error): void => {
-		this.fail(streamError("stdin", error));
+		this.fail(streamError('stdin', error));
 	};
 
 	private readonly onProcessError = (error: Error): void => {
 		this.fail(new Error(`App Server process error: ${error.message}`));
 	};
 
-	private readonly onProcessExit = (
-		code: number | null,
-		signal: NodeJS.Signals | null,
-	): void => {
+	private readonly onProcessExit = (code: number | null, signal: NodeJS.Signals | null): void => {
 		this.finish(
 			new Error(
 				signal
 					? `Ash app-server exited from signal ${signal}`
-					: `Ash app-server exited with code ${code ?? "unknown"}`,
+					: `Ash app-server exited with code ${code ?? 'unknown'}`,
 			),
 		);
 	};
@@ -286,31 +270,29 @@ export class ChildProcessJsonlTransport implements IDisposable {
 
 	private emitFrame(): void {
 		if (this.frameBytes === 0) {
-			this.fail(new Error("App Server emitted an empty JSONL frame"));
+			this.fail(new Error('App Server emitted an empty JSONL frame'));
 			return;
 		}
 		const bytes = Buffer.concat(this.frameParts, this.frameBytes);
 		this.frameParts = [];
 		this.frameBytes = 0;
 		if (bytes.at(-1) === 0x0d) {
-			this.fail(new Error("App Server JSONL framing must use LF, not CRLF"));
+			this.fail(new Error('App Server JSONL framing must use LF, not CRLF'));
 			return;
 		}
 
 		let frame: string;
 		try {
-			frame = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+			frame = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
 		} catch {
-			this.fail(new Error("App Server emitted invalid UTF-8"));
+			this.fail(new Error('App Server emitted invalid UTF-8'));
 			return;
 		}
 		for (const listener of this.frameListeners) {
 			try {
 				listener(frame);
 			} catch (error) {
-				this.fail(
-					error instanceof Error ? error : new Error("JSONL frame listener failed"),
-				);
+				this.fail(error instanceof Error ? error : new Error('JSONL frame listener failed'));
 				return;
 			}
 		}
@@ -323,7 +305,7 @@ export class ChildProcessJsonlTransport implements IDisposable {
 			let drainComplete = true;
 			let settled = false;
 			const cleanup = (): void => {
-				this.process.stdin.off("drain", onDrain);
+				this.process.stdin.off('drain', onDrain);
 				this.writeRejectors.delete(rejectWrite);
 			};
 			const settle = (): void => {
@@ -344,9 +326,9 @@ export class ChildProcessJsonlTransport implements IDisposable {
 			};
 			this.writeRejectors.add(rejectWrite);
 			try {
-				const accepted = this.process.stdin.write(frame, "utf8", (error?: Error | null) => {
+				const accepted = this.process.stdin.write(frame, 'utf8', (error?: Error | null) => {
 					if (error) {
-						rejectWrite(streamError("stdin", error));
+						rejectWrite(streamError('stdin', error));
 						return;
 					}
 					callbackComplete = true;
@@ -354,10 +336,10 @@ export class ChildProcessJsonlTransport implements IDisposable {
 				});
 				if (!accepted) {
 					drainComplete = false;
-					this.process.stdin.once("drain", onDrain);
+					this.process.stdin.once('drain', onDrain);
 				}
 			} catch (error) {
-				rejectWrite(error instanceof Error ? error : new Error("App Server stdin write failed"));
+				rejectWrite(error instanceof Error ? error : new Error('App Server stdin write failed'));
 			}
 		});
 	}
@@ -365,21 +347,21 @@ export class ChildProcessJsonlTransport implements IDisposable {
 	private fail(error: Error): void {
 		this.finish(error);
 		if (this.process.exitCode === null && this.process.signalCode === null) {
-			this.process.kill("SIGTERM");
+			this.process.kill('SIGTERM');
 		}
 	}
 
 	private finish(error: Error): void {
 		if (this.terminalError) return;
 		this.terminalError = error;
-		this.process.stdout.off("data", this.onStdoutData);
-		this.process.stdout.off("end", this.onStdoutEnd);
-		this.process.stdout.off("error", this.onStdoutError);
-		this.process.stderr.off("data", this.onStderrData);
-		this.process.stderr.off("error", this.onStderrError);
-		this.process.stdin.off("error", this.onStdinError);
-		this.process.off("error", this.onProcessError);
-		this.process.off("exit", this.onProcessExit);
+		this.process.stdout.off('data', this.onStdoutData);
+		this.process.stdout.off('end', this.onStdoutEnd);
+		this.process.stdout.off('error', this.onStdoutError);
+		this.process.stderr.off('data', this.onStderrData);
+		this.process.stderr.off('error', this.onStderrError);
+		this.process.stdin.off('error', this.onStdinError);
+		this.process.off('error', this.onProcessError);
+		this.process.off('exit', this.onProcessExit);
 		for (const reject of this.writeRejectors) reject(error);
 		this.writeRejectors.clear();
 		for (const listener of this.closeListeners) {
@@ -410,10 +392,10 @@ function streamError(stream: string, error: Error): Error {
 
 function redactSecrets(value: string): string {
 	return value
-		.replace(/(bearer\s+)[^\s"',}]+/giu, "$1[REDACTED]")
+		.replace(/(bearer\s+)[^\s"',}]+/giu, '$1[REDACTED]')
 		.replace(
 			/((?:api[-_ ]?key|authorization|token|secret|password)["']?\s*[:=]\s*["']?)[^"'\s,}]+/giu,
-			"$1[REDACTED]",
+			'$1[REDACTED]',
 		)
-		.replace(/\bsk-[A-Za-z0-9_-]{8,}\b/gu, "[REDACTED]");
+		.replace(/\bsk-[A-Za-z0-9_-]{8,}\b/gu, '[REDACTED]');
 }

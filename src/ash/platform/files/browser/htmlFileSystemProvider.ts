@@ -6,11 +6,23 @@ import { canceled } from '../../../base/common/errors.js';
 import { newWriteableStream, type ReadableStreamEvents } from '../../../base/common/stream.js';
 import { Emitter, Event } from '../../../base/common/event.js';
 import { parse, type ParsedPattern } from '../../../base/common/glob.js';
-import { Disposable, DisposableMap, DisposableStore, MutableDisposable, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
+import {
+	Disposable,
+	DisposableMap,
+	DisposableStore,
+	MutableDisposable,
+	toDisposable,
+	type IDisposable,
+} from '../../../base/common/lifecycle.js';
 import { extUri } from '../../../base/common/resources.js';
 import { URI } from '../../../base/common/uri.js';
 import { localize } from '../../../nls.js';
-import { WebFileSystemAccess, WebFileSystemObserver, type FileSystemObserver, type FileSystemObserverRecord } from './webFileSystemAccess.js';
+import {
+	WebFileSystemAccess,
+	WebFileSystemObserver,
+	type FileSystemObserver,
+	type FileSystemObserverRecord,
+} from './webFileSystemAccess.js';
 import {
 	createFileSystemProviderError,
 	FileSystemProviderErrorCode,
@@ -40,8 +52,8 @@ interface SavedDirectory {
 }
 
 interface PermissionedDirectoryHandle extends FileSystemDirectoryHandle {
-	queryPermission(descriptor?: { mode: 'read' | 'readwrite'; }): Promise<PermissionState>;
-	requestPermission(descriptor?: { mode: 'read' | 'readwrite'; }): Promise<PermissionState>;
+	queryPermission(descriptor?: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
+	requestPermission(descriptor?: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
 }
 
 interface BrowserFileWatch extends DisposableStore {
@@ -58,7 +70,11 @@ const ROOT_PREFIX = '/@browser/';
 
 /** File access for folders explicitly selected through the browser picker. */
 export class HTMLFileSystemProvider extends Disposable implements IFileSystemProviderWithFileReadStreamCapability {
-	public readonly capabilities = FileSystemProviderCapabilities.FileReadWrite | FileSystemProviderCapabilities.FileFolderCopy | FileSystemProviderCapabilities.FileReadStream | FileSystemProviderCapabilities.PathCaseSensitive;
+	public readonly capabilities =
+		FileSystemProviderCapabilities.FileReadWrite |
+		FileSystemProviderCapabilities.FileFolderCopy |
+		FileSystemProviderCapabilities.FileReadStream |
+		FileSystemProviderCapabilities.PathCaseSensitive;
 	public readonly onDidChangeCapabilities = Event.None;
 	private readonly changes = this._register(new Emitter<IFileChangeEvent>());
 	private readonly database: Promise<IndexedDB>;
@@ -70,24 +86,45 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 	private shouldRetryObservers = false;
 	public readonly onDidChangeFiles = this.changes.event;
 
-	constructor(factory: IDBFactory, private readonly ownerWindow: Window) {
+	constructor(
+		factory: IDBFactory,
+		private readonly ownerWindow: Window,
+	) {
 		super();
 		this.database = IndexedDB.create(DATABASE_NAME, 1, [STORE_NAME], factory);
 		// Handle operations report opening errors even when a folder is selected long after construction.
 		void this.database.catch(() => undefined);
-		this._register(toDisposable(() => { void this.database.then(database => database.close(), () => undefined); }));
+		this._register(
+			toDisposable(() => {
+				void this.database.then(
+					database => database.close(),
+					() => undefined,
+				);
+			}),
+		);
 	}
 
 	public async registerDirectoryHandle(handle: FileSystemDirectoryHandle): Promise<URI> {
 		this.assertNotDisposed();
-		if (!WebFileSystemAccess.isFileSystemHandle(handle) || !WebFileSystemAccess.isFileSystemDirectoryHandle(handle)) {
+		if (
+			!WebFileSystemAccess.isFileSystemHandle(handle) ||
+			!WebFileSystemAccess.isFileSystemDirectoryHandle(handle)
+		) {
 			throw new TypeError('Expected a browser directory handle');
 		}
-		if (await (handle as PermissionedDirectoryHandle).requestPermission({ mode: 'readwrite' }) !== 'granted') {
-			throw createFileSystemProviderError(localize({ bundle: 'ash', key: 'workbench.browserFolderPermission' }, 'Browser folder permission is required'), FileSystemProviderErrorCode.NoPermissions);
+		if ((await (handle as PermissionedDirectoryHandle).requestPermission({ mode: 'readwrite' })) !== 'granted') {
+			throw createFileSystemProviderError(
+				localize(
+					{ bundle: 'ash', key: 'workbench.browserFolderPermission' },
+					'Browser folder permission is required',
+				),
+				FileSystemProviderErrorCode.NoPermissions,
+			);
 		}
 		const database = await this.database;
-		const registered = await database.runInTransaction<SavedDirectory[]>(STORE_NAME, 'readonly', store => store.getAll());
+		const registered = await database.runInTransaction<SavedDirectory[]>(STORE_NAME, 'readonly', store =>
+			store.getAll(),
+		);
 		// A folder keeps its resource and workspace identity across picker calls and page reloads.
 		for (const saved of registered) {
 			if (await saved.handle.isSameEntry(handle)) {
@@ -97,7 +134,9 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		}
 		const saved: SavedDirectory = { id: crypto.randomUUID(), name: handle.name, handle };
 		// Older databases used an inline id key; preserve those registrations without a data migration.
-		await database.runInTransaction(STORE_NAME, 'readwrite', store => store.keyPath === null ? store.put(saved, saved.id) : store.put(saved));
+		await database.runInTransaction(STORE_NAME, 'readwrite', store =>
+			store.keyPath === null ? store.put(saved, saved.id) : store.put(saved),
+		);
 		this.directories.set(saved.id, saved);
 		return rootUri(saved);
 	}
@@ -112,7 +151,8 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 	/** Resolves a previously authorized folder for the browser's starting location. */
 	public async getDirectoryHandle(resource: URI): Promise<FileSystemDirectoryHandle> {
 		const handle = await this.handle(resource);
-		if (!WebFileSystemAccess.isFileSystemDirectoryHandle(handle)) throw new FileOperationNotSupportedError(resource, 'getDirectoryHandle');
+		if (!WebFileSystemAccess.isFileSystemDirectoryHandle(handle))
+			throw new FileOperationNotSupportedError(resource, 'getDirectoryHandle');
 		return handle;
 	}
 
@@ -123,12 +163,19 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		}
 		if (!WebFileSystemAccess.isFileSystemFileHandle(handle)) throw new FileNotFoundError(resource);
 		const file = await handle.getFile();
-		return { resource, kind: FileKind.File, sizeBytes: file.size, readonly: false, modifiedAtMillis: file.lastModified };
+		return {
+			resource,
+			kind: FileKind.File,
+			sizeBytes: file.size,
+			readonly: false,
+			modifiedAtMillis: file.lastModified,
+		};
 	}
 
 	public async readDirectory(resource: URI): Promise<readonly IFileEntry[]> {
 		const handle = await this.handle(resource);
-		if (!WebFileSystemAccess.isFileSystemDirectoryHandle(handle)) throw createFileSystemProviderError('Expected a directory', FileSystemProviderErrorCode.FileNotADirectory);
+		if (!WebFileSystemAccess.isFileSystemDirectoryHandle(handle))
+			throw createFileSystemProviderError('Expected a directory', FileSystemProviderErrorCode.FileNotADirectory);
 		const entries: IFileEntry[] = [];
 		for await (const [name, child] of handle.entries()) {
 			entries.push({
@@ -146,7 +193,11 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		return { resource, bytes, revision: await revision(bytes) };
 	}
 
-	public readFileStream(resource: URI, options: IFileReadStreamOptions, token: CancellationToken): ReadableStreamEvents<Uint8Array> {
+	public readFileStream(
+		resource: URI,
+		options: IFileReadStreamOptions,
+		token: CancellationToken,
+	): ReadableStreamEvents<Uint8Array> {
 		this.assertNotDisposed();
 		const stream = newWriteableStream<Uint8Array>(null, { highWaterMark: 1 });
 		const lifetime = new DisposableStore();
@@ -154,22 +205,39 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		const cancellation = new CancellationTokenSource(token);
 		lifetime.add(toDisposable(() => cancellation.dispose(true)));
 		const destroy = stream.destroy;
-		stream.destroy = (): void => { this.reads.deleteAndDispose(lifetime); destroy(); };
+		stream.destroy = (): void => {
+			this.reads.deleteAndDispose(lifetime);
+			destroy();
+		};
 		void (async () => {
 			let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 			try {
 				const file = await raceCancellationError(this.file(resource), cancellation.token);
 				if (options.limits?.size !== undefined && file.size > options.limits.size) {
-					throw createFileSystemProviderError('File exceeds the read size limit', FileSystemProviderErrorCode.FileTooLarge);
+					throw createFileSystemProviderError(
+						'File exceeds the read size limit',
+						FileSystemProviderErrorCode.FileTooLarge,
+					);
 				}
 				const start = options.position ?? 0;
-				reader = file.slice(start, options.length === undefined ? undefined : start + options.length).stream().getReader();
+				reader = file
+					.slice(start, options.length === undefined ? undefined : start + options.length)
+					.stream()
+					.getReader();
 				const activeReader = reader;
-				lifetime.add(toDisposable(() => { void activeReader.cancel().catch(() => undefined); }));
+				lifetime.add(
+					toDisposable(() => {
+						void activeReader.cancel().catch(() => undefined);
+					}),
+				);
 				while (true) {
-					if (cancellation.token.isCancellationRequested) { throw canceled(); }
+					if (cancellation.token.isCancellationRequested) {
+						throw canceled();
+					}
 					const chunk = await raceCancellationError(reader.read(), cancellation.token);
-					if (chunk.done) { break; }
+					if (chunk.done) {
+						break;
+					}
 					await raceCancellationError(Promise.resolve(stream.write(chunk.value)), cancellation.token);
 				}
 			} catch (error) {
@@ -197,9 +265,11 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		});
 		this.watches.set(watch, watch);
 		if (!this.foregroundListeners.value) {
-			const listeners = this.foregroundListeners.value = new DisposableStore();
+			const listeners = (this.foregroundListeners.value = new DisposableStore());
 			listeners.add(addDisposableListener(this.ownerWindow, 'focus', () => this.scheduleRefresh(true)));
-			listeners.add(addDisposableListener(this.ownerWindow.document, 'visibilitychange', () => this.scheduleRefresh(true)));
+			listeners.add(
+				addDisposableListener(this.ownerWindow.document, 'visibilitychange', () => this.scheduleRefresh(true)),
+			);
 		}
 		void this.startWatching(watch);
 		return toDisposable(() => {
@@ -217,7 +287,8 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		if (!WebFileSystemObserver.supported(this.ownerWindow as Window & typeof globalThis)) {
 			return;
 		}
-		const Observer = (this.ownerWindow as Window & { FileSystemObserver: typeof FileSystemObserver; }).FileSystemObserver;
+		const Observer = (this.ownerWindow as Window & { FileSystemObserver: typeof FileSystemObserver })
+			.FileSystemObserver;
 		watch.isStarting = true;
 		let observer: FileSystemObserver | undefined;
 		try {
@@ -273,7 +344,11 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 				}
 			}
 			for (const parts of paths) {
-				if (parts.some(part => !part || part === '.' || part === '..' || part.includes('/') || part.includes('\\'))) {
+				if (
+					parts.some(
+						part => !part || part === '.' || part === '..' || part.includes('/') || part.includes('\\'),
+					)
+				) {
 					shouldRescan = true;
 					continue;
 				}
@@ -329,15 +404,20 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		let created = false;
 		try {
 			handle = await parent.getFileHandle(name);
-			if (!options.overwrite) throw createFileSystemProviderError(localize({ bundle: 'ash', key: 'workbench.browserFolderFileExists' }, 'File already exists'), FileSystemProviderErrorCode.FileExists);
+			if (!options.overwrite)
+				throw createFileSystemProviderError(
+					localize({ bundle: 'ash', key: 'workbench.browserFolderFileExists' }, 'File already exists'),
+					FileSystemProviderErrorCode.FileExists,
+				);
 		} catch (error) {
-			if (!isMissing(error) || !options.create || options.expectedRevision !== undefined) throw fileError(error, resource);
+			if (!isMissing(error) || !options.create || options.expectedRevision !== undefined)
+				throw fileError(error, resource);
 			handle = await parent.getFileHandle(name, { create: true });
 			created = true;
 		}
 		if (options.expectedRevision !== undefined) {
 			const current = new Uint8Array(await (await handle.getFile()).arrayBuffer());
-			if (await revision(current) !== options.expectedRevision) throw new FileRevisionConflictError(resource);
+			if ((await revision(current)) !== options.expectedRevision) throw new FileRevisionConflictError(resource);
 		}
 		let writable: FileSystemWritableFileStream | undefined;
 		try {
@@ -356,9 +436,17 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 	public async createFile(resource: URI, existing: FileExistingTargetBehavior): Promise<IFileStat> {
 		const { parent, name } = await this.parent(resource);
 		let found = true;
-		try { await parent.getFileHandle(name); }
-		catch (error) { if (!isMissing(error)) throw fileError(error, resource); found = false; }
-		if (found && existing === 'error') throw createFileSystemProviderError(localize({ bundle: 'ash', key: 'workbench.browserFolderFileExists' }, 'File already exists'), FileSystemProviderErrorCode.FileExists);
+		try {
+			await parent.getFileHandle(name);
+		} catch (error) {
+			if (!isMissing(error)) throw fileError(error, resource);
+			found = false;
+		}
+		if (found && existing === 'error')
+			throw createFileSystemProviderError(
+				localize({ bundle: 'ash', key: 'workbench.browserFolderFileExists' }, 'File already exists'),
+				FileSystemProviderErrorCode.FileExists,
+			);
 		if (!found || existing === 'overwrite') {
 			const handle = await parent.getFileHandle(name, { create: true });
 			if (found) {
@@ -380,27 +468,47 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 	public async copy(source: URI, target: URI): Promise<void> {
 		const sourceParts = partsOf(source);
 		const targetParts = partsOf(target);
-		if (sourceParts.parts.length === 0 || targetParts.parts.length === 0 ||
-			(sourceParts.id === targetParts.id && target.path.startsWith(`${source.path}/`))) {
+		if (
+			sourceParts.parts.length === 0 ||
+			targetParts.parts.length === 0 ||
+			(sourceParts.id === targetParts.id && target.path.startsWith(`${source.path}/`))
+		) {
 			throw new FileOperationNotSupportedError(source, 'copy');
 		}
 		const sourceHandle = await this.handle(source);
 		const { parent, name } = await this.parent(target);
-		try { await this.handle(target); throw createFileSystemProviderError('Copy target already exists', FileSystemProviderErrorCode.FileExists); }
-		catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
-		const copyEntry = async (from: FileSystemHandle, toParent: FileSystemDirectoryHandle, toName: string): Promise<void> => {
+		try {
+			await this.handle(target);
+			throw createFileSystemProviderError('Copy target already exists', FileSystemProviderErrorCode.FileExists);
+		} catch (error) {
+			if (!(error instanceof FileNotFoundError)) throw error;
+		}
+		const copyEntry = async (
+			from: FileSystemHandle,
+			toParent: FileSystemDirectoryHandle,
+			toName: string,
+		): Promise<void> => {
 			if (WebFileSystemAccess.isFileSystemDirectoryHandle(from)) {
 				const to = await toParent.getDirectoryHandle(toName, { create: true });
 				for await (const [childName, child] of from.entries()) await copyEntry(child, to, childName);
 			} else if (WebFileSystemAccess.isFileSystemFileHandle(from)) {
 				const file = await toParent.getFileHandle(toName, { create: true });
 				const writable = await file.createWritable();
-				try { await writable.write(await from.getFile()); await writable.close(); }
-				catch (error) { await writable.abort(); throw error; }
+				try {
+					await writable.write(await from.getFile());
+					await writable.close();
+				} catch (error) {
+					await writable.abort();
+					throw error;
+				}
 			}
 		};
-		try { await copyEntry(sourceHandle, parent, name); }
-		catch (error) { await parent.removeEntry(name, { recursive: true }); throw error; }
+		try {
+			await copyEntry(sourceHandle, parent, name);
+		} catch (error) {
+			await parent.removeEntry(name, { recursive: true });
+			throw error;
+		}
 		this.changes.fire({ resources: [target] });
 	}
 
@@ -412,12 +520,22 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		}
 		if (source.toString() === target.toString()) return;
 		const handle = await this.handle(source);
-		if (!WebFileSystemAccess.isFileSystemFileHandle(handle)) throw new FileOperationNotSupportedError(source, 'renameDirectory');
+		if (!WebFileSystemAccess.isFileSystemFileHandle(handle))
+			throw new FileOperationNotSupportedError(source, 'renameDirectory');
 		try {
 			await this.stat(target);
 			if (existing === 'ignore') return;
-			if (existing === 'error') throw createFileSystemProviderError(localize({ bundle: 'ash', key: 'workbench.browserFolderTargetExists' }, 'Target file already exists'), FileSystemProviderErrorCode.FileExists);
-		} catch (error) { if (!(error instanceof FileNotFoundError)) throw error; }
+			if (existing === 'error')
+				throw createFileSystemProviderError(
+					localize(
+						{ bundle: 'ash', key: 'workbench.browserFolderTargetExists' },
+						'Target file already exists',
+					),
+					FileSystemProviderErrorCode.FileExists,
+				);
+		} catch (error) {
+			if (!(error instanceof FileNotFoundError)) throw error;
+		}
 		const bytes = new Uint8Array(await (await handle.getFile()).arrayBuffer());
 		const { parent, name } = await this.parent(target);
 		const targetHandle = await parent.getFileHandle(name, { create: true });
@@ -436,14 +554,18 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 
 	public async delete(resource: URI, missing: FileMissingTargetBehavior, mode: FileDeleteMode): Promise<void> {
 		const { parent, name } = await this.parent(resource);
-		try { await parent.removeEntry(name, { recursive: mode === 'recursive' }); }
-		catch (error) { if (missing !== 'ignore' || !isMissing(error)) throw fileError(error, resource); }
+		try {
+			await parent.removeEntry(name, { recursive: mode === 'recursive' });
+		} catch (error) {
+			if (missing !== 'ignore' || !isMissing(error)) throw fileError(error, resource);
+		}
 		this.changes.fire({ resources: [resource] });
 	}
 
 	private async file(resource: URI): Promise<File> {
 		const handle = await this.handle(resource);
-		if (!WebFileSystemAccess.isFileSystemFileHandle(handle)) throw createFileSystemProviderError('Expected a file', FileSystemProviderErrorCode.FileIsADirectory);
+		if (!WebFileSystemAccess.isFileSystemFileHandle(handle))
+			throw createFileSystemProviderError('Expected a file', FileSystemProviderErrorCode.FileIsADirectory);
 		return handle.getFile();
 	}
 
@@ -453,54 +575,86 @@ export class HTMLFileSystemProvider extends Disposable implements IFileSystemPro
 		for (const part of parts) {
 			if (!WebFileSystemAccess.isFileSystemDirectoryHandle(current)) throw new FileNotFoundError(resource);
 			const directory = current;
-			try { current = await directory.getDirectoryHandle(part); }
-			catch (error) {
-				if (!isMissing(error) && !(error instanceof DOMException && error.name === 'TypeMismatchError')) throw fileError(error, resource);
-				try { current = await directory.getFileHandle(part); }
-				catch (fileHandleError) { throw fileError(fileHandleError, resource); }
+			try {
+				current = await directory.getDirectoryHandle(part);
+			} catch (error) {
+				if (!isMissing(error) && !(error instanceof DOMException && error.name === 'TypeMismatchError'))
+					throw fileError(error, resource);
+				try {
+					current = await directory.getFileHandle(part);
+				} catch (fileHandleError) {
+					throw fileError(fileHandleError, resource);
+				}
 			}
 		}
 		return current;
 	}
 
-	private async parent(resource: URI): Promise<{ parent: FileSystemDirectoryHandle; name: string; }> {
+	private async parent(resource: URI): Promise<{ parent: FileSystemDirectoryHandle; name: string }> {
 		const { saved, parts } = await this.directory(resource, false);
 		if (parts.length === 0) throw new FileOperationNotSupportedError(resource, 'modifyRoot');
 		let parent = saved.handle;
 		for (const part of parts.slice(0, -1)) {
-			try { parent = await parent.getDirectoryHandle(part); }
-			catch (error) { throw fileError(error, resource); }
+			try {
+				parent = await parent.getDirectoryHandle(part);
+			} catch (error) {
+				throw fileError(error, resource);
+			}
 		}
 		return { parent, name: parts[parts.length - 1]! };
 	}
 
-	private async directory(resource: URI, requestPermission: boolean): Promise<{ saved: SavedDirectory; parts: readonly string[]; }> {
+	private async directory(
+		resource: URI,
+		requestPermission: boolean,
+	): Promise<{ saved: SavedDirectory; parts: readonly string[] }> {
 		const { id, name, parts } = partsOf(resource);
 		let saved = this.directories.get(id);
 		if (!saved) {
 			const database = await this.database;
-			saved = await database.runInTransaction<SavedDirectory | undefined>(STORE_NAME, 'readonly', store => store.get(id));
+			saved = await database.runInTransaction<SavedDirectory | undefined>(STORE_NAME, 'readonly', store =>
+				store.get(id),
+			);
 			if (!saved) throw new FileNotFoundError(resource);
 		}
 		if (saved.name !== name) throw new FileNotFoundError(resource);
 		const handle = saved.handle as PermissionedDirectoryHandle;
 		const permission = await handle.queryPermission({ mode: 'readwrite' });
-		if (permission !== 'granted' && (!requestPermission || await handle.requestPermission({ mode: 'readwrite' }) !== 'granted')) {
-			throw createFileSystemProviderError(localize({ bundle: 'ash', key: 'workbench.browserFolderPermission' }, 'Browser folder permission is required'), FileSystemProviderErrorCode.NoPermissions);
+		if (
+			permission !== 'granted' &&
+			(!requestPermission || (await handle.requestPermission({ mode: 'readwrite' })) !== 'granted')
+		) {
+			throw createFileSystemProviderError(
+				localize(
+					{ bundle: 'ash', key: 'workbench.browserFolderPermission' },
+					'Browser folder permission is required',
+				),
+				FileSystemProviderErrorCode.NoPermissions,
+			);
 		}
 		this.directories.set(id, saved);
 		return { saved, parts };
 	}
 }
 
-function partsOf(resource: URI): { id: string; name: string; parts: readonly string[]; } {
+function partsOf(resource: URI): { id: string; name: string; parts: readonly string[] } {
 	const encodedPath = resource.toEncodedComponents().path;
-	if (resource.scheme !== 'file' || resource.authority || resource.query || resource.fragment || !encodedPath.startsWith(ROOT_PREFIX)) {
+	if (
+		resource.scheme !== 'file' ||
+		resource.authority ||
+		resource.query ||
+		resource.fragment ||
+		!encodedPath.startsWith(ROOT_PREFIX)
+	) {
 		throw new FileNotFoundError(resource);
 	}
 	const segments = encodedPath.slice(ROOT_PREFIX.length).split('/').map(decodeURIComponent);
 	const [id, name, ...parts] = segments;
-	if (!id || !name || segments.some(segment => !segment || segment === '.' || segment === '..' || segment.includes('\\'))) {
+	if (
+		!id ||
+		!name ||
+		segments.some(segment => !segment || segment === '.' || segment === '..' || segment.includes('\\'))
+	) {
 		throw new FileNotFoundError(resource);
 	}
 	return { id, name, parts };
@@ -524,7 +678,9 @@ function isMissing(error: unknown): boolean {
 }
 
 function fileError(error: unknown, resource: URI): unknown {
-	if (isMissing(error)) { return new FileNotFoundError(resource); }
+	if (isMissing(error)) {
+		return new FileNotFoundError(resource);
+	}
 	if (error instanceof DOMException && ['NotAllowedError', 'SecurityError'].includes(error.name)) {
 		return createFileSystemProviderError(error, FileSystemProviderErrorCode.NoPermissions);
 	}

@@ -2,10 +2,18 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { SubmenuAction } from '../../../../../../base/common/actions.js';
 import { Emitter, Event } from '../../../../../../base/common/event.js';
-import { type IMenuChangeEvent, type IMenuService, MenuId, MenuItemAction } from '../../../../../../platform/actions/common/actions.js';
+import {
+	type IMenuChangeEvent,
+	type IMenuService,
+	MenuId,
+	MenuItemAction,
+} from '../../../../../../platform/actions/common/actions.js';
 import type { ICommandService } from '../../../../../../platform/commands/common/commands.js';
-import { ContextKeyService } from "../../../../../../platform/contextkey/browser/contextKeyService.js";
-import type { INativeMenubarData, INativeMenubarSelection } from '../../../../../../platform/menubar/common/nativeMenubar.js';
+import { ContextKeyService } from '../../../../../../platform/contextkey/browser/contextKeyService.js';
+import type {
+	INativeMenubarData,
+	INativeMenubarSelection,
+} from '../../../../../../platform/menubar/common/nativeMenubar.js';
 import type { IMenubarService } from '../../../../../../platform/menubar/electron-browser/menubar.js';
 import { NativeMenubarControl } from '../../../../../../workbench/electron-browser/parts/titlebar/menubarControl.js';
 import { TestNotificationService } from '../../../../../services/notification/test/common/testNotificationService.js';
@@ -44,11 +52,12 @@ test('failed menubar updates retain the last installed revision', async () => {
 	const menu = {
 		onDidChange: changes.event,
 		getActions: () => [['navigation', [new SubmenuAction('file', 'File', [primary])]]] as const,
-		dispose() { },
-		[Symbol.dispose]() { },
+		dispose() {},
+		[Symbol.dispose]() {},
 	};
 	const menuService = {
-		createMenu: (id: MenuId) => id === MenuId.MenubarMainMenu ? menu : { ...menu, onDidChange: Event.None, getActions: () => [] },
+		createMenu: (id: MenuId) =>
+			id === MenuId.MenubarMainMenu ? menu : { ...menu, onDidChange: Event.None, getActions: () => [] },
 		getMenuActions: () => [],
 	} as unknown as IMenuService;
 	const api: IMenubarService = {

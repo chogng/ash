@@ -12,7 +12,9 @@ export class TerminalTabsChatEntry extends Disposable {
 	constructor(
 		@ITerminalService private readonly terminals: ITerminalService,
 		@IViewsService private readonly views: IViewsService,
-	) { super(); }
+	) {
+		super();
+	}
 
 	async attach(instance: ITerminalInstance): Promise<void> {
 		if (this.isDisposed || !this.terminals.instances.includes(instance)) return;
@@ -22,7 +24,11 @@ export class TerminalTabsChatEntry extends Disposable {
 			if (removed === instance) controller.abort();
 		});
 		try {
-			const attachment = await captureTerminalAttachment(instance, this.views.getViewWithId<ITerminalView>(TERMINAL_VIEW_ID), controller.signal);
+			const attachment = await captureTerminalAttachment(
+				instance,
+				this.views.getViewWithId<ITerminalView>(TERMINAL_VIEW_ID),
+				controller.signal,
+			);
 			if (!attachment || controller.signal.aborted) return;
 			const chat = await this.views.openView<IView & IChatContextTarget>(CHAT_VIEW_ID, true);
 			if (!controller.signal.aborted) chat?.addContext(attachment);

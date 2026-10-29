@@ -1,7 +1,12 @@
 import type { MarkedExtension, Token, TokenizerThis, Tokens } from '../../../../base/common/marked/marked.js';
 import { basicMarkupHtmlTags, sanitizeHtmlToFragment } from '../../../../base/browser/domSanitize.js';
 import { getDocument } from '../../../../base/browser/dom.js';
-import { allowedMarkdownHtmlAttributes, renderAsPlaintext, renderWorkbenchMarkdown, type MarkdownRenderOptions } from '../../../../base/browser/markdownRenderer.js';
+import {
+	allowedMarkdownHtmlAttributes,
+	renderAsPlaintext,
+	renderWorkbenchMarkdown,
+	type MarkdownRenderOptions,
+} from '../../../../base/browser/markdownRenderer.js';
 import { htmlAttributeEncodeValue } from '../../../../base/common/strings.js';
 import { localize } from '../../../../nls.js';
 import type { ChatGPTReference, ChatGPTResource } from './chatGPTClient.js';
@@ -19,12 +24,39 @@ interface RichTag {
 const inlineTags = new Set(['text', 'icon']);
 const mediaTags = new Set(['img', 'video', 'audio', 'iframe', 'canvas']);
 // This is routing to the shared HTML renderer, not a second HTML implementation.
-const htmlTags = new Set<string>([...basicMarkupHtmlTags, 'script', 'style', 'svg', 'path', 'line', 'title', 'desc', 'canvas', 'iframe', 'audio', 'math']);
+const htmlTags = new Set<string>([
+	...basicMarkupHtmlTags,
+	'script',
+	'style',
+	'svg',
+	'path',
+	'line',
+	'title',
+	'desc',
+	'canvas',
+	'iframe',
+	'audio',
+	'math',
+]);
 const hiddenTags = new Set(['cite']);
-const iconText = new Map(Object.entries({ 'arrow-down': '↓', 'arrow-up': '↑', 'arrow-left': '←', 'arrow-right': '→', check: '✓', x: '×', plus: '+', minus: '−', info: 'ⓘ', warning: '⚠' }));
+const iconText = new Map(
+	Object.entries({
+		'arrow-down': '↓',
+		'arrow-up': '↑',
+		'arrow-left': '←',
+		'arrow-right': '→',
+		check: '✓',
+		x: '×',
+		plus: '+',
+		minus: '−',
+		info: 'ⓘ',
+		warning: '⚠',
+	}),
+);
 const escapeHTML = htmlAttributeEncodeValue;
 const fallbackText = (): string => localize('sessions.chatgpt.viewContent', 'View this content in ChatGPT');
-const fallbackHTML = (): string => `<a class="ash-chatgpt-rich-fallback" href="https://chatgpt.com/">${escapeHTML(fallbackText())}</a>`;
+const fallbackHTML = (): string =>
+	`<a class="ash-chatgpt-rich-fallback" href="https://chatgpt.com/">${escapeHTML(fallbackText())}</a>`;
 
 interface RichContent {
 	readonly tag: RichTag;
@@ -35,48 +67,85 @@ interface RichContent {
 /** Read the component syntax as data; JSX expressions are never evaluated. */
 function readTag(source: string): RichTag | undefined {
 	const name = /^<\/?([a-z][\w-]*(?::[a-z][\w-]*)?)(?=[\s/>]|$)/iu.exec(source);
-	if (!name || htmlTags.has(name[1].toLowerCase()) && name[1] !== 'Cite' && !mediaTags.has(name[1].toLowerCase())) { return undefined; }
-	let quote = '', braces = 0;
+	if (!name || (htmlTags.has(name[1].toLowerCase()) && name[1] !== 'Cite' && !mediaTags.has(name[1].toLowerCase()))) {
+		return undefined;
+	}
+	let quote = '',
+		braces = 0;
 	for (let index = name[0].length; index < Math.min(source.length, 8192); index++) {
 		const character = source[index];
 		if (quote) {
-			if (character === '\\') { index++; }
-			else if (character === quote) { quote = ''; }
-		} else if (character === '"' || character === "'") { quote = character; }
-		else if (character === '{') { braces++; }
-		else if (character === '}') { braces--; }
-		else if (character === '>' && braces === 0) {
+			if (character === '\\') {
+				index++;
+			} else if (character === quote) {
+				quote = '';
+			}
+		} else if (character === '"' || character === "'") {
+			quote = character;
+		} else if (character === '{') {
+			braces++;
+		} else if (character === '}') {
+			braces--;
+		} else if (character === '>' && braces === 0) {
 			const raw = source.slice(0, index + 1);
-			return { name: name[1].toLowerCase(), raw, attributes: raw.slice(name[0].length, -1).replace(/\/$/u, ''), closing: raw.startsWith('</'), selfClosing: raw.endsWith('/>') };
+			return {
+				name: name[1].toLowerCase(),
+				raw,
+				attributes: raw.slice(name[0].length, -1).replace(/\/$/u, ''),
+				closing: raw.startsWith('</'),
+				selfClosing: raw.endsWith('/>'),
+			};
 		}
-		if (braces < 0) { return undefined; }
+		if (braces < 0) {
+			return undefined;
+		}
 	}
 	// A streaming reply can end inside an opening tag. Consume the unfinished
 	// tag as a visible fallback instead of letting Marked drop the whole block.
-	return { name: name[1].toLowerCase(), raw: source.slice(0, 8192), attributes: '', closing: false, selfClosing: true };
+	return {
+		name: name[1].toLowerCase(),
+		raw: source.slice(0, 8192),
+		attributes: '',
+		closing: false,
+		selfClosing: true,
+	};
 }
 
 function codeEnd(source: string, index: number): number | undefined {
 	const marker = /^(?:`+|~{3,})/u.exec(source.slice(index))?.[0];
-	if (!marker) { return undefined; }
+	if (!marker) {
+		return undefined;
+	}
 	const end = source.indexOf(marker, index + marker.length);
 	return end < 0 ? undefined : end + marker.length;
 }
 
 /** Writing metadata is a transport envelope, not Markdown or executable attributes. */
-function readWriting(source: string): { raw: string; body: string; } | undefined {
+function readWriting(source: string): { raw: string; body: string } | undefined {
 	const prefix = /^ {0,3}:::writing\{/u.exec(source);
-	if (!prefix) { return undefined; }
+	if (!prefix) {
+		return undefined;
+	}
 	let quote = false;
 	for (let index = prefix[0].length; index < Math.min(source.length, 8192); index++) {
 		const character = source[index];
-		if (character === '\\' && quote) { index++; continue; }
-		if (character === '"') { quote = !quote; }
-		if (character !== '}' || quote) { continue; }
+		if (character === '\\' && quote) {
+			index++;
+			continue;
+		}
+		if (character === '"') {
+			quote = !quote;
+		}
+		if (character !== '}' || quote) {
+			continue;
+		}
 		const start = index + 1;
 		for (index = start; index < source.length;) {
 			const end = codeEnd(source, index);
-			if (end !== undefined) { index = end; continue; }
+			if (end !== undefined) {
+				index = end;
+				continue;
+			}
 			if (source.startsWith(':::', index) && /^(?:\s|$)/u.test(source.slice(index + 3))) {
 				return { raw: source.slice(0, index + 3), body: source.slice(start, index).trim() };
 			}
@@ -90,17 +159,28 @@ function readWriting(source: string): { raw: string; body: string; } | undefined
 
 function readContent(source: string): RichContent | undefined {
 	const tag = readTag(source);
-	if (!tag) { return undefined; }
-	if (tag.closing) { return { tag, raw: tag.raw, body: '' }; }
-	if (tag.selfClosing) { return { tag, raw: tag.raw, body: '' }; }
+	if (!tag) {
+		return undefined;
+	}
+	if (tag.closing) {
+		return { tag, raw: tag.raw, body: '' };
+	}
+	if (tag.selfClosing) {
+		return { tag, raw: tag.raw, body: '' };
+	}
 	let depth = 1;
 	for (let index = tag.raw.length; index < source.length;) {
 		const end = codeEnd(source, index);
-		if (end !== undefined) { index = end; continue; }
+		if (end !== undefined) {
+			index = end;
+			continue;
+		}
 		if (source[index] === '<') {
 			const nested = readTag(source.slice(index));
 			if (nested) {
-				if (nested.name === tag.name && !nested.selfClosing) { depth += nested.closing ? -1 : 1; }
+				if (nested.name === tag.name && !nested.selfClosing) {
+					depth += nested.closing ? -1 : 1;
+				}
 				if (depth === 0) {
 					let length = index + nested.raw.length;
 					if (tag.name === 'canvas') {
@@ -125,24 +205,46 @@ function attributes(tag: RichTag): Map<string, string> {
 	const source = tag.attributes;
 	for (let index = 0; index < source.length;) {
 		const match = /^\s*([a-z][\w-]*)(\s*=\s*)?/iu.exec(source.slice(index));
-		if (!match) { break; }
+		if (!match) {
+			break;
+		}
 		index += match[0].length;
-		if (!match[2]) { result.set(match[1], 'true'); continue; }
-		const start = index, first = source[index];
+		if (!match[2]) {
+			result.set(match[1], 'true');
+			continue;
+		}
+		const start = index,
+			first = source[index];
 		if (first === '"' || first === "'" || first === '{') {
-			let quote = first === '{' ? '' : first, braces = first === '{' ? 1 : 0;
+			let quote = first === '{' ? '' : first,
+				braces = first === '{' ? 1 : 0;
 			for (index++; index < source.length; index++) {
 				const character = source[index];
-				if (character === '\\') { index++; continue; }
-				if (quote) { if (character === quote) { quote = ''; if (!braces) { break; } } }
-				else if (character === '"' || character === "'") { quote = character; }
-				else if (character === '{') { braces++; }
-				else if (character === '}' && --braces === 0) { break; }
+				if (character === '\\') {
+					index++;
+					continue;
+				}
+				if (quote) {
+					if (character === quote) {
+						quote = '';
+						if (!braces) {
+							break;
+						}
+					}
+				} else if (character === '"' || character === "'") {
+					quote = character;
+				} else if (character === '{') {
+					braces++;
+				} else if (character === '}' && --braces === 0) {
+					break;
+				}
 			}
 			result.set(match[1], source.slice(start + 1, index));
 			index++;
 		} else {
-			while (index < source.length && !/\s/u.test(source[index])) { index++; }
+			while (index < source.length && !/\s/u.test(source[index])) {
+				index++;
+			}
 			result.set(match[1], source.slice(start, index));
 		}
 	}
@@ -151,23 +253,38 @@ function attributes(tag: RichTag): Map<string, string> {
 
 function description(tag: RichTag): string {
 	const values = attributes(tag);
-	return [...new Set(['title', 'label', 'alt', 'caption', 'description', 'text'].flatMap(key => values.has(key) ? [values.get(key)!] : []))].join(' — ');
+	return [
+		...new Set(
+			['title', 'label', 'alt', 'caption', 'description', 'text'].flatMap(key =>
+				values.has(key) ? [values.get(key)!] : [],
+			),
+		),
+	].join(' — ');
 }
 
 function componentData(tag: RichTag): string {
 	const values = attributes(tag);
 	const data = values.get('data');
 	if (!data) {
-		const properties = Object.fromEntries([...values].filter(([key]) => !['title', 'label', 'alt', 'caption', 'description', 'text'].includes(key)));
+		const properties = Object.fromEntries(
+			[...values].filter(([key]) => !['title', 'label', 'alt', 'caption', 'description', 'text'].includes(key)),
+		);
 		return Object.keys(properties).length ? JSON.stringify(properties, null, 2) : '';
 	}
-	try { return JSON.stringify(JSON.parse(data), null, 2); }
-	catch { return data; } // Retain unfamiliar expressions as text, never execute them.
+	try {
+		return JSON.stringify(JSON.parse(data), null, 2);
+	} catch {
+		return data;
+	} // Retain unfamiliar expressions as text, never execute them.
 }
 
 function colorClass(property: 'background' | 'border', value: string | undefined): string | undefined {
-	const match = value && /^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(0(?:\.\d+)?|1(?:\.0+)?))?\s*\)$/u.exec(value);
-	if (!match || match.slice(1, 4).some(channel => Number(channel) > 255)) { return undefined; }
+	const match =
+		value &&
+		/^rgba?\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})(?:\s*,\s*(0(?:\.\d+)?|1(?:\.0+)?))?\s*\)$/u.exec(value);
+	if (!match || match.slice(1, 4).some(channel => Number(channel) > 255)) {
+		return undefined;
+	}
 	return `${property}-rgba-${match[1]}-${match[2]}-${match[3]}-${(match[4] ?? '1').replace('.', 'p')}`;
 }
 
@@ -177,55 +294,99 @@ function classes(tag: RichTag): string {
 	// Only named presentation variants reach HTML. Unknown attributes, event
 	// handlers and arbitrary expressions have no effect on the host document.
 	const variants: ReadonlyArray<readonly [string, readonly string[]]> = [
-		['radius', ['sm', 'md', 'lg']], ['padding', ['0', '1', '2', '3', '4']], ['gap', ['0', '1', '2', '3', '4']],
-		['align', ['start', 'center', 'end', 'stretch']], ['justify', ['start', 'center', 'end']],
-		['background', ['surface', 'surface-secondary']], ['color', ['secondary']], ['size', ['xs', 'sm', 'lg']],
+		['radius', ['sm', 'md', 'lg']],
+		['padding', ['0', '1', '2', '3', '4']],
+		['gap', ['0', '1', '2', '3', '4']],
+		['align', ['start', 'center', 'end', 'stretch']],
+		['justify', ['start', 'center', 'end']],
+		['background', ['surface', 'surface-secondary']],
+		['color', ['secondary']],
+		['size', ['xs', 'sm', 'lg']],
 	];
 	for (const [name, allowed] of variants) {
 		const value = values.get(name);
-		if (value && allowed.includes(value)) { result.push(`${name}-${value}`); }
+		if (value && allowed.includes(value)) {
+			result.push(`${name}-${value}`);
+		}
 	}
-	if (values.has('border')) { result.push('border'); }
+	if (values.has('border')) {
+		result.push('border');
+	}
 	const background = colorClass('background', values.get('background'));
 	const border = colorClass('border', /\bcolor\s*:\s*["']([^"']+)["']/u.exec(values.get('border') ?? '')?.[1]);
-	if (background) { result.push(background); }
-	if (border) { result.push(border); }
+	if (background) {
+		result.push(background);
+	}
+	if (border) {
+		result.push(border);
+	}
 	return result.join(' ');
 }
 
 const lexerDepth = new WeakMap<TokenizerThis['lexer'], number>();
-function tokenize(this: TokenizerThis, source: string, level: 'block' | 'inline', previous: readonly Token[]): Tokens.Generic | undefined {
-	if (this.lexer.state.inRawBlock) { return undefined; }
+function tokenize(
+	this: TokenizerThis,
+	source: string,
+	level: 'block' | 'inline',
+	previous: readonly Token[],
+): Tokens.Generic | undefined {
+	if (this.lexer.state.inRawBlock) {
+		return undefined;
+	}
 	// SVG's standard <text> element shares a spelling with the web component.
 	// Let the shared HTML renderer own it while an SVG namespace is open.
 	let svgDepth = 0;
 	for (const token of previous) {
-		if (token.type !== 'html') { continue; }
+		if (token.type !== 'html') {
+			continue;
+		}
 		for (const match of token.raw.matchAll(/<\/?svg\b[^>]*>/giu)) {
 			svgDepth += match[0].startsWith('</') ? -1 : match[0].endsWith('/>') ? 0 : 1;
 		}
 	}
-	if (svgDepth > 0) { return undefined; }
+	if (svgDepth > 0) {
+		return undefined;
+	}
 	const leading = /^ {0,3}(?=<)/u.exec(source)?.[0] ?? '';
 	const content = readContent(source.slice(leading.length));
-	if (!content) { return undefined; }
+	if (!content) {
+		return undefined;
+	}
 	const inline = inlineTags.has(content.tag.name) || level === 'inline';
 	const lines = content.body.split('\n');
 	let indentation = Infinity;
 	for (const line of lines) {
-		if (line.trim()) { indentation = Math.min(indentation, /^[ \t]*/u.exec(line)![0].length); }
+		if (line.trim()) {
+			indentation = Math.min(indentation, /^[ \t]*/u.exec(line)![0].length);
+		}
 	}
 	// Remove the component's common indentation, preserving indentation inside code.
-	const body = inline ? content.body : lines.map(line => line.slice(Number.isFinite(indentation) ? indentation : 0)).join('\n').trim();
+	const body = inline
+		? content.body
+		: lines
+				.map(line => line.slice(Number.isFinite(indentation) ? indentation : 0))
+				.join('\n')
+				.trim();
 	const depth = lexerDepth.get(this.lexer) ?? 0;
 	let tokens: Token[] = [];
 	const literal = depth >= 32 || content.tag.name === 'code';
 	if (!literal && !hiddenTags.has(content.tag.name)) {
 		lexerDepth.set(this.lexer, depth + 1);
-		try { tokens = inline ? this.lexer.inlineTokens(body) : this.lexer.blockTokens(body); }
-		finally { lexerDepth.set(this.lexer, depth); }
+		try {
+			tokens = inline ? this.lexer.inlineTokens(body) : this.lexer.blockTokens(body);
+		} finally {
+			lexerDepth.set(this.lexer, depth);
+		}
 	}
-	return { type: 'chatgptRichContent', raw: leading + content.raw, tag: content.tag, tokens, inline, literal: literal ? renderAsPlaintext(body) : undefined, hasBody: !!body };
+	return {
+		type: 'chatgptRichContent',
+		raw: leading + content.raw,
+		tag: content.tag,
+		tokens,
+		inline,
+		literal: literal ? renderAsPlaintext(body) : undefined,
+		hasBody: !!body,
+	};
 }
 
 function resourceMarkup(resource: ChatGPTResource): string {
@@ -235,7 +396,9 @@ function resourceMarkup(resource: ChatGPTResource): string {
 function referenceMarkup(ids: readonly string[], references: readonly ChatGPTReference[]): string {
 	const selected = [...new Set(ids)].flatMap(id => {
 		const exact = references.find(reference => reference.id === id);
-		const candidates = references.filter(reference => reference.id.replace(/^turn\d+/u, '') === id.replace(/^turn\d+/u, ''));
+		const candidates = references.filter(
+			reference => reference.id.replace(/^turn\d+/u, '') === id.replace(/^turn\d+/u, ''),
+		);
 		const reference = exact ?? (candidates.length === 1 ? candidates[0] : undefined);
 		return reference ? [reference] : [];
 	});
@@ -247,8 +410,13 @@ function createRichContentExtension(references: readonly ChatGPTReference[] = []
 	return {
 		renderer: {
 			image(token) {
-				if (token.href.startsWith('data:image/')) return `<img src="${escapeHTML(token.href)}" alt="${escapeHTML(token.text)}">`;
-				return resourceMarkup({ uri: token.href, name: token.text || localize('sessions.chatgpt.image', 'Image'), kind: 'image' });
+				if (token.href.startsWith('data:image/'))
+					return `<img src="${escapeHTML(token.href)}" alt="${escapeHTML(token.text)}">`;
+				return resourceMarkup({
+					uri: token.href,
+					name: token.text || localize('sessions.chatgpt.image', 'Image'),
+					kind: 'image',
+				});
 			},
 			link(token) {
 				if (/^(?:sandbox:|file-service:|sediment:)/u.test(token.href)) {
@@ -258,112 +426,203 @@ function createRichContentExtension(references: readonly ChatGPTReference[] = []
 					else if (mimeType?.startsWith('audio/')) kind = 'audio';
 					else if (mimeType?.startsWith('video/')) kind = 'video';
 					else if (mimeType === 'text/html') kind = 'html';
-					return resourceMarkup({ uri: token.href, name: token.text || token.href.split('/').at(-1) || localize('sessions.chatgpt.file', 'File'), kind, mimeType });
+					return resourceMarkup({
+						uri: token.href,
+						name: token.text || token.href.split('/').at(-1) || localize('sessions.chatgpt.file', 'File'),
+						kind,
+						mimeType,
+					});
 				}
 				return false;
 			},
 		},
-		extensions: [...(['block', 'inline'] as const).map((level): NonNullable<MarkedExtension['extensions']>[number] => ({
-			name: 'chatgptRichContent', level, tokenizer(source, tokens) { return tokenize.call(this, source, level, tokens); }, childTokens: ['tokens'],
-			start: source => {
-				if (level === 'inline') { return source.search(/<\/?[a-z][\w-]*(?::[a-z][\w-]*)?(?=[\s/>]|$)/iu); }
-				// Marked searches after the first character. Requiring a newline avoids
-				// splitting a code span whose opening backtick was that first character.
-				const match = /\n {0,3}<\/?[a-z][\w-]*(?::[a-z][\w-]*)?(?=[\s/>]|$)/iu.exec(source);
-				return match ? match.index + 1 : -1;
-			},
-			renderer(token) {
-				const tag = token.tag as RichTag;
-				if (tag.closing) { return ''; }
-				if (hiddenTags.has(tag.name)) {
-					const ids = attributes(tag).get('refs')?.match(/turn\d+[a-z]+\d+/giu) ?? [];
-					return referenceMarkup(ids, references);
-				}
-				if (mediaTags.has(tag.name)) {
-					const values = attributes(tag);
-					if (tag.name === 'canvas') return resourceMarkup({ uri: `data:text/html;charset=utf-8,${encodeURIComponent(token.raw)}`, name: description(tag) || localize('sessions.chatgpt.interactive', 'Interactive content'), kind: 'html' });
-					if (tag.name === 'iframe' && values.has('srcdoc')) {
-						// Decode the HTML attribute as inert text before handing its document
-						// to the isolated host. The Workbench never inserts that HTML.
-						const encoded = values.get('srcdoc')!.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-						const html = sanitizeHtmlToFragment(encoded, { ownerDocument: getDocument() }).textContent ?? '';
-						return resourceMarkup({ uri: `data:text/html;charset=utf-8,${encodeURIComponent(html)}`, name: description(tag) || localize('sessions.chatgpt.interactive', 'Interactive content'), kind: 'html' });
+		extensions: [
+			...(['block', 'inline'] as const).map((level): NonNullable<MarkedExtension['extensions']>[number] => ({
+				name: 'chatgptRichContent',
+				level,
+				tokenizer(source, tokens) {
+					return tokenize.call(this, source, level, tokens);
+				},
+				childTokens: ['tokens'],
+				start: source => {
+					if (level === 'inline') {
+						return source.search(/<\/?[a-z][\w-]*(?::[a-z][\w-]*)?(?=[\s/>]|$)/iu);
 					}
-					const uri = values.get('src');
-					if (uri && tag.name === 'iframe') {
-						try {
-							const url = new URL(uri);
-							if (url.protocol === 'https:' && !url.username && !url.password) return resourceMarkup({
-								uri: `data:text/html;charset=utf-8,${encodeURIComponent(`<iframe src="${escapeHTML(url.href)}" title="${escapeHTML(description(tag))}" style="border:0;width:100%;height:100vh" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>`)}`,
-								name: description(tag) || localize('sessions.chatgpt.interactive', 'Interactive content'), kind: 'html', frameOrigin: url.origin,
+					// Marked searches after the first character. Requiring a newline avoids
+					// splitting a code span whose opening backtick was that first character.
+					const match = /\n {0,3}<\/?[a-z][\w-]*(?::[a-z][\w-]*)?(?=[\s/>]|$)/iu.exec(source);
+					return match ? match.index + 1 : -1;
+				},
+				renderer(token) {
+					const tag = token.tag as RichTag;
+					if (tag.closing) {
+						return '';
+					}
+					if (hiddenTags.has(tag.name)) {
+						const ids =
+							attributes(tag)
+								.get('refs')
+								?.match(/turn\d+[a-z]+\d+/giu) ?? [];
+						return referenceMarkup(ids, references);
+					}
+					if (mediaTags.has(tag.name)) {
+						const values = attributes(tag);
+						if (tag.name === 'canvas')
+							return resourceMarkup({
+								uri: `data:text/html;charset=utf-8,${encodeURIComponent(token.raw)}`,
+								name:
+									description(tag) || localize('sessions.chatgpt.interactive', 'Interactive content'),
+								kind: 'html',
 							});
-						} catch { /* Malformed destinations remain readable as unavailable media. */ }
+						if (tag.name === 'iframe' && values.has('srcdoc')) {
+							// Decode the HTML attribute as inert text before handing its document
+							// to the isolated host. The Workbench never inserts that HTML.
+							const encoded = values.get('srcdoc')!.replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+							const html =
+								sanitizeHtmlToFragment(encoded, { ownerDocument: getDocument() }).textContent ?? '';
+							return resourceMarkup({
+								uri: `data:text/html;charset=utf-8,${encodeURIComponent(html)}`,
+								name:
+									description(tag) || localize('sessions.chatgpt.interactive', 'Interactive content'),
+								kind: 'html',
+							});
+						}
+						const uri = values.get('src');
+						if (uri && tag.name === 'iframe') {
+							try {
+								const url = new URL(uri);
+								if (url.protocol === 'https:' && !url.username && !url.password)
+									return resourceMarkup({
+										uri: `data:text/html;charset=utf-8,${encodeURIComponent(`<iframe src="${escapeHTML(url.href)}" title="${escapeHTML(description(tag))}" style="border:0;width:100%;height:100vh" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>`)}`,
+										name:
+											description(tag) ||
+											localize('sessions.chatgpt.interactive', 'Interactive content'),
+										kind: 'html',
+										frameOrigin: url.origin,
+									});
+							} catch {
+								/* Malformed destinations remain readable as unavailable media. */
+							}
+						}
+						if (uri)
+							return resourceMarkup({
+								uri,
+								name: description(tag) || localize('sessions.chatgpt.media', 'Media'),
+								kind:
+									tag.name === 'img'
+										? 'image'
+										: tag.name === 'iframe'
+											? 'html'
+											: (tag.name as 'audio' | 'video'),
+							});
+						return `<span class="ash-chat-markdown-media">${localize('chat.markdown.mediaUnavailable', 'Media content is unavailable here.')}</span>`;
 					}
-					if (uri) return resourceMarkup({ uri, name: description(tag) || localize('sessions.chatgpt.media', 'Media'), kind: tag.name === 'img' ? 'image' : tag.name === 'iframe' ? 'html' : tag.name as 'audio' | 'video' });
-					return `<span class="ash-chat-markdown-media">${localize('chat.markdown.mediaUnavailable', 'Media content is unavailable here.')}</span>`;
-				}
-				const element = token.inline ? 'span' : 'div';
-				const body = typeof token.literal === 'string' ? escapeHTML(token.literal).replace(/&amp;(?=(?:#\d+|#x[\da-f]+|[a-z]+);)/giu, '&') : token.inline ? this.parser.parseInline(token.tokens as Token[]) : this.parser.parse(token.tokens as Token[]);
-				if (tag.name === 'icon') {
-					const name = attributes(tag).get('name') ?? '';
-					return `<span class="${classes(tag)}">${escapeHTML(iconText.get(name) ?? (description(tag) || name)) || fallbackHTML()}</span>`;
-				}
-				if (['box', 'row', 'text'].includes(tag.name)) { return `<${element} class="${classes(tag)}">${body || fallbackHTML()}</${element}>`; }
-				const label = escapeHTML(description(tag));
-				const data = componentData(tag);
-				const chart = tag.name === 'chart' && data && !plaintext ? chartDocument(description(tag), data) : undefined;
-				if (chart) return resourceMarkup({ uri: `data:text/html;charset=utf-8,${encodeURIComponent(chart)}`, name: description(tag) || localize('sessions.chatgpt.chart', 'Chart'), kind: 'html' });
-				// Unknown web cards still have usable disclosure and readable data; no
-				// arbitrary JSX or component expressions are evaluated in the Workbench.
-				if (!label && !body && !data) return '';
-				return `<details class="ash-chatgpt-rich" open><summary>${label || localize('sessions.chatgpt.content', 'Content')}</summary>${body}${data ? `<pre><code>${escapeHTML(data)}</code></pre>` : ''}</details>`;
+					const element = token.inline ? 'span' : 'div';
+					const body =
+						typeof token.literal === 'string'
+							? escapeHTML(token.literal).replace(/&amp;(?=(?:#\d+|#x[\da-f]+|[a-z]+);)/giu, '&')
+							: token.inline
+								? this.parser.parseInline(token.tokens as Token[])
+								: this.parser.parse(token.tokens as Token[]);
+					if (tag.name === 'icon') {
+						const name = attributes(tag).get('name') ?? '';
+						return `<span class="${classes(tag)}">${escapeHTML(iconText.get(name) ?? (description(tag) || name)) || fallbackHTML()}</span>`;
+					}
+					if (['box', 'row', 'text'].includes(tag.name)) {
+						return `<${element} class="${classes(tag)}">${body || fallbackHTML()}</${element}>`;
+					}
+					const label = escapeHTML(description(tag));
+					const data = componentData(tag);
+					const chart =
+						tag.name === 'chart' && data && !plaintext ? chartDocument(description(tag), data) : undefined;
+					if (chart)
+						return resourceMarkup({
+							uri: `data:text/html;charset=utf-8,${encodeURIComponent(chart)}`,
+							name: description(tag) || localize('sessions.chatgpt.chart', 'Chart'),
+							kind: 'html',
+						});
+					// Unknown web cards still have usable disclosure and readable data; no
+					// arbitrary JSX or component expressions are evaluated in the Workbench.
+					if (!label && !body && !data) return '';
+					return `<details class="ash-chatgpt-rich" open><summary>${label || localize('sessions.chatgpt.content', 'Content')}</summary>${body}${data ? `<pre><code>${escapeHTML(data)}</code></pre>` : ''}</details>`;
+				},
+			})),
+			{
+				name: 'chatgptWebReference',
+				level: 'inline',
+				start: source => source.indexOf('\uE200'),
+				tokenizer(source) {
+					const match = /^\uE200(cite|url)\uE202([^\uE201]+)\uE201/u.exec(source);
+					if (!match) return undefined;
+					const parts = match[2]!.split('\uE202');
+					return {
+						type: 'chatgptWebReference',
+						raw: match[0],
+						label: match[1] === 'url' ? parts.shift() : undefined,
+						ids: parts,
+					};
+				},
+				renderer(token) {
+					const ids = token.ids as string[];
+					if (typeof token.label === 'string') {
+						const reference = references.find(reference => ids.includes(reference.id));
+						return reference
+							? `<a href="${escapeHTML(reference.url)}">${escapeHTML(token.label)}</a>`
+							: escapeHTML(token.label);
+					}
+					return referenceMarkup(ids, references);
+				},
 			},
-		})), {
-			name: 'chatgptWebReference', level: 'inline',
-			start: source => source.indexOf('\uE200'),
-			tokenizer(source) {
-				const match = /^\uE200(cite|url)\uE202([^\uE201]+)\uE201/u.exec(source);
-				if (!match) return undefined;
-				const parts = match[2]!.split('\uE202');
-				return { type: 'chatgptWebReference', raw: match[0], label: match[1] === 'url' ? parts.shift() : undefined, ids: parts };
+			{
+				name: 'chatgptWriting',
+				level: 'block',
+				// Marked omits the paragraph's first character here; an offset-zero match
+				// would split a codespan whose opening backtick was that character.
+				start: source => /\n {0,3}:::writing\{/u.exec(source)?.index ?? -1,
+				tokenizer(source) {
+					const depth = lexerDepth.get(this.lexer) ?? 0;
+					if (depth >= 32) {
+						return undefined;
+					}
+					const writing = readWriting(source);
+					if (!writing) {
+						return undefined;
+					}
+					lexerDepth.set(this.lexer, depth + 1);
+					try {
+						return {
+							type: 'chatgptWriting',
+							raw: writing.raw,
+							tokens: this.lexer.blockTokens(writing.body),
+						};
+					} finally {
+						lexerDepth.set(this.lexer, depth);
+					}
+				},
+				renderer(token) {
+					return this.parser.parse(token.tokens ?? []);
+				},
 			},
-			renderer(token) {
-				const ids = token.ids as string[];
-				if (typeof token.label === 'string') {
-					const reference = references.find(reference => ids.includes(reference.id));
-					return reference ? `<a href="${escapeHTML(reference.url)}">${escapeHTML(token.label)}</a>` : escapeHTML(token.label);
-				}
-				return referenceMarkup(ids, references);
-			},
-		}, {
-			name: 'chatgptWriting', level: 'block',
-			// Marked omits the paragraph's first character here; an offset-zero match
-			// would split a codespan whose opening backtick was that character.
-			start: source => /\n {0,3}:::writing\{/u.exec(source)?.index ?? -1,
-			tokenizer(source) {
-				const depth = lexerDepth.get(this.lexer) ?? 0;
-				if (depth >= 32) { return undefined; }
-				const writing = readWriting(source);
-				if (!writing) { return undefined; }
-				lexerDepth.set(this.lexer, depth + 1);
-				try { return { type: 'chatgptWriting', raw: writing.raw, tokens: this.lexer.blockTokens(writing.body) }; }
-				finally { lexerDepth.set(this.lexer, depth); }
-			},
-			renderer(token) { return this.parser.parse(token.tokens ?? []); },
-		}],
+		],
 	};
 }
 
 /** Map web component syntax to shared Markdown and inert attachment descriptors. */
-export function getChatGPTMarkdownRenderOptions(role: 'user' | 'assistant', references?: readonly ChatGPTReference[]): MarkdownRenderOptions {
+export function getChatGPTMarkdownRenderOptions(
+	role: 'user' | 'assistant',
+	references?: readonly ChatGPTReference[],
+): MarkdownRenderOptions {
 	return {
 		markedExtensions: role === 'assistant' ? [createRichContentExtension(references)] : [],
 		sanitizerConfig: {
 			replaceWithPlaintext: role === 'user',
 			allowedAttributes: {
-				override: [...allowedMarkdownHtmlAttributes, 'data-chatgpt-resource', 'open', {
-					attributeName: 'src', shouldKeep: (_element, data) => data.attrValue.startsWith('data:'),
-				}]
+				override: [
+					...allowedMarkdownHtmlAttributes,
+					'data-chatgpt-resource',
+					'open',
+					{ attributeName: 'src', shouldKeep: (_element, data) => data.attrValue.startsWith('data:') },
+				],
 			},
 		},
 	};
@@ -372,46 +631,65 @@ export function getChatGPTMarkdownRenderOptions(role: 'user' | 'assistant', refe
 /** Complete generated links and validated colors after sanitization, without loading message resources. */
 export function completeChatGPTRichContent(root: HTMLElement, conversationId: string | undefined): void {
 	for (const media of root.querySelectorAll<HTMLElement>('.ash-chat-markdown-media')) {
-		if (media.querySelector('.ash-chatgpt-rich-fallback')) { continue; }
+		if (media.querySelector('.ash-chatgpt-rich-fallback')) {
+			continue;
+		}
 		const link = root.ownerDocument.createElement('a');
 		link.className = 'ash-chatgpt-rich-fallback';
 		link.textContent = fallbackText();
 		media.append(link);
 	}
 	for (const link of root.querySelectorAll<HTMLAnchorElement>('.ash-chatgpt-rich-fallback')) {
-		link.href = conversationId ? `https://chatgpt.com/c/${encodeURIComponent(conversationId)}` : 'https://chatgpt.com/';
+		link.href = conversationId
+			? `https://chatgpt.com/c/${encodeURIComponent(conversationId)}`
+			: 'https://chatgpt.com/';
 	}
 	for (const element of root.querySelectorAll<HTMLElement>('.ash-chatgpt-rich')) {
 		for (const name of element.classList) {
 			const match = /^(background|border)-rgba-(\d+)-(\d+)-(\d+)-(\d+(?:p\d+)?)$/u.exec(name);
-			if (!match) { continue; }
+			if (!match) {
+				continue;
+			}
 			const color = `rgba(${match[2]},${match[3]},${match[4]},${match[5].replace('p', '.')})`;
-			if (match[1] === 'background') { element.style.backgroundColor = color; }
-			else { element.style.borderColor = color; }
+			if (match[1] === 'background') {
+				element.style.backgroundColor = color;
+			} else {
+				element.style.borderColor = color;
+			}
 		}
 	}
 }
 
 /** The accessible view retains component text and arrows without exposing markup. */
 export function getChatGPTRichContentText(source: string, references?: readonly ChatGPTReference[]): string {
-	const html = renderWorkbenchMarkdown({ value: source, supportHtml: true }, false, { markedExtensions: [createRichContentExtension(references, true)] });
+	const html = renderWorkbenchMarkdown({ value: source, supportHtml: true }, false, {
+		markedExtensions: [createRichContentExtension(references, true)],
+	});
 	return renderAsPlaintext(html, { useLinkFormatter: true });
 }
 
 /** A Chart web component carries data, not executable JSX. Its interaction runs inside the existing Webview host. */
 function chartDocument(title: string, json: string): string | undefined {
 	let data: unknown;
-	try { data = JSON.parse(json); }
-	catch { return undefined; }
+	try {
+		data = JSON.parse(json);
+	} catch {
+		return undefined;
+	}
 	let rows: unknown[] = Array.isArray(data) ? data : isRecord(data) && Array.isArray(data.data) ? data.data : [];
 	if (isRecord(data) && Array.isArray(data.labels) && Array.isArray(data.datasets)) {
 		const datasets = data.datasets.filter(isRecord);
-		rows = data.labels.map((label, index) => Object.fromEntries([
-			['label', label],
-			...datasets.map((dataset, series) => [typeof dataset.label === 'string' ? dataset.label : String(series + 1), Array.isArray(dataset.data) ? dataset.data[index] : null]),
-		]));
+		rows = data.labels.map((label, index) =>
+			Object.fromEntries([
+				['label', label],
+				...datasets.map((dataset, series) => [
+					typeof dataset.label === 'string' ? dataset.label : String(series + 1),
+					Array.isArray(dataset.data) ? dataset.data[index] : null,
+				]),
+			]),
+		);
 	}
-	const table = rows.map((row, index) => isRecord(row) ? row : { index: index + 1, value: row });
+	const table = rows.map((row, index) => (isRecord(row) ? row : { index: index + 1, value: row }));
 	const keys = [...new Set(table.flatMap(row => Object.keys(row)))];
 	const content = JSON.stringify({ rows: table, keys }).replaceAll('<', '\\u003c');
 	return `<!doctype html>

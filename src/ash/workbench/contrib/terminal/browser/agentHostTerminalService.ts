@@ -5,7 +5,11 @@ import { terminalExecutionScope } from '../common/remote/terminal.js';
 import { CancellationError } from '../../../../base/common/errors.js';
 import { toDisposable } from '../../../../base/common/lifecycle.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
-import { ITerminalProcessService, type ITerminalProcessCreation, type ITerminalProcessCreateOptions } from '../../../../platform/terminal/common/terminal.js';
+import {
+	ITerminalProcessService,
+	type ITerminalProcessCreation,
+	type ITerminalProcessCreateOptions,
+} from '../../../../platform/terminal/common/terminal.js';
 import { AgentHostPty } from './agentHostPty.js';
 import { BaseTerminalBackend } from './baseTerminalBackend.js';
 
@@ -30,16 +34,24 @@ export class AgentHostTerminalService extends BaseTerminalBackend {
 		@IWorkspaceContextService private readonly workspace: IWorkspaceContextService,
 	) {
 		super(processes);
-		this._register(toDisposable(() => {
-			for (const pty of this.handles.values()) pty.shutdown(false);
-			this.handles.clear();
-			this.backends.clear();
-		}));
+		this._register(
+			toDisposable(() => {
+				for (const pty of this.handles.values()) pty.shutdown(false);
+				this.handles.clear();
+				this.backends.clear();
+			}),
+		);
 	}
 
-	async createProcess(options: ITerminalProcessCreateOptions, id: number, attached?: ITerminalProcessCreation, ownership?: ITerminalProcessOwnership): Promise<AgentHostPty> {
+	async createProcess(
+		options: ITerminalProcessCreateOptions,
+		id: number,
+		attached?: ITerminalProcessCreation,
+		ownership?: ITerminalProcessOwnership,
+	): Promise<AgentHostPty> {
 		if (this.isDisposed) throw new CancellationError();
-		const kind = terminalExecutionScope(this.workspace.getWorkspace()).remoteAuthority === undefined ? 'local' : 'remote';
+		const kind =
+			terminalExecutionScope(this.workspace.getWorkspace()).remoteAuthority === undefined ? 'local' : 'remote';
 		const ctor = factories.get(kind);
 		if (ctor) {
 			let backend = this.backends.get(kind);
@@ -49,14 +61,25 @@ export class AgentHostTerminalService extends BaseTerminalBackend {
 			}
 			return backend.createProcess(options, id, attached, ownership);
 		}
-		const creation = attached ?? await this.processes.create(options);
+		const creation = attached ?? (await this.processes.create(options));
 		if (this.isDisposed) {
-			if (ownership?.canTerminate !== false) await this.processes.close({ terminalId: creation.terminalId, ...(options.dirId === undefined ? {} : { dirId: options.dirId }) });
+			if (ownership?.canTerminate !== false)
+				await this.processes.close({
+					terminalId: creation.terminalId,
+					...(options.dirId === undefined ? {} : { dirId: options.dirId }),
+				});
 			throw new CancellationError();
 		}
-		const pty = this.instantiation.createInstance(AgentHostPty, id, creation, options.dirId, () => {
-			if (this.handles.get(id) === pty) this.handles.delete(id);
-		}, ownership);
+		const pty = this.instantiation.createInstance(
+			AgentHostPty,
+			id,
+			creation,
+			options.dirId,
+			() => {
+				if (this.handles.get(id) === pty) this.handles.delete(id);
+			},
+			ownership,
+		);
 		this.handles.set(id, pty);
 		return pty;
 	}

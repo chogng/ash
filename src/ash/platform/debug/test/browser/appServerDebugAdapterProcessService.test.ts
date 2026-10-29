@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { AppServerProtocolClient } from '../../../agentHost/browser/appServerProtocolClient.js';
 import type { IAppServerApi } from '../../../agentHost/common/appServerApi.js';
-import { WEB_APP_SERVER_CONNECT_EVENT, WEB_APP_SERVER_CONNECTED_EVENT, WEB_APP_SERVER_FRAME_EVENT, type AppServerTransport } from '../../../agentHost/common/appServerTransport.js';
+import {
+	WEB_APP_SERVER_CONNECT_EVENT,
+	WEB_APP_SERVER_CONNECTED_EVENT,
+	WEB_APP_SERVER_FRAME_EVENT,
+	type AppServerTransport,
+} from '../../../agentHost/common/appServerTransport.js';
 import { createTestInitializeResult } from '../../../agentHost/test/common/testAppServerProtocol.js';
 import { AppServerDebugAdapterProcessService } from '../../browser/appServerDebugAdapterProcessService.js';
 import type { IDebugAdapterProcessStartOptions } from '../../common/debugAdapterProcessService.js';
@@ -11,11 +16,22 @@ import { resetNlsResolver, setNlsMessages } from '../../../../nls.js';
 
 test('Debug adapter handles isolate identical backend IDs across folders and retired sessions', async () => {
 	const listeners = new Map<string, Set<(value: unknown) => void>>();
-	const requests: { method: string; params: unknown; }[] = [];
+	const requests: { method: string; params: unknown }[] = [];
 	let failClose = false;
-	const workspace = { revision: 1, state: { breakpoints: [{ id: 'source', resource: 'file:///workspace/main.ts', lineNumber: 2, enabled: true }], functionBreakpoints: [], dataBreakpoints: [], watchExpressions: ['value'], exceptionBreakpoints: {} } };
+	const workspace = {
+		revision: 1,
+		state: {
+			breakpoints: [{ id: 'source', resource: 'file:///workspace/main.ts', lineNumber: 2, enabled: true }],
+			functionBreakpoints: [],
+			dataBreakpoints: [],
+			watchExpressions: ['value'],
+			exceptionBreakpoints: {},
+		},
+	};
 	function emit(event: string, value: unknown): void {
-		for (const listener of listeners.get(event) ?? []) { listener(value); }
+		for (const listener of listeners.get(event) ?? []) {
+			listener(value);
+		}
 	}
 	const transport: AppServerTransport = {
 		on(event, listener) {
@@ -23,27 +39,121 @@ test('Debug adapter handles isolate identical backend IDs across folders and ret
 			handlers.add(listener);
 			listeners.set(event, handlers);
 		},
-		off(event, listener) { listeners.get(event)?.delete(listener); },
+		off(event, listener) {
+			listeners.get(event)?.delete(listener);
+		},
 		send(event, payload) {
 			if (event === WEB_APP_SERVER_CONNECT_EVENT) {
-				emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: 1, workspaceId: 'workspace', workspaceRoot: '/workspace' });
+				emit(WEB_APP_SERVER_CONNECTED_EVENT, {
+					protocolVersion: 1,
+					workspaceId: 'workspace',
+					workspaceRoot: '/workspace',
+				});
 				return;
 			}
-			if (event !== WEB_APP_SERVER_FRAME_EVENT) { return; }
-			const request = JSON.parse((payload as { frame: string; }).frame) as { id?: number; method: string; params: unknown; };
-			if (request.id === undefined) { return; }
-			if (request.method !== 'initialize') { requests.push({ method: request.method, params: request.params }); }
+			if (event !== WEB_APP_SERVER_FRAME_EVENT) {
+				return;
+			}
+			const request = JSON.parse((payload as { frame: string }).frame) as {
+				id?: number;
+				method: string;
+				params: unknown;
+			};
+			if (request.id === undefined) {
+				return;
+			}
+			if (request.method !== 'initialize') {
+				requests.push({ method: request.method, params: request.params });
+			}
 			if (request.method === 'debug/adapter/close' && failClose) {
-				emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, error: { code: -32000, message: 'injected close failure', data: { kind: 'DebugAdapterOperationFailed' } } }) });
+				emit(WEB_APP_SERVER_FRAME_EVENT, {
+					frame: JSON.stringify({
+						jsonrpc: '2.0',
+						id: request.id,
+						error: {
+							code: -32000,
+							message: 'injected close failure',
+							data: { kind: 'DebugAdapterOperationFailed' },
+						},
+					}),
+				});
 				return;
 			}
-			const relation = { id: 'public', parentId: null, consoleId: 'public', consoleIds: ['public'], consoleCatalogRevision: 1, lifecycleTargetId: 'public', noDebug: null, ended: false, descendants: [] };
-			const result = request.method === 'debug/session/prepare' || request.method === 'debug/session/reserve' || request.method === 'debug/session/lifecycle' ? relation
-				: request.method === 'debug/session/console' ? { revision: 4, entries: [] }
-					: request.method === 'debug/session/exceptions/set' ? { version: 7 }
-						: request.method.startsWith('debug/workspace/') ? { status: request.method.endsWith('/read') ? 'current' : 'applied', snapshot: workspace } : request.method === 'initialize' ? createTestInitializeResult()
-							: request.method === 'debug/adapter/start' ? { sessionId: 'adapter-1' }
-								: request.method === 'debug/adapter/read' ? { consoleRevision: 0, exceptions: { version: 0, appliedVersion: 0, appliedFilters: [], filters: [], error: null }, breakpointRevision: 0, session: { revision: 0, executionRevision: 0, inspectionRevision: 0, state: 'starting', phase: 'uninitialized', reason: null, stoppedThreadId: null, capabilities: { supportsRestart: false, supportsTerminate: false, supportsSetVariable: false, supportsConditionalBreakpoints: false, supportsHitConditionalBreakpoints: false, supportsLogPoints: false, supportsFunctionBreakpoints: false, supportsDataBreakpoints: false, supportsInstructionBreakpoints: false, supportsDisassembleRequest: false, supportsSteppingGranularity: false, supportsCompletionsRequest: false, supportsCancelRequest: false, completionTriggerCharacters: [], exceptionBreakpointFilters: [] } }, messages: [], nextSequence: 0, outputGap: false, stderr: '', exited: false, exitCode: null, protocolError: null } : null;
+			const relation = {
+				id: 'public',
+				parentId: null,
+				consoleId: 'public',
+				consoleIds: ['public'],
+				consoleCatalogRevision: 1,
+				lifecycleTargetId: 'public',
+				noDebug: null,
+				ended: false,
+				descendants: [],
+			};
+			const result =
+				request.method === 'debug/session/prepare' ||
+				request.method === 'debug/session/reserve' ||
+				request.method === 'debug/session/lifecycle'
+					? relation
+					: request.method === 'debug/session/console'
+						? { revision: 4, entries: [] }
+						: request.method === 'debug/session/exceptions/set'
+							? { version: 7 }
+							: request.method.startsWith('debug/workspace/')
+								? {
+										status: request.method.endsWith('/read') ? 'current' : 'applied',
+										snapshot: workspace,
+									}
+								: request.method === 'initialize'
+									? createTestInitializeResult()
+									: request.method === 'debug/adapter/start'
+										? { sessionId: 'adapter-1' }
+										: request.method === 'debug/adapter/read'
+											? {
+													consoleRevision: 0,
+													exceptions: {
+														version: 0,
+														appliedVersion: 0,
+														appliedFilters: [],
+														filters: [],
+														error: null,
+													},
+													breakpointRevision: 0,
+													session: {
+														revision: 0,
+														executionRevision: 0,
+														inspectionRevision: 0,
+														state: 'starting',
+														phase: 'uninitialized',
+														reason: null,
+														stoppedThreadId: null,
+														capabilities: {
+															supportsRestart: false,
+															supportsTerminate: false,
+															supportsSetVariable: false,
+															supportsConditionalBreakpoints: false,
+															supportsHitConditionalBreakpoints: false,
+															supportsLogPoints: false,
+															supportsFunctionBreakpoints: false,
+															supportsDataBreakpoints: false,
+															supportsInstructionBreakpoints: false,
+															supportsDisassembleRequest: false,
+															supportsSteppingGranularity: false,
+															supportsCompletionsRequest: false,
+															supportsCancelRequest: false,
+															completionTriggerCharacters: [],
+															exceptionBreakpointFilters: [],
+														},
+													},
+													messages: [],
+													nextSequence: 0,
+													outputGap: false,
+													stderr: '',
+													exited: false,
+													exitCode: null,
+													protocolError: null,
+												}
+											: null;
 			emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) });
 		},
 	};
@@ -51,18 +161,37 @@ test('Debug adapter handles isolate identical backend IDs across folders and ret
 	try {
 		await client.connect();
 		const service = new AppServerDebugAdapterProcessService(client, {} as IAppServerApi);
-		assert.deepEqual(await service.readWorkspaceState('workspace', workspace.state), { status: 'current', snapshot: workspace });
-		assert.deepEqual(await service.editWorkspaceState('workspace', 1, [{ kind: 'addWatch', expression: 'next' }]), { status: 'applied', snapshot: workspace });
+		assert.deepEqual(await service.readWorkspaceState('workspace', workspace.state), {
+			status: 'current',
+			snapshot: workspace,
+		});
+		assert.deepEqual(await service.editWorkspaceState('workspace', 1, [{ kind: 'addWatch', expression: 'next' }]), {
+			status: 'applied',
+			snapshot: workspace,
+		});
 		assert.deepEqual(requests, [
 			{ method: 'debug/workspace/read', params: { workspaceId: 'workspace', legacy: workspace.state } },
-			{ method: 'debug/workspace/write', params: { workspaceId: 'workspace', revision: 1, edits: [{ kind: 'addWatch', expression: 'next' }] } },
+			{
+				method: 'debug/workspace/write',
+				params: { workspaceId: 'workspace', revision: 1, edits: [{ kind: 'addWatch', expression: 'next' }] },
+			},
 		]);
 		requests.length = 0;
-		const relation = await service.reserveSession({ id: 'public', workspaceId: 'workspace', parentId: null, lifecycleManagedByParent: false, mergeConsole: false, noDebug: null });
+		const relation = await service.reserveSession({
+			id: 'public',
+			workspaceId: 'workspace',
+			parentId: null,
+			lifecycleManagedByParent: false,
+			mergeConsole: false,
+			noDebug: null,
+		});
 		assert.equal(relation.consoleId, 'public');
 		assert.equal((await service.manageSession('public', 'route')).lifecycleTargetId, 'public');
 		assert.equal((await service.readConsole('public', { clear: true })).revision, 4);
-		assert.deepEqual(requests.map(request => request.method), ['debug/session/reserve', 'debug/session/lifecycle', 'debug/session/console']);
+		assert.deepEqual(
+			requests.map(request => request.method),
+			['debug/session/reserve', 'debug/session/lifecycle', 'debug/session/console'],
+		);
 		requests.length = 0;
 		const start = (dirId?: string) => service.start({ dirId, program: 'adapter', arguments: [] });
 		const [first, second, folderless] = await Promise.all([start('first'), start('second'), start()]);
@@ -74,11 +203,20 @@ test('Debug adapter handles isolate identical backend IDs across folders and ret
 		await service.close(first);
 		await service.send(second, { command: 'next' });
 		assert.deepEqual(requests, [
-			{ method: 'debug/adapter/send', params: { dirId: 'first', sessionId: 'adapter-1', message: { command: 'continue' } } },
-			{ method: 'debug/adapter/read', params: { dirId: 'second', sessionId: 'adapter-1', afterSequence: 7, maxMessages: 20 } },
+			{
+				method: 'debug/adapter/send',
+				params: { dirId: 'first', sessionId: 'adapter-1', message: { command: 'continue' } },
+			},
+			{
+				method: 'debug/adapter/read',
+				params: { dirId: 'second', sessionId: 'adapter-1', afterSequence: 7, maxMessages: 20 },
+			},
 			{ method: 'debug/adapter/send', params: { sessionId: 'adapter-1', message: { command: 'pause' } } },
 			{ method: 'debug/adapter/close', params: { dirId: 'first', sessionId: 'adapter-1' } },
-			{ method: 'debug/adapter/send', params: { dirId: 'second', sessionId: 'adapter-1', message: { command: 'next' } } },
+			{
+				method: 'debug/adapter/send',
+				params: { dirId: 'second', sessionId: 'adapter-1', message: { command: 'next' } },
+			},
 		]);
 		assert.equal(await service.setExceptionBreakpoints(second, []), 7);
 		const replacement = await start('first');
@@ -91,7 +229,10 @@ test('Debug adapter handles isolate identical backend IDs across folders and ret
 		failClose = true;
 		await assert.rejects(service.close(second), /injected close failure/);
 		await assert.rejects(service.send(second, {}), /no longer available/);
-		setNlsMessages('zh-CN', JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')));
+		setNlsMessages(
+			'zh-CN',
+			JSON.parse(readFileSync('extensions/language-pack-zh-cn/translations/workbench.json', 'utf8')),
+		);
 		try {
 			await assert.rejects(service.read(second, 0, 20), { message: '调试适配器会话已不可用。' });
 		} finally {
@@ -109,7 +250,9 @@ test('Debug adapter startup preserves executable and connection options across t
 	const listeners = new Map<string, Set<(value: unknown) => void>>();
 	const requests: unknown[] = [];
 	function emit(event: string, value: unknown): void {
-		for (const listener of listeners.get(event) ?? []) { listener(value); }
+		for (const listener of listeners.get(event) ?? []) {
+			listener(value);
+		}
 	}
 	const transport: AppServerTransport = {
 		on(event, listener) {
@@ -117,18 +260,38 @@ test('Debug adapter startup preserves executable and connection options across t
 			handlers.add(listener);
 			listeners.set(event, handlers);
 		},
-		off(event, listener) { listeners.get(event)?.delete(listener); },
+		off(event, listener) {
+			listeners.get(event)?.delete(listener);
+		},
 		send(event, payload) {
 			if (event === WEB_APP_SERVER_CONNECT_EVENT) {
-				emit(WEB_APP_SERVER_CONNECTED_EVENT, { protocolVersion: 1, workspaceId: 'workspace', workspaceRoot: '/workspace' });
+				emit(WEB_APP_SERVER_CONNECTED_EVENT, {
+					protocolVersion: 1,
+					workspaceId: 'workspace',
+					workspaceRoot: '/workspace',
+				});
 				return;
 			}
-			if (event !== WEB_APP_SERVER_FRAME_EVENT) { return; }
-			const request = JSON.parse((payload as { frame: string; }).frame) as { id?: number; method: string; params: unknown; };
-			if (request.id === undefined) { return; }
-			if (request.method === 'debug/adapter/start') { requests.push(request.params); }
-			else { assert.equal(request.method, 'initialize'); }
-			const result = request.method === 'initialize' ? createTestInitializeResult() : { sessionId: `adapter-${requests.length}` };
+			if (event !== WEB_APP_SERVER_FRAME_EVENT) {
+				return;
+			}
+			const request = JSON.parse((payload as { frame: string }).frame) as {
+				id?: number;
+				method: string;
+				params: unknown;
+			};
+			if (request.id === undefined) {
+				return;
+			}
+			if (request.method === 'debug/adapter/start') {
+				requests.push(request.params);
+			} else {
+				assert.equal(request.method, 'initialize');
+			}
+			const result =
+				request.method === 'initialize'
+					? createTestInitializeResult()
+					: { sessionId: `adapter-${requests.length}` };
 			emit(WEB_APP_SERVER_FRAME_EVENT, { frame: JSON.stringify({ jsonrpc: '2.0', id: request.id, result }) });
 		},
 	};
@@ -137,12 +300,20 @@ test('Debug adapter startup preserves executable and connection options across t
 		await client.connect();
 		const service = new AppServerDebugAdapterProcessService(client, {} as IAppServerApi);
 		const options: readonly IDebugAdapterProcessStartOptions[] = [
-			{ dirId: 'workspace', program: 'adapter', arguments: ['--stdio'], cwd: '/workspace', env: { KEEP: 'value', REMOVE: null } },
+			{
+				dirId: 'workspace',
+				program: 'adapter',
+				arguments: ['--stdio'],
+				cwd: '/workspace',
+				env: { KEEP: 'value', REMOVE: null },
+			},
 			{ dirId: 'workspace', connection: { type: 'server', port: 4711, host: '::1' }, arguments: [] },
 			{ dirId: 'workspace', connection: { type: 'namedPipe', path: '/tmp/adapter.sock' }, arguments: [] },
 		];
 		const sessions: string[] = [];
-		for (const option of options) { sessions.push(await service.start(option)); }
+		for (const option of options) {
+			sessions.push(await service.start(option));
+		}
 		assert.deepEqual(requests, options);
 		assert.equal(new Set(sessions).size, options.length);
 	} finally {

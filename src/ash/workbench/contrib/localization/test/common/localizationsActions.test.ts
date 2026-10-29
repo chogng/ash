@@ -12,7 +12,10 @@ import { registerAction2 } from '../../../../../platform/actions/common/actions.
 import { ICommandService } from '../../../../../platform/commands/common/commands.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
-import { ILanguagePackService, type ILanguagePackItem } from '../../../../../platform/languagePacks/common/languagePacks.js';
+import {
+	ILanguagePackService,
+	type ILanguagePackItem,
+} from '../../../../../platform/languagePacks/common/languagePacks.js';
 import type { LanguagePackCatalog } from '../../../../../platform/languagePacks/common/languagePackContract.js';
 import {
 	IExtensionManagementService,
@@ -20,7 +23,11 @@ import {
 	type ExtensionsSearchOptions,
 } from '../../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { INotificationService } from '../../../../../platform/notification/common/notification.js';
-import { IQuickInputService, type IQuickPick, type IQuickPickItem } from '../../../../../platform/quickinput/common/quickInput.js';
+import {
+	IQuickInputService,
+	type IQuickPick,
+	type IQuickPickItem,
+} from '../../../../../platform/quickinput/common/quickInput.js';
 import { CommandService } from '../../../../services/commands/common/commandService.js';
 import { productLanguagePackCatalogs } from '../../../../services/localization/common/localizationCatalogs.js';
 import { ILocaleService, LocalizationConfiguration } from '../../../../services/localization/common/locale.js';
@@ -39,7 +46,10 @@ test('display language commands select an installed catalog and clear the prefer
 		picker.chooseItem(picker.items.find(item => item.label === '简体中文')!);
 		await changed;
 		assert.equal(environment.configuration.getValue(LocalizationConfiguration.locale), 'zh-CN');
-		assert.equal(environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'), 'Display Language');
+		assert.equal(
+			environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'),
+			'Display Language',
+		);
 		assert.equal(commandActionLabel(new ConfigureDisplayLanguageAction().desc.title), 'Configure Display Language');
 
 		await environment.commands.executeCommand(ClearDisplayLanguageAction.ID);
@@ -66,7 +76,10 @@ test('display language command installs a Extensions catalog before selecting it
 		assert.deepEqual(environment.searches, [['French', { packageType: 'localization', limit: 30 }]]);
 		assert.equal(environment.configuration.getValue(LocalizationConfiguration.locale), 'fr');
 		assert.equal(environment.locale.locale, 'en');
-		assert.equal(environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'), 'Display Language');
+		assert.equal(
+			environment.localization.translate('ash.settings', 'displayLanguage.title', 'Display Language'),
+			'Display Language',
+		);
 		assert.deepEqual(environment.errors, []);
 	} finally {
 		resetNlsResolver();
@@ -91,7 +104,10 @@ test('display language search excludes installed package versions through Extens
 	});
 	picker.setQuery('French');
 	await searched;
-	assert.equal(picker.items.some(item => item.label === 'French pack'), false);
+	assert.equal(
+		picker.items.some(item => item.label === 'French pack'),
+		false,
+	);
 	assert.deepEqual(environment.searches, [['French', { packageType: 'localization', limit: 30 }]]);
 	assert.deepEqual(environment.errors, []);
 	picker.hide();
@@ -116,7 +132,15 @@ class LanguageActionEnvironment extends Disposable {
 		services.registerInstance(IExtensionManagementService, {
 			search: async (query: string, options?: ExtensionsSearchOptions) => {
 				this.searches.push([query, options]);
-				return [{ id: 'fr-pack', version: '1', packageType: 'localization', displayName: 'French pack', description: '' }];
+				return [
+					{
+						id: 'fr-pack',
+						version: '1',
+						packageType: 'localization',
+						displayName: 'French pack',
+						description: '',
+					},
+				];
 			},
 			listInstalled: async () => this.installedPackages,
 			install: async (id: string, version?: string) => {
@@ -154,14 +178,18 @@ class TestLanguagePacks extends Disposable implements ILanguagePackService {
 		return this.installedCatalogs.map(catalog => ({ id: catalog.locale, label: catalog.localizedLanguageName }));
 	}
 
-	public async getBuiltInExtensionTranslationsUri(): Promise<undefined> { return undefined; }
+	public async getBuiltInExtensionTranslationsUri(): Promise<undefined> {
+		return undefined;
+	}
 
 	public queueFrenchCatalog(): void {
 		this.pendingFrenchCatalog = true;
 	}
 
 	public async refresh(): Promise<void> {
-		if (!this.pendingFrenchCatalog) { return; }
+		if (!this.pendingFrenchCatalog) {
+			return;
+		}
 		this.pendingFrenchCatalog = false;
 		this.installedCatalogs.push({
 			schemaVersion: 1,
@@ -173,7 +201,6 @@ class TestLanguagePacks extends Disposable implements ILanguagePackService {
 		});
 		this.changed.fire();
 	}
-
 }
 
 class TestQuickInputService implements IQuickInputService {
@@ -204,9 +231,12 @@ class TestQuickInputService implements IQuickInputService {
 class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements IQuickPick<TItem> {
 	readonly type = QuickInputType.QuickPick;
 	activeItems: readonly TItem[] = [];
-	focus(): void { }
-	toggle(): void { }
-	accept(inBackground = false): void { this.selectedItems = this.activeItems; this.accepted.fire({ inBackground }); }
+	focus(): void {}
+	toggle(): void {}
+	accept(inBackground = false): void {
+		this.selectedItems = this.activeItems;
+		this.accepted.fire({ inBackground });
+	}
 
 	canSelectMany = false;
 	selectedItems: readonly TItem[] = [];
@@ -255,7 +285,8 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 	}
 
 	public chooseItem(item: TItem): void {
-		this.selectedItems = [item]; this.accepted.fire({ inBackground: false });
+		this.selectedItems = [item];
+		this.accepted.fire({ inBackground: false });
 	}
 
 	public setQuery(value: string): void {
@@ -263,8 +294,10 @@ class TestQuickPick<TItem extends IQuickPickItem> extends Disposable implements 
 		this.changed.fire(value);
 	}
 
-	public show(): void { }
-	public hide(): void { this.hidden.fire(); }
+	public show(): void {}
+	public hide(): void {
+		this.hidden.fire();
+	}
 }
 
 function nextPreferenceChange(configuration: InMemoryConfigurationService): Promise<void> {

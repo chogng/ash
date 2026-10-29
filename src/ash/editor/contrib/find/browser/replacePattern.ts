@@ -2,15 +2,21 @@ import { buildReplaceStringWithCasePreserved } from '../../../../base/common/sea
 
 /** One literal segment or numbered capture in a replacement expression. */
 export class ReplacePiece {
-	public static staticValue(value: string): ReplacePiece { return new ReplacePiece(value, -1, null); }
-	public static matchIndex(index: number): ReplacePiece { return new ReplacePiece(null, index, null); }
-	public static caseOps(index: number, operations: string[]): ReplacePiece { return new ReplacePiece(null, index, [...operations]); }
+	public static staticValue(value: string): ReplacePiece {
+		return new ReplacePiece(value, -1, null);
+	}
+	public static matchIndex(index: number): ReplacePiece {
+		return new ReplacePiece(null, index, null);
+	}
+	public static caseOps(index: number, operations: string[]): ReplacePiece {
+		return new ReplacePiece(null, index, [...operations]);
+	}
 
 	private constructor(
 		public readonly staticValue: string | null,
 		public readonly matchIndex: number,
 		public readonly caseOps: string[] | null,
-	) { }
+	) {}
 }
 
 interface NamedPiece {
@@ -35,11 +41,14 @@ export class ReplacePattern {
 	}
 
 	public buildReplaceString(matches: string[] | null, preserveCase = false): string {
-		const groups = (matches as (string[] & { groups?: Record<string, string | undefined>; }) | null)?.groups;
+		const groups = (matches as (string[] & { groups?: Record<string, string | undefined> }) | null)?.groups;
 		let result = '';
 		for (const piece of this.pieces) {
 			if (isNamedPiece(piece)) {
-				result += applyCaseOperations(groups && Object.hasOwn(groups, piece.name) ? groups[piece.name] ?? '' : `$<${piece.name}>`, piece.caseOps);
+				result += applyCaseOperations(
+					groups && Object.hasOwn(groups, piece.name) ? (groups[piece.name] ?? '') : `$<${piece.name}>`,
+					piece.caseOps,
+				);
 			} else if (piece.staticValue !== null) {
 				result += piece.staticValue;
 			} else {
@@ -83,14 +92,16 @@ export function parseReplaceString(source: string): ReplacePattern {
 			index++;
 			continue;
 		}
-		if (next === '&' || next >= '0' && next <= '9') {
+		if (next === '&' || (next >= '0' && next <= '9')) {
 			flush();
 			let matchIndex = next === '&' ? 0 : Number(next);
 			if (matchIndex > 0 && source[index + 2] && source[index + 2]! >= '0' && source[index + 2]! <= '9') {
 				matchIndex = matchIndex * 10 + Number(source[index + 2]);
 				index++;
 			}
-			pieces.push(caseOps.length ? ReplacePiece.caseOps(matchIndex, caseOps) : ReplacePiece.matchIndex(matchIndex));
+			pieces.push(
+				caseOps.length ? ReplacePiece.caseOps(matchIndex, caseOps) : ReplacePiece.matchIndex(matchIndex),
+			);
 			caseOps = [];
 			index++;
 			continue;
@@ -119,7 +130,7 @@ function capture(matches: string[] | null, index: number): string {
 	if (matches === null) return '';
 	if (index < matches.length) return matches[index] ?? '';
 	if (index >= 10 && Math.floor(index / 10) < matches.length) {
-		return (matches[Math.floor(index / 10)] ?? '') + index % 10;
+		return (matches[Math.floor(index / 10)] ?? '') + (index % 10);
 	}
 	return `$${index}`;
 }
@@ -129,8 +140,12 @@ function applyCaseOperations(value: string, operations: readonly string[]): stri
 	let operationIndex = 0;
 	for (const character of value) {
 		const operation = operations[operationIndex];
-		result += operation === 'u' || operation === 'U' ? character.toUpperCase()
-			: operation === 'l' || operation === 'L' ? character.toLowerCase() : character;
+		result +=
+			operation === 'u' || operation === 'U'
+				? character.toUpperCase()
+				: operation === 'l' || operation === 'L'
+					? character.toLowerCase()
+					: character;
 		if (operation === 'u' || operation === 'l') operationIndex++;
 	}
 	return result;

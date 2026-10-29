@@ -1,4 +1,8 @@
-import type { ITerminalProcessCreation, ITerminalReconnectLease, ITerminalProcessCreateOptions } from '../../../../platform/terminal/common/terminal.js';
+import type {
+	ITerminalProcessCreation,
+	ITerminalReconnectLease,
+	ITerminalProcessCreateOptions,
+} from '../../../../platform/terminal/common/terminal.js';
 
 /** Construction borrows a transferred process until its destination screen is ready. */
 export interface ITerminalProcessOwnership {
@@ -33,7 +37,7 @@ export interface ITerminalReloadState {
 	readonly workspaceId: string;
 	readonly remoteAuthority?: string;
 	readonly instances: readonly ITerminalSerializedState[];
-	readonly groups: readonly { readonly ids: readonly number[]; readonly sizes: readonly number[]; }[];
+	readonly groups: readonly { readonly ids: readonly number[]; readonly sizes: readonly number[] }[];
 	readonly activeId?: number;
 	readonly focusedId?: number;
 }
@@ -43,4 +47,3 @@ export interface ITerminalReloadCredentials {
 	readonly expiresAt: number;
 	readonly leases: readonly ITerminalReconnectLease[];
 }
-

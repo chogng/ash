@@ -1,18 +1,13 @@
 import { toDisposable } from '../../../base/common/lifecycle.js';
 import { OperatingSystem } from '../../../base/common/platform.js';
 import { createServiceIdentifier } from '../../instantiation/common/instantiation.js';
-import type {
-	IKeyboardLayoutDefinition,
-	IKeyboardLayoutInfo,
-	IKeyboardLayoutProvider,
-} from './keyboardLayout.js';
+import type { IKeyboardLayoutDefinition, IKeyboardLayoutInfo, IKeyboardLayoutProvider } from './keyboardLayout.js';
 import {
 	expectKeyboardLayoutKeys,
 	expectKeyboardLayoutRecord,
 	validateKeyboardLayoutDefinition,
 	validateKeyboardMapping,
 } from './keyboardLayoutValidation.js';
-
 
 export const USER_KEYBOARD_LAYOUT_DEFAULT_CONTENT = `// Defines a custom keyboard layout for Ash.
 // Run "Developer: Inspect Key Mappings (JSON)", then replace null with its output.
@@ -25,9 +20,10 @@ export interface IUserKeyboardLayoutService extends IKeyboardLayoutProvider {
 	openResource(): Promise<void>;
 }
 
-export interface IUserKeyboardLayoutApi extends IUserKeyboardLayoutService { }
+export interface IUserKeyboardLayoutApi extends IUserKeyboardLayoutService {}
 
-export const IUserKeyboardLayoutService = createServiceIdentifier<IUserKeyboardLayoutService>('userKeyboardLayoutService');
+export const IUserKeyboardLayoutService =
+	createServiceIdentifier<IUserKeyboardLayoutService>('userKeyboardLayoutService');
 
 export const UnavailableUserKeyboardLayoutService: IUserKeyboardLayoutService = Object.freeze({
 	available: false,
@@ -49,10 +45,7 @@ export function parseUserKeyboardLayoutResource(value: unknown): IKeyboardLayout
 	const resource = expectKeyboardLayoutRecord(value, 'user keyboard layout resource');
 	expectKeyboardLayoutKeys(resource, ['layout', 'rawMapping'], 'user keyboard layout resource');
 	const layout = normalizeUserLayoutInfo(resource.layout);
-	return Object.freeze({
-		layout,
-		mapping: validateKeyboardMapping(resource.rawMapping),
-	});
+	return Object.freeze({ layout, mapping: validateKeyboardMapping(resource.rawMapping) });
 }
 
 export function validateUserKeyboardLayoutRead(value: unknown): undefined {
@@ -67,20 +60,31 @@ export const validateUserKeyboardLayoutOpenResource = validateUserKeyboardLayout
 function normalizeUserLayoutInfo(value: unknown): IKeyboardLayoutInfo {
 	const layout = expectKeyboardLayoutRecord(value, 'user keyboard layout info');
 	if ('label' in layout) {
-		expectKeyboardLayoutKeys(layout, ['id', 'isUSStandard', 'isUserKeyboardLayout', 'label', 'operatingSystem', 'source'], 'user keyboard layout info');
-		return validateKeyboardLayoutDefinition({
-			layout: {
-				id: layout.id,
-				label: layout.label,
-				operatingSystem: layout.operatingSystem,
-				isUSStandard: layout.isUSStandard,
-				source: 'user',
+		expectKeyboardLayoutKeys(
+			layout,
+			['id', 'isUSStandard', 'isUserKeyboardLayout', 'label', 'operatingSystem', 'source'],
+			'user keyboard layout info',
+		);
+		return validateKeyboardLayoutDefinition(
+			{
+				layout: {
+					id: layout.id,
+					label: layout.label,
+					operatingSystem: layout.operatingSystem,
+					isUSStandard: layout.isUSStandard,
+					source: 'user',
+				},
+				mapping: {},
 			},
-			mapping: {},
-		}, 'user')!.layout;
+			'user',
+		)!.layout;
 	}
 	if ('name' in layout) {
-		expectKeyboardLayoutKeys(layout, ['id', 'isUSStandard', 'isUserKeyboardLayout', 'name', 'text'], 'Windows keyboard layout info');
+		expectKeyboardLayoutKeys(
+			layout,
+			['id', 'isUSStandard', 'isUserKeyboardLayout', 'name', 'text'],
+			'Windows keyboard layout info',
+		);
 		return createLayoutInfo(
 			expectBoundedString(layout.name, 'layout.name'),
 			expectBoundedString(layout.text, 'layout.text'),
@@ -89,7 +93,11 @@ function normalizeUserLayoutInfo(value: unknown): IKeyboardLayoutInfo {
 		);
 	}
 	if ('lang' in layout) {
-		expectKeyboardLayoutKeys(layout, ['id', 'isUSStandard', 'isUserKeyboardLayout', 'lang', 'localizedName'], 'macOS keyboard layout info');
+		expectKeyboardLayoutKeys(
+			layout,
+			['id', 'isUSStandard', 'isUserKeyboardLayout', 'lang', 'localizedName'],
+			'macOS keyboard layout info',
+		);
 		const id = expectBoundedString(layout.id, 'layout.id');
 		return createLayoutInfo(
 			id,
@@ -101,15 +109,14 @@ function normalizeUserLayoutInfo(value: unknown): IKeyboardLayoutInfo {
 		);
 	}
 	if ('layout' in layout) {
-		expectKeyboardLayoutKeys(layout, ['group', 'isUSStandard', 'isUserKeyboardLayout', 'layout', 'model', 'options', 'rules', 'variant'], 'Linux keyboard layout info');
+		expectKeyboardLayoutKeys(
+			layout,
+			['group', 'isUSStandard', 'isUserKeyboardLayout', 'layout', 'model', 'options', 'rules', 'variant'],
+			'Linux keyboard layout info',
+		);
 		const id = expectBoundedString(layout.layout, 'layout.layout');
 		const variant = layout.variant === undefined ? '' : expectBoundedString(layout.variant, 'layout.variant', true);
-		return createLayoutInfo(
-			id,
-			variant ? `${id} (${variant})` : id,
-			OperatingSystem.Linux,
-			layout.isUSStandard,
-		);
+		return createLayoutInfo(id, variant ? `${id} (${variant})` : id, OperatingSystem.Linux, layout.isUSStandard);
 	}
 	throw new TypeError('user keyboard layout info does not identify a supported platform');
 }

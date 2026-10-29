@@ -5,18 +5,19 @@ import type { IColorTheme } from '../../../../platform/theme/common/themeService
 
 /** CSS emitted by the theme service, also used by pre-workbench window hosts. */
 export class CSSValue {
-	constructor(readonly code: string) { }
+	constructor(readonly code: string) {}
 }
 
 /** Serializes a resolved theme without retaining a document or mutating its nodes. */
 export function generateColorThemeCSS(theme: IColorTheme, scopeSelector: string): CSSValue {
-	const declarations = theme.colorEntries.map(({ id, value }) =>
-		`${colorCssVariable(id)}: ${value?.toString() ?? 'initial'};`);
+	const declarations = theme.colorEntries.map(
+		({ id, value }) => `${colorCssVariable(id)}: ${value?.toString() ?? 'initial'};`,
+	);
 	for (const { id, value } of theme.sizeEntries) {
 		declarations.push(`${asCssVariableName(id)}: ${sizeValueToCss(value)};`);
 	}
-	const highContrast = theme.colorScheme === ColorScheme.HighContrastDark
-		|| theme.colorScheme === ColorScheme.HighContrastLight;
+	const highContrast =
+		theme.colorScheme === ColorScheme.HighContrastDark || theme.colorScheme === ColorScheme.HighContrastLight;
 	declarations.push(
 		`color-scheme: ${isDarkColorScheme(theme.colorScheme) ? 'dark' : 'light'};`,
 		`forced-color-adjust: ${highContrast ? 'none' : 'auto'};`,

@@ -3,7 +3,11 @@ import { h } from '../../../../base/browser/dom.js';
 import { WorkbenchToolBar } from '../../../../platform/actions/browser/toolbar.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import { localize } from '../../../../nls.js';
-import { ViewPane, type IViewPaneOptions, type PartTitleProjection } from '../../../../workbench/browser/parts/views/viewPane.js';
+import {
+	ViewPane,
+	type IViewPaneOptions,
+	type PartTitleProjection,
+} from '../../../../workbench/browser/parts/views/viewPane.js';
 import { ExplorerView } from '../../../../workbench/contrib/files/browser/views/explorerView.js';
 
 // Explorer commands resolve this identity in each window's separate view catalog.
@@ -26,14 +30,16 @@ export class SessionsExplorerView extends ExplorerView {
 			const updateActions = (): void => {
 				const label = localize('sessions.files.collapseFolders', 'Collapse folders');
 				actions.element.setAttribute('aria-label', localize('sessions.files.actions', 'Files actions'));
-				actions.setActions([{
-					id: 'sessions.files.action.collapseExplorerFolders',
-					label,
-					tooltip: label,
-					icon: Lxicon.chevronUp,
-					enabled: true,
-					run: () => this.commandService.executeCommand('sessions.files.action.collapseExplorerFolders'),
-				}]);
+				actions.setActions([
+					{
+						id: 'sessions.files.action.collapseExplorerFolders',
+						label,
+						tooltip: label,
+						icon: Lxicon.chevronUp,
+						enabled: true,
+						run: () => this.commandService.executeCommand('sessions.files.action.collapseExplorerFolders'),
+					},
+				]);
 			};
 			updateActions();
 		}

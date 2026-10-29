@@ -10,13 +10,15 @@ import { remotePortForwardingChannel } from '../../../../../platform/remote/elec
 import { SshPortForwardingService } from '../../../../../platform/remote/electron-main/sshPortForwardingService.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { IMainProcessService } from '../../../../../platform/ipc/common/mainProcessService.js';
-import type { SshPortForward as Forward, SshPortForwardChange as ForwardChange } from '../../../../../platform/remote/electron-main/sshPortForwardingService.js';
+import type {
+	SshPortForward as Forward,
+	SshPortForwardChange as ForwardChange,
+} from '../../../../../platform/remote/electron-main/sshPortForwardingService.js';
 import { TunnelPrivacyId, type RemoteTunnel } from '../../../../../platform/tunnel/common/tunnel.js';
 import { resetNlsResolver, setNlsMessages } from '../../../../../nls.js';
 import { TunnelService } from '../../electron-browser/tunnelService.js';
 import chinese from '../../../../../../../extensions/language-pack-zh-cn/translations/workbench.json' with { type: 'json' };
 import { ITunnelService } from '../../../../../platform/tunnel/common/tunnel.js';
-
 
 test('Tunnel handles share a forward and release the process after the last reference', async () => {
 	using api = new TestChannelOwner();
@@ -25,9 +27,15 @@ test('Tunnel handles share a forward and release the process after the last refe
 	using service = services.createInstance(TunnelService);
 	const first = await open(service);
 	const second = await open(service);
-	assert.deepEqual({ host: first.tunnelRemoteHost, port: first.tunnelRemotePort, localAddress: first.localAddress, privacy: first.privacy }, {
-		host: '127.0.0.1', port: 3000, localAddress: '127.0.0.1:13000', privacy: TunnelPrivacyId.ConstantPrivate,
-	});
+	assert.deepEqual(
+		{
+			host: first.tunnelRemoteHost,
+			port: first.tunnelRemotePort,
+			localAddress: first.localAddress,
+			privacy: first.privacy,
+		},
+		{ host: '127.0.0.1', port: 3000, localAddress: '127.0.0.1:13000', privacy: TunnelPrivacyId.ConstantPrivate },
+	);
 	await first.dispose();
 	assert.deepEqual(api.closed, []);
 	await second.dispose();
@@ -45,7 +53,9 @@ test('Tunnel events keep recovery state and a stale list cannot resurrect a remo
 	using opened = service.onTunnelOpened(tunnel => events.push(tunnel.state));
 	using closed = service.onTunnelClosed(address => events.push(address));
 	let reply!: (value: readonly Forward[]) => void;
-	api.nextList = new Promise(resolve => { reply = resolve; });
+	api.nextList = new Promise(resolve => {
+		reply = resolve;
+	});
 	const pending = service.tunnels;
 	api.upsert({ ...api.forward!, state: 'recovering' });
 	await api.close('one');
@@ -76,8 +86,13 @@ test('Unsupported Tunnel options are rejected before IPC and use Chinese localiz
 	setNlsMessages('zh-CN', chinese);
 	try {
 		assert.equal(await service.openTunnel(undefined, '0.0.0.0', 3000), chinese.ash['tunnel.unsupportedOptions']);
-		assert.equal(await service.openTunnel(undefined, 'localhost', 3000, undefined, 3000), chinese.ash['tunnel.unsupportedOptions']);
-		await assert.rejects(service.openTunnel(undefined, 'localhost', 0), { message: chinese.ash['tunnel.invalidPort'] });
+		assert.equal(
+			await service.openTunnel(undefined, 'localhost', 3000, undefined, 3000),
+			chinese.ash['tunnel.unsupportedOptions'],
+		);
+		await assert.rejects(service.openTunnel(undefined, 'localhost', 0), {
+			message: chinese.ash['tunnel.invalidPort'],
+		});
 		assert.equal(api.opens, 0);
 	} finally {
 		resetNlsResolver();
@@ -123,7 +138,9 @@ test('Concurrent Tunnel opens share one startup and keep independent leases', as
 	registerMainProcess(services, api);
 	using service = services.createInstance(TunnelService);
 	let finish!: () => void;
-	api.pendingOpen = new Promise(resolve => { finish = resolve; });
+	api.pendingOpen = new Promise(resolve => {
+		finish = resolve;
+	});
 	const first = open(service);
 	const second = open(service);
 	assert.equal(api.opens, 1);
@@ -141,7 +158,9 @@ test('Desktop service disposal releases a late open result without publishing a 
 	registerMainProcess(services, api);
 	using service = services.createInstance(TunnelService);
 	let finish!: () => void;
-	api.pendingOpen = new Promise(resolve => { finish = resolve; });
+	api.pendingOpen = new Promise(resolve => {
+		finish = resolve;
+	});
 	const opening = service.openTunnel(undefined, 'localhost', 3000);
 	service.dispose();
 	finish();
@@ -154,7 +173,9 @@ test('Desktop TunnelService rejects malformed Main tunnel data before exposing h
 	using services = new InstantiationService();
 	registerMainProcess(services, api);
 	using service = services.createInstance(TunnelService);
-	api.nextList = Promise.resolve([{ id: 'unsafe', remoteHost: '0.0.0.0', remotePort: 3000, localPort: 13000, state: 'open' }] as unknown as Forward[]);
+	api.nextList = Promise.resolve([
+		{ id: 'unsafe', remoteHost: '0.0.0.0', remotePort: 3000, localPort: 13000, state: 'open' },
+	] as unknown as Forward[]);
 	await assert.rejects(service.tunnels, /Invalid Remote tunnel reply/);
 	assert.deepEqual(await service.tunnels, []);
 });
@@ -163,58 +184,75 @@ test('Desktop tunnels cross the Main channel into the window SSH owner and close
 	using resources = new DisposableStore();
 	const children: TestSshChild[] = [];
 	const hosts: string[] = [];
-	const owner = (host: string): SshPortForwardingService => resources.add(new SshPortForwardingService({
-		getWorkspace: () => ({ id: host, remoteAuthority: `ssh+${host}` }),
-		sshExecutable: 'ssh',
-		localEnvironment: { SSH_AUTH_SOCK: '/private/agent.sock' },
-		reserveLocalPort: async () => 13000,
-		spawnProcess: (_executable, args) => {
-			hosts.push(args.at(-1)!);
-			const child = new TestSshChild();
-			children.push(child);
-			return child as unknown as ChildProcess;
-		},
-		probeLoopbackListener: async () => 'ready',
-	}));
+	const owner = (host: string): SshPortForwardingService =>
+		resources.add(
+			new SshPortForwardingService({
+				getWorkspace: () => ({ id: host, remoteAuthority: `ssh+${host}` }),
+				sshExecutable: 'ssh',
+				localEnvironment: { SSH_AUTH_SOCK: '/private/agent.sock' },
+				reserveLocalPort: async () => 13000,
+				spawnProcess: (_executable, args) => {
+					hosts.push(args.at(-1)!);
+					const child = new TestSshChild();
+					children.push(child);
+					return child as unknown as ChildProcess;
+				},
+				probeLoopbackListener: async () => 'ready',
+			}),
+		);
 	const firstOwner = owner('first-host');
 	const secondOwner = owner('second-host');
 	const otherForward = await secondOwner.open({ remotePort: 3000 });
 	const rendererMessages = resources.add(new Emitter<VSBuffer>());
 	const mainMessages = resources.add(new Emitter<VSBuffer>());
-	const renderer = resources.add(new IPCClient({
-		onMessage: rendererMessages.event,
-		send: buffer => queueMicrotask(() => mainMessages.fire(buffer)),
-	}, 'renderer'));
-	const main = resources.add(new IPCClient({
-		onMessage: mainMessages.event,
-		send: buffer => queueMicrotask(() => rendererMessages.fire(buffer)),
-	}, 'window:1'));
-	main.registerChannel('remotePortForwarding', remotePortForwardingChannel(context => {
-		assert.equal(context, 'window:1');
-		return firstOwner;
-	}));
+	const renderer = resources.add(
+		new IPCClient(
+			{ onMessage: rendererMessages.event, send: buffer => queueMicrotask(() => mainMessages.fire(buffer)) },
+			'renderer',
+		),
+	);
+	const main = resources.add(
+		new IPCClient(
+			{ onMessage: mainMessages.event, send: buffer => queueMicrotask(() => rendererMessages.fire(buffer)) },
+			'window:1',
+		),
+	);
+	main.registerChannel(
+		'remotePortForwarding',
+		remotePortForwardingChannel(context => {
+			assert.equal(context, 'window:1');
+			return firstOwner;
+		}),
+	);
 	using services = new InstantiationService();
 	services.registerInstance(IMainProcessService, {
 		_serviceBrand: undefined,
 		getChannel: name => renderer.getChannel(name),
-		registerChannel: () => { throw new Error('Unexpected registration'); },
+		registerChannel: () => {
+			throw new Error('Unexpected registration');
+		},
 	});
 	using service = services.createInstance(TunnelService);
 	const opened: string[] = [];
 	using listener = service.onTunnelOpened(tunnel => opened.push(tunnel.localAddress));
 	const tunnel = await open(service);
-	assert.deepEqual({ hosts, opened, localAddress: tunnel.localAddress }, {
-		hosts: ['second-host', 'first-host'], opened: ['127.0.0.1:13000'], localAddress: '127.0.0.1:13000',
-	});
+	assert.deepEqual(
+		{ hosts, opened, localAddress: tunnel.localAddress },
+		{ hosts: ['second-host', 'first-host'], opened: ['127.0.0.1:13000'], localAddress: '127.0.0.1:13000' },
+	);
 	const channel = renderer.getChannel('remotePortForwarding');
-	await assert.rejects(channel.call('ash:remote:tunnel:open', { remotePort: 3000, window: 'window:2' }), /exactly required keys/);
+	await assert.rejects(
+		channel.call('ash:remote:tunnel:open', { remotePort: 3000, window: 'window:2' }),
+		/exactly required keys/,
+	);
 	await assert.rejects(channel.call('ash:remote:tunnel:open', { remotePort: 0 }), /positive/);
 	await assert.rejects(channel.call('ash:remote:tunnel:list', { host: 'second-host' }), /does not accept parameters/);
 	await tunnel.dispose();
 	assert.deepEqual(await service.tunnels, []);
-	assert.deepEqual({ firstExit: children[1]?.exitCode, otherExit: children[0]?.exitCode, otherTunnels: await secondOwner.list() }, {
-		firstExit: 0, otherExit: null, otherTunnels: [otherForward],
-	});
+	assert.deepEqual(
+		{ firstExit: children[1]?.exitCode, otherExit: children[0]?.exitCode, otherTunnels: await secondOwner.list() },
+		{ firstExit: 0, otherExit: null, otherTunnels: [otherForward] },
+	);
 });
 
 class TestSshChild extends EventEmitter {
@@ -253,10 +291,18 @@ class TestChannelOwner extends Disposable {
 		return pending ?? Promise.resolve(this.forward ? [this.forward] : []);
 	}
 
-	public async open(request: { remotePort: number; }): Promise<Forward> {
+	public async open(request: { remotePort: number }): Promise<Forward> {
 		this.opens++;
 		await this.pendingOpen;
-		const forward = this.forward ?? { id: this.nextId, remoteHost: '127.0.0.1', remotePort: request.remotePort, localPort: 13000, state: 'open' } as const;
+		const forward =
+			this.forward ??
+			({
+				id: this.nextId,
+				remoteHost: '127.0.0.1',
+				remotePort: request.remotePort,
+				localPort: 13000,
+				state: 'open',
+			} as const);
 		this.upsert(forward);
 		return forward;
 	}
@@ -296,10 +342,15 @@ function registerMainProcess(services: InstantiationService, owner: TestChannelO
 			return {
 				call: async <T>(command: string, value?: unknown): Promise<T> => {
 					switch (command) {
-						case 'ash:remote:tunnel:list': return await owner.list() as T;
-						case 'ash:remote:tunnel:open': return await owner.open(value as { remotePort: number; }) as T;
-						case 'ash:remote:tunnel:close': await owner.close((value as { id: string; }).id); return undefined as T;
-						default: throw new Error('Unexpected tunnel call');
+						case 'ash:remote:tunnel:list':
+							return (await owner.list()) as T;
+						case 'ash:remote:tunnel:open':
+							return (await owner.open(value as { remotePort: number })) as T;
+						case 'ash:remote:tunnel:close':
+							await owner.close((value as { id: string }).id);
+							return undefined as T;
+						default:
+							throw new Error('Unexpected tunnel call');
 					}
 				},
 				listen: <T>(event: string) => {
@@ -308,7 +359,9 @@ function registerMainProcess(services: InstantiationService, owner: TestChannelO
 				},
 			};
 		},
-		registerChannel: () => { throw new Error('Unexpected channel registration'); },
+		registerChannel: () => {
+			throw new Error('Unexpected channel registration');
+		},
 	});
 }
 
@@ -325,15 +378,21 @@ function fixture() {
 			return child as unknown as ChildProcess;
 		},
 		probeLoopbackListener: async () => 'ready',
-		wait: async () => { },
+		wait: async () => {},
 	});
 	const channel = remotePortForwardingChannel(() => host);
-	const call = <T>(method: string, params?: unknown): Promise<T> => channel.call<T>('window:1', `ash:remote:tunnel:${method}`, params);
+	const call = <T>(method: string, params?: unknown): Promise<T> =>
+		channel.call<T>('window:1', `ash:remote:tunnel:${method}`, params);
 	const services = new InstantiationService();
 	services.registerInstance(IMainProcessService, {
 		_serviceBrand: undefined,
-		getChannel: () => ({ call: <T>(command: string, value?: unknown) => channel.call<T>('window:1', command, value), listen: <T>(event: string) => channel.listen<T>('window:1', event) }),
-		registerChannel: () => { throw new Error('Unexpected channel registration'); },
+		getChannel: () => ({
+			call: <T>(command: string, value?: unknown) => channel.call<T>('window:1', command, value),
+			listen: <T>(event: string) => channel.listen<T>('window:1', event),
+		}),
+		registerChannel: () => {
+			throw new Error('Unexpected channel registration');
+		},
 	});
 	const tunnel = services.createInstance(TunnelService);
 	services.registerInstance(ITunnelService, tunnel);
@@ -376,7 +435,7 @@ test('Workbench catalog reads acquire no references and Stop invalidates every a
 	await handle.dispose();
 	assert.deepEqual(await f.tunnel.tunnels, []);
 	assert.equal(await f.tunnel.getExistingTunnel('localhost', 3000), undefined);
-	assert.equal(typeof await f.tunnel.openTunnel(undefined, 'public.example', 3000), 'string');
+	assert.equal(typeof (await f.tunnel.openTunnel(undefined, 'public.example', 3000)), 'string');
 	assert.equal(f.children.length, 1);
 	const replacement = await f.tunnel.openTunnel(undefined, 'localhost', 3000);
 	assert.ok(replacement && typeof replacement !== 'string');

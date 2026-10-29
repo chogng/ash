@@ -51,8 +51,17 @@ for (const reverse of [false, true]) {
 			const ids = styles.map(style => cache.getOrCreateEntry(...style));
 			assert.notEqual(ids[0], ids[1]);
 			for (let index = 0; index < styles.length; index++) {
-				const [color, bold, opacity, strikethrough, strikethroughThickness, strikethroughColor] = styles[index]!;
-				assert.deepEqual(cache.getStyleSet(ids[index]!), { id: ids[index], color, bold, opacity, strikethrough, strikethroughThickness, strikethroughColor });
+				const [color, bold, opacity, strikethrough, strikethroughThickness, strikethroughColor] =
+					styles[index]!;
+				assert.deepEqual(cache.getStyleSet(ids[index]!), {
+					id: ids[index],
+					color,
+					bold,
+					opacity,
+					strikethrough,
+					strikethroughThickness,
+					strikethroughColor,
+				});
 				assert.equal(cache.getOrCreateEntry(...styles[index]!), ids[index]);
 			}
 		}
@@ -66,9 +75,15 @@ test('BufferDirtyTracker exposes one inclusive dirty range', () => {
 	tracker.flag(8, 3);
 	tracker.flag(2, 2);
 
-	assert.deepEqual({ offset: tracker.dataOffset, size: tracker.dirtySize, dirty: tracker.isDirty }, { offset: 2, size: 9, dirty: true });
+	assert.deepEqual(
+		{ offset: tracker.dataOffset, size: tracker.dirtySize, dirty: tracker.isDirty },
+		{ offset: 2, size: 9, dirty: true },
+	);
 	tracker.clear();
-	assert.deepEqual({ offset: tracker.dataOffset, size: tracker.dirtySize, dirty: tracker.isDirty }, { offset: undefined, size: undefined, dirty: false });
+	assert.deepEqual(
+		{ offset: tracker.dataOffset, size: tracker.dirtySize, dirty: tracker.isDirty },
+		{ offset: undefined, size: undefined, dirty: false },
+	);
 });
 
 test('ObjectCollectionBuffer grows and compacts managed entries', () => {
@@ -97,25 +112,55 @@ test('ContentSegmenter returns one entry for a complete grapheme', () => {
 });
 
 for (const [property, value] of [
-	['color', 0], ['bold', false], ['opacity', 0], ['strikethrough', false],
-	['strikethroughThickness', 0], ['strikethroughColor', 0],
+	['color', 0],
+	['bold', false],
+	['opacity', 0],
+	['strikethrough', false],
+	['strikethroughThickness', 0],
+	['strikethroughColor', 0],
 ] as const) {
 	for (const explicitFirst of [false, true]) {
 		test(`GPU style cache preserves inherited and explicit ${property} (explicit first: ${explicitFirst})`, () => {
 			const cache = new DecorationStyleCache();
 			// Keep both entries non-empty so the inherited entry also goes through the cache.
 			const inherited: IDecorationStyleSet = {
-				color: undefined, bold: undefined, opacity: 1, strikethrough: undefined,
-				strikethroughThickness: undefined, strikethroughColor: undefined,
+				color: undefined,
+				bold: undefined,
+				opacity: 1,
+				strikethrough: undefined,
+				strikethroughThickness: undefined,
+				strikethroughColor: undefined,
 			};
-			if (property === 'opacity') { inherited.color = 0x123456ff; inherited.opacity = undefined; }
+			if (property === 'opacity') {
+				inherited.color = 0x123456ff;
+				inherited.opacity = undefined;
+			}
 			const explicit = { ...inherited, [property]: value };
 			const styles = explicitFirst ? [explicit, inherited] : [inherited, explicit];
-			const ids = styles.map(style => cache.getOrCreateEntry(style.color, style.bold, style.opacity, style.strikethrough, style.strikethroughThickness, style.strikethroughColor));
+			const ids = styles.map(style =>
+				cache.getOrCreateEntry(
+					style.color,
+					style.bold,
+					style.opacity,
+					style.strikethrough,
+					style.strikethroughThickness,
+					style.strikethroughColor,
+				),
+			);
 			assert.notEqual(ids[0], ids[1]);
 			for (const [index, style] of styles.entries()) {
 				assert.deepEqual(cache.getStyleSet(ids[index]!), { id: ids[index], ...style });
-				assert.equal(cache.getOrCreateEntry(style.color, style.bold, style.opacity, style.strikethrough, style.strikethroughThickness, style.strikethroughColor), ids[index]);
+				assert.equal(
+					cache.getOrCreateEntry(
+						style.color,
+						style.bold,
+						style.opacity,
+						style.strikethrough,
+						style.strikethroughThickness,
+						style.strikethroughColor,
+					),
+					ids[index],
+				);
 			}
 			assert.equal(cache.getOrCreateEntry(undefined, undefined, undefined, undefined, undefined, undefined), 0);
 			assert.equal(cache.getStyleSet(0), undefined);
@@ -127,18 +172,35 @@ test('Full-file GPU strategy writes canonical cells and draws from the document 
 	const { FullFileRenderStrategy } = await import('../../browser/gpu/renderStrategy/fullFileRenderStrategy.js');
 	withGpuBufferUsage(() => {
 		const harness = createStrategyHarness();
-		using strategy = new FullFileRenderStrategy(harness.context, harness.gpuContext, harness.device, { value: harness.rasterizer });
+		using strategy = new FullFileRenderStrategy(harness.context, harness.gpuContext, harness.device, {
+			value: harness.rasterizer,
+		});
 		const viewportData = viewport(['ab'], 4, 7);
 
 		const objectCount = strategy.update(viewportData, viewLineOptions());
 		const cellWrite = harness.writes.find(write => write.label === 'Ash full-file GPU cells');
 		assert.equal(objectCount, FullFileRenderStrategy.maxSupportedColumns);
-		assert.equal(cellWrite?.offset, 3 * 6 * FullFileRenderStrategy.maxSupportedColumns * Float32Array.BYTES_PER_ELEMENT);
+		assert.equal(
+			cellWrite?.offset,
+			3 * 6 * FullFileRenderStrategy.maxSupportedColumns * Float32Array.BYTES_PER_ELEMENT,
+		);
 		assert.deepEqual(cellWrite?.values.slice(0, 12), [0, 13, 0, 0, 1, 0, 8, 13, 0, 0, 1, 0]);
 
 		let drawArguments: readonly number[] | undefined;
-		strategy.draw({ draw: (...args: number[]) => { drawArguments = args; } } as unknown as GPURenderPassEncoder, viewportData);
-		assert.deepEqual(drawArguments, [6, FullFileRenderStrategy.maxSupportedColumns, 0, 3 * FullFileRenderStrategy.maxSupportedColumns]);
+		strategy.draw(
+			{
+				draw: (...args: number[]) => {
+					drawArguments = args;
+				},
+			} as unknown as GPURenderPassEncoder,
+			viewportData,
+		);
+		assert.deepEqual(drawArguments, [
+			6,
+			FullFileRenderStrategy.maxSupportedColumns,
+			0,
+			3 * FullFileRenderStrategy.maxSupportedColumns,
+		]);
 	});
 });
 
@@ -146,25 +208,17 @@ test('Viewport GPU strategy preserves tab stops and complete grapheme cells', as
 	const { ViewportRenderStrategy } = await import('../../browser/gpu/renderStrategy/viewportRenderStrategy.js');
 	withGpuBufferUsage(() => {
 		const harness = createStrategyHarness();
-		using strategy = new ViewportRenderStrategy(harness.context, harness.gpuContext, harness.device, { value: harness.rasterizer });
+		using strategy = new ViewportRenderStrategy(harness.context, harness.gpuContext, harness.device, {
+			value: harness.rasterizer,
+		});
 		const content = 'a\t👩‍💻b';
 		const objectCount = strategy.update(viewport([content]), viewLineOptions());
 		const cellWrite = [...harness.writes].reverse().find(write => write.label === 'Ash viewport GPU cells');
 		const cells = cellWrite!.values;
 
 		assert.equal(objectCount, ViewportRenderStrategy.maxSupportedColumns);
-		assert.deepEqual([
-			cells[0],
-			cells[2 * 6],
-			cells[3 * 6],
-			cells[7 * 6],
-		], [0, 32, 0, 40]);
-		assert.deepEqual([
-			cells[4],
-			cells[2 * 6 + 4],
-			cells[3 * 6 + 4],
-			cells[7 * 6 + 4],
-		], [1, 1, 0, 1]);
+		assert.deepEqual([cells[0], cells[2 * 6], cells[3 * 6], cells[7 * 6]], [0, 32, 0, 40]);
+		assert.deepEqual([cells[4], cells[2 * 6 + 4], cells[3 * 6 + 4], cells[7 * 6 + 4]], [1, 1, 0, 1]);
 	});
 });
 
@@ -173,76 +227,121 @@ test('GPU strategies send semantic colors and font styles to the glyph atlas', a
 	const { FullFileRenderStrategy } = await import('../../browser/gpu/renderStrategy/fullFileRenderStrategy.js');
 	const { ViewGpuContext } = await import('../../browser/gpu/viewGpuContext.js');
 	const theme = createColorTheme({
-		id: 'gpu-semantic-test', label: 'GPU semantic test', colorScheme: ColorScheme.Dark, semanticTokenRules: [
-			{ selector: 'variable', type: 'variable', modifiers: [], foreground: '#123456', fontStyle: 'italic underline' },
-		]
+		id: 'gpu-semantic-test',
+		label: 'GPU semantic test',
+		colorScheme: ColorScheme.Dark,
+		semanticTokenRules: [
+			{
+				selector: 'variable',
+				type: 'variable',
+				modifiers: [],
+				foreground: '#123456',
+				fontStyle: 'italic underline',
+			},
+		],
 	});
 	const resolver = new SemanticTokenStyleResolver(theme, true);
 	withGpuBufferUsage(() => {
 		for (const Strategy of [ViewportRenderStrategy, FullFileRenderStrategy]) {
 			const harness = createStrategyHarness();
 			Object.assign(harness.gpuContext, {
-				getSemanticTokens: () => [{ startColumn: 1, endColumn: 2, semanticType: 'variable', semanticModifiers: [] }],
+				getSemanticTokens: () => [
+					{ startColumn: 1, endColumn: 2, semanticType: 'variable', semanticModifiers: [] },
+				],
 				resolveSemanticStyle: resolver.resolve.bind(resolver),
 			});
-			using strategy = new Strategy(harness.context, harness.gpuContext, harness.device, { value: harness.rasterizer });
+			using strategy = new Strategy(harness.context, harness.gpuContext, harness.device, {
+				value: harness.rasterizer,
+			});
 			strategy.update(viewport(['ab']), viewLineOptions());
 			assert.equal(harness.glyphs.length, 2);
 			assert.equal(harness.glyphs[0]?.styleSetId, 0);
-			assert.equal(TokenMetadata.getFontStyle(harness.glyphs[1]!.metadata), FontStyle.Italic | FontStyle.Underline);
-			assert.equal(ViewGpuContext.decorationStyleCache.getStyleSet(harness.glyphs[1]!.styleSetId)?.color, 0x123456ff);
+			assert.equal(
+				TokenMetadata.getFontStyle(harness.glyphs[1]!.metadata),
+				FontStyle.Italic | FontStyle.Underline,
+			);
+			assert.equal(
+				ViewGpuContext.decorationStyleCache.getStyleSet(harness.glyphs[1]!.styleSetId)?.color,
+				0x123456ff,
+			);
 		}
 	});
 });
 
 test('semantic GPU rules follow type, modifier, language, and highlighting preference', () => {
 	const theme = createColorTheme({
-		id: 'gpu-semantic-specificity', label: 'GPU semantic specificity', colorScheme: ColorScheme.Dark, semanticTokenRules: [
+		id: 'gpu-semantic-specificity',
+		label: 'GPU semantic specificity',
+		colorScheme: ColorScheme.Dark,
+		semanticTokenRules: [
 			{ selector: '*.declaration', type: '*', modifiers: ['declaration'], foreground: '#112233' },
 			{ selector: 'variable', type: 'variable', modifiers: [], foreground: '#445566' },
-			{ selector: 'variable.declaration:typescript', type: 'variable', modifiers: ['declaration'], language: 'typescript', foreground: '#778899', fontStyle: 'bold' },
-		]
+			{
+				selector: 'variable.declaration:typescript',
+				type: 'variable',
+				modifiers: ['declaration'],
+				language: 'typescript',
+				foreground: '#778899',
+				fontStyle: 'bold',
+			},
+		],
 	});
-	const token = { startColumn: 0, endColumn: 1, semanticType: 'variable', semanticModifiers: ['declaration'], semanticLanguage: 'typescript' };
+	const token = {
+		startColumn: 0,
+		endColumn: 1,
+		semanticType: 'variable',
+		semanticModifiers: ['declaration'],
+		semanticLanguage: 'typescript',
+	};
 	const enabled = new SemanticTokenStyleResolver(theme, true).resolve(token, 0);
 	const disabled = new SemanticTokenStyleResolver(theme, false).resolve(token, 0);
-	assert.deepEqual({ color: enabled.color, style: TokenMetadata.getFontStyle(enabled.tokenMetadata) }, { color: 0x778899ff, style: FontStyle.Bold });
+	assert.deepEqual(
+		{ color: enabled.color, style: TokenMetadata.getFontStyle(enabled.tokenMetadata) },
+		{ color: 0x778899ff, style: FontStyle.Bold },
+	);
 	assert.deepEqual(disabled, { tokenMetadata: 0, color: undefined });
 });
 
 test('Rectangle GPU rendering draws a clear pass into the caller-owned frame', async () => {
-	const installedUsage = installEditorTestGlobals({ GPUBufferUsage: { COPY_DST: 1, STORAGE: 2, UNIFORM: 4, VERTEX: 8 } });
+	const installedUsage = installEditorTestGlobals({
+		GPUBufferUsage: { COPY_DST: 1, STORAGE: 2, UNIFORM: 4, VERTEX: 8 },
+	});
 	const passes: GPURenderPassDescriptor[] = [];
 	const ready = new DeferredPromise<void>();
 	let ended = false;
 	const device = {
-		lost: new Promise<GPUDeviceLostInfo>(() => { }),
-		queue: {
-			writeBuffer: () => undefined,
-			submit: () => undefined,
-		},
+		lost: new Promise<GPUDeviceLostInfo>(() => {}),
+		queue: { writeBuffer: () => undefined, submit: () => undefined },
 		createBuffer: () => ({ destroy: () => undefined }),
 		createShaderModule: () => ({}),
 		createRenderPipeline: () => ({ getBindGroupLayout: () => ({}) }),
-		createBindGroup: () => { void ready.complete(); return {}; },
+		createBindGroup: () => {
+			void ready.complete();
+			return {};
+		},
 		createCommandEncoder: () => encoder,
 	} as unknown as GPUDevice;
 	const encoder = {
 		beginRenderPass: (descriptor: GPURenderPassDescriptor) => {
 			passes.push(descriptor);
-			return { end: () => { ended = true; } };
+			return {
+				end: () => {
+					ended = true;
+				},
+			};
 		},
 		finish: () => ({}),
 	} as unknown as GPUCommandEncoder;
 	const view = {} as GPUTextureView;
 	let eventHandlerCount = 0;
 	const context = {
-		addEventHandler: () => { eventHandlerCount++; },
-		removeEventHandler: () => { eventHandlerCount--; },
-		viewLayout: {
-			getCurrentScrollLeft: () => 10,
-			getCurrentScrollTop: () => 20,
+		addEventHandler: () => {
+			eventHandlerCount++;
 		},
+		removeEventHandler: () => {
+			eventHandlerCount--;
+		},
+		viewLayout: { getCurrentScrollLeft: () => 10, getCurrentScrollTop: () => 20 },
 	} as unknown as ViewContext;
 	const canvas = h(browserEnvironment.window.document, 'canvas');
 	canvas.width = 800;
@@ -253,32 +352,44 @@ test('Rectangle GPU rendering draws a clear pass into the caller-owned frame', a
 	});
 	let configured = false;
 	const canvasContext = {
-		configure: () => { configured = true; },
+		configure: () => {
+			configured = true;
+		},
 		getCurrentTexture: () => ({ createView: () => view }),
 	} as unknown as GPUCanvasContext;
 
 	try {
-		const renderer = new RectangleRenderer(context, observableValue('contentLeft', 0), observableValue('devicePixelRatio', 1), canvas, canvasContext, Promise.resolve(device));
+		const renderer = new RectangleRenderer(
+			context,
+			observableValue('contentLeft', 0),
+			observableValue('devicePixelRatio', 1),
+			canvas,
+			canvasContext,
+			Promise.resolve(device),
+		);
 		await ready.p;
 		assert.equal(eventHandlerCount, 1);
 		assert.equal(configured, true);
 		renderer.draw({ bigNumbersDelta: 0 } as ViewportData);
 		const attachment = [...(passes[0]?.colorAttachments ?? [])][0] as GPURenderPassColorAttachment | undefined;
-		assert.deepEqual({
-			passCount: passes.length,
-			view: attachment?.view,
-			loadOp: attachment?.loadOp,
-			storeOp: attachment?.storeOp,
-			clearValue: attachment?.clearValue,
-			ended,
-		}, {
-			passCount: 1,
-			view,
-			loadOp: 'clear',
-			storeOp: 'store',
-			clearValue: { r: 0, g: 0, b: 0, a: 0 },
-			ended: true,
-		});
+		assert.deepEqual(
+			{
+				passCount: passes.length,
+				view: attachment?.view,
+				loadOp: attachment?.loadOp,
+				storeOp: attachment?.storeOp,
+				clearValue: attachment?.clearValue,
+				ended,
+			},
+			{
+				passCount: 1,
+				view,
+				loadOp: 'clear',
+				storeOp: 'store',
+				clearValue: { r: 0, g: 0, b: 0, a: 0 },
+				ended: true,
+			},
+		);
 		renderer.dispose();
 		assert.equal(eventHandlerCount, 0);
 	} finally {
@@ -322,10 +433,12 @@ test('GPU initialization and canvas resizing request a fresh host frame and stop
 	try {
 		// This range belongs to the frame before the model was replaced.
 		view.renderText({
-			getViewLineRenderingData: () => { throw new RangeError('Stale viewport'); },
+			getViewLineRenderingData: () => {
+				throw new RangeError('Stale viewport');
+			},
 		} as unknown as ViewportData);
 		view.onDidRender();
-		await ready.complete({ lost: new Promise<GPUDeviceLostInfo>(() => { }) } as GPUDevice);
+		await ready.complete({ lost: new Promise<GPUDeviceLostInfo>(() => {}) } as GPUDevice);
 		await hostReady.p;
 		assert.deepEqual(
 			{ requests, dirty: view.shouldRender(), handlers: handlers.size },
@@ -366,12 +479,17 @@ for (const failure of ['initialization', 'device-loss'] as const) {
 		} as unknown as ViewContext;
 		ViewGpuContext.device = ready.p;
 		ViewGpuContext.deviceSync = undefined;
-		Object.defineProperty(ViewGpuContext, 'atlas', { configurable: true, get: () => ({ onDidDeleteGlyphs: deletedGlyphs.event }) });
+		Object.defineProperty(ViewGpuContext, 'atlas', {
+			configurable: true,
+			get: () => ({ onDidDeleteGlyphs: deletedGlyphs.event }),
+		});
 		const gpuContext = {
 			canvas: { domNode: h(browserEnvironment.window.document, 'canvas') },
 			canvasDevicePixelDimensions: observableValue('canvasDimensions', { width: 800, height: 300 }),
 			devicePixelRatio: observableValue('pixelRatio', 1),
-			dispose: () => { void fallback.complete(); },
+			dispose: () => {
+				void fallback.complete();
+			},
 		} as unknown as ViewGpuContext;
 		let requests = 0;
 		const view = new ViewLinesGpu(context, gpuContext, () => {
@@ -390,7 +508,11 @@ for (const failure of ['initialization', 'device-loss'] as const) {
 			assert.equal(requests, failure === 'initialization' ? 2 : 3);
 			assert.equal(view.shouldRender(), true);
 			assert.equal(view.getLineWidth(1), undefined);
-			view.renderText({ getViewLineRenderingData: () => { throw new Error('GPU rendering continued after fallback'); } } as unknown as ViewportData);
+			view.renderText({
+				getViewLineRenderingData: () => {
+					throw new Error('GPU rendering continued after fallback');
+				},
+			} as unknown as ViewportData);
 		} finally {
 			view.dispose();
 			ViewGpuContext.device = originalDevice;
@@ -407,11 +529,17 @@ test('ViewGpuContext exposes observable canvas geometry and releases view handle
 	const resizeCallbacks: ResizeObserverCallback[] = [];
 	let disconnected = false;
 	class TestResizeObserver implements ResizeObserver {
-		constructor(callback: ResizeObserverCallback) { resizeCallbacks.push(callback); }
-		public observe(): void { }
-		public unobserve(): void { }
-		public disconnect(): void { disconnected = true; }
-		public takeRecords(): ResizeObserverEntry[] { return []; }
+		constructor(callback: ResizeObserverCallback) {
+			resizeCallbacks.push(callback);
+		}
+		public observe(): void {}
+		public unobserve(): void {}
+		public disconnect(): void {
+			disconnected = true;
+		}
+		public takeRecords(): ResizeObserverEntry[] {
+			return [];
+		}
 	}
 	const canvasContext = { configure: () => undefined, unconfigure: () => undefined } as unknown as GPUCanvasContext;
 	const canvasPrototype = browserEnvironment.window.HTMLCanvasElement.prototype;
@@ -420,17 +548,17 @@ test('ViewGpuContext exposes observable canvas geometry and releases view handle
 	const originalGpu = Object.getOwnPropertyDescriptor(browserEnvironment.window.navigator, 'gpu');
 	Object.defineProperty(canvasPrototype, 'getContext', {
 		configurable: true,
-		value: (type: string) => type === 'webgpu' ? canvasContext : null,
+		value: (type: string) => (type === 'webgpu' ? canvasContext : null),
 	});
-	Object.defineProperty(browserEnvironment.window, 'ResizeObserver', { configurable: true, value: TestResizeObserver });
+	Object.defineProperty(browserEnvironment.window, 'ResizeObserver', {
+		configurable: true,
+		value: TestResizeObserver,
+	});
 	Object.defineProperty(browserEnvironment.window.navigator, 'gpu', {
 		configurable: true,
-		value: {
-			getPreferredCanvasFormat: () => 'bgra8unorm',
-			requestAdapter: () => pendingAdapter.p,
-		},
+		value: { getPreferredCanvasFormat: () => 'bgra8unorm', requestAdapter: () => pendingAdapter.p },
 	});
-	const configurationEmitter = new Emitter<{ hasChanged(option: EditorOption): boolean; }>();
+	const configurationEmitter = new Emitter<{ hasChanged(option: EditorOption): boolean }>();
 	const state = { contentLeft: 24, verticalScrollbarSize: 12 };
 	const handlers = new Set<object>();
 	const context = {
@@ -439,7 +567,8 @@ test('ViewGpuContext exposes observable canvas geometry and releases view handle
 			options: {
 				get(option: EditorOption) {
 					if (option === EditorOption.layoutInfo) return { contentLeft: state.contentLeft };
-					if (option === EditorOption.scrollbar) return { verticalScrollbarSize: state.verticalScrollbarSize };
+					if (option === EditorOption.scrollbar)
+						return { verticalScrollbarSize: state.verticalScrollbarSize };
 					throw new RangeError(`Unexpected editor option: ${option}`);
 				},
 			},
@@ -454,57 +583,78 @@ test('ViewGpuContext exposes observable canvas geometry and releases view handle
 		const { ViewGpuContext } = await import('../../browser/gpu/viewGpuContext.js');
 		const gpuContext = new ViewGpuContext(context);
 		browserEnvironment.window.document.body.append(gpuContext.canvas.domNode);
-		assert.deepEqual({
-			className: gpuContext.canvas.domNode.className,
-			ariaHidden: gpuContext.canvas.domNode.getAttribute('aria-hidden'),
-			context: gpuContext.ctx,
-			devicePixelRatio: gpuContext.devicePixelRatio.get(),
-			contentLeft: gpuContext.contentLeft.get(),
-			dimensions: gpuContext.canvasDevicePixelDimensions.get(),
-			paddingRight: gpuContext.canvas.domNode.style.paddingRight,
-			handlerCount: handlers.size,
-		}, {
-			className: 'stanza-editor-gpu-canvas',
-			ariaHidden: 'true',
-			context: canvasContext,
-			devicePixelRatio: 1,
-			contentLeft: 24,
-			dimensions: { width: 300, height: 150 },
-			paddingRight: '12px',
-			handlerCount: 2,
-		});
+		assert.deepEqual(
+			{
+				className: gpuContext.canvas.domNode.className,
+				ariaHidden: gpuContext.canvas.domNode.getAttribute('aria-hidden'),
+				context: gpuContext.ctx,
+				devicePixelRatio: gpuContext.devicePixelRatio.get(),
+				contentLeft: gpuContext.contentLeft.get(),
+				dimensions: gpuContext.canvasDevicePixelDimensions.get(),
+				paddingRight: gpuContext.canvas.domNode.style.paddingRight,
+				handlerCount: handlers.size,
+			},
+			{
+				className: 'stanza-editor-gpu-canvas',
+				ariaHidden: 'true',
+				context: canvasContext,
+				devicePixelRatio: 1,
+				contentLeft: 24,
+				dimensions: { width: 300, height: 150 },
+				paddingRight: '12px',
+				handlerCount: 2,
+			},
+		);
 
-		resizeCallbacks[0]!([{
-			target: gpuContext.canvas.domNode,
-			devicePixelContentBoxSize: [{ inlineSize: 640, blockSize: 480 }],
-		} as unknown as ResizeObserverEntry], {} as ResizeObserver);
+		resizeCallbacks[0]!(
+			[
+				{
+					target: gpuContext.canvas.domNode,
+					devicePixelContentBoxSize: [{ inlineSize: 640, blockSize: 480 }],
+				} as unknown as ResizeObserverEntry,
+			],
+			{} as ResizeObserver,
+		);
 		state.contentLeft = 40;
 		state.verticalScrollbarSize = 16;
-		configurationEmitter.fire({ hasChanged: option => option === EditorOption.layoutInfo || option === EditorOption.scrollbar });
-		assert.deepEqual({
-			dimensions: gpuContext.canvasDevicePixelDimensions.get(),
-			contentLeft: gpuContext.contentLeft.get(),
-			paddingRight: gpuContext.canvas.domNode.style.paddingRight,
-		}, {
-			dimensions: { width: 640, height: 480 },
-			contentLeft: 40,
-			paddingRight: '16px',
+		configurationEmitter.fire({
+			hasChanged: option => option === EditorOption.layoutInfo || option === EditorOption.scrollbar,
 		});
+		assert.deepEqual(
+			{
+				dimensions: gpuContext.canvasDevicePixelDimensions.get(),
+				contentLeft: gpuContext.contentLeft.get(),
+				paddingRight: gpuContext.canvas.domNode.style.paddingRight,
+			},
+			{ dimensions: { width: 640, height: 480 }, contentLeft: 40, paddingRight: '16px' },
+		);
 
 		gpuContext.dispose();
-		assert.deepEqual({ handlerCount: handlers.size, disconnected, connected: gpuContext.canvas.domNode.isConnected }, { handlerCount: 0, disconnected: true, connected: false });
+		assert.deepEqual(
+			{ handlerCount: handlers.size, disconnected, connected: gpuContext.canvas.domNode.isConnected },
+			{ handlerCount: 0, disconnected: true, connected: false },
+		);
 		const pendingDevice = ViewGpuContext.device!;
 		browserEnvironment.window.dispatchEvent(new browserEnvironment.window.Event('pagehide'));
 		await pendingAdapter.complete({
-			requestDevice: async () => ({ destroy: () => { destroyedLateDevices++; } }) as GPUDevice,
+			requestDevice: async () =>
+				({
+					destroy: () => {
+						destroyedLateDevices++;
+					},
+				}) as GPUDevice,
 		} as GPUAdapter);
 		await assert.rejects(pendingDevice, { name: 'CancellationError' });
-		assert.deepEqual({ destroyedLateDevices, device: ViewGpuContext.device, ready: ViewGpuContext.deviceSync }, { destroyedLateDevices: 1, device: undefined, ready: undefined });
+		assert.deepEqual(
+			{ destroyedLateDevices, device: ViewGpuContext.device, ready: ViewGpuContext.deviceSync },
+			{ destroyedLateDevices: 1, device: undefined, ready: undefined },
+		);
 	} finally {
 		browserEnvironment.window.dispatchEvent(new browserEnvironment.window.Event('pagehide'));
 		configurationEmitter.dispose();
 		if (originalGetContext) Object.defineProperty(canvasPrototype, 'getContext', originalGetContext);
-		if (originalResizeObserver) Object.defineProperty(browserEnvironment.window, 'ResizeObserver', originalResizeObserver);
+		if (originalResizeObserver)
+			Object.defineProperty(browserEnvironment.window, 'ResizeObserver', originalResizeObserver);
 		else Reflect.deleteProperty(browserEnvironment.window, 'ResizeObserver');
 		if (originalGpu) Object.defineProperty(browserEnvironment.window.navigator, 'gpu', originalGpu);
 		else Reflect.deleteProperty(browserEnvironment.window.navigator, 'gpu');
@@ -540,21 +690,35 @@ function createStrategyHarness(): {
 	readonly device: GPUDevice;
 	readonly rasterizer: GlyphRasterizer;
 	readonly writes: BufferWrite[];
-	readonly glyphs: { readonly chars: string; readonly metadata: number; readonly styleSetId: number; }[];
+	readonly glyphs: { readonly chars: string; readonly metadata: number; readonly styleSetId: number }[];
 } {
 	const writes: BufferWrite[] = [];
-	const glyphs: { chars: string; metadata: number; styleSetId: number; }[] = [];
+	const glyphs: { chars: string; metadata: number; styleSetId: number }[] = [];
 	const labels = new WeakMap<object, string>();
 	const device = {
 		queue: {
-			writeBuffer: (buffer: object, offset: number, data: AllowSharedBufferSource, dataOffset?: number, size?: number) => {
+			writeBuffer: (
+				buffer: object,
+				offset: number,
+				data: AllowSharedBufferSource,
+				dataOffset?: number,
+				size?: number,
+			) => {
 				let values: Float32Array;
 				if (data instanceof ArrayBuffer) {
 					const byteOffset = dataOffset ?? 0;
-					values = new Float32Array(data, byteOffset, size === undefined ? undefined : size / Float32Array.BYTES_PER_ELEMENT);
+					values = new Float32Array(
+						data,
+						byteOffset,
+						size === undefined ? undefined : size / Float32Array.BYTES_PER_ELEMENT,
+					);
 				} else {
 					const view = data as ArrayBufferView;
-					values = new Float32Array(view.buffer, view.byteOffset, view.byteLength / Float32Array.BYTES_PER_ELEMENT);
+					values = new Float32Array(
+						view.buffer,
+						view.byteOffset,
+						view.byteLength / Float32Array.BYTES_PER_ELEMENT,
+					);
 				}
 				writes.push({ label: labels.get(buffer) ?? '', offset, values: [...values] });
 			},
@@ -569,10 +733,7 @@ function createStrategyHarness(): {
 		theme: { value: darkColorTheme },
 		addEventHandler: () => undefined,
 		removeEventHandler: () => undefined,
-		viewLayout: {
-			getCurrentScrollLeft: () => 0,
-			getCurrentScrollTop: () => 0,
-		},
+		viewLayout: { getCurrentScrollLeft: () => 0, getCurrentScrollTop: () => 0 },
 	} as unknown as ViewContext;
 	const gpuContext = {
 		devicePixelRatio: observableValue('devicePixelRatio', 1),
@@ -580,7 +741,7 @@ function createStrategyHarness(): {
 			getGlyph: (_rasterizer: GlyphRasterizer, chars: string, metadata: number, styleSetId: number) => {
 				glyphs.push({ chars, metadata, styleSetId });
 				return fixedGlyphAtlas().getGlyph(_rasterizer, chars, metadata, styleSetId, 0);
-			}
+			},
 		},
 		decorationStyleCache: new DecorationStyleCache(),
 		decorationCssRuleExtractor: { getStyleRules: () => [] },
@@ -589,28 +750,28 @@ function createStrategyHarness(): {
 		getSemanticTokens: () => [],
 		resolveSemanticStyle: (_token: unknown, metadata: number) => ({ tokenMetadata: metadata, color: undefined }),
 	} as unknown as ViewGpuContext;
-	const rasterizer = {
-		devicePixelRatio: 1,
-		getTextMetrics: () => ({ width: 8 }),
-	} as unknown as GlyphRasterizer;
+	const rasterizer = { devicePixelRatio: 1, getTextMetrics: () => ({ width: 8 }) } as unknown as GlyphRasterizer;
 	return { context, gpuContext, device, rasterizer, writes, glyphs };
 }
 
 function viewport(contents: readonly string[], startLineNumber = 1, bigNumbersDelta = 0): ViewportData {
-	const lines = contents.map(content => new ViewLineRenderingData(
-		1,
-		content.length + 1,
-		content,
-		false,
-		false,
-		true,
-		lineTokens(content),
-		[],
-		4,
-		0,
-		TextDirection.LTR,
-		false,
-	));
+	const lines = contents.map(
+		content =>
+			new ViewLineRenderingData(
+				1,
+				content.length + 1,
+				content,
+				false,
+				false,
+				true,
+				lineTokens(content),
+				[],
+				4,
+				0,
+				TextDirection.LTR,
+				false,
+			),
+	);
 	return {
 		startLineNumber,
 		endLineNumber: startLineNumber + lines.length - 1,
@@ -622,11 +783,7 @@ function viewport(contents: readonly string[], startLineNumber = 1, bigNumbersDe
 }
 
 function viewLineOptions(): ViewLineOptions {
-	return {
-		spaceWidth: 8,
-		useMonospaceOptimizations: false,
-		fontLigatures: '',
-	} as ViewLineOptions;
+	return { spaceWidth: 8, useMonospaceOptimizations: false, fontLigatures: '' } as ViewLineOptions;
 }
 
 function lineTokens(content: string): IViewLineTokens {
@@ -639,7 +796,13 @@ function lineTokens(content: string): IViewLineTokens {
 		getEndOffset: () => content.length,
 		getClassName: () => '',
 		getInlineStyle: () => '',
-		getPresentation: (): ITokenPresentation => ({ foreground: ColorId.DefaultForeground, italic: false, bold: false, underline: false, strikethrough: false }),
+		getPresentation: (): ITokenPresentation => ({
+			foreground: ColorId.DefaultForeground,
+			italic: false,
+			bold: false,
+			underline: false,
+			strikethrough: false,
+		}),
 		findTokenIndexAtOffset: () => 0,
 		getLineContent: () => content,
 		getMetadata: () => 0,
@@ -651,7 +814,9 @@ function lineTokens(content: string): IViewLineTokens {
 }
 
 function withGpuBufferUsage(callback: () => void): void {
-	const installedUsage = installEditorTestGlobals({ GPUBufferUsage: { COPY_DST: 1, STORAGE: 2, UNIFORM: 4, VERTEX: 8 } });
+	const installedUsage = installEditorTestGlobals({
+		GPUBufferUsage: { COPY_DST: 1, STORAGE: 2, UNIFORM: 4, VERTEX: 8 },
+	});
 	try {
 		callback();
 	} finally {

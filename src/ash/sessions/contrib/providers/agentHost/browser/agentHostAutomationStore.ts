@@ -5,9 +5,25 @@ import { observableValue, transaction, type IObservable } from '../../../../../b
 import { URI } from '../../../../../base/common/uri.js';
 import { generateUuid } from '../../../../../base/common/uuid.js';
 import { localize } from '../../../../../nls.js';
-import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../platform/agentHost/common/automation.js';
-import type { IAutomationDescriptor, IAutomationRun, IAutomationRunResult, IAutomationSchedule } from '../../../../../workbench/contrib/chat/common/automations/automation.js';
-import type { AutomationCatalogueState, ICreateAutomationOptions, IGuardedAutomationUpdateResult, IUpdateAutomationOptions, IAutomationRunRequestResult } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
+import type {
+	Automation,
+	AutomationDefinition,
+	AutomationRun,
+	IAutomationBackendService,
+} from '../../../../../platform/agentHost/common/automation.js';
+import type {
+	IAutomationDescriptor,
+	IAutomationRun,
+	IAutomationRunResult,
+	IAutomationSchedule,
+} from '../../../../../workbench/contrib/chat/common/automations/automation.js';
+import type {
+	AutomationCatalogueState,
+	ICreateAutomationOptions,
+	IGuardedAutomationUpdateResult,
+	IUpdateAutomationOptions,
+	IAutomationRunRequestResult,
+} from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
 import type { ISessionsProviderAutomations } from '../../../../services/sessions/common/sessionsProvider.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 
@@ -30,24 +46,36 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		@IRendererHostService host: IRendererHost,
 	) {
 		super();
-		if (!host.automation) throw new Error(localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'));
+		if (!host.automation)
+			throw new Error(
+				localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'),
+			);
 		this.backend = host.automation;
-		this._register(this.backend.onDidChange(() => { void this.refresh().catch(() => { }); }));
-		this._register(connection.onDidChange(state => {
-			this.epoch++;
-			this.connectionEpoch++;
-			if (state === 'connected') void this.refresh().catch(() => { });
-			else transaction(tx => {
-				this.catalogueState.set(state === 'connecting' ? 'loading' : 'unavailable', tx);
-				this.historyState.set(state === 'connecting' ? 'loading' : 'unavailable', tx);
-			});
-		}));
-		this._register(toDisposable(() => {
-			this.epoch++;
-			this.catalogueState.set('unavailable', undefined);
-			this.historyState.set('unavailable', undefined);
-		}));
-		void this.refresh().catch(() => { });
+		this._register(
+			this.backend.onDidChange(() => {
+				void this.refresh().catch(() => {});
+			}),
+		);
+		this._register(
+			connection.onDidChange(state => {
+				this.epoch++;
+				this.connectionEpoch++;
+				if (state === 'connected') void this.refresh().catch(() => {});
+				else
+					transaction(tx => {
+						this.catalogueState.set(state === 'connecting' ? 'loading' : 'unavailable', tx);
+						this.historyState.set(state === 'connecting' ? 'loading' : 'unavailable', tx);
+					});
+			}),
+		);
+		this._register(
+			toDisposable(() => {
+				this.epoch++;
+				this.catalogueState.set('unavailable', undefined);
+				this.historyState.set('unavailable', undefined);
+			}),
+		);
+		void this.refresh().catch(() => {});
 	}
 
 	refresh(): Promise<void> {
@@ -60,7 +88,9 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		}
 		if (this.historyState.get() === 'error') this.historyState.set('loading', undefined);
 		this.refreshAgain = true;
-		return this.refreshing ??= this.readCatalogue().finally(() => { this.refreshing = undefined; });
+		return (this.refreshing ??= this.readCatalogue().finally(() => {
+			this.refreshing = undefined;
+		}));
 	}
 
 	private async readCatalogue(): Promise<void> {
@@ -79,80 +109,127 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 			if (this.isDisposed) return;
 			if (epoch !== this.epoch) continue;
 			transaction(tx => {
-				this.automations.set(definitions.map(item => this.descriptor(item)).sort((a, b) => b.createdAt - a.createdAt), tx);
+				this.automations.set(
+					definitions.map(item => this.descriptor(item)).sort((a, b) => b.createdAt - a.createdAt),
+					tx,
+				);
 				this.catalogueState.set('ready', tx);
 			});
 			const history: IAutomationRun[] = [];
-			let historyError: { error: unknown; } | undefined;
+			let historyError: { error: unknown } | undefined;
 			// Refresh histories independently, retaining the last rows for a failed definition.
 			for (let index = 0; index < definitions.length; index += 4) {
 				if (this.isDisposed || epoch !== this.epoch) break;
 				const batch = definitions.slice(index, index + 4);
 				const results = await Promise.allSettled(batch.map(item => this.backend.runs(item.id)));
 				for (const [offset, result] of results.entries()) {
-					if (result.status === 'fulfilled') history.push(...result.value.map(item => this.runDescriptor(item)));
+					if (result.status === 'fulfilled')
+						history.push(...result.value.map(item => this.runDescriptor(item)));
 					else {
 						historyError ??= { error: result.reason };
-						history.push(...this.runs.get().filter(run => run.automationId === this.identity(batch[offset]!.id)));
+						history.push(
+							...this.runs.get().filter(run => run.automationId === this.identity(batch[offset]!.id)),
+						);
 					}
 				}
 			}
 			if (this.isDisposed) return;
 			if (epoch !== this.epoch) continue;
 			transaction(tx => {
-				this.runs.set(history.sort((a, b) => b.scheduledAt - a.scheduledAt), tx);
+				this.runs.set(
+					history.sort((a, b) => b.scheduledAt - a.scheduledAt),
+					tx,
+				);
 				this.historyState.set(historyError ? 'error' : 'ready', tx);
 			});
 			if (historyError) throw historyError.error;
 		} while (this.refreshAgain && !this.isDisposed && this.connection.get() === 'connected');
 	}
 
-	getAutomation(id: string): IAutomationDescriptor | undefined { return this.automations.get().find(item => item.id === id); }
+	getAutomation(id: string): IAutomationDescriptor | undefined {
+		return this.automations.get().find(item => item.id === id);
+	}
 
-	private getActiveRunFor(id: string): IAutomationRun | undefined { return this.runs.get().find(item => item.automationId === id && !terminal(item)); }
+	private getActiveRunFor(id: string): IAutomationRun | undefined {
+		return this.runs.get().find(item => item.automationId === id && !terminal(item));
+	}
 
-	canRunAutomation(id: string): boolean { return this.canUpdateAutomation(id) && !this.getActiveRunFor(id); }
+	canRunAutomation(id: string): boolean {
+		return this.canUpdateAutomation(id) && !this.getActiveRunFor(id);
+	}
 
-	canUpdateAutomation(id: string): boolean { return this.catalogueState.get() === 'ready' && !!this.getAutomation(id); }
+	canUpdateAutomation(id: string): boolean {
+		return this.catalogueState.get() === 'ready' && !!this.getAutomation(id);
+	}
 
-	canDeleteAutomation(id: string): boolean { return this.canUpdateAutomation(id) && !this.getAutomation(id)?.kind && !this.getActiveRunFor(id); }
+	canDeleteAutomation(id: string): boolean {
+		return this.canUpdateAutomation(id) && !this.getAutomation(id)?.kind && !this.getActiveRunFor(id);
+	}
 
-	canStopRun(run: IAutomationRun): boolean { return this.connection.get() === 'connected' && run.providerId === this.providerId && !terminal(run); }
+	canStopRun(run: IAutomationRun): boolean {
+		return this.connection.get() === 'connected' && run.providerId === this.providerId && !terminal(run);
+	}
 
 	async createAutomation(options: ICreateAutomationOptions): Promise<IAutomationDescriptor> {
 		this.assertReady();
 		this.assertTarget(options.target.providerId);
 		const connectionEpoch = this.connectionEpoch;
-		const value = await this.backend.save(generateUuid(), 0, definition(options), options.enabled === false ? 'paused' : 'enabled');
+		const value = await this.backend.save(
+			generateUuid(),
+			0,
+			definition(options),
+			options.enabled === false ? 'paused' : 'enabled',
+		);
 		return this.acceptAutomation(value, connectionEpoch);
 	}
 
 	async updateAutomation(id: string, patch: IUpdateAutomationOptions): Promise<IAutomationDescriptor> {
 		const expected = this.requireAutomation(id);
 		const result = await this.updateAutomationIfUnchanged(id, patch, expected);
-		if (result.kind === 'conflict') throw new Error(localize('automations.editConflict', 'This automation changed. Refresh it before saving.'));
+		if (result.kind === 'conflict')
+			throw new Error(localize('automations.editConflict', 'This automation changed. Refresh it before saving.'));
 		return result.automation;
 	}
 
-	async updateAutomationIfUnchanged(id: string, patch: IUpdateAutomationOptions, expected: IAutomationDescriptor): Promise<IGuardedAutomationUpdateResult> {
+	async updateAutomationIfUnchanged(
+		id: string,
+		patch: IUpdateAutomationOptions,
+		expected: IAutomationDescriptor,
+	): Promise<IGuardedAutomationUpdateResult> {
 		this.assertReady();
 		const current = this.getAutomation(id);
 		if (!current || current.revision !== expected.revision) return { kind: 'conflict', current };
 		if (current.kind) {
 			if (Object.keys(patch).some(key => key !== 'enabled')) {
-				throw new Error(localize('automations.followUpControls', 'Use the PR follow-up controls in Checks to change this automation.'));
+				throw new Error(
+					localize(
+						'automations.followUpControls',
+						'Use the PR follow-up controls in Checks to change this automation.',
+					),
+				);
 			}
 			const connectionEpoch = this.connectionEpoch;
 			const source = (await this.backend.list()).find(plan => plan.id === this.backendId(id));
 			if (!this.isCurrentConnection(connectionEpoch)) throw canceled();
-			if (!source || source.revision !== expected.revision) return { kind: 'conflict', current: this.getAutomation(id) };
-			const value = await this.backend.save(source.id, source.revision, source.definition, patch.enabled ? 'enabled' : 'paused');
+			if (!source || source.revision !== expected.revision)
+				return { kind: 'conflict', current: this.getAutomation(id) };
+			const value = await this.backend.save(
+				source.id,
+				source.revision,
+				source.definition,
+				patch.enabled ? 'enabled' : 'paused',
+			);
 			return { kind: 'updated', automation: this.acceptAutomation(value, connectionEpoch) };
 		}
 		const options = { ...current, ...patch };
 		this.assertTarget(options.target.providerId);
 		const connectionEpoch = this.connectionEpoch;
-		const value = await this.backend.save(this.backendId(id), expected.revision, definition(options), options.enabled ? 'enabled' : 'paused');
+		const value = await this.backend.save(
+			this.backendId(id),
+			expected.revision,
+			definition(options),
+			options.enabled ? 'enabled' : 'paused',
+		);
 		return { kind: 'updated', automation: this.acceptAutomation(value, connectionEpoch) };
 	}
 
@@ -163,10 +240,16 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		if (this.isCurrentConnection(connectionEpoch)) {
 			this.epoch++;
 			transaction(tx => {
-				this.automations.set(this.automations.get().filter(item => item.id !== id), tx);
-				this.runs.set(this.runs.get().filter(item => item.automationId !== id), tx);
+				this.automations.set(
+					this.automations.get().filter(item => item.id !== id),
+					tx,
+				);
+				this.runs.set(
+					this.runs.get().filter(item => item.automationId !== id),
+					tx,
+				);
 			});
-			void this.refresh().catch(() => { });
+			void this.refresh().catch(() => {});
 		}
 	}
 
@@ -179,15 +262,17 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		if (this.isCurrentConnection(connectionEpoch)) {
 			this.epoch++;
 			this.runs.set([run, ...this.runs.get().filter(item => item.id !== run.id)], undefined);
-			void this.refresh().catch(() => { });
+			void this.refresh().catch(() => {});
 		}
 		const whenCompleted = this.observeRun(run.id, connectionEpoch);
 		// Observe rejection immediately, even when the caller is still processing admission.
-		void whenCompleted.catch(() => { });
+		void whenCompleted.catch(() => {});
 		return {
-			kind: 'dispatched', run, whenCompleted,
+			kind: 'dispatched',
+			run,
+			whenCompleted,
 			cancel: () => {
-				if (this.isCurrentConnection(connectionEpoch)) void this.stopRun(run).catch(() => { });
+				if (this.isCurrentConnection(connectionEpoch)) void this.stopRun(run).catch(() => {});
 			},
 		};
 	}
@@ -201,7 +286,7 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		if (this.isCurrentConnection(connectionEpoch)) {
 			this.epoch++;
 			this.runs.set([updated, ...this.runs.get().filter(item => item.id !== run.id)], undefined);
-			void this.refresh().catch(() => { });
+			void this.refresh().catch(() => {});
 		}
 	}
 
@@ -233,8 +318,13 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 		if (this.isCurrentConnection(connectionEpoch)) {
 			// A successful write is final. Subsequent catalogue/history reads cannot turn it into a failed save.
 			this.epoch++;
-			this.automations.set([automation, ...this.automations.get().filter(item => item.id !== automation.id)].sort((a, b) => b.createdAt - a.createdAt), undefined);
-			void this.refresh().catch(() => { });
+			this.automations.set(
+				[automation, ...this.automations.get().filter(item => item.id !== automation.id)].sort(
+					(a, b) => b.createdAt - a.createdAt,
+				),
+				undefined,
+			);
+			void this.refresh().catch(() => {});
 		}
 		return automation;
 	}
@@ -264,14 +354,23 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 						watching.dispose();
 						reject(error);
 					}
-				} finally { reading = false; }
+				} finally {
+					reading = false;
+				}
 			};
 			const update = (): void => {
 				if (watching.isDisposed) return;
 				const run = this.runs.get().find(item => item.id === id);
 				if (!this.isCurrentConnection(connectionEpoch)) {
 					watching.dispose();
-					reject(new Error(localize('automations.observationLost', 'The automation host is unavailable. Its run may still be active.')));
+					reject(
+						new Error(
+							localize(
+								'automations.observationLost',
+								'The automation host is unavailable. Its run may still be active.',
+							),
+						),
+					);
 				} else if (run && terminal(run)) {
 					watching.dispose();
 					resolve();
@@ -294,13 +393,17 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 			name: value.definition.title,
 			...(value.definition.condition ? { kind: 'pullRequestFollowUp' as const } : {}),
 			prompt: value.definition.prompt,
-			target: { providerId: this.providerId, directory: value.definition.directory, session: value.definition.session },
+			target: {
+				providerId: this.providerId,
+				directory: value.definition.directory,
+				session: value.definition.session,
+			},
 			schedule: value.definition.schedule,
 			enabled: value.status === 'enabled',
 			revision: value.revision,
 			createdAt: value.createdAt,
 			updatedAt: value.updatedAt,
-			nextRunAt: value.nextRunAt
+			nextRunAt: value.nextRunAt,
 		};
 	}
 
@@ -311,12 +414,23 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 				name: value.definition.title,
 				prompt: value.definition.prompt,
 				schedule: value.definition.schedule,
-				target: { providerId: this.providerId, directory: value.definition.directory, session: value.definition.session },
+				target: {
+					providerId: this.providerId,
+					directory: value.definition.directory,
+					session: value.definition.session,
+				},
 			},
 			id: this.identity(value.id),
 			automationId: this.identity(value.automationId),
 			providerId: this.providerId,
-			sessionResource: value.sessionId && value.threadId ? URI.from({ scheme: 'ash-session', authority: encodeURIComponent(this.providerId), path: `/${encodeURIComponent(value.sessionId)}/${encodeURIComponent(value.threadId)}` }) : undefined
+			sessionResource:
+				value.sessionId && value.threadId
+					? URI.from({
+							scheme: 'ash-session',
+							authority: encodeURIComponent(this.providerId),
+							path: `/${encodeURIComponent(value.sessionId)}/${encodeURIComponent(value.threadId)}`,
+						})
+					: undefined,
 		};
 	}
 
@@ -326,19 +440,38 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 
 	private backendId(id: string): string {
 		let value: unknown;
-		try { value = JSON.parse(id); } catch { /* Invalid public identity follows the same unavailable path. */ }
-		if (Array.isArray(value) && value.length === 2 && value[0] === this.providerId && typeof value[1] === 'string' && value[1]) return value[1];
-		throw new Error(localize('automations.missing', 'This automation or run is unavailable on its owning provider.'));
+		try {
+			value = JSON.parse(id);
+		} catch {
+			/* Invalid public identity follows the same unavailable path. */
+		}
+		if (
+			Array.isArray(value) &&
+			value.length === 2 &&
+			value[0] === this.providerId &&
+			typeof value[1] === 'string' &&
+			value[1]
+		)
+			return value[1];
+		throw new Error(
+			localize('automations.missing', 'This automation or run is unavailable on its owning provider.'),
+		);
 	}
 
 	private requireAutomation(id: string): IAutomationDescriptor {
 		const value = this.getAutomation(id);
-		if (!value) throw new Error(localize('automations.missing', 'This automation or run is unavailable on its owning provider.'));
+		if (!value)
+			throw new Error(
+				localize('automations.missing', 'This automation or run is unavailable on its owning provider.'),
+			);
 		return value;
 	}
 
 	private assertReady(): void {
-		if (this.isDisposed || this.connection.get() !== 'connected') throw new Error(localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'));
+		if (this.isDisposed || this.connection.get() !== 'connected')
+			throw new Error(
+				localize('automations.hostUnavailable', 'Connect to the owning automation host and try again.'),
+			);
 	}
 
 	private isCurrentConnection(connectionEpoch: number): boolean {
@@ -346,7 +479,13 @@ export class AgentHostAutomationStore extends Disposable implements ISessionsPro
 	}
 
 	private assertTarget(providerId: string): void {
-		if (providerId !== this.providerId) throw new Error(localize('automations.providerMismatch', 'An automation cannot be moved to another provider. Create a new automation on that provider.'));
+		if (providerId !== this.providerId)
+			throw new Error(
+				localize(
+					'automations.providerMismatch',
+					'An automation cannot be moved to another provider. Create a new automation on that provider.',
+				),
+			);
 	}
 }
 
@@ -356,8 +495,10 @@ function definition(options: ICreateAutomationOptions): AutomationDefinition {
 		prompt: options.prompt,
 		directory: options.target.directory,
 		session: options.target.session,
-		schedule: options.schedule
+		schedule: options.schedule,
 	};
 }
 
-function terminal(run: Pick<IAutomationRun, 'status'>): boolean { return ['completed', 'failed', 'stopped', 'skipped'].includes(run.status); }
+function terminal(run: Pick<IAutomationRun, 'status'>): boolean {
+	return ['completed', 'failed', 'stopped', 'skipped'].includes(run.status);
+}

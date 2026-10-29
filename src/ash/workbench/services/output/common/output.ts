@@ -2,15 +2,15 @@ import { RawContextKey } from '../../../../platform/contextkey/common/contextkey
 import type { ILogger } from '../../../../platform/log/common/log.js';
 import type { URI } from '../../../../base/common/uri.js';
 import type { ITextModel } from '../../../../editor/common/model.js';
-import type { Event } from "../../../../base/common/event.js";
-import type { IDisposable } from "../../../../base/common/lifecycle.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import type { Event } from '../../../../base/common/event.js';
+import type { IDisposable } from '../../../../base/common/lifecycle.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
-export type OutputEntrySeverity = "trace" | "debug" | "information" | "warning" | "error" | "log";
-export type OutputChannelKind = "output" | "log";
-export type OutputChannelSource = "core" | "extension" | "user";
-export type OutputChannelChangeKind = "append" | "replace" | "clear";
-export type OutputChannelRevealFocus = "take" | "preserve";
+export type OutputEntrySeverity = 'trace' | 'debug' | 'information' | 'warning' | 'error' | 'log';
+export type OutputChannelKind = 'output' | 'log';
+export type OutputChannelSource = 'core' | 'extension' | 'user';
+export type OutputChannelChangeKind = 'append' | 'replace' | 'clear';
+export type OutputChannelRevealFocus = 'take' | 'preserve';
 
 /** One immutable chunk retained by an Output channel. */
 export interface IOutputEntry {
@@ -38,7 +38,7 @@ export interface IOutputChannelDescriptor {
 	readonly extensionId?: string;
 	readonly languageId?: string;
 	/** Optional control owned by the producer; display filtering never changes it. */
-	readonly logger?: { readonly label: string; readonly control: ILogger; };
+	readonly logger?: { readonly label: string; readonly control: ILogger };
 }
 
 /** One atomic content-model transition. */
@@ -93,19 +93,26 @@ export interface IOutputService {
 	showChannel(id: string, options?: IOutputChannelRevealOptions): void;
 }
 
-export const IOutputService = createServiceIdentifier<IOutputService>("outputService");
+export const IOutputService = createServiceIdentifier<IOutputService>('outputService');
 
-export const OUTPUT_VIEW_ID = "ash.output";
-export const SHOW_OUTPUT_COMMAND_ID = "workbench.action.output.show";
-export const SHOW_OUTPUT_CHANNELS_COMMAND_ID = "workbench.action.output.showChannels";
-export const CLEAR_OUTPUT_COMMAND_ID = "workbench.action.output.clear";
-export const OPEN_OUTPUT_IN_EDITOR_COMMAND_ID = "workbench.action.output.openInEditor";
-export const EXPORT_OUTPUT_COMMAND_ID = "workbench.action.output.export";
+export const OUTPUT_VIEW_ID = 'ash.output';
+export const SHOW_OUTPUT_COMMAND_ID = 'workbench.action.output.show';
+export const SHOW_OUTPUT_CHANNELS_COMMAND_ID = 'workbench.action.output.showChannels';
+export const CLEAR_OUTPUT_COMMAND_ID = 'workbench.action.output.clear';
+export const OPEN_OUTPUT_IN_EDITOR_COMMAND_ID = 'workbench.action.output.openInEditor';
+export const EXPORT_OUTPUT_COMMAND_ID = 'workbench.action.output.export';
 export const OPEN_SAVED_LOGS_COMMAND_ID = 'workbench.action.output.openSavedLogs';
 
 export const OUTPUT_MODE_ID = 'Log';
 export const LOG_MODE_ID = 'log';
-export const OutputSeverities: readonly OutputEntrySeverity[] = Object.freeze(['trace', 'debug', 'information', 'warning', 'error', 'log']);
+export const OutputSeverities: readonly OutputEntrySeverity[] = Object.freeze([
+	'trace',
+	'debug',
+	'information',
+	'warning',
+	'error',
+	'log',
+]);
 
 /** Structured producer metadata drives view filtering without changing shared text. */
 export interface IOutputViewFilters {

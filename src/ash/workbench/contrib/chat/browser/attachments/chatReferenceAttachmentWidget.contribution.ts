@@ -12,7 +12,10 @@ export class ChatReferenceAttachmentWidgetContribution extends Disposable {
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
-		this._register(registry.registerFactory('sessionReference', (attachment, options, container) =>
-			instantiation.createInstance(ChatReferenceAttachmentWidget, attachment, options, container)));
+		this._register(
+			registry.registerFactory('sessionReference', (attachment, options, container) =>
+				instantiation.createInstance(ChatReferenceAttachmentWidget, attachment, options, container),
+			),
+		);
 	}
 }

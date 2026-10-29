@@ -13,7 +13,6 @@ const { CodeEditorWidget } = await import('../../../../browser/widget/codeEditor
 const { createTestCodeEditor } = await import('../../../../test/browser/testCodeEditor.js');
 const { CursorUndoRedoController } = await import('../../browser/cursorUndo.js');
 
-
 test('CursorUndoRedoController records canonical same-version selection events', () => {
 	const dom = new JSDOM('<!doctype html><body><main></main></body>');
 	dom.window.HTMLCanvasElement.prototype.getContext = () => null;

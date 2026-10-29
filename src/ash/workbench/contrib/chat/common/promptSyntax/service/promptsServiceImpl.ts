@@ -6,15 +6,29 @@ import { Schemas } from '../../../../../../base/common/network.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { AppServerRemoteError } from '../../../../../../platform/agentHost/common/appServerError.js';
 import { CancellationError } from '../../../../../../base/common/errors.js';
-import { IAppServerHookApi, IAppServerSkillApi, type HookSource, type SkillDescriptor, type SkillReference } from '../../../../../../platform/agentHost/common/appServerApi.js';
+import {
+	IAppServerHookApi,
+	IAppServerSkillApi,
+	type HookSource,
+	type SkillDescriptor,
+	type SkillReference,
+} from '../../../../../../platform/agentHost/common/appServerApi.js';
 import { PromptFileParser, type ParsedPromptFile } from '../promptFileParser.js';
-import { SkillManagementConflictError, type IAgentSkill, type IPromptsService, type SkillManagementSnapshot } from './promptsService.js';
+import {
+	SkillManagementConflictError,
+	type IAgentSkill,
+	type IPromptsService,
+	type SkillManagementSnapshot,
+} from './promptsService.js';
 
 /** Owns discovered Prompt identities and readable snapshots; Rust owns catalog and enablement. */
 export class PromptsService extends Disposable implements IPromptsService {
 	private readonly changed = this._register(new Emitter<void>());
 	public readonly onDidChangeSkills = this.changed.event;
-	private readonly references = new ResourceMap<{ readonly reference: SkillReference; readonly sessionId: string | undefined; }>();
+	private readonly references = new ResourceMap<{
+		readonly reference: SkillReference;
+		readonly sessionId: string | undefined;
+	}>();
 	private readonly parser = new PromptFileParser();
 	private readonly reads = new Set<AbortController>();
 	private epoch = 0;
@@ -27,16 +41,20 @@ export class PromptsService extends Disposable implements IPromptsService {
 		@IAppServerHookApi private readonly hooks: IAppServerHookApi,
 	) {
 		super();
-		this._register(hooks.onDidChangeHooks(() => {
-			this.hookEpoch++;
-			this.hooksChanged.fire();
-		}));
-		this._register(backend.onDidChangeSkills(() => {
-			this.epoch++;
-			for (const read of this.reads) read.abort();
-			this.references.clear();
-			this.changed.fire();
-		}));
+		this._register(
+			hooks.onDidChangeHooks(() => {
+				this.hookEpoch++;
+				this.hooksChanged.fire();
+			}),
+		);
+		this._register(
+			backend.onDidChangeSkills(() => {
+				this.epoch++;
+				for (const read of this.reads) read.abort();
+				this.references.clear();
+				this.changed.fire();
+			}),
+		);
 	}
 
 	public async getHooks(token: CancellationToken, sessionId?: string): Promise<readonly HookSource[]> {
@@ -68,18 +86,30 @@ export class PromptsService extends Disposable implements IPromptsService {
 			const snapshot = await this.backend.read(sessionId);
 			if (this.isDisposed) throw new CancellationError();
 			if (epoch !== this.epoch) continue;
-			return { ...snapshot, catalog: { generation: snapshot.catalog.generation, skills: Object.freeze(snapshot.catalog.skills.map(skill => this.discover(skill, sessionId))) } };
+			return {
+				...snapshot,
+				catalog: {
+					generation: snapshot.catalog.generation,
+					skills: Object.freeze(snapshot.catalog.skills.map(skill => this.discover(skill, sessionId))),
+				},
+			};
 		}
 		throw new CancellationError();
 	}
 
-	public async setSkillEnablement(skillId: SkillDescriptor['id'], enabled: boolean, expectedRevision: number, sessionId?: string): Promise<void> {
+	public async setSkillEnablement(
+		skillId: SkillDescriptor['id'],
+		enabled: boolean,
+		expectedRevision: number,
+		sessionId?: string,
+	): Promise<void> {
 		if (this.isDisposed) throw new CancellationError();
 		// Do not retry a mutation: an expected-revision conflict must remain reviewable to the caller.
 		try {
 			await this.backend.setEnabled(skillId, enabled, expectedRevision, sessionId);
 		} catch (error) {
-			if (error instanceof AppServerRemoteError && error.errorName === 'ConfigRevisionConflict') throw new SkillManagementConflictError(expectedRevision);
+			if (error instanceof AppServerRemoteError && error.errorName === 'ConfigRevisionConflict')
+				throw new SkillManagementConflictError(expectedRevision);
 			throw error;
 		}
 	}
@@ -95,12 +125,24 @@ export class PromptsService extends Disposable implements IPromptsService {
 		const instructions = match ? uri.with({ path: `/${match[1]}/SKILL.md`, fragment: '' }) : uri;
 		const target = this.references.get(instructions);
 		const path = match?.[2];
-		if (!target || !path || (/[\x00-\x1f\x7f\\]/u.test(path)) || path.split('/').some(segment => segment === '..' || segment === '.' || !segment) || this.isDisposed) throw new ReferenceError('Prompt URI was not discovered in this window');
+		if (
+			!target ||
+			!path ||
+			/[\x00-\x1f\x7f\\]/u.test(path) ||
+			path.split('/').some(segment => segment === '..' || segment === '.' || !segment) ||
+			this.isDisposed
+		)
+			throw new ReferenceError('Prompt URI was not discovered in this window');
 		const controller = new AbortController();
 		this.reads.add(controller);
 		const cancelled = token.onCancellationRequested(() => controller.abort());
 		try {
-			const content = await this.backend.readTextResource(target.reference, path, controller.signal, target.sessionId);
+			const content = await this.backend.readTextResource(
+				target.reference,
+				path,
+				controller.signal,
+				target.sessionId,
+			);
 			throwIfCancelled(token);
 			throwIfCancelled(controller.signal);
 			return this.parser.parse(uri, content);
@@ -111,8 +153,16 @@ export class PromptsService extends Disposable implements IPromptsService {
 	}
 
 	private discover(skill: SkillDescriptor, sessionId: string | undefined): IAgentSkill {
-		const reference: SkillReference = { id: skill.id, version: { type: 'pinnedDigest', digest: skill.contentDigest } };
-		const uri = URI.from({ scheme: Schemas.internal, authority: 'skill', path: `/${skill.id.name}/SKILL.md`, query: JSON.stringify({ source: skill.id.source, digest: skill.contentDigest, sessionId }) });
+		const reference: SkillReference = {
+			id: skill.id,
+			version: { type: 'pinnedDigest', digest: skill.contentDigest },
+		};
+		const uri = URI.from({
+			scheme: Schemas.internal,
+			authority: 'skill',
+			path: `/${skill.id.name}/SKILL.md`,
+			query: JSON.stringify({ source: skill.id.source, digest: skill.contentDigest, sessionId }),
+		});
 		this.references.set(uri, { reference, sessionId });
 		return Object.freeze({ ...skill, name: skill.id.name, uri });
 	}

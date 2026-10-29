@@ -1,5 +1,5 @@
-import { DocumentTransaction } from "./documentTransaction.js";
-import { type DocumentSelection } from "../core/documentSelection.js";
+import { DocumentTransaction } from './documentTransaction.js';
+import { type DocumentSelection } from '../core/documentSelection.js';
 
 export interface DocumentHistoryEntry {
 	readonly transaction: DocumentTransaction;
@@ -23,7 +23,8 @@ export class DocumentHistory {
 	private groupOpen = false;
 
 	constructor(limit = 1_000) {
-		if (!Number.isSafeInteger(limit) || limit < 0) throw new RangeError("Document history limit must be a non-negative safe integer");
+		if (!Number.isSafeInteger(limit) || limit < 0)
+			throw new RangeError('Document history limit must be a non-negative safe integer');
 		this.limit = limit;
 	}
 
@@ -43,7 +44,8 @@ export class DocumentHistory {
 		}
 		this.redoStack.length = 0;
 		const previous = this.undoStack.at(-1);
-		if (this.groupOpen && previous?.historyGroup !== undefined && previous.historyGroup === entry.historyGroup) this.undoStack[this.undoStack.length - 1] = mergeHistoryEntries(previous, entry);
+		if (this.groupOpen && previous?.historyGroup !== undefined && previous.historyGroup === entry.historyGroup)
+			this.undoStack[this.undoStack.length - 1] = mergeHistoryEntries(previous, entry);
 		else this.undoStack.push(entry);
 		this.groupOpen = entry.historyGroup !== undefined;
 		this.trim(this.undoStack);
@@ -92,7 +94,9 @@ export class DocumentHistory {
 
 	/** Replaces both local history branches with entries rebased by a collaboration adapter. */
 	rebase(mapper: (entries: DocumentHistoryEntries) => DocumentHistoryEntries): void {
-		const entries = mapper(Object.freeze({ undo: Object.freeze([...this.undoStack]), redo: Object.freeze([...this.redoStack]) }));
+		const entries = mapper(
+			Object.freeze({ undo: Object.freeze([...this.undoStack]), redo: Object.freeze([...this.redoStack]) }),
+		);
 		this.undoStack.splice(0, this.undoStack.length, ...entries.undo);
 		this.redoStack.splice(0, this.redoStack.length, ...entries.redo);
 		this.trim(this.undoStack);
@@ -108,8 +112,19 @@ export class DocumentHistory {
 
 function mergeHistoryEntries(previous: DocumentHistoryEntry, next: DocumentHistoryEntry): DocumentHistoryEntry {
 	return Object.freeze({
-		transaction: new DocumentTransaction([...previous.transaction.steps, ...next.transaction.steps], { label: next.transaction.label, selection: next.transaction.selection, selectionSet: next.transaction.selectionSet, storedMarks: next.transaction.storedMarks, storedMarksSet: next.transaction.storedMarksSet, historyGroup: next.historyGroup, metadata: [...previous.transaction.metadata, ...next.transaction.metadata] }),
-		inverse: new DocumentTransaction([...next.inverse.steps, ...previous.inverse.steps], { addToHistory: false, label: next.inverse.label }),
+		transaction: new DocumentTransaction([...previous.transaction.steps, ...next.transaction.steps], {
+			label: next.transaction.label,
+			selection: next.transaction.selection,
+			selectionSet: next.transaction.selectionSet,
+			storedMarks: next.transaction.storedMarks,
+			storedMarksSet: next.transaction.storedMarksSet,
+			historyGroup: next.historyGroup,
+			metadata: [...previous.transaction.metadata, ...next.transaction.metadata],
+		}),
+		inverse: new DocumentTransaction([...next.inverse.steps, ...previous.inverse.steps], {
+			addToHistory: false,
+			label: next.inverse.label,
+		}),
 		selectionBefore: previous.selectionBefore,
 		selectionAfter: next.selectionAfter,
 		historyGroup: next.historyGroup,

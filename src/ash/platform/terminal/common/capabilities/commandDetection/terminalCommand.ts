@@ -43,7 +43,9 @@ export class TerminalCommand implements ITerminalCommand {
 	readonly promptStartMarker?: Marker;
 	private end: Marker | undefined;
 	private endColumn = 0;
-	get endMarker(): Marker | undefined { return this.end; }
+	get endMarker(): Marker | undefined {
+		return this.end;
+	}
 	set endMarker(value: Marker | undefined) {
 		this.end = value;
 		this.endColumn = this.terminal.buffer.normal.cursorX;
@@ -52,7 +54,10 @@ export class TerminalCommand implements ITerminalCommand {
 	readonly aliases?: string[][];
 	readonly wasReplayed?: boolean;
 
-	constructor(private readonly terminal: ITerminalCommandScreen, properties: ITerminalCommandProperties) {
+	constructor(
+		private readonly terminal: ITerminalCommandScreen,
+		properties: ITerminalCommandProperties,
+	) {
 		Object.assign(this, properties);
 		if (properties.wasReplayed) {
 			this.endColumn = 0;
@@ -63,17 +68,31 @@ export class TerminalCommand implements ITerminalCommand {
 		if (!this.marker || this.marker.isDisposed || !this.executedMarker || this.executedMarker.isDisposed) {
 			return this.command;
 		}
-		return readBufferRange(this.terminal, this.marker.line, this.startX ?? 0, this.executedMarker.line, this.executedX ?? 0).replace(/\n$/, '');
+		return readBufferRange(
+			this.terminal,
+			this.marker.line,
+			this.startX ?? 0,
+			this.executedMarker.line,
+			this.executedX ?? 0,
+		).replace(/\n$/, '');
 	}
 
 	getOutput(): string | undefined {
 		if (!this.executedMarker || !this.endMarker || this.executedMarker.isDisposed || this.endMarker.isDisposed) {
 			return undefined;
 		}
-		return readBufferRange(this.terminal, this.executedMarker.line, this.executedX ?? 0, this.endMarker.line, this.endColumn).replace(/\n$/, '');
+		return readBufferRange(
+			this.terminal,
+			this.executedMarker.line,
+			this.executedX ?? 0,
+			this.endMarker.line,
+			this.endColumn,
+		).replace(/\n$/, '');
 	}
 
-	hasOutput(): boolean { return Boolean(this.getOutput()); }
+	hasOutput(): boolean {
+		return Boolean(this.getOutput());
+	}
 
 	getOutputMatch(matcher: ITerminalOutputMatcher): ITerminalOutputMatch | undefined {
 		const output = this.getOutput();
@@ -85,8 +104,10 @@ export class TerminalCommand implements ITerminalCommand {
 		const offset = Math.max(0, Math.floor(matcher.offset));
 		const start = matcher.anchor === 'top' ? offset : Math.max(0, lines.length - offset - length);
 		const selected = lines.slice(start, matcher.anchor === 'top' ? start + length : lines.length - offset);
-		const expression = typeof matcher.lineMatcher === 'string'
-			? new RegExp(matcher.lineMatcher.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) : new RegExp(matcher.lineMatcher.source, matcher.lineMatcher.flags.replace(/[gy]/g, ''));
+		const expression =
+			typeof matcher.lineMatcher === 'string'
+				? new RegExp(matcher.lineMatcher.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+				: new RegExp(matcher.lineMatcher.source, matcher.lineMatcher.flags.replace(/[gy]/g, ''));
 		if (expression.multiline || expression.source.includes('\\n')) {
 			const regexMatch = selected.join('\n').match(expression);
 			return regexMatch ? { regexMatch, outputLines: selected } : undefined;
@@ -101,11 +122,15 @@ export class TerminalCommand implements ITerminalCommand {
 	}
 
 	getPromptRowCount(): number {
-		return this.promptStartMarker && this.marker ? Math.max(1, this.marker.line - this.promptStartMarker.line + 1) : 1;
+		return this.promptStartMarker && this.marker
+			? Math.max(1, this.marker.line - this.promptStartMarker.line + 1)
+			: 1;
 	}
 
 	getCommandRowCount(): number {
-		return this.marker && this.executedMarker ? Math.max(1, this.executedMarker.line - this.marker.line + (this.executedX ? 1 : 0)) : 1;
+		return this.marker && this.executedMarker
+			? Math.max(1, this.executedMarker.line - this.marker.line + (this.executedX ? 1 : 0))
+			: 1;
 	}
 
 	serialize(isCommandStorageDisabled: boolean): ISerializedTerminalCommand {
@@ -129,10 +154,16 @@ export class TerminalCommand implements ITerminalCommand {
 		};
 	}
 
-	static deserialize(terminal: ITerminalCommandScreen, value: ISerializedTerminalCommand, disabled: boolean): TerminalCommand | undefined {
+	static deserialize(
+		terminal: ITerminalCommandScreen,
+		value: ISerializedTerminalCommand,
+		disabled: boolean,
+	): TerminalCommand | undefined {
 		const buffer = terminal.buffer.normal;
-		const marker = (line: number | undefined): Marker | undefined => line !== undefined && line >= 0 && line < buffer.length
-			? terminal.registerMarker(line - buffer.baseY - buffer.cursorY) : undefined;
+		const marker = (line: number | undefined): Marker | undefined =>
+			line !== undefined && line >= 0 && line < buffer.length
+				? terminal.registerMarker(line - buffer.baseY - buffer.cursorY)
+				: undefined;
 		const start = marker(value.startLine);
 		if (!start) {
 			return undefined;
@@ -150,10 +181,18 @@ export class TerminalCommand implements ITerminalCommand {
 	}
 }
 
-function liveLine(marker: Marker | undefined): number | undefined { return marker?.isDisposed ? undefined : marker?.line; }
+function liveLine(marker: Marker | undefined): number | undefined {
+	return marker?.isDisposed ? undefined : marker?.line;
+}
 
 /** Reads cell ranges while joining physical wraps and preserving intentional line breaks. */
-export function readBufferRange(terminal: ITerminalCommandScreen, startLine: number, startX: number, endLine: number, endX: number): string {
+export function readBufferRange(
+	terminal: ITerminalCommandScreen,
+	startLine: number,
+	startX: number,
+	endLine: number,
+	endX: number,
+): string {
 	const buffer = terminal.buffer.normal;
 	const result: string[] = [];
 	for (let line = Math.max(0, startLine); line <= Math.min(buffer.length - 1, endLine); line++) {
@@ -164,7 +203,9 @@ export function readBufferRange(terminal: ITerminalCommandScreen, startLine: num
 		if (line > startLine && !row.isWrapped) {
 			result.push('\n');
 		}
-		result.push(row.translateToString(true, line === startLine ? startX : 0, line === endLine ? endX : terminal.cols));
+		result.push(
+			row.translateToString(true, line === startLine ? startX : 0, line === endLine ? endX : terminal.cols),
+		);
 	}
 	return result.join('');
 }
@@ -181,7 +222,7 @@ export interface ICurrentPartialCommand {
 	commandExecutedX?: number;
 	commandFinishedMarker?: Marker;
 	currentContinuationMarker?: Marker;
-	continuations?: { marker: Marker; end: number; }[];
+	continuations?: { marker: Marker; end: number }[];
 	command?: string;
 	isTrusted?: boolean;
 	isInvalid?: boolean;
@@ -202,7 +243,7 @@ export class PartialTerminalCommand implements ICurrentPartialCommand {
 	commandExecutedX?: number;
 	commandFinishedMarker?: Marker;
 	currentContinuationMarker?: Marker;
-	continuations?: { marker: Marker; end: number; }[];
+	continuations?: { marker: Marker; end: number }[];
 	command?: string;
 	isTrusted?: boolean;
 	isInvalid?: boolean;
@@ -210,26 +251,64 @@ export class PartialTerminalCommand implements ICurrentPartialCommand {
 	private started = 0;
 	private elapsed = 0;
 
-	constructor(private readonly terminal: ITerminalCommandScreen, id?: string) {
+	constructor(
+		private readonly terminal: ITerminalCommandScreen,
+		id?: string,
+	) {
 		this.id = id ?? generateUuid();
 	}
 
-	markExecutedTime(): void { this.started = Date.now(); }
-	markFinishedTime(): void { this.elapsed = this.started ? Math.max(0, Date.now() - this.started) : 0; }
-	getPromptRowCount(): number { return this.promptStartMarker && this.commandStartMarker ? Math.max(1, this.commandStartMarker.line - this.promptStartMarker.line + 1) : 1; }
-	getCommandRowCount(): number { return this.commandStartMarker && this.commandExecutedMarker ? Math.max(1, this.commandExecutedMarker.line - this.commandStartMarker.line + (this.commandExecutedX ? 1 : 0)) : 1; }
+	markExecutedTime(): void {
+		this.started = Date.now();
+	}
+	markFinishedTime(): void {
+		this.elapsed = this.started ? Math.max(0, Date.now() - this.started) : 0;
+	}
+	getPromptRowCount(): number {
+		return this.promptStartMarker && this.commandStartMarker
+			? Math.max(1, this.commandStartMarker.line - this.promptStartMarker.line + 1)
+			: 1;
+	}
+	getCommandRowCount(): number {
+		return this.commandStartMarker && this.commandExecutedMarker
+			? Math.max(
+					1,
+					this.commandExecutedMarker.line - this.commandStartMarker.line + (this.commandExecutedX ? 1 : 0),
+				)
+			: 1;
+	}
 
-	promoteToFullCommand(cwd: string | undefined, exitCode: number | undefined, ignoreCommandLine: boolean, markProperties: IMarkProperties | undefined): TerminalCommand | undefined {
-		if (!this.commandStartMarker || this.commandStartMarker.isDisposed || this.isInvalid || (!this.command && !ignoreCommandLine)) {
+	promoteToFullCommand(
+		cwd: string | undefined,
+		exitCode: number | undefined,
+		ignoreCommandLine: boolean,
+		markProperties: IMarkProperties | undefined,
+	): TerminalCommand | undefined {
+		if (
+			!this.commandStartMarker ||
+			this.commandStartMarker.isDisposed ||
+			this.isInvalid ||
+			(!this.command && !ignoreCommandLine)
+		) {
 			return undefined;
 		}
 		return new TerminalCommand(this.terminal, {
-			command: this.command ?? '', commandLineConfidence: this.command === undefined ? 'low' : this.isTrusted ? 'high' : 'medium',
-			isTrusted: this.isTrusted === true, timestamp: this.started, duration: this.elapsed, id: this.id,
-			marker: this.commandStartMarker, promptStartMarker: this.promptStartMarker,
-			executedMarker: this.commandExecutedMarker, endMarker: this.commandFinishedMarker,
-			startX: this.commandStartX, executedX: this.commandExecutedX, cwd, exitCode,
-			commandStartLineContent: this.commandStartLineContent, markProperties,
+			command: this.command ?? '',
+			commandLineConfidence: this.command === undefined ? 'low' : this.isTrusted ? 'high' : 'medium',
+			isTrusted: this.isTrusted === true,
+			timestamp: this.started,
+			duration: this.elapsed,
+			id: this.id,
+			marker: this.commandStartMarker,
+			promptStartMarker: this.promptStartMarker,
+			executedMarker: this.commandExecutedMarker,
+			endMarker: this.commandFinishedMarker,
+			startX: this.commandStartX,
+			executedX: this.commandExecutedX,
+			cwd,
+			exitCode,
+			commandStartLineContent: this.commandStartLineContent,
+			markProperties,
 		});
 	}
 

@@ -25,7 +25,13 @@ test('LRUCache trims oldest entries and touches values on read', () => {
 
 	cache.set('five', 5);
 
-	assert.deepEqual([...cache], [['one', 1], ['five', 5]]);
+	assert.deepEqual(
+		[...cache],
+		[
+			['one', 1],
+			['five', 5],
+		],
+	);
 });
 
 test('LRUCache peek preserves age and validates its bounds', () => {
@@ -34,7 +40,13 @@ test('LRUCache peek preserves age and validates its bounds', () => {
 	assert.equal(cache.peek('one'), 1);
 	cache.set('three', 3);
 
-	assert.deepEqual([...cache], [['two', 2], ['three', 3]]);
+	assert.deepEqual(
+		[...cache],
+		[
+			['two', 2],
+			['three', 3],
+		],
+	);
 	assert.throws(() => new LRUCache(-1), RangeError);
 	assert.throws(() => new LRUCache(1, 2), RangeError);
 });

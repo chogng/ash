@@ -3,7 +3,12 @@ import { addDisposableListener } from '../../../../base/browser/dom.js';
 import { createUuid } from '../../../../base/common/uuid.js';
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import type { JsonValue } from '../../../../base/common/jsonValue.js';
-import { IMAGE_VIEW_OPEN_CHANNEL, IMAGE_VIEW_CANCEL_CHANNEL, validateImageViewImage, type ImageViewRequest } from '../../../../platform/imageView/common/imageView.js';
+import {
+	IMAGE_VIEW_OPEN_CHANNEL,
+	IMAGE_VIEW_CANCEL_CHANNEL,
+	validateImageViewImage,
+	type ImageViewRequest,
+} from '../../../../platform/imageView/common/imageView.js';
 import { invoke } from '../../../../platform/ipc/electron-browser/rendererIpc.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { localize } from '../../../../nls.js';
@@ -22,22 +27,27 @@ export class NativeImageEditorService extends ImageEditorService {
 		const root = document.querySelector('.ash-workbench');
 		const colorScheme = root?.getAttribute('data-color-scheme');
 		const request: ImageViewRequest = {
-			id, title: resolved.displayName, html: resolved.view.html,
+			id,
+			title: resolved.displayName,
+			html: resolved.view.html,
 			source: options?.code ? 'content' : 'screen',
 			input: {
 				defaultAction: options?.defaultAction ?? 'attach',
 				...(options?.code ? { code: options.code } : {}),
 				...(resolved.view.state !== undefined ? { state: resolved.view.state } : {}),
 				theme: readImageEditorTheme(document),
-				colorScheme: colorScheme === 'light' || colorScheme === 'hcDark' || colorScheme === 'hcLight' ? colorScheme : 'dark',
+				colorScheme:
+					colorScheme === 'light' || colorScheme === 'hcDark' || colorScheme === 'hcLight'
+						? colorScheme
+						: 'dark',
 			} as unknown as Readonly<Record<string, JsonValue>>,
 		};
 		const cancellation = addDisposableListener(signal, 'abort', () => {
-			void invoke<void>(IMAGE_VIEW_CANCEL_CHANNEL, id).catch(() => { });
+			void invoke<void>(IMAGE_VIEW_CANCEL_CHANNEL, id).catch(() => {});
 		});
 		const lifetime = toDisposable(() => {
 			cancellation.dispose();
-			void invoke<void>(IMAGE_VIEW_CANCEL_CHANNEL, id).catch(() => { });
+			void invoke<void>(IMAGE_VIEW_CANCEL_CHANNEL, id).catch(() => {});
 		});
 		this.desktopCaptureLifetime.value = lifetime;
 		try {
@@ -52,7 +62,7 @@ export class NativeImageEditorService extends ImageEditorService {
 				throw new Error(localize('chat.screenshot.tooLarge', 'The screenshot is too large to preview.'));
 			if (message.includes('ImageViewUnavailable'))
 				throw new Error(
-					localize('screenshot.overlayUnavailable', 'The screen capture window could not be opened.')
+					localize('screenshot.overlayUnavailable', 'The screen capture window could not be opened.'),
 				);
 			throw error;
 		} finally {

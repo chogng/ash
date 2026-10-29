@@ -18,8 +18,14 @@ suite('Chat context budget', () => {
 	setup(() => {
 		environment = new JSDOM('<!doctype html><body></body>', { pretendToBeVisual: true });
 		// jsdom does not implement scrolling used when context views restore focus.
-		environment.window.HTMLElement.prototype.scrollTo = () => { };
-		installedGlobals = installEditorTestDom(environment, ['Node', 'Element', 'HTMLElement', 'Event', 'KeyboardEvent']);
+		environment.window.HTMLElement.prototype.scrollTo = () => {};
+		installedGlobals = installEditorTestDom(environment, [
+			'Node',
+			'Element',
+			'HTMLElement',
+			'Event',
+			'KeyboardEvent',
+		]);
 		initializeTestLocalization('en');
 		contextViews = new BrowserContextViewService(environment.window.document.body);
 		widget = new ChatContextUsageWidget(environment.window.document, contextViews);
@@ -39,7 +45,9 @@ suite('Chat context budget', () => {
 	});
 
 	const usage = (): ChatContextUsage => ({
-		estimatedTokens: 450_000, contextWindow: 475_000, autoCompactAt: 450_000,
+		estimatedTokens: 450_000,
+		contextWindow: 475_000,
+		autoCompactAt: 450_000,
 		categories: [{ category: 'conversation', tokens: 450_000 }],
 	});
 
@@ -49,7 +57,10 @@ suite('Chat context budget', () => {
 			widget.update(undefined, true);
 			assert.equal(widget.domNode.hidden, false);
 			assert.equal(widget.domNode.disabled, true);
-			assert.equal(widget.domNode.getAttribute('aria-label'), locale === 'en' ? 'Context usage is not available yet' : '暂无上下文用量数据');
+			assert.equal(
+				widget.domNode.getAttribute('aria-label'),
+				locale === 'en' ? 'Context usage is not available yet' : '暂无上下文用量数据',
+			);
 			assert.equal(widget.showDetails(), false);
 			widget.update(usage(), true);
 			assert.equal(widget.domNode.disabled, false);
@@ -64,12 +75,18 @@ suite('Chat context budget', () => {
 			initializeTestLocalization(locale);
 			widget.update(usage());
 			assert.match(widget.domNode.getAttribute('aria-label')!, /100%/u);
-			assert.equal(widget.domNode.querySelector('.ash-chat-context-usage-value')?.getAttribute('stroke-dasharray'), '100 0');
+			assert.equal(
+				widget.domNode.querySelector('.ash-chat-context-usage-value')?.getAttribute('stroke-dasharray'),
+				'100 0',
+			);
 			widget.domNode.click();
 			const details = environment.window.document.querySelector<HTMLElement>('.ash-chat-context-details')!;
 			assert.equal(widget.domNode.getAttribute('aria-expanded'), 'true');
 			assert.match(details.querySelector('.ash-chat-context-details-summary')!.textContent!, /100%/u);
-			assert.match(details.textContent!, locale === 'en' ? /Model context capacity: 475,000/u : /模型上下文容量：475,000/u);
+			assert.match(
+				details.textContent!,
+				locale === 'en' ? /Model context capacity: 475,000/u : /模型上下文容量：475,000/u,
+			);
 			assert.match(details.textContent!, locale === 'en' ? /Remaining input budget0/u : /剩余输入预算0/u);
 			details.dispatchEvent(new environment.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 			assert.equal(widget.domNode.getAttribute('aria-expanded'), 'false');

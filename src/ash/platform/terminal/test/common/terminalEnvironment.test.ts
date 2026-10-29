@@ -9,7 +9,9 @@ suite('Terminal launch environment operations', () => {
 	test('literal POSIX arguments retain quotes, Unicode and shell expansion characters', function () {
 		if (process.platform === 'win32') this.skip();
 		const value = '中文🙂 $HOME $(printf injected) a\'";tail\\';
-		const output = execFileSync('/bin/sh', ['-c', `printf %s ${escapeNonWindowsPath(value)}`], { encoding: 'utf8' });
+		const output = execFileSync('/bin/sh', ['-c', `printf %s ${escapeNonWindowsPath(value)}`], {
+			encoding: 'utf8',
+		});
 		assert.equal(output, value);
 	});
 

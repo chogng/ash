@@ -51,57 +51,29 @@ export function layout2d(
 	anchor: IRectangle,
 	options: Layout2DOptions = {},
 ): Layout2DResult {
-	const axis = options.anchorAxisAlignment ??
-		AnchorAxisAlignment.Vertical;
+	const axis = options.anchorAxisAlignment ?? AnchorAxisAlignment.Vertical;
 	const gap = Math.max(0, options.gap ?? 0);
-	const requestedPosition = options.anchorPosition ??
-		AnchorPosition.Below;
-	const requestedAlignment = options.anchorAlignment ??
-		AnchorAlignment.Left;
+	const requestedPosition = options.anchorPosition ?? AnchorPosition.Below;
+	const requestedAlignment = options.anchorAlignment ?? AnchorAlignment.Left;
 
-	const primary = axis === AnchorAxisAlignment.Vertical
-		? placeBeside(
-			viewport.top,
-			viewport.height,
-			view.height,
-			anchor.top,
-			anchor.height,
-			requestedPosition,
-			gap,
-		)
-		: placeBeside(
-			viewport.left,
-			viewport.width,
-			view.width,
-			anchor.left,
-			anchor.width,
-			requestedPosition,
-			gap,
-		);
-	const cross = axis === AnchorAxisAlignment.Vertical
-		? alignWithAnchor(
-			viewport.left,
-			viewport.width,
-			view.width,
-			anchor.left,
-			anchor.width,
-			requestedAlignment,
-		)
-		: alignWithAnchor(
-			viewport.top,
-			viewport.height,
-			view.height,
-			anchor.top,
-			anchor.height,
-			requestedAlignment,
-		);
+	const primary =
+		axis === AnchorAxisAlignment.Vertical
+			? placeBeside(viewport.top, viewport.height, view.height, anchor.top, anchor.height, requestedPosition, gap)
+			: placeBeside(viewport.left, viewport.width, view.width, anchor.left, anchor.width, requestedPosition, gap);
+	const cross =
+		axis === AnchorAxisAlignment.Vertical
+			? alignWithAnchor(viewport.left, viewport.width, view.width, anchor.left, anchor.width, requestedAlignment)
+			: alignWithAnchor(
+					viewport.top,
+					viewport.height,
+					view.height,
+					anchor.top,
+					anchor.height,
+					requestedAlignment,
+				);
 
-	const left = axis === AnchorAxisAlignment.Vertical
-		? cross.offset
-		: primary.offset;
-	const top = axis === AnchorAxisAlignment.Vertical
-		? primary.offset
-		: cross.offset;
+	const left = axis === AnchorAxisAlignment.Vertical ? cross.offset : primary.offset;
+	const top = axis === AnchorAxisAlignment.Vertical ? primary.offset : cross.offset;
 
 	return {
 		left,
@@ -154,19 +126,9 @@ function placeBeside(
 
 	const spaceAfter = Math.max(0, viewportEnd - after);
 	const spaceBefore = Math.max(0, anchorStart - gap - viewportStart);
-	const position = spaceAfter >= spaceBefore
-		? AnchorPosition.Below
-		: AnchorPosition.Above;
+	const position = spaceAfter >= spaceBefore ? AnchorPosition.Below : AnchorPosition.Above;
 	const desired = position === AnchorPosition.Below ? after : before;
-	return {
-		offset: clampToViewport(
-			desired,
-			viewSize,
-			viewportStart,
-			viewportEnd,
-		),
-		position,
-	};
+	return { offset: clampToViewport(desired, viewSize, viewportStart, viewportEnd), position };
 }
 
 interface CrossPlacement {
@@ -185,72 +147,35 @@ function alignWithAnchor(
 	const viewportEnd = viewportStart + viewportSize;
 	if (requested === AnchorAlignment.Center) {
 		return {
-			offset: clampToViewport(
-				anchorStart + (anchorSize - viewSize) / 2,
-				viewSize,
-				viewportStart,
-				viewportEnd,
-			),
+			offset: clampToViewport(anchorStart + (anchorSize - viewSize) / 2, viewSize, viewportStart, viewportEnd),
 			alignment: AnchorAlignment.Center,
 		};
 	}
 	const leftAligned = anchorStart;
 	const rightAligned = anchorStart + anchorSize - viewSize;
-	const leftFits = leftAligned + viewSize <= viewportEnd &&
-		leftAligned >= viewportStart;
-	const rightFits = rightAligned >= viewportStart &&
-		rightAligned + viewSize <= viewportEnd;
+	const leftFits = leftAligned + viewSize <= viewportEnd && leftAligned >= viewportStart;
+	const rightFits = rightAligned >= viewportStart && rightAligned + viewSize <= viewportEnd;
 
 	if (requested === AnchorAlignment.Left) {
 		if (leftFits) {
-			return {
-				offset: leftAligned,
-				alignment: AnchorAlignment.Left,
-			};
+			return { offset: leftAligned, alignment: AnchorAlignment.Left };
 		}
 		if (rightFits) {
-			return {
-				offset: rightAligned,
-				alignment: AnchorAlignment.Right,
-			};
+			return { offset: rightAligned, alignment: AnchorAlignment.Right };
 		}
 	} else {
 		if (rightFits) {
-			return {
-				offset: rightAligned,
-				alignment: AnchorAlignment.Right,
-			};
+			return { offset: rightAligned, alignment: AnchorAlignment.Right };
 		}
 		if (leftFits) {
-			return {
-				offset: leftAligned,
-				alignment: AnchorAlignment.Left,
-			};
+			return { offset: leftAligned, alignment: AnchorAlignment.Left };
 		}
 	}
 
-	const desired = requested === AnchorAlignment.Left
-		? leftAligned
-		: rightAligned;
-	return {
-		offset: clampToViewport(
-			desired,
-			viewSize,
-			viewportStart,
-			viewportEnd,
-		),
-		alignment: requested,
-	};
+	const desired = requested === AnchorAlignment.Left ? leftAligned : rightAligned;
+	return { offset: clampToViewport(desired, viewSize, viewportStart, viewportEnd), alignment: requested };
 }
 
-function clampToViewport(
-	offset: number,
-	size: number,
-	viewportStart: number,
-	viewportEnd: number,
-): number {
-	return Math.min(
-		Math.max(offset, viewportStart),
-		Math.max(viewportStart, viewportEnd - size),
-	);
+function clampToViewport(offset: number, size: number, viewportStart: number, viewportEnd: number): number {
+	return Math.min(Math.max(offset, viewportStart), Math.max(viewportStart, viewportEnd - size));
 }

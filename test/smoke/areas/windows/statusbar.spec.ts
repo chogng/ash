@@ -1,6 +1,9 @@
 import { expect, test } from '../../../automation/test.js';
 
-test('status bar command, keyboard menu and entry visibility survive a Workbench restart', async ({ workbench, reloadWorkbench }) => {
+test('status bar command, keyboard menu and entry visibility survive a Workbench restart', async ({
+	workbench,
+	reloadWorkbench,
+}) => {
 	let page = workbench.page;
 	let bar = page.locator('[data-part="statusbar"]');
 	let bell = bar.locator('[data-statusbar-item-id="ash.status.notifications"] [role="button"]');

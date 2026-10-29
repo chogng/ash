@@ -3,7 +3,8 @@ import type { IDisposable } from '../../../../../base/common/lifecycle.js';
 import { createDecorator } from '../../../../../platform/instantiation/common/instantiation.js';
 import type { ITerminalExternalLinkProvider } from '../../../terminal/browser/terminal.js';
 
-export const ITerminalLinkProviderService = createDecorator<ITerminalLinkProviderService>('terminalLinkProviderService');
+export const ITerminalLinkProviderService =
+	createDecorator<ITerminalLinkProviderService>('terminalLinkProviderService');
 
 /** Window-owned providers shared by existing and future terminal instances. */
 export interface ITerminalLinkProviderService {

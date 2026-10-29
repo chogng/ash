@@ -31,12 +31,23 @@ export function registerDiffEditorCommands(): void {
 		group: '1_diff',
 		order: 10,
 	});
-	registerAction2(class ToggleDiffLayoutAction extends Action2 {
-		constructor() { super({ id: TOGGLE_DIFF_SIDE_BY_SIDE, title: localize2({ bundle: 'ash.workbench', key: 'command.ToggleDiffLayoutAction' }, 'Toggle Inline Diff View'), f1: true }); }
-		override run(accessor: ServicesAccessor): Promise<void> {
-			return accessor.get(IDiffEditorCommandsService).toggleRenderSideBySide();
-		}
-	});
+	registerAction2(
+		class ToggleDiffLayoutAction extends Action2 {
+			constructor() {
+				super({
+					id: TOGGLE_DIFF_SIDE_BY_SIDE,
+					title: localize2(
+						{ bundle: 'ash.workbench', key: 'command.ToggleDiffLayoutAction' },
+						'Toggle Inline Diff View',
+					),
+					f1: true,
+				});
+			}
+			override run(accessor: ServicesAccessor): Promise<void> {
+				return accessor.get(IDiffEditorCommandsService).toggleRenderSideBySide();
+			}
+		},
+	);
 
 	for (const [id, title, mode, toggled, order] of [
 		[
@@ -50,105 +61,157 @@ export function registerDiffEditorCommands(): void {
 			SET_DIFF_VIEW_MODE_SIDE_BY_SIDE,
 			localize2({ bundle: 'ash.workbench', key: 'diffView.sideBySide' }, 'Side by Side'),
 			'sideBySide',
-			ContextKeyExpr.and(ContextKeyExpr.equals('config.diffEditor.renderSideBySide', true), ContextKeyExpr.equals('config.diffEditor.useInlineViewWhenSpaceIsLimited', false)),
+			ContextKeyExpr.and(
+				ContextKeyExpr.equals('config.diffEditor.renderSideBySide', true),
+				ContextKeyExpr.equals('config.diffEditor.useInlineViewWhenSpaceIsLimited', false),
+			),
 			2,
 		],
 		[
 			SET_DIFF_VIEW_MODE_AUTOMATIC,
 			localize2({ bundle: 'ash.workbench', key: 'diffView.automatic' }, 'Automatic'),
 			'automatic',
-			ContextKeyExpr.and(ContextKeyExpr.equals('config.diffEditor.renderSideBySide', true), ContextKeyExpr.equals('config.diffEditor.useInlineViewWhenSpaceIsLimited', true)),
+			ContextKeyExpr.and(
+				ContextKeyExpr.equals('config.diffEditor.renderSideBySide', true),
+				ContextKeyExpr.equals('config.diffEditor.useInlineViewWhenSpaceIsLimited', true),
+			),
 			3,
 		],
 	] as const) {
-		registerAction2(class SetDiffLayoutAction extends Action2 {
+		registerAction2(
+			class SetDiffLayoutAction extends Action2 {
+				constructor() {
+					super({
+						id,
+						title,
+						f1: true,
+						precondition: diffEditorActive,
+						toggled,
+						menu: { id: MenuId.DiffEditorViewSubmenu, group: '1_view', order },
+					});
+				}
+				override run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+					activateEditorGroup(accessor, context);
+					return accessor.get(IDiffEditorCommandsService).setViewMode(mode);
+				}
+			},
+		);
+	}
+	registerAction2(
+		class NextChangeAction extends Action2 {
 			constructor() {
 				super({
-					id,
-					title,
+					id: GOTO_NEXT_CHANGE,
+					title: localize2({ bundle: 'ash.workbench', key: 'command.NextChangeAction' }, 'Go to Next Change'),
 					f1: true,
-					precondition: diffEditorActive,
-					toggled,
-					menu: { id: MenuId.DiffEditorViewSubmenu, group: '1_view', order },
+					keybinding: { primary: Keybinding.single(logicalKey('f5', { altKey: true })) },
 				});
 			}
-			override run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+
+			override run(accessor: ServicesAccessor, context?: unknown): void {
 				activateEditorGroup(accessor, context);
-				return accessor.get(IDiffEditorCommandsService).setViewMode(mode);
+				accessor.get(IDiffEditorCommandsService).navigateInDiffEditor(true);
 			}
-		});
-	}
-	registerAction2(class NextChangeAction extends Action2 {
-		constructor() {
-			super({
-				id: GOTO_NEXT_CHANGE,
-				title: localize2({ bundle: 'ash.workbench', key: 'command.NextChangeAction' }, 'Go to Next Change'),
-				f1: true,
-				keybinding: { primary: Keybinding.single(logicalKey('f5', { altKey: true })) },
-			});
-		}
+		},
+	);
 
-		override run(accessor: ServicesAccessor, context?: unknown): void {
-			activateEditorGroup(accessor, context);
-			accessor.get(IDiffEditorCommandsService).navigateInDiffEditor(true);
-		}
-	});
+	registerAction2(
+		class PreviousChangeAction extends Action2 {
+			constructor() {
+				super({
+					id: GOTO_PREVIOUS_CHANGE,
+					title: localize2(
+						{ bundle: 'ash.workbench', key: 'command.PreviousChangeAction' },
+						'Go to Previous Change',
+					),
+					f1: true,
+					keybinding: { primary: Keybinding.single(logicalKey('f5', { altKey: true, shiftKey: true })) },
+				});
+			}
 
-	registerAction2(class PreviousChangeAction extends Action2 {
-		constructor() {
-			super({
-				id: GOTO_PREVIOUS_CHANGE,
-				title: localize2({ bundle: 'ash.workbench', key: 'command.PreviousChangeAction' }, 'Go to Previous Change'),
-				f1: true,
-				keybinding: { primary: Keybinding.single(logicalKey('f5', { altKey: true, shiftKey: true })) },
-			});
-		}
-
-		override run(accessor: ServicesAccessor, context?: unknown): void {
-			activateEditorGroup(accessor, context);
-			accessor.get(IDiffEditorCommandsService).navigateInDiffEditor(false);
-		}
-	});
+			override run(accessor: ServicesAccessor, context?: unknown): void {
+				activateEditorGroup(accessor, context);
+				accessor.get(IDiffEditorCommandsService).navigateInDiffEditor(false);
+			}
+		},
+	);
 
 	for (const [id, title, mode] of [
 		[DIFF_FOCUS_PRIMARY_SIDE, 'Focus Modified Side of Diff', FocusTextDiffEditorMode.Modified],
 		[DIFF_FOCUS_SECONDARY_SIDE, 'Focus Original Side of Diff', FocusTextDiffEditorMode.Original],
 		[DIFF_FOCUS_OTHER_SIDE, 'Focus Other Side of Diff', FocusTextDiffEditorMode.Toggle],
 	] as const) {
-		registerAction2(class FocusDiffSideAction extends Action2 {
-			constructor() { super({ id, title, f1: true }); }
-			override run(accessor: ServicesAccessor): void {
-				accessor.get(IDiffEditorCommandsService).focusInDiffEditor(mode);
-			}
-		});
+		registerAction2(
+			class FocusDiffSideAction extends Action2 {
+				constructor() {
+					super({ id, title, f1: true });
+				}
+				override run(accessor: ServicesAccessor): void {
+					accessor.get(IDiffEditorCommandsService).focusInDiffEditor(mode);
+				}
+			},
+		);
 	}
 
 	for (const [id, title, operation] of [
-		[DIFF_OPEN_SIDE, localize2({ bundle: 'ash.workbench', key: 'compare.openSide' }, 'Open Active Diff Side'), (service: IDiffEditorCommandsService) => service.openActiveDiffSide()],
-		[TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE, localize2({ bundle: 'ash.workbench', key: 'diff.showWhitespace' }, 'Show Leading/Trailing Whitespace Differences'), (service: IDiffEditorCommandsService) => service.toggleDiffIgnoreTrimWhitespace()],
-		[DIFF_SWAP_SIDES, localize2({ bundle: 'ash.workbench', key: 'diff.swapSides' }, 'Swap Sides'), (service: IDiffEditorCommandsService) => service.swapDiffSides()],
+		[
+			DIFF_OPEN_SIDE,
+			localize2({ bundle: 'ash.workbench', key: 'compare.openSide' }, 'Open Active Diff Side'),
+			(service: IDiffEditorCommandsService) => service.openActiveDiffSide(),
+		],
+		[
+			TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE,
+			localize2(
+				{ bundle: 'ash.workbench', key: 'diff.showWhitespace' },
+				'Show Leading/Trailing Whitespace Differences',
+			),
+			(service: IDiffEditorCommandsService) => service.toggleDiffIgnoreTrimWhitespace(),
+		],
+		[
+			DIFF_SWAP_SIDES,
+			localize2({ bundle: 'ash.workbench', key: 'diff.swapSides' }, 'Swap Sides'),
+			(service: IDiffEditorCommandsService) => service.swapDiffSides(),
+		],
 	] as const) {
-		registerAction2(class DiffOperationAction extends Action2 {
-			constructor() {
-				super({
-					id,
-					title,
-					f1: true,
-					precondition: diffEditorActive,
-					toggled: id === TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE ? ContextKeyExpr.equals('config.diffEditor.ignoreTrimWhitespace', false) : undefined,
-					menu: id === DIFF_OPEN_SIDE ? undefined : { id: MenuId.EditorTitle, when: diffEditorActive, group: '1_diff', order: id === TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE ? 20 : 30 },
-				});
-			}
-			override run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
-				activateEditorGroup(accessor, context);
-				return operation(accessor.get(IDiffEditorCommandsService));
-			}
-		});
+		registerAction2(
+			class DiffOperationAction extends Action2 {
+				constructor() {
+					super({
+						id,
+						title,
+						f1: true,
+						precondition: diffEditorActive,
+						toggled:
+							id === TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE
+								? ContextKeyExpr.equals('config.diffEditor.ignoreTrimWhitespace', false)
+								: undefined,
+						menu:
+							id === DIFF_OPEN_SIDE
+								? undefined
+								: {
+										id: MenuId.EditorTitle,
+										when: diffEditorActive,
+										group: '1_diff',
+										order: id === TOGGLE_DIFF_IGNORE_TRIM_WHITESPACE ? 20 : 30,
+									},
+					});
+				}
+				override run(accessor: ServicesAccessor, context?: unknown): Promise<void> {
+					activateEditorGroup(accessor, context);
+					return operation(accessor.get(IDiffEditorCommandsService));
+				}
+			},
+		);
 	}
 }
 
 function activateEditorGroup(accessor: ServicesAccessor, context: unknown): void {
-	if (typeof context === 'object' && context !== null && 'groupId' in context && typeof context.groupId === 'number') {
+	if (
+		typeof context === 'object' &&
+		context !== null &&
+		'groupId' in context &&
+		typeof context.groupId === 'number'
+	) {
 		accessor.get(IEditorPart).activateGroup(context.groupId);
 	}
 }

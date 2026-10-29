@@ -1,12 +1,12 @@
 import { defaultButtonStyles, defaultCountBadgeStyles } from '../../../platform/theme/browser/defaultStyles.js';
-import { addDisposableListener, h } from "../../../base/browser/dom.js";
-import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
-import { ActionViewItem, type ActionViewItemOptions } from "../../../base/browser/ui/actionbar/actionViewItems.js";
-import { IconLabel } from "../../../base/browser/ui/iconlabel/iconlabel.js";
+import { addDisposableListener, h } from '../../../base/browser/dom.js';
+import type { IContextMenuProvider } from '../../../base/browser/contextmenu.js';
+import { ActionViewItem, type ActionViewItemOptions } from '../../../base/browser/ui/actionbar/actionViewItems.js';
+import { IconLabel } from '../../../base/browser/ui/iconlabel/iconlabel.js';
 import { CountBadge } from '../../../base/browser/ui/countBadge/countBadge.js';
-import type { IAction } from "../../../base/common/actions.js";
-import type { Icon } from "../../../base/common/icon.js";
-import { assertDefined } from "../../../base/common/types.js";
+import type { IAction } from '../../../base/common/actions.js';
+import type { Icon } from '../../../base/common/icon.js';
+import { assertDefined } from '../../../base/common/types.js';
 import type { IDelayedHoverOptions } from '../../../base/browser/ui/hover/hover.js';
 import { HoverPosition } from '../../../base/browser/ui/hover/hoverWidget.js';
 import { Lxicon } from '../../../base/common/lxicons.js';
@@ -21,11 +21,17 @@ export interface IActivityHoverOptions {
 }
 
 /** Window hosts supply their own placement; both products share the inward-facing direction rule. */
-export function getActivityHoverPosition(location: ActivityBarPosition, sideBarLocation: SideBarLocation): HoverPosition {
+export function getActivityHoverPosition(
+	location: ActivityBarPosition,
+	sideBarLocation: SideBarLocation,
+): HoverPosition {
 	switch (location) {
-		case ActivityBarPosition.TOP: return HoverPosition.BELOW;
-		case ActivityBarPosition.BOTTOM: return HoverPosition.ABOVE;
-		default: return sideBarLocation === 'left' ? HoverPosition.RIGHT : HoverPosition.LEFT;
+		case ActivityBarPosition.TOP:
+			return HoverPosition.BELOW;
+		case ActivityBarPosition.BOTTOM:
+			return HoverPosition.ABOVE;
+		default:
+			return sideBarLocation === 'left' ? HoverPosition.RIGHT : HoverPosition.LEFT;
 	}
 }
 
@@ -48,7 +54,7 @@ export interface CompositeBarActionOptions {
 	readonly tabId: string;
 	readonly panelId?: string;
 	readonly checked: boolean;
-	readonly badge?: { readonly count: number; readonly description: string; };
+	readonly badge?: { readonly count: number; readonly description: string };
 	readonly badgeEnabled: boolean;
 	readonly onActivate: (compositeId: string) => void;
 }
@@ -63,7 +69,9 @@ export class CompositeBarAction extends Disposable implements IAction {
 		super();
 	}
 
-	get options(): CompositeBarActionOptions { return this._options; }
+	get options(): CompositeBarActionOptions {
+		return this._options;
+	}
 
 	get id(): string {
 		return this.options.id;
@@ -101,7 +109,10 @@ export class CompositeActionViewItem extends ActionViewItem {
 	private renderedContainer: HTMLElement | undefined;
 	private button: Button | undefined;
 
-	constructor(private readonly compositeAction: IAction, private readonly options: ICompositeBarActionViewItemOptions) {
+	constructor(
+		private readonly compositeAction: IAction,
+		private readonly options: ICompositeBarActionViewItemOptions,
+	) {
 		super(compositeAction, { ...options, draggable: true });
 	}
 
@@ -116,14 +127,20 @@ export class CompositeActionViewItem extends ActionViewItem {
 		this.renderedContainer = container;
 		if (this.options.presentation === 'navigation') {
 			container.classList.add('ash-composite-bar-navigation-item');
-			this.button = this._register(new Button(container, {
-				...defaultButtonStyles,
-				label: this.action.label,
-				icon: this.action.icon,
-				iconOnly: this.options.navigationLabel !== 'visible',
-				onClick: () => { void Promise.resolve(this.action.run()).catch(onUnexpectedError); },
-			}));
-			if (this.options.navigationClassName) { this.button.domNode.classList.add(this.options.navigationClassName); }
+			this.button = this._register(
+				new Button(container, {
+					...defaultButtonStyles,
+					label: this.action.label,
+					icon: this.action.icon,
+					iconOnly: this.options.navigationLabel !== 'visible',
+					onClick: () => {
+						void Promise.resolve(this.action.run()).catch(onUnexpectedError);
+					},
+				}),
+			);
+			if (this.options.navigationClassName) {
+				this.button.domNode.classList.add(this.options.navigationClassName);
+			}
 			const update = (): void => {
 				const button = this.button!;
 				button.label = this.action.label;
@@ -131,17 +148,24 @@ export class CompositeActionViewItem extends ActionViewItem {
 				button.enabled = this.action.enabled;
 				container.classList.toggle('checked', this.action.checked === true);
 				button.toggleClassName('selected', this.action.checked === true);
-				if (this.action.checked) { button.domNode.setAttribute('aria-current', 'page'); }
-				else { button.domNode.removeAttribute('aria-current'); }
+				if (this.action.checked) {
+					button.domNode.setAttribute('aria-current', 'page');
+				} else {
+					button.domNode.removeAttribute('aria-current');
+				}
 			};
 			update();
-			if (this.options.onDidChange) { this._register(this.options.onDidChange(update)); }
+			if (this.options.onDidChange) {
+				this._register(this.options.onDidChange(update));
+			}
 			this.setupDelayedHover(this.button.domNode, this.action.tooltip);
 			return;
 		}
-		container.classList.add("ash-composite-bar-item");
-		container.classList.add("ash-composite-bar-destination");
-		if (!(this.compositeAction instanceof CompositeBarAction)) { throw new TypeError('Composite tabs require a CompositeBarAction'); }
+		container.classList.add('ash-composite-bar-item');
+		container.classList.add('ash-composite-bar-destination');
+		if (!(this.compositeAction instanceof CompositeBarAction)) {
+			throw new TypeError('Composite tabs require a CompositeBarAction');
+		}
 		const options = this.compositeAction.options;
 		const updateSelection = (): void => {
 			container.classList.toggle('checked', this.compositeAction.checked === true);
@@ -150,16 +174,21 @@ export class CompositeActionViewItem extends ActionViewItem {
 		updateSelection();
 		this._register(this.compositeAction.onDidChange(updateSelection));
 		container.id = options.tabId;
-		container.setAttribute("role", "tab");
-		container.setAttribute("aria-label", options.badge ? `${options.label}, ${options.badge.description}` : options.label);
-		if (options.panelId) container.setAttribute("aria-controls", options.panelId);
-		this.setupDelayedHover(container, options.badge ? `${this.compositeAction.tooltip}, ${options.badge.description}` : this.compositeAction.tooltip);
-		const action = h(container.ownerDocument, "span");
-		action.className = "ash-composite-bar-action";
-		const label = this._register(new IconLabel(action, {
-			label: options.label,
-			icon: options.icon,
-		}));
+		container.setAttribute('role', 'tab');
+		container.setAttribute(
+			'aria-label',
+			options.badge ? `${options.label}, ${options.badge.description}` : options.label,
+		);
+		if (options.panelId) container.setAttribute('aria-controls', options.panelId);
+		this.setupDelayedHover(
+			container,
+			options.badge
+				? `${this.compositeAction.tooltip}, ${options.badge.description}`
+				: this.compositeAction.tooltip,
+		);
+		const action = h(container.ownerDocument, 'span');
+		action.className = 'ash-composite-bar-action';
+		const label = this._register(new IconLabel(action, { label: options.label, icon: options.icon }));
 		container.append(action);
 		// A separate layer keeps focus above badges even when the icon has its own stacking context.
 		const focusRing = h(container.ownerDocument, 'span');
@@ -168,30 +197,38 @@ export class CompositeActionViewItem extends ActionViewItem {
 		container.append(focusRing);
 		if (options.badge && options.badgeEnabled && options.badge.count > 0) {
 			const count = options.badge.count;
-			const countFormat = count >= 1000 ? `${Math.trunc(count / 1000)}K${count % 1000 === 0 ? '' : '+'}` : undefined;
-			const badge = this._register(new CountBadge(container, {
-				count, countFormat, size: 'small'
-			}, defaultCountBadgeStyles));
+			const countFormat =
+				count >= 1000 ? `${Math.trunc(count / 1000)}K${count % 1000 === 0 ? '' : '+'}` : undefined;
+			const badge = this._register(
+				new CountBadge(container, { count, countFormat, size: 'small' }, defaultCountBadgeStyles),
+			);
 			badge.domNode.classList.add('ash-composite-bar-badge');
 			badge.domNode.classList.toggle('long-count', (countFormat ?? String(count)).length >= 3);
 			badge.domNode.setAttribute('aria-hidden', 'true');
 		}
-		this._register(addDisposableListener(container, "click", (event) => {
-			event.preventDefault();
-			event.stopPropagation();
-			this.compositeAction.run();
-		}));
-		this._register(addDisposableListener(container, "keydown", (event) => {
-			if (event.key !== "Enter" && event.key !== " ") return;
-			event.preventDefault();
-			event.stopPropagation();
-			this.compositeAction.run();
-		}));
+		this._register(
+			addDisposableListener(container, 'click', event => {
+				event.preventDefault();
+				event.stopPropagation();
+				this.compositeAction.run();
+			}),
+		);
+		this._register(
+			addDisposableListener(container, 'keydown', event => {
+				if (event.key !== 'Enter' && event.key !== ' ') return;
+				event.preventDefault();
+				event.stopPropagation();
+				this.compositeAction.run();
+			}),
+		);
 	}
 
 	override focus(): void {
-		if (this.button) { this.button.focus(); }
-		else { this.container.focus(); }
+		if (this.button) {
+			this.button.focus();
+		} else {
+			this.container.focus();
+		}
 	}
 
 	override setTabbable(tabbable: boolean): void {
@@ -226,32 +263,34 @@ export class CompositeOverflowActivityActionViewItem extends ActionViewItem {
 			throw new Error(`CompositeBar overflow action is already rendered: ${this.action.id}`);
 		}
 		this.renderedContainer = container;
-		container.classList.add("ash-composite-bar-item");
-		container.classList.add("ash-composite-bar-overflow");
-		container.setAttribute("role", "tab");
-		container.setAttribute("aria-selected", "false");
-		container.setAttribute("aria-label", this.action.label);
-		container.setAttribute("aria-haspopup", "menu");
-		container.setAttribute("aria-expanded", "false");
+		container.classList.add('ash-composite-bar-item');
+		container.classList.add('ash-composite-bar-overflow');
+		container.setAttribute('role', 'tab');
+		container.setAttribute('aria-selected', 'false');
+		container.setAttribute('aria-label', this.action.label);
+		container.setAttribute('aria-haspopup', 'menu');
+		container.setAttribute('aria-expanded', 'false');
 		this.setupDelayedHover(container, this.action.tooltip);
-		const action = h(container.ownerDocument, "span");
-		action.className = "ash-composite-bar-action";
-		const label = this._register(new IconLabel(action, {
-			label: this.action.label,
-			icon: this.action.icon,
-		}));
+		const action = h(container.ownerDocument, 'span');
+		action.className = 'ash-composite-bar-action';
+		const label = this._register(new IconLabel(action, { label: this.action.label, icon: this.action.icon }));
 		container.append(action);
-		this._register(addDisposableListener(container, "click", (event) => {
-			event.preventDefault();
-			event.stopPropagation();
-			this.show();
-		}));
-		this._register(addDisposableListener(container, "keydown", (event) => {
-			if (event.key !== "Enter" && event.key !== " " && event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-			event.preventDefault();
-			event.stopPropagation();
-			this.show();
-		}));
+		this._register(
+			addDisposableListener(container, 'click', event => {
+				event.preventDefault();
+				event.stopPropagation();
+				this.show();
+			}),
+		);
+		this._register(
+			addDisposableListener(container, 'keydown', event => {
+				if (event.key !== 'Enter' && event.key !== ' ' && event.key !== 'ArrowDown' && event.key !== 'ArrowUp')
+					return;
+				event.preventDefault();
+				event.stopPropagation();
+				this.show();
+			}),
+		);
 	}
 
 	override focus(): void {
@@ -264,16 +303,16 @@ export class CompositeOverflowActivityActionViewItem extends ActionViewItem {
 
 	private show(): void {
 		const actions = this.getActions();
-		if (actions.length === 0 || this.container.getAttribute("aria-expanded") === "true") return;
-		this.container.setAttribute("aria-expanded", "true");
+		if (actions.length === 0 || this.container.getAttribute('aria-expanded') === 'true') return;
+		this.container.setAttribute('aria-expanded', 'true');
 		try {
 			this.contextMenuProvider.showContextMenu({
 				getAnchor: () => this.container,
 				getActions: () => actions,
-				onHide: () => this.container.setAttribute("aria-expanded", "false"),
+				onHide: () => this.container.setAttribute('aria-expanded', 'false'),
 			});
 		} catch (error) {
-			this.container.setAttribute("aria-expanded", "false");
+			this.container.setAttribute('aria-expanded', 'false');
 			throw error;
 		}
 	}
@@ -285,7 +324,7 @@ export class CompositeOverflowActivityActionViewItem extends ActionViewItem {
 }
 
 export class CompositeOverflowActivityAction implements IAction {
-	readonly id = "ash.compositeBar.overflow";
+	readonly id = 'ash.compositeBar.overflow';
 	readonly icon = Lxicon.ellipsis;
 	readonly enabled = true;
 	readonly tooltip: string;
@@ -294,5 +333,5 @@ export class CompositeOverflowActivityAction implements IAction {
 		this.tooltip = label;
 	}
 
-	run(): void { }
+	run(): void {}
 }

@@ -23,7 +23,12 @@ test('selection URIs preserve resource identity when extracting positions and ra
 	const extracted = extractSelection(withSelection(uri, selection));
 	assert.equal(extracted.uri.toString(), uri.toString());
 	assert.deepEqual(extracted.selection, selection);
-	assert.deepEqual(extractSelection(uri.with({ fragment: 'L12,7' })).selection, { startLineNumber: 12, startColumn: 7, endLineNumber: undefined, endColumn: undefined });
+	assert.deepEqual(extractSelection(uri.with({ fragment: 'L12,7' })).selection, {
+		startLineNumber: 12,
+		startColumn: 7,
+		endLineNumber: undefined,
+		endColumn: undefined,
+	});
 	const anchor = uri.with({ fragment: 'section' });
 	assert.equal(extractSelection(anchor).uri, anchor);
 });

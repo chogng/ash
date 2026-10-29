@@ -1,5 +1,5 @@
-import type { Event } from "../../../../base/common/event.js";
-import { createServiceIdentifier } from "../../../../platform/instantiation/common/instantiation.js";
+import type { Event } from '../../../../base/common/event.js';
+import { createServiceIdentifier } from '../../../../platform/instantiation/common/instantiation.js';
 
 /** Startup progress; shutdown does not move this phase backwards. */
 export enum LifecyclePhase {
@@ -18,7 +18,7 @@ export enum StartupKind {
 	ReopenedWindow = 4,
 }
 
-export type ShutdownReason = "pageHide" | "windowClose" | "reload" | "load" | "quit";
+export type ShutdownReason = 'pageHide' | 'windowClose' | 'reload' | 'load' | 'quit';
 
 export interface IBeforeShutdownEvent {
 	readonly reason: ShutdownReason;
@@ -60,4 +60,4 @@ export interface ILifecycleService {
 	shutdown(reason: ShutdownReason): Promise<void>;
 }
 
-export const ILifecycleService = createServiceIdentifier<ILifecycleService>("lifecycleService");
+export const ILifecycleService = createServiceIdentifier<ILifecycleService>('lifecycleService');

@@ -22,13 +22,20 @@ export class OutlineService extends Disposable implements IOutlineService {
 		return [...this.creators].some(creator => creator.matches(editor));
 	}
 
-	public async createOutline(editor: IEditorPane, target: OutlineTarget, token: CancellationToken): Promise<IOutline<any> | undefined> {
+	public async createOutline(
+		editor: IEditorPane,
+		target: OutlineTarget,
+		token: CancellationToken,
+	): Promise<IOutline<any> | undefined> {
 		this.assertNotDisposed();
 		throwIfCancelled(token);
 		const creator = [...this.creators].find(candidate => candidate.matches(editor));
 		if (!creator) return undefined;
 		const pending = creator.createOutline(editor, target, token).then(outline => {
-			if (token.isCancellationRequested || this.isDisposed || !this.creators.has(creator)) { outline?.dispose(); return undefined; }
+			if (token.isCancellationRequested || this.isDisposed || !this.creators.has(creator)) {
+				outline?.dispose();
+				return undefined;
+			}
 			return outline;
 		});
 		const outline = await raceCancellationError(pending, token);

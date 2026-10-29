@@ -1,15 +1,29 @@
-import { type ChildProcessWithoutNullStreams, spawn, execFile } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { createHash, randomUUID } from "node:crypto";
-import { createReadStream, existsSync } from "node:fs";
-import { isAbsolute, join } from "node:path";
+import { createHash, randomUUID } from 'node:crypto';
+import { createReadStream, existsSync } from 'node:fs';
+import { isAbsolute, join } from 'node:path';
 import { AbstractDisposable, type IDisposable, toDisposable } from '../../../base/common/lifecycle.js';
-import { buildAppServerEnvironment, isAllowedAppServerEnvironmentKey, type AppServerHostPlatform } from '../../agentHost/common/appServerEnvironment.js';
+import {
+	buildAppServerEnvironment,
+	isAllowedAppServerEnvironmentKey,
+	type AppServerHostPlatform,
+} from '../../agentHost/common/appServerEnvironment.js';
 import type { IAppServerProcessLauncher } from '../../agentHost/electron-main/appServerProcessLauncher.js';
 import { LOCAL_APP_SERVER_INITIALIZE_TIMEOUT_MS } from '../../agentHost/common/appServerTransport.js';
-import { appServerDaemonExecutablePath, appServerExecutablePath, developmentAppServerGenerationPath, packagedAppServerDaemonSha256, packagedAppServerSha256, type AppServerDaemonPackageLocation } from '../node/appServerDaemonPackage.js';
+import {
+	appServerDaemonExecutablePath,
+	appServerExecutablePath,
+	developmentAppServerGenerationPath,
+	packagedAppServerDaemonSha256,
+	packagedAppServerSha256,
+	type AppServerDaemonPackageLocation,
+} from '../node/appServerDaemonPackage.js';
 import { readDevelopmentAppServerGenerationSync } from './developmentAppServerReloader.js';
-import { acquireDevelopmentAppServerRuntime, type IDevelopmentAppServerRuntime } from './developmentAppServerRuntime.js';
+import {
+	acquireDevelopmentAppServerRuntime,
+	type IDevelopmentAppServerRuntime,
+} from './developmentAppServerRuntime.js';
 
 interface AppServerDaemonConnectionOptions {
 	readonly packageLocation: AppServerDaemonPackageLocation;
@@ -21,19 +35,31 @@ interface AppServerDaemonConnectionOptions {
 }
 
 /** Creates a connection carrier; stopping it leaves the profile's shared backend running. */
-export function createAppServerDaemonLauncher(options: AppServerDaemonConnectionOptions): { readonly launcher: AppServerDaemonLauncher; readonly generationFile: string | undefined; } {
+export function createAppServerDaemonLauncher(options: AppServerDaemonConnectionOptions): {
+	readonly launcher: AppServerDaemonLauncher;
+	readonly generationFile: string | undefined;
+} {
 	const { packageLocation, sourceEnvironment } = options;
 	const reloadBackend = sourceEnvironment.ASH_DEV_APP_SERVER_RELOAD === '1';
-	const generationFile = !packageLocation.isPackaged && (reloadBackend || sourceEnvironment.ASH_RENDERER_URL !== undefined)
-		? sourceEnvironment.ASH_DEV_APP_SERVER_GENERATION ?? developmentAppServerGenerationPath(packageLocation.appPath)
-		: undefined;
+	const generationFile =
+		!packageLocation.isPackaged && (reloadBackend || sourceEnvironment.ASH_RENDERER_URL !== undefined)
+			? (sourceEnvironment.ASH_DEV_APP_SERVER_GENERATION ??
+				developmentAppServerGenerationPath(packageLocation.appPath))
+			: undefined;
 	if (generationFile && !isAbsolute(generationFile)) throw new Error('Development generation path must be absolute');
 	const developmentRuntime = generationFile ? readDevelopmentAppServerGenerationSync(generationFile) : undefined;
-	if (generationFile && !developmentRuntime) throw new Error('Development runtime is not prepared. Run pnpm prepare:backend.');
+	if (generationFile && !developmentRuntime)
+		throw new Error('Development runtime is not prepared. Run pnpm prepare:backend.');
 	const backendSha256 = packagedAppServerSha256(packageLocation);
 	const productEnvironment: Record<string, string> = {
 		ASH_ELECTRON_RUN_AS_NODE_PATH: options.electronExecutable,
-		ASH_APP_SERVER_PATH: developmentRuntime ? join(developmentRuntime, 'bin', packageLocation.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server') : appServerExecutablePath(packageLocation),
+		ASH_APP_SERVER_PATH: developmentRuntime
+			? join(
+					developmentRuntime,
+					'bin',
+					packageLocation.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server',
+				)
+			: appServerExecutablePath(packageLocation),
 		ASH_HOME: options.profileRoot,
 	};
 	if (developmentRuntime) productEnvironment.ASH_DEV_RUNTIME_ROOT = developmentRuntime;
@@ -55,10 +81,17 @@ export function createAppServerDaemonLauncher(options: AppServerDaemonConnection
 	}
 	let hostPlatform: AppServerHostPlatform;
 	switch (packageLocation.platform) {
-		case 'win32': hostPlatform = 'windows'; break;
-		case 'darwin': hostPlatform = 'macos'; break;
-		case 'linux': hostPlatform = 'linux'; break;
-		default: throw new Error(`Unsupported App Server host platform: ${packageLocation.platform}`);
+		case 'win32':
+			hostPlatform = 'windows';
+			break;
+		case 'darwin':
+			hostPlatform = 'macos';
+			break;
+		case 'linux':
+			hostPlatform = 'linux';
+			break;
+		default:
+			throw new Error(`Unsupported App Server host platform: ${packageLocation.platform}`);
 	}
 	return {
 		launcher: new AppServerDaemonLauncher({
@@ -81,7 +114,11 @@ interface SpawnAppServerDaemonOptions {
 	readonly environment: Readonly<Record<string, string>>;
 }
 
-type SpawnAppServerDaemon = (executable: string, args: readonly string[], options: SpawnAppServerDaemonOptions) => ChildProcessWithoutNullStreams;
+type SpawnAppServerDaemon = (
+	executable: string,
+	args: readonly string[],
+	options: SpawnAppServerDaemonOptions,
+) => ChildProcessWithoutNullStreams;
 
 interface AppServerDaemonLauncherOptions {
 	readonly executable: string;
@@ -108,7 +145,8 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 	constructor(readonly options: AppServerDaemonLauncherOptions) {
 		super();
 		validateExecutable(options.executable);
-		if (options.expectedSha256 !== undefined && !/^[a-f0-9]{64}$/.test(options.expectedSha256)) throw new Error("App Server executable digest must be a SHA-256 hex string");
+		if (options.expectedSha256 !== undefined && !/^[a-f0-9]{64}$/.test(options.expectedSha256))
+			throw new Error('App Server executable digest must be a SHA-256 hex string');
 		this.validateEnvironment(options.environment);
 		this.spawnProcess = options.spawnProcess ?? defaultSpawn;
 		this.fileExists = options.fileExists ?? existsSync;
@@ -122,7 +160,9 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 
 	get executable(): string {
 		const runtime = this.developmentRuntime?.runtime;
-		return runtime ? join(runtime, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon') : this.options.executable;
+		return runtime
+			? join(runtime, 'bin', process.platform === 'win32' ? 'ash-app-server-daemon.exe' : 'ash-app-server-daemon')
+			: this.options.executable;
 	}
 
 	get environment(): Readonly<Record<string, string>> {
@@ -141,7 +181,10 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 			await this.developmentStartupBarrier();
 		} else if (this.options.generationFile && !this.developmentRuntime) {
 			const lease = await this.acquireDevelopmentRuntime();
-			if (this.isDisposed) { lease.dispose(); this.assertNotDisposed(); }
+			if (this.isDisposed) {
+				lease.dispose();
+				this.assertNotDisposed();
+			}
 			this.ownedDevelopmentRuntime = lease;
 			this.selectDevelopmentRuntime(lease);
 		}
@@ -149,26 +192,41 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 		if (!this.fileExists(this.executable)) throw new Error(`Packaged Ash binary is missing: ${this.executable}`);
 		if (this.options.expectedSha256 !== undefined) {
 			const actual = await this.fileSha256(this.executable);
-			if (actual !== this.options.expectedSha256) throw new Error(`Packaged Ash binary failed integrity validation: ${this.executable}`);
+			if (actual !== this.options.expectedSha256)
+				throw new Error(`Packaged Ash binary failed integrity validation: ${this.executable}`);
 		}
 	}
 
 	acquireDevelopmentRuntime(): Promise<IDevelopmentAppServerRuntime> {
 		if (!this.options.generationFile) throw new Error('Development generation path is required');
-		return acquireDevelopmentAppServerRuntime(this.options.executable, this.options.generationFile, this.environmentValue);
+		return acquireDevelopmentAppServerRuntime(
+			this.options.executable,
+			this.options.generationFile,
+			this.environmentValue,
+		);
 	}
 
 	/** The caller owns the lease and keeps it until every connection adopts its replacement. */
 	selectDevelopmentRuntime(lease: IDevelopmentAppServerRuntime): void {
 		lease.assertActive();
 		this.developmentRuntime = lease;
-		this.replaceEnvironment({ ...this.environmentValue, ASH_DEV_RUNTIME_ROOT: lease.runtime, ASH_APP_SERVER_PATH: join(lease.runtime, 'bin', process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server') });
+		this.replaceEnvironment({
+			...this.environmentValue,
+			ASH_DEV_RUNTIME_ROOT: lease.runtime,
+			ASH_APP_SERVER_PATH: join(
+				lease.runtime,
+				'bin',
+				process.platform === 'win32' ? 'ash-app-server.exe' : 'ash-app-server',
+			),
+		});
 	}
 
 	/** Gates connection startup while the profile-wide development daemon is restarting. */
 	setDevelopmentStartupBarrier(barrier: () => Promise<void>): IDisposable {
 		this.developmentStartupBarrier = barrier;
-		return toDisposable(() => { this.developmentStartupBarrier = undefined; });
+		return toDisposable(() => {
+			this.developmentStartupBarrier = undefined;
+		});
 	}
 
 	launch(): ChildProcessWithoutNullStreams {
@@ -186,10 +244,19 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 	async getLogPath(): Promise<string> {
 		await this.validate();
 		const { stdout } = await promisify(execFile)(this.executable, ['version'], {
-			env: { ...this.environmentValue }, timeout: 5_000, maxBuffer: 64 * 1024, windowsHide: true,
+			env: { ...this.environmentValue },
+			timeout: 5_000,
+			maxBuffer: 64 * 1024,
+			windowsHide: true,
 		});
 		const value: unknown = JSON.parse(stdout);
-		if (!value || typeof value !== 'object' || !('logPath' in value) || typeof value.logPath !== 'string' || !isAbsolute(value.logPath)) {
+		if (
+			!value ||
+			typeof value !== 'object' ||
+			!('logPath' in value) ||
+			typeof value.logPath !== 'string' ||
+			!isAbsolute(value.logPath)
+		) {
 			throw new TypeError('Invalid daemon log location');
 		}
 		return value.logPath;
@@ -201,25 +268,30 @@ export class AppServerDaemonLauncher extends AbstractDisposable implements IAppS
 
 	private validateEnvironment(environment: Readonly<Record<string, string>>): void {
 		for (const key of Object.keys(environment)) {
-			if (!isAllowedAppServerEnvironmentKey(key)) throw new Error(`App Server environment variable is not allowed: ${key}`);
+			if (!isAllowedAppServerEnvironmentKey(key))
+				throw new Error(`App Server environment variable is not allowed: ${key}`);
 		}
 	}
 }
 
 function sha256File(path: string): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const digest = createHash("sha256");
+		const digest = createHash('sha256');
 		const stream = createReadStream(path);
-		stream.on("data", chunk => digest.update(chunk));
-		stream.on("error", reject);
-		stream.on("end", () => resolve(digest.digest("hex")));
+		stream.on('data', chunk => digest.update(chunk));
+		stream.on('error', reject);
+		stream.on('end', () => resolve(digest.digest('hex')));
 	});
 }
 
 function validateExecutable(executable: string): void {
-	if (!isAbsolute(executable)) throw new Error("App Server executable path must be absolute");
+	if (!isAbsolute(executable)) throw new Error('App Server executable path must be absolute');
 }
 
-function defaultSpawn(executable: string, args: readonly string[], options: SpawnAppServerDaemonOptions): ChildProcessWithoutNullStreams {
-	return spawn(executable, [...args], { env: { ...options.environment }, shell: false, stdio: "pipe" });
+function defaultSpawn(
+	executable: string,
+	args: readonly string[],
+	options: SpawnAppServerDaemonOptions,
+): ChildProcessWithoutNullStreams {
+	return spawn(executable, [...args], { env: { ...options.environment }, shell: false, stdio: 'pipe' });
 }

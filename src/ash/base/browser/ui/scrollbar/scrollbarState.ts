@@ -1,4 +1,4 @@
-import { clamp } from "../../../common/numbers.js";
+import { clamp } from '../../../common/numbers.js';
 
 export interface ScrollbarAxisMetrics {
 	readonly viewportSize: number;
@@ -22,34 +22,15 @@ export function createScrollbarAxisMetrics(
 	const maximumPosition = Math.max(0, scrollSize - viewportSize);
 	position = clamp(position, 0, maximumPosition);
 	trackSize = nonNegativeFinite(trackSize);
-	minimumThumbSize = clamp(
-		nonNegativeFinite(minimumThumbSize),
-		0,
-		trackSize,
-	);
-	const proportionalSize = scrollSize === 0
-		? trackSize
-		: trackSize * viewportSize / scrollSize;
+	minimumThumbSize = clamp(nonNegativeFinite(minimumThumbSize), 0, trackSize);
+	const proportionalSize = scrollSize === 0 ? trackSize : (trackSize * viewportSize) / scrollSize;
 	const thumbSize = clamp(proportionalSize, minimumThumbSize, trackSize);
 	const thumbTravel = Math.max(0, trackSize - thumbSize);
-	const thumbPosition = maximumPosition === 0
-		? 0
-		: thumbTravel * position / maximumPosition;
-	return {
-		viewportSize,
-		scrollSize,
-		position,
-		maximumPosition,
-		trackSize,
-		thumbSize,
-		thumbPosition,
-	};
+	const thumbPosition = maximumPosition === 0 ? 0 : (thumbTravel * position) / maximumPosition;
+	return { viewportSize, scrollSize, position, maximumPosition, trackSize, thumbSize, thumbPosition };
 }
 
-export function clampScrollbarPosition(
-	value: number,
-	maximum: number,
-): number {
+export function clampScrollbarPosition(value: number, maximum: number): number {
 	return clamp(nonNegativeFinite(value), 0, nonNegativeFinite(maximum));
 }
 

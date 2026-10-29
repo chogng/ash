@@ -17,15 +17,27 @@ export async function captureTerminalAttachment(
 ): Promise<ChatContextAttachment | undefined> {
 	const output = await view?.getTerminalOutput(instance, 100_000, signal);
 	if (signal.aborted) return undefined;
-	if (!output?.trim()) throw new Error(localize('chat.context.terminalUnavailable', 'The terminal has closed or has no output to attach'));
+	if (!output?.trim())
+		throw new Error(
+			localize('chat.context.terminalUnavailable', 'The terminal has closed or has no output to attach'),
+		);
 	const name = localize('chat.context.terminalName', 'Terminal: {0}', instance.title);
 	const integration = instance.shellIntegration;
 	const commands = integration?.commandDetection && !integration.commandStorageDisabled ? integration.commands : [];
-	const content = `Terminal: ${instance.title}\nDirectory: ${instance.cwd ?? instance.initialCwd}\n\n${output}`
-		+ (commands.length ? `\n\n${JSON.stringify({ hasRichCommandDetection: integration!.hasRichCommandDetection, commands }, null, 2)}` : '');
+	const content =
+		`Terminal: ${instance.title}\nDirectory: ${instance.cwd ?? instance.initialCwd}\n\n${output}` +
+		(commands.length
+			? `\n\n${JSON.stringify({ hasRichCommandDetection: integration!.hasRichCommandDetection, commands }, null, 2)}`
+			: '');
 	return Object.freeze({
-		id: `terminal:${instance.id}`, kind: 'terminal', name,
-		resource: URI.from({ scheme: Schemas.internal, authority: 'terminal', query: new URLSearchParams({ id: instance.id }).toString() }),
+		id: `terminal:${instance.id}`,
+		kind: 'terminal',
+		name,
+		resource: URI.from({
+			scheme: Schemas.internal,
+			authority: 'terminal',
+			query: new URLSearchParams({ id: instance.id }).toString(),
+		}),
 		terminalSnapshot: Object.freeze({ text: output, columns: instance.xterm?.raw.cols ?? 80 }),
 		resolve: async () => ({ name, content }),
 	});

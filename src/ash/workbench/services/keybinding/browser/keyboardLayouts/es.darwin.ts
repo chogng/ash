@@ -1,6 +1,5 @@
 import { KeyboardLayoutContribution } from './_.contribution.js';
 
-
 KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 	layout: { id: 'com.apple.keylayout.Spanish-ISO', lang: 'es', localizedName: 'Spanish - ISO' },
 	secondaryLayouts: [],
@@ -46,7 +45,7 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		Backspace: [],
 		Tab: [],
 		Space: [' ', ' ', ' ', ' ', 0],
-		Minus: ['\'', '?', '´', '¸', 0],
+		Minus: ["'", '?', '´', '¸', 0],
 		Equal: ['¡', '¿', '‚', '˛', 0],
 		BracketLeft: ['`', '^', '[', 'ˆ', 3],
 		BracketRight: ['+', '*', ']', '±', 0],
@@ -122,6 +121,6 @@ KeyboardLayoutContribution.INSTANCE.registerKeyboardLayout({
 		ControlRight: [],
 		ShiftRight: [],
 		AltRight: [],
-		MetaRight: []
-	}
+		MetaRight: [],
+	},
 });

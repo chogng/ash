@@ -8,7 +8,11 @@ import type { ProcessRun } from '../../../build/processes.ts';
 export async function startBrowserUnitServer(run: ProcessRun, environment: NodeJS.ProcessEnv) {
 	const root = resolve(import.meta.dirname, '../../..');
 	const assets = mkdtempSync(resolve(root, '.build/desktop/unit-browser-'));
-	const build = await run.command(process.execPath, ['node_modules/vite/bin/vite.js', 'build', '--config', 'test/unit/browser/vite.config.ts', '--outDir', assets], environment);
+	const build = await run.command(
+		process.execPath,
+		['node_modules/vite/bin/vite.js', 'build', '--config', 'test/unit/browser/vite.config.ts', '--outDir', assets],
+		environment,
+	);
 	if (build.code !== 0) {
 		rmSync(assets, { recursive: true, force: true });
 		throw new Error('Browser unit fixture build failed.');
@@ -17,7 +21,10 @@ export async function startBrowserUnitServer(run: ProcessRun, environment: NodeJ
 	const server = createServer(serve);
 	await new Promise<void>((resolveReady, reject) => {
 		server.once('error', reject);
-		server.listen(0, '127.0.0.1', () => { server.off('error', reject); resolveReady(); });
+		server.listen(0, '127.0.0.1', () => {
+			server.off('error', reject);
+			resolveReady();
+		});
 	});
 	const address = server.address();
 	if (!address || typeof address === 'string') throw new Error('Browser unit server requires TCP.');

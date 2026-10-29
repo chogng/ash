@@ -1,8 +1,17 @@
 import type { IAction } from '../../../../base/common/actions.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { getActionBarActions, getFlatContextMenuActions, type PrimaryAndSecondaryActions } from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
-import { IMenuService, type MenuId, type IMenu, type IMenuActionOptions } from '../../../../platform/actions/common/actions.js';
+import {
+	getActionBarActions,
+	getFlatContextMenuActions,
+	type PrimaryAndSecondaryActions,
+} from '../../../../platform/actions/browser/menuEntryActionViewItem.js';
+import {
+	IMenuService,
+	type MenuId,
+	type IMenu,
+	type IMenuActionOptions,
+} from '../../../../platform/actions/common/actions.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
 
 export interface IViewMenuActionsOptions {

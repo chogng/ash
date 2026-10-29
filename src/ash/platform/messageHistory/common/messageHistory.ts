@@ -33,4 +33,6 @@ export interface IMessageHistoryService {
 }
 
 /** Hosts without Profile history explicitly register an unavailable capability. */
-export const IMessageHistoryService = createServiceIdentifier<IMessageHistoryService | undefined>('messageHistoryService');
+export const IMessageHistoryService = createServiceIdentifier<IMessageHistoryService | undefined>(
+	'messageHistoryService',
+);

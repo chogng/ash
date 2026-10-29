@@ -11,7 +11,9 @@ import { ILayoutService } from '../../../../platform/layout/browser/layoutServic
 
 /** Each embedded editor owns the lifetime and geometry of its Quick Input host. */
 export class StandaloneQuickInputService extends QuickInputService {
-	private readonly controllers = this._register(new DisposableMap<ICodeEditor, IDisposable & { readonly controller: QuickInputController; }>());
+	private readonly controllers = this._register(
+		new DisposableMap<ICodeEditor, IDisposable & { readonly controller: QuickInputController }>(),
+	);
 
 	constructor(
 		@ICodeEditorService private readonly codeEditors: ICodeEditorService,
@@ -20,14 +22,19 @@ export class StandaloneQuickInputService extends QuickInputService {
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super(instantiation, contextKeys, layout);
-		this._register(codeEditors.onCodeEditorRemove(editor => {
-			this.controllers.deleteAndDispose(editor);
-		}));
-		this._register(layout.onDidChangeActiveContainer(() => {
-			for (const [editor, entry] of this.controllers) {
-				if (editor.getContainerDomNode() !== layout.activeContainer) entry.controller.currentQuickInput?.hide();
-			}
-		}));
+		this._register(
+			codeEditors.onCodeEditorRemove(editor => {
+				this.controllers.deleteAndDispose(editor);
+			}),
+		);
+		this._register(
+			layout.onDidChangeActiveContainer(() => {
+				for (const [editor, entry] of this.controllers) {
+					if (editor.getContainerDomNode() !== layout.activeContainer)
+						entry.controller.currentQuickInput?.hide();
+				}
+			}),
+		);
 	}
 
 	public override get currentQuickInput(): IQuickInput | undefined {
@@ -52,7 +59,10 @@ export class StandaloneQuickInputService extends QuickInputService {
 			const layout = (): void => controller.layout(editor.getLayoutInfo(), 0);
 			lifetime.add(editor.onDidLayoutChange(layout));
 			layout();
-			entry = Object.assign(toDisposable(() => lifetime.dispose()), { controller });
+			entry = Object.assign(
+				toDisposable(() => lifetime.dispose()),
+				{ controller },
+			);
 			this.controllers.set(editor, entry);
 		}
 		return entry.controller;

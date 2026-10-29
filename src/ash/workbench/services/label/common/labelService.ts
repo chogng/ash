@@ -1,11 +1,18 @@
 import {
-	ILabelService, type ResourceLabelFormatter, type IFormatterChangeEvent, type IUriLabelOptions,
+	ILabelService,
+	type ResourceLabelFormatter,
+	type IFormatterChangeEvent,
+	type IUriLabelOptions,
 } from '../../../../platform/label/common/label.js';
 import { InstantiationType, registerSingleton } from '../../../../platform/instantiation/common/extensions.js';
 import { getRemoteWorkspacePath, isWindowsRemotePath } from '../../../../platform/remote/common/remote.js';
 import { Emitter } from '../../../../base/common/event.js';
 import {
-	getPathLabel, normalizeDriveLetter, type IPathLabelFormatting, type IRelativePathProvider, type IUserHomeProvider,
+	getPathLabel,
+	normalizeDriveLetter,
+	type IPathLabelFormatting,
+	type IRelativePathProvider,
+	type IUserHomeProvider,
 } from '../../../../base/common/labels.js';
 import { operatingSystem, OperatingSystem } from '../../../../base/common/platform.js';
 import { Schemas } from '../../../../base/common/network.js';
@@ -29,26 +36,37 @@ export class LabelService extends Disposable implements ILabelService {
 		@IRendererHostService private readonly host: IRendererHost,
 	) {
 		super();
-		const subscription = host.appServer.onConnectionState(() => this.formatterChangeEmitter.fire({ scheme: Schemas.file }));
+		const subscription = host.appServer.onConnectionState(() =>
+			this.formatterChangeEmitter.fire({ scheme: Schemas.file }),
+		);
 		this._register(toDisposable(() => subscription.dispose()));
 	}
 
 	getUriLabel(resource: URI, options: IUriLabelOptions = {}): string {
-		const formatter = this.formatters.get(resource.scheme)?.find(candidate => !candidate.authority || candidate.authority === resource.authority);
+		const formatter = this.formatters
+			.get(resource.scheme)
+			?.find(candidate => !candidate.authority || candidate.authority === resource.authority);
 
 		const relative: IRelativePathProvider | undefined = options.relative
 			? {
-				noPrefix: options.noPrefix,
-				getWorkspace: () => this.workspaceContextService.getWorkspace(),
-				getWorkspaceFolder: candidate => this.workspaceContextService.getWorkspaceFolder(candidate),
-			}
+					noPrefix: options.noPrefix,
+					getWorkspace: () => this.workspaceContextService.getWorkspace(),
+					getWorkspaceFolder: candidate => this.workspaceContextService.getWorkspaceFolder(candidate),
+				}
 			: undefined;
 		const home = this.paths.resolvedUserHome;
-		const userHome = home?.scheme === resource.scheme && home.authority === resource.authority && !resource.path.startsWith('/@browser/') ? home : undefined;
+		const userHome =
+			home?.scheme === resource.scheme &&
+			home.authority === resource.authority &&
+			!resource.path.startsWith('/@browser/')
+				? home
+				: undefined;
 		const formatting: IPathLabelFormatting = {
 			os: this.resourceOperatingSystem(resource),
 			...(relative ? { relative } : {}),
-			...(!options.noPrefix && userHome && (!formatter || formatter.formatting.tildify) ? { tildify: { userHome } satisfies IUserHomeProvider } : {}),
+			...(!options.noPrefix && userHome && (!formatter || formatter.formatting.tildify)
+				? { tildify: { userHome } satisfies IUserHomeProvider }
+				: {}),
 		};
 		let label = getPathLabel(resource, formatting);
 		if (formatter?.formatting.normalizeDriveLetter) {
@@ -67,19 +85,30 @@ export class LabelService extends Disposable implements ILabelService {
 	}
 
 	getUriBasenameLabel(resource: URI): string {
-		const formatter = this.formatters.get(resource.scheme)?.find(candidate => !candidate.authority || candidate.authority === resource.authority);
+		const formatter = this.formatters
+			.get(resource.scheme)
+			?.find(candidate => !candidate.authority || candidate.authority === resource.authority);
 		if (formatter) {
 			const label = this.getUriLabel(resource);
-			return label.split(formatter.formatting.separator || this.getSeparator(resource.scheme, resource.authority)).filter(Boolean).at(-1) ?? label;
+			return (
+				label
+					.split(formatter.formatting.separator || this.getSeparator(resource.scheme, resource.authority))
+					.filter(Boolean)
+					.at(-1) ?? label
+			);
 		}
 		return basename(resource) || resource.authority || resource.toString();
 	}
 
 	getSeparator(scheme: string, authority?: string): '/' | '\\' {
-		const formatter = this.formatters.get(scheme)?.find(candidate => !candidate.authority || candidate.authority === authority);
+		const formatter = this.formatters
+			.get(scheme)
+			?.find(candidate => !candidate.authority || candidate.authority === authority);
 		if (formatter?.formatting.separator) return formatter.formatting.separator;
 		if (scheme === Schemas.ashRemote) {
-			const folder = this.workspaceContextService.getWorkspace().folders.find(folder => folder.uri.scheme === scheme && folder.uri.authority === authority);
+			const folder = this.workspaceContextService
+				.getWorkspace()
+				.folders.find(folder => folder.uri.scheme === scheme && folder.uri.authority === authority);
 			return folder && isWindowsRemotePath(getRemoteWorkspacePath(folder.uri)) ? '\\' : '/';
 		}
 		return scheme === Schemas.file && this.resourceOperatingSystem() === OperatingSystem.Windows ? '\\' : '/';
@@ -87,19 +116,27 @@ export class LabelService extends Disposable implements ILabelService {
 
 	private resourceOperatingSystem(resource?: URI): OperatingSystem {
 		if (resource?.scheme === Schemas.ashRemote) {
-			return isWindowsRemotePath(getRemoteWorkspacePath(resource)) ? OperatingSystem.Windows : OperatingSystem.Linux;
+			return isWindowsRemotePath(getRemoteWorkspacePath(resource))
+				? OperatingSystem.Windows
+				: OperatingSystem.Linux;
 		}
 		if (resource && (resource.scheme !== Schemas.file || resource.path.startsWith('/@browser/'))) {
 			return OperatingSystem.Linux;
 		}
-		return this.host.hasAppServer ? this.host.appServer.operatingSystem ?? OperatingSystem.Linux : operatingSystem;
+		return this.host.hasAppServer
+			? (this.host.appServer.operatingSystem ?? OperatingSystem.Linux)
+			: operatingSystem;
 	}
 
 	registerFormatter(formatter: ResourceLabelFormatter): IDisposable {
-		if (!formatter || typeof formatter !== 'object'
-			|| typeof formatter.scheme !== 'string' || formatter.scheme.length === 0
-			|| typeof formatter.formatting?.label !== 'string'
-			|| !['/', '\\', ''].includes(formatter.formatting.separator)) {
+		if (
+			!formatter ||
+			typeof formatter !== 'object' ||
+			typeof formatter.scheme !== 'string' ||
+			formatter.scheme.length === 0 ||
+			typeof formatter.formatting?.label !== 'string' ||
+			!['/', '\\', ''].includes(formatter.formatting.separator)
+		) {
 			throw new TypeError('Label formatter must provide a scheme, label and separator');
 		}
 		const entries = this.formatters.get(formatter.scheme) ?? [];

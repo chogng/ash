@@ -22,7 +22,11 @@ suite('quickAccess browser component', () => {
 		expect(await picker.boundingBox()).toEqual(initial);
 	});
 
-	for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', theme: 'dark' }, { locale: 'en', theme: 'hc' }]) {
+	for (const variant of [
+		{ locale: 'en', theme: 'light' },
+		{ locale: 'zh-CN', theme: 'dark' },
+		{ locale: 'en', theme: 'hc' },
+	]) {
 		test(`Quick Input drags, snaps, restores and resets without changing appearance (${variant.locale}, ${variant.theme})`, async () => {
 			const { page } = browserTests;
 			await page.goto(`/quickAccess.html?${new URLSearchParams(variant)}`);
@@ -31,10 +35,18 @@ suite('quickAccess browser component', () => {
 			const picker = page.getByRole('dialog');
 			const input = picker.getByRole('combobox');
 			const initial = (await picker.boundingBox())!;
-			const appearance = () => picker.evaluate(element => {
-				const style = getComputedStyle(element);
-				return [style.width, style.fontSize, style.border, style.borderRadius, style.backgroundColor, style.boxShadow];
-			});
+			const appearance = () =>
+				picker.evaluate(element => {
+					const style = getComputedStyle(element);
+					return [
+						style.width,
+						style.fontSize,
+						style.border,
+						style.borderRadius,
+						style.backgroundColor,
+						style.boxShadow,
+					];
+				});
 			const originalAppearance = await appearance();
 			const drag = async (left: number, top: number): Promise<void> => {
 				const bounds = (await picker.boundingBox())!;
@@ -44,7 +56,9 @@ suite('quickAccess browser component', () => {
 				await page.mouse.up();
 			};
 			await drag(initial.x + 130, 85);
-			await expect.poll(async () => Math.round((await picker.boundingBox())!.x)).toBe(Math.round(initial.x + 130));
+			await expect
+				.poll(async () => Math.round((await picker.boundingBox())!.x))
+				.toBe(Math.round(initial.x + 130));
 			await expect.poll(async () => Math.round((await picker.boundingBox())!.y)).toBe(85);
 			await expect(input).toBeFocused();
 			expect(await appearance()).toEqual(originalAppearance);
@@ -85,9 +99,17 @@ suite('quickAccess browser component', () => {
 		await input.fill('file-12');
 		const initial = await picker.boundingBox();
 		await input.dblclick();
-		expect(await input.evaluate(element => (element as HTMLInputElement).selectionEnd! - (element as HTMLInputElement).selectionStart!)).toBeGreaterThan(0);
+		expect(
+			await input.evaluate(
+				element => (element as HTMLInputElement).selectionEnd! - (element as HTMLInputElement).selectionStart!,
+			),
+		).toBeGreaterThan(0);
 		expect(await picker.boundingBox()).toEqual(initial);
-		const selection = () => input.evaluate(element => [(element as HTMLInputElement).selectionStart, (element as HTMLInputElement).selectionEnd]);
+		const selection = () =>
+			input.evaluate(element => [
+				(element as HTMLInputElement).selectionStart,
+				(element as HTMLInputElement).selectionEnd,
+			]);
 		const selectedWord = await selection();
 		await page.mouse.move(initial!.x + 3, initial!.y + 3);
 		await page.mouse.down();
@@ -103,9 +125,13 @@ suite('quickAccess browser component', () => {
 		await page.evaluate(() => window.ashQuickAccessIntegration.showAnchored());
 		const anchored = (await picker.boundingBox())!;
 		// Dispatch the drag stream without the native blur that dismisses anchored surfaces.
-		await picker.locator('.ash-quick-pick-input').dispatchEvent('mousedown', { button: 0, clientX: anchored.x + 3, clientY: anchored.y + 3 });
+		await picker
+			.locator('.ash-quick-pick-input')
+			.dispatchEvent('mousedown', { button: 0, clientX: anchored.x + 3, clientY: anchored.y + 3 });
 		await page.evaluate(bounds => {
-			window.dispatchEvent(new MouseEvent('mousemove', { buttons: 1, clientX: bounds.x + 90, clientY: bounds.y + 90 }));
+			window.dispatchEvent(
+				new MouseEvent('mousemove', { buttons: 1, clientX: bounds.x + 90, clientY: bounds.y + 90 }),
+			);
 			window.dispatchEvent(new MouseEvent('mouseup'));
 		}, anchored);
 		expect(await picker.boundingBox()).toEqual(anchored);
@@ -129,19 +155,23 @@ suite('quickAccess browser component', () => {
 		const active = picker.locator('.ash-list-row.is-active');
 		await expect(active).toHaveAttribute('aria-setsize', '60');
 		await expect(active).toHaveAttribute('aria-posinset', '1');
-		await expect(input).toHaveAttribute('aria-activedescendant', await active.getAttribute('id') ?? '');
+		await expect(input).toHaveAttribute('aria-activedescendant', (await active.getAttribute('id')) ?? '');
 		expect(await picker.getByRole('option').count()).toBeLessThan(40);
 		await input.press('ArrowUp');
 		await expect(active.locator('.ash-quick-pick-row-label')).toHaveText('file-59.ts');
 		await expect(active).toHaveAttribute('aria-posinset', '60');
-		await expect(input).toHaveAttribute('aria-activedescendant', await active.getAttribute('id') ?? '');
+		await expect(input).toHaveAttribute('aria-activedescendant', (await active.getAttribute('id')) ?? '');
 		expect(await picker.getByRole('option').count()).toBeLessThan(40);
 		await input.press('Enter');
 		await expect(picker).toHaveCount(0);
 		await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText('file-59.ts');
 	});
 
-	for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', theme: 'dark' }, { locale: 'en', theme: 'hc' }]) {
+	for (const variant of [
+		{ locale: 'en', theme: 'light' },
+		{ locale: 'zh-CN', theme: 'dark' },
+		{ locale: 'en', theme: 'hc' },
+	]) {
 		test(`Quick Pick clears input through its toolbar and retains focus (${variant.locale}, ${variant.theme})`, async function () {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
@@ -201,7 +231,9 @@ suite('quickAccess browser component', () => {
 			const removeLabel = variant.locale === 'zh-CN' ? '从命令历史记录中移除' : 'Remove from Command History';
 			await open.click();
 			await input.fill('>Format');
-			const alpha = picker.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label', { hasText: /^Alpha Format$/ }) });
+			const alpha = picker
+				.getByRole('option')
+				.filter({ has: page.locator('.ash-quick-pick-row-label', { hasText: /^Alpha Format$/ }) });
 			const gear = alpha.getByRole('button', { name: configureLabel });
 			await expect(gear).toHaveCSS('opacity', '0');
 			await alpha.hover();
@@ -219,9 +251,9 @@ suite('quickAccess browser component', () => {
 			await expect(gear).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			await gear.click();
 			await expect(picker).toHaveCount(0);
-			await expect.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.keybindingRequests)).toEqual([
-				{ textual: false, query: '@command:test.quickAccess.AlphaFormat', pickerVisible: false },
-			]);
+			await expect
+				.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.keybindingRequests))
+				.toEqual([{ textual: false, query: '@command:test.quickAccess.AlphaFormat', pickerVisible: false }]);
 			await open.click();
 			await input.fill('>Unbound command');
 			await expect(picker.getByRole('button', { name: removeLabel })).toHaveCount(0);
@@ -234,9 +266,9 @@ suite('quickAccess browser component', () => {
 			await expect(unboundGear).toHaveCSS('opacity', '1');
 			await unboundGear.press('Enter');
 			await expect(picker).toHaveCount(0);
-			await expect.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.keybindingRequests.at(-1))).toEqual({
-				textual: false, query: '@command:test.quickAccess.Unboundcommand', pickerVisible: false,
-			});
+			await expect
+				.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.keybindingRequests.at(-1)))
+				.toEqual({ textual: false, query: '@command:test.quickAccess.Unboundcommand', pickerVisible: false });
 			expect(await page.evaluate(() => window.ashQuickAccessIntegration.executions)).toEqual([]);
 			await open.click();
 			const recentLabel = variant.locale === 'zh-CN' ? '最近使用' : 'recently used';
@@ -246,13 +278,15 @@ suite('quickAccess browser component', () => {
 			await expect(picker).toHaveCount(0);
 			await open.click();
 			await input.fill('>Format');
-			const recent = picker.getByRole('option').filter({ has: page.locator('.ash-quick-pick-row-label', { hasText: /^Format$/ }) });
+			const recent = picker
+				.getByRole('option')
+				.filter({ has: page.locator('.ash-quick-pick-row-label', { hasText: /^Format$/ }) });
 			await expect(recent.getByRole('button', { name: removeLabel })).toHaveCount(1);
 			await recent.getByRole('button', { name: configureLabel }).click();
 			await expect(picker).toHaveCount(0);
-			await expect.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.keybindingRequests.at(-1))).toEqual({
-				textual: false, query: '@command:test.quickAccess.Format', pickerVisible: false,
-			});
+			await expect
+				.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.keybindingRequests.at(-1)))
+				.toEqual({ textual: false, query: '@command:test.quickAccess.Format', pickerVisible: false });
 			expect(await page.evaluate(() => window.ashQuickAccessIntegration.executions)).toEqual(['Format']);
 			await open.click();
 			await expect(picker.getByRole('separator', { name: recentLabel })).toHaveCount(1);
@@ -270,7 +304,10 @@ suite('quickAccess browser component', () => {
 			const configureLabel = variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding';
 			const title = variant.locale === 'zh-CN' ? '键盘快捷方式' : 'Keyboard Shortcuts';
 			const modal = page.getByRole('dialog', { name: title, exact: true });
-			for (const [label, command, close] of [['Alpha Format', 'AlphaFormat', 'Escape'], ['Unbound command', 'Unboundcommand', 'button']] as const) {
+			for (const [label, command, close] of [
+				['Alpha Format', 'AlphaFormat', 'Escape'],
+				['Unbound command', 'Unboundcommand', 'button'],
+			] as const) {
 				await open.click();
 				await picker.getByRole('combobox').fill(`>${label}`);
 				await picker.getByRole('button', { name: configureLabel }).click();
@@ -282,16 +319,32 @@ suite('quickAccess browser component', () => {
 				await expect(search).toBeFocused();
 				await expect(modal.locator('.ash-keybindings-row')).toHaveCount(1);
 				await expect(modal.locator('.ash-keybindings-command-id')).toHaveText(`test.quickAccess.${command}`);
-				await expect(modal.locator('.ash-keybindings-source')).toHaveText(command === 'AlphaFormat'
-					? variant.locale === 'zh-CN' ? '系统' : 'System'
-					: variant.locale === 'zh-CN' ? '未分配' : 'Unassigned');
-				const closeToolbar = modal.getByRole('toolbar', { name: variant.locale === 'zh-CN' ? `关闭${title}` : `Close ${title}`, exact: true });
-				const closeButton = closeToolbar.getByRole('button', { name: variant.locale === 'zh-CN' ? '关闭' : 'Close', exact: true });
+				await expect(modal.locator('.ash-keybindings-source')).toHaveText(
+					command === 'AlphaFormat'
+						? variant.locale === 'zh-CN'
+							? '系统'
+							: 'System'
+						: variant.locale === 'zh-CN'
+							? '未分配'
+							: 'Unassigned',
+				);
+				const closeToolbar = modal.getByRole('toolbar', {
+					name: variant.locale === 'zh-CN' ? `关闭${title}` : `Close ${title}`,
+					exact: true,
+				});
+				const closeButton = closeToolbar.getByRole('button', {
+					name: variant.locale === 'zh-CN' ? '关闭' : 'Close',
+					exact: true,
+				});
 				await expect(closeButton.locator('.ash-icon')).toBeVisible();
-				expect((await closeButton.locator('.ash-button-content').boundingBox())!.width).toBeGreaterThanOrEqual(16);
+				expect((await closeButton.locator('.ash-button-content').boundingBox())!.width).toBeGreaterThanOrEqual(
+					16,
+				);
 				await closeButton.focus();
 				await page.keyboard.press('Shift+Tab');
-				expect(await modal.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(true);
+				expect(await modal.evaluate(element => element.contains(element.ownerDocument.activeElement))).toBe(
+					true,
+				);
 				await search.focus();
 				if (close === 'Escape') {
 					await modal.screenshot({ path: testInfo.outputPath('keyboard-shortcuts-modal.png') });
@@ -312,18 +365,35 @@ suite('quickAccess browser component', () => {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
 
-			await page.goto(`/quickAccess.html?${new URLSearchParams({ ...variant, shortcuts: '1', shortcutToolbar: '1' })}`);
+			await page.goto(
+				`/quickAccess.html?${new URLSearchParams({ ...variant, shortcuts: '1', shortcutToolbar: '1' })}`,
+			);
 			await page.getByRole('button', { name: 'Open commands' }).click();
 			const picker = page.locator('.ash-quick-pick');
 			await picker.getByRole('combobox').fill('>Alpha Format');
-			await picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' }).click();
+			await picker
+				.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' })
+				.click();
 			const modal = page.locator('.ash-modal-editor');
 			const search = modal.locator('.ash-keybindings-search input');
 			const actions = modal.locator('.ash-keybindings-search-actions');
-			const record = actions.getByRole('button', { name: variant.locale === 'zh-CN' ? '录制按键' : 'Record Keys', exact: false });
-			const sort = actions.getByRole('button', { name: variant.locale === 'zh-CN' ? '按优先级排序（从高到低）' : 'Sort by Precedence (Highest first)', exact: false });
-			const clear = actions.getByRole('button', { name: variant.locale === 'zh-CN' ? '清空快捷键搜索输入' : 'Clear Keybindings Search Input', exact: false });
-			expect(await actions.locator('.ash-icon').evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id')))).toEqual(['record-keys', 'sort-precedence', 'clear-all']);
+			const record = actions.getByRole('button', {
+				name: variant.locale === 'zh-CN' ? '录制按键' : 'Record Keys',
+				exact: false,
+			});
+			const sort = actions.getByRole('button', {
+				name: variant.locale === 'zh-CN' ? '按优先级排序（从高到低）' : 'Sort by Precedence (Highest first)',
+				exact: false,
+			});
+			const clear = actions.getByRole('button', {
+				name: variant.locale === 'zh-CN' ? '清空快捷键搜索输入' : 'Clear Keybindings Search Input',
+				exact: false,
+			});
+			expect(
+				await actions
+					.locator('.ash-icon')
+					.evaluateAll(icons => icons.map(icon => icon.getAttribute('data-ash-icon-id'))),
+			).toEqual(['record-keys', 'sort-precedence', 'clear-all']);
 			await expect(record).toHaveAttribute('aria-pressed', 'false');
 			await expect(sort).toHaveAttribute('aria-pressed', 'false');
 			await clear.click();
@@ -349,20 +419,42 @@ suite('quickAccess browser component', () => {
 			await expect(search).toHaveValue(chordQuery);
 			await expect(modal).toBeVisible();
 			await search.press('Control+Alt+9');
-			await expect.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.executions)).toEqual(['YankeeLatest']);
+			await expect
+				.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.executions))
+				.toEqual(['YankeeLatest']);
 			await clear.click();
 			await search.fill('test.shortcutToolbar');
 			const commands = () => modal.locator('.ash-keybindings-command-id').allTextContents();
-			await expect.poll(commands).toEqual(['test.shortcutToolbar.AlphaLate', 'test.shortcutToolbar.YankeeLatest', 'test.shortcutToolbar.ZuluEarly']);
+			await expect
+				.poll(commands)
+				.toEqual([
+					'test.shortcutToolbar.AlphaLate',
+					'test.shortcutToolbar.YankeeLatest',
+					'test.shortcutToolbar.ZuluEarly',
+				]);
 			await sort.click();
 			await expect(sort).toHaveAttribute('aria-pressed', 'true');
 			await expect(search).toHaveValue('test.shortcutToolbar');
-			await expect.poll(commands).toEqual(['test.shortcutToolbar.YankeeLatest', 'test.shortcutToolbar.ZuluEarly', 'test.shortcutToolbar.AlphaLate']);
-			await expect(modal.locator('.ash-keybindings-count')).toContainText(variant.locale === 'zh-CN' ? '按优先级' : 'precedence');
+			await expect
+				.poll(commands)
+				.toEqual([
+					'test.shortcutToolbar.YankeeLatest',
+					'test.shortcutToolbar.ZuluEarly',
+					'test.shortcutToolbar.AlphaLate',
+				]);
+			await expect(modal.locator('.ash-keybindings-count')).toContainText(
+				variant.locale === 'zh-CN' ? '按优先级' : 'precedence',
+			);
 			await record.click();
 			await clear.click();
 			await search.press('Control+Alt+9');
-			await expect.poll(commands).toEqual(['test.shortcutToolbar.YankeeLatest', 'test.shortcutToolbar.ZuluEarly', 'test.shortcutToolbar.AlphaLate']);
+			await expect
+				.poll(commands)
+				.toEqual([
+					'test.shortcutToolbar.YankeeLatest',
+					'test.shortcutToolbar.ZuluEarly',
+					'test.shortcutToolbar.AlphaLate',
+				]);
 			expect(await page.evaluate(() => window.ashQuickAccessIntegration.executions)).toEqual(['YankeeLatest']);
 			await modal.screenshot({ path: testInfo.outputPath('keybindings-search-actions-recording.png') });
 			await search.press('Tab');
@@ -372,7 +464,13 @@ suite('quickAccess browser component', () => {
 			await page.keyboard.press('Space');
 			await expect(sort).toHaveAttribute('aria-pressed', 'false');
 			await expect(search).toBeFocused();
-			await expect.poll(commands).toEqual(['test.shortcutToolbar.AlphaLate', 'test.shortcutToolbar.YankeeLatest', 'test.shortcutToolbar.ZuluEarly']);
+			await expect
+				.poll(commands)
+				.toEqual([
+					'test.shortcutToolbar.AlphaLate',
+					'test.shortcutToolbar.YankeeLatest',
+					'test.shortcutToolbar.ZuluEarly',
+				]);
 			await page.setViewportSize({ width: 700, height: 720 });
 			const bounds = (await modal.locator('.ash-keybindings-search').boundingBox())!;
 			for (const button of [record, sort, clear]) {
@@ -392,11 +490,15 @@ suite('quickAccess browser component', () => {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
 
-			await page.goto(`/quickAccess.html?${new URLSearchParams({ ...variant, shortcuts: '1', shortcutRows: '1' })}`);
+			await page.goto(
+				`/quickAccess.html?${new URLSearchParams({ ...variant, shortcuts: '1', shortcutRows: '1' })}`,
+			);
 			await page.getByRole('button', { name: 'Open commands' }).click();
 			const picker = page.locator('.ash-quick-pick');
 			await picker.getByRole('combobox').fill('>Alpha Format');
-			await picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' }).click();
+			await picker
+				.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' })
+				.click();
 			const modal = page.locator('.ash-modal-editor');
 			const editor = modal.locator('.ash-keybindings-editor');
 			const search = editor.locator('.ash-keybindings-search input');
@@ -427,7 +529,10 @@ suite('quickAccess browser component', () => {
 			await search.fill('row000');
 			await expect(row.locator('.ash-keybindings-command-id')).toBeHidden();
 			await expect(row).toHaveCSS('height', '24px');
-			const clear = editor.getByRole('button', { name: variant.locale === 'zh-CN' ? '清空快捷键搜索输入' : 'Clear Keybindings Search Input', exact: false });
+			const clear = editor.getByRole('button', {
+				name: variant.locale === 'zh-CN' ? '清空快捷键搜索输入' : 'Clear Keybindings Search Input',
+				exact: false,
+			});
 			await clear.click();
 			await expect(search).toHaveValue('');
 			await expect(search).toBeFocused();
@@ -442,10 +547,18 @@ suite('quickAccess browser component', () => {
 			const narrowEditor = (await editor.boundingBox())!;
 			const narrowSearch = (await search.boundingBox())!;
 			expect(narrowSearch.x + narrowSearch.width).toBeLessThanOrEqual(narrowEditor.x + narrowEditor.width);
-			await expect.poll(() => grid.locator('.ash-keybinding-label-chord').evaluateAll(chords => chords.length > 0 && chords.every(chord => {
-				const cell = chord.closest('.ash-keybindings-key')!.getBoundingClientRect();
-				return chord.getBoundingClientRect().width <= cell.width - 20;
-			}))).toBe(true);
+			await expect
+				.poll(() =>
+					grid.locator('.ash-keybinding-label-chord').evaluateAll(
+						chords =>
+							chords.length > 0 &&
+							chords.every(chord => {
+								const cell = chord.closest('.ash-keybindings-key')!.getBoundingClientRect();
+								return chord.getBoundingClientRect().width <= cell.width - 20;
+							}),
+					),
+				)
+				.toBe(true);
 			await modal.screenshot({ path: testInfo.outputPath('keybindings-compact-narrow.png') });
 		});
 
@@ -457,10 +570,19 @@ suite('quickAccess browser component', () => {
 			await page.getByRole('button', { name: 'Open commands' }).click();
 			const picker = page.locator('.ash-quick-pick');
 			await picker.getByRole('combobox').fill('>Alpha Format');
-			await picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' }).click();
+			await picker
+				.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' })
+				.click();
 			const modal = page.locator('.ash-modal-editor');
 			const toolbar = modal.locator('.ash-modal-editor-actions');
-			await expect(toolbar.getByRole('button', { name: variant.locale === 'zh-CN' ? '打开键盘快捷方式 (JSON)' : 'Open Keyboard Shortcuts (JSON)', exact: true }).locator('.ash-icon')).toBeVisible();
+			await expect(
+				toolbar
+					.getByRole('button', {
+						name: variant.locale === 'zh-CN' ? '打开键盘快捷方式 (JSON)' : 'Open Keyboard Shortcuts (JSON)',
+						exact: true,
+					})
+					.locator('.ash-icon'),
+			).toBeVisible();
 			const more = toolbar.locator('.ash-toolbar-more-actions button');
 			const search = modal.locator('.ash-keybindings-search input');
 			for (const [source, label] of [
@@ -472,11 +594,13 @@ suite('quickAccess browser component', () => {
 				await more.click();
 				await expect(page.locator('.ash-menu-leading-check > .ash-icon:visible')).toHaveCount(1);
 				await expect(page.locator('.ash-menu')).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-				if (source === 'system') await page.screenshot({ path: testInfo.outputPath('keybindings-source-menu.png') });
+				if (source === 'system')
+					await page.screenshot({ path: testInfo.outputPath('keybindings-source-menu.png') });
 				await page.getByRole('menuitemcheckbox', { name: label, exact: true }).click();
 				await expect(search).toHaveValue(`@source:${source}`);
 				await expect(search).toBeFocused();
-				if (source === 'user' || source === 'extension') await expect(modal.locator('.ash-keybindings-empty')).toBeVisible();
+				if (source === 'user' || source === 'extension')
+					await expect(modal.locator('.ash-keybindings-empty')).toBeVisible();
 			}
 			await search.fill('@source:system @command:test.quickAccess.AlphaFormat');
 			const row = modal.locator('.ash-keybindings-row');
@@ -492,17 +616,28 @@ suite('quickAccess browser component', () => {
 			await page.keyboard.press('Tab');
 			await expect(recorder).toBeFocused();
 			await recorder.press('Enter');
-			await expect(modal.locator('.ash-keybindings-status')).toHaveText(variant.locale === 'zh-CN' ? '快捷键已保存。' : 'Keybinding saved.');
+			await expect(modal.locator('.ash-keybindings-status')).toHaveText(
+				variant.locale === 'zh-CN' ? '快捷键已保存。' : 'Keybinding saved.',
+			);
 			await expect(modal.locator('.ash-keybindings-recorder')).toBeHidden();
 			await search.fill('@source:user @command:test.quickAccess.AlphaFormat');
 			await expect(row).toHaveCount(1);
-			await expect(row.locator('.ash-keybindings-source')).toHaveText(variant.locale === 'zh-CN' ? '用户' : 'User');
+			await expect(row.locator('.ash-keybindings-source')).toHaveText(
+				variant.locale === 'zh-CN' ? '用户' : 'User',
+			);
 			await expect(row.locator('.ash-keybindings-when')).toHaveText(previousWhen);
 			await expect(row.locator('.ash-keybindings-row-action .ash-icon')).toHaveCount(2);
 			await modal.screenshot({ path: testInfo.outputPath('keybindings-icons-and-toolbar.png') });
 			await page.setViewportSize({ width: 700, height: 720 });
 			await expect(edit.first()).toBeVisible();
-			await row.getByRole('button', { name: variant.locale === 'zh-CN' ? '移除“Alpha Format”的快捷键' : 'Remove keybinding for Alpha Format' }).click();
+			await row
+				.getByRole('button', {
+					name:
+						variant.locale === 'zh-CN'
+							? '移除“Alpha Format”的快捷键'
+							: 'Remove keybinding for Alpha Format',
+				})
+				.click();
 			await expect(row).toHaveCount(0);
 		});
 
@@ -510,11 +645,15 @@ suite('quickAccess browser component', () => {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
 
-			await page.goto(`/quickAccess.html?${new URLSearchParams({ ...variant, shortcuts: '1', shortcutRows: '1' })}`);
+			await page.goto(
+				`/quickAccess.html?${new URLSearchParams({ ...variant, shortcuts: '1', shortcutRows: '1' })}`,
+			);
 			await page.getByRole('button', { name: 'Open commands' }).click();
 			const picker = page.locator('.ash-quick-pick');
 			await picker.getByRole('combobox').fill('>Alpha Format');
-			await picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' }).click();
+			await picker
+				.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' })
+				.click();
 			const modal = page.locator('.ash-modal-editor');
 			const search = modal.locator('.ash-keybindings-search input');
 			await search.fill('test.shortcutTable');
@@ -532,8 +671,13 @@ suite('quickAccess browser component', () => {
 			await page.mouse.down();
 			await page.mouse.move(sash.x + sash.width / 2 + 72, sash.y + sash.height / 2);
 			await page.mouse.up();
-			await expect.poll(async () => (await commandHeader.boundingBox())!.width).toBeGreaterThan(originalWidth + 40);
-			const widths = () => headers.evaluateAll(elements => elements.map(element => Math.round(element.getBoundingClientRect().width)));
+			await expect
+				.poll(async () => (await commandHeader.boundingBox())!.width)
+				.toBeGreaterThan(originalWidth + 40);
+			const widths = () =>
+				headers.evaluateAll(elements =>
+					elements.map(element => Math.round(element.getBoundingClientRect().width)),
+				);
 			const draggedWidths = await widths();
 			await search.fill('test.shortcutTable row000');
 			await expect(grid.locator('.ash-table-row')).toHaveCount(1);
@@ -547,7 +691,9 @@ suite('quickAccess browser component', () => {
 			const headerTop = (await commandHeader.boundingBox())!.y;
 			await grid.locator('.ash-table-row').first().focus();
 			await page.keyboard.press('End');
-			const last = grid.locator('.ash-table-row').filter({ has: page.locator('.ash-keybindings-command-id', { hasText: 'test.shortcutTable.row159' }) });
+			const last = grid
+				.locator('.ash-table-row')
+				.filter({ has: page.locator('.ash-keybindings-command-id', { hasText: 'test.shortcutTable.row159' }) });
 			await expect(last).toBeFocused();
 			expect((await commandHeader.boundingBox())!.y).toBe(headerTop);
 			await page.keyboard.press('ArrowUp');
@@ -559,8 +705,12 @@ suite('quickAccess browser component', () => {
 			await modal.locator('.ash-keybindings-record-input input').press('Escape');
 			await expect(focusedCell).toBeFocused();
 			const aligned = await grid.evaluate(element => {
-				const headerWidths = [...element.querySelectorAll('[role="columnheader"]')].map(cell => Math.round(cell.getBoundingClientRect().width));
-				const cellWidths = [...element.querySelector('.ash-table-row')!.querySelectorAll('[role="gridcell"]')].map(cell => Math.round(cell.getBoundingClientRect().width));
+				const headerWidths = [...element.querySelectorAll('[role="columnheader"]')].map(cell =>
+					Math.round(cell.getBoundingClientRect().width),
+				);
+				const cellWidths = [
+					...element.querySelector('.ash-table-row')!.querySelectorAll('[role="gridcell"]'),
+				].map(cell => Math.round(cell.getBoundingClientRect().width));
 				return { headerWidths, cellWidths };
 			});
 			expect(aligned.cellWidths).toEqual(aligned.headerWidths);
@@ -579,19 +729,29 @@ suite('quickAccess browser component', () => {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
 
-			await page.addInitScript(userAgent => Object.defineProperty(navigator, 'userAgent', { get: () => userAgent }), variant.userAgent);
-			await page.goto(`/quickAccess.html?${new URLSearchParams({ os: variant.os, locale: variant.locale, theme: variant.theme, shortcuts: '1', shortcutToolbar: '1' })}`);
+			await page.addInitScript(
+				userAgent => Object.defineProperty(navigator, 'userAgent', { get: () => userAgent }),
+				variant.userAgent,
+			);
+			await page.goto(
+				`/quickAccess.html?${new URLSearchParams({ os: variant.os, locale: variant.locale, theme: variant.theme, shortcuts: '1', shortcutToolbar: '1' })}`,
+			);
 			const trigger = page.getByRole('button', { name: 'Open commands' });
 			await trigger.click();
 			const picker = page.locator('.ash-quick-pick');
 			await picker.getByRole('combobox').fill('>Alpha Format');
-			await picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' }).click();
+			await picker
+				.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' })
+				.click();
 			const modal = page.locator('.ash-modal-editor');
 			const search = modal.locator('.ash-keybindings-search input');
 			const buttons = modal.locator('.ash-keybindings-search-action');
-			const record = buttons.nth(0), sort = buttons.nth(1), clear = buttons.nth(2);
+			const record = buttons.nth(0),
+				sort = buttons.nth(1),
+				clear = buttons.nth(2);
 			const recordLabel = variant.locale === 'zh-CN' ? '录制按键' : 'Record Keys';
-			const sortLabel = variant.locale === 'zh-CN' ? '按优先级排序（从高到低）' : 'Sort by Precedence (Highest first)';
+			const sortLabel =
+				variant.locale === 'zh-CN' ? '按优先级排序（从高到低）' : 'Sort by Precedence (Highest first)';
 			const clearLabel = variant.locale === 'zh-CN' ? '清空快捷键搜索输入' : 'Clear Keybindings Search Input';
 			const recordKey = variant.os === 'mac' ? 'Alt+Meta+k' : 'Alt+k';
 			const sortKey = variant.os === 'mac' ? 'Alt+Meta+p' : 'Alt+p';
@@ -614,14 +774,26 @@ suite('quickAccess browser component', () => {
 			await page.keyboard.press(sortKey);
 			await expect(sort).toHaveAttribute('aria-pressed', 'true');
 			await expect(search).toBeFocused();
-			await expect(modal.locator('.ash-keybindings-command-id').first()).toHaveText('test.shortcutToolbar.YankeeLatest');
+			await expect(modal.locator('.ash-keybindings-command-id').first()).toHaveText(
+				'test.shortcutToolbar.YankeeLatest',
+			);
 			await modal.screenshot({ path: testInfo.outputPath('keybindings-default-command-shortcuts.png') });
-			await page.evaluate(async () => window.ashQuickAccessIntegration.writeShortcutBindings([
-				{ key: 'f6', command: 'keybindings.editor.recordSearchKeys', when: 'inKeybindings && inKeybindingsSearch' },
-				{ key: 'f7', command: 'keybindings.editor.toggleSortByPrecedence', when: 'inKeybindings' },
-				{ key: 'f8', command: 'keybindings.editor.clearSearchResults', when: 'inKeybindings && inKeybindingsSearch && keybindingsSearchHasValue' },
-				{ key: 'escape', command: null },
-			]));
+			await page.evaluate(async () =>
+				window.ashQuickAccessIntegration.writeShortcutBindings([
+					{
+						key: 'f6',
+						command: 'keybindings.editor.recordSearchKeys',
+						when: 'inKeybindings && inKeybindingsSearch',
+					},
+					{ key: 'f7', command: 'keybindings.editor.toggleSortByPrecedence', when: 'inKeybindings' },
+					{
+						key: 'f8',
+						command: 'keybindings.editor.clearSearchResults',
+						when: 'inKeybindings && inKeybindingsSearch && keybindingsSearchHasValue',
+					},
+					{ key: 'escape', command: null },
+				]),
+			);
 			await expect(record).toHaveAttribute('title', `${recordLabel} (F6)`);
 			await expect(sort).toHaveAttribute('title', `${sortLabel} (F7)`);
 			await expect(clear).toHaveAttribute('title', `${clearLabel} (F8)`);
@@ -636,14 +808,25 @@ suite('quickAccess browser component', () => {
 			await expect(modal).toBeVisible();
 			await search.press('F7');
 			await expect(sort).toHaveAttribute('aria-pressed', 'false');
-			await expect(modal.locator('.ash-keybindings-command-id').first()).toHaveText('test.shortcutToolbar.AlphaLate');
+			await expect(modal.locator('.ash-keybindings-command-id').first()).toHaveText(
+				'test.shortcutToolbar.AlphaLate',
+			);
 			await search.press('F8');
 			await expect(search).toHaveValue('');
 			await expect(search).toBeFocused();
 			await expect(clear).toBeDisabled();
-			await page.evaluate(async ({ recordKey, sortKey }) => window.ashQuickAccessIntegration.writeShortcutBindings([
-				{ key: recordKey, command: null }, { key: sortKey, command: null }, { key: 'escape', command: null },
-			]), { recordKey: variant.os === 'mac' ? 'alt+cmd+k' : 'alt+k', sortKey: variant.os === 'mac' ? 'alt+cmd+p' : 'alt+p' });
+			await page.evaluate(
+				async ({ recordKey, sortKey }) =>
+					window.ashQuickAccessIntegration.writeShortcutBindings([
+						{ key: recordKey, command: null },
+						{ key: sortKey, command: null },
+						{ key: 'escape', command: null },
+					]),
+				{
+					recordKey: variant.os === 'mac' ? 'alt+cmd+k' : 'alt+k',
+					sortKey: variant.os === 'mac' ? 'alt+cmd+p' : 'alt+p',
+				},
+			);
 			await expect(record).toHaveAttribute('title', recordLabel);
 			await expect(sort).toHaveAttribute('title', sortLabel);
 			await expect(clear).toHaveAttribute('title', clearLabel);
@@ -668,13 +851,17 @@ suite('quickAccess browser component', () => {
 			await expect(input).toBeFocused();
 			await input.fill('Other');
 			await input.press('Enter');
-			await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText(JSON.stringify({ preferredEditorId: 'test.other', preserveFocus: false, pinned: true }));
+			await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText(
+				JSON.stringify({ preferredEditorId: 'test.other', preserveFocus: false, pinned: true }),
+			);
 			await expect(picker).toHaveCount(0);
 
 			await trigger.click();
 			await input.fill('Other');
 			await input.press('Control+Enter');
-			await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText(JSON.stringify({ preferredEditorId: 'test.other', preserveFocus: true, pinned: true }));
+			await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText(
+				JSON.stringify({ preferredEditorId: 'test.other', preserveFocus: true, pinned: true }),
+			);
 			await expect(trigger).toBeFocused();
 
 			await trigger.click();
@@ -699,12 +886,17 @@ suite('quickAccess browser component', () => {
 			const picker = page.locator('.ash-quick-pick');
 			const input = picker.getByRole('combobox');
 			await input.fill('>Format');
-			const row = picker.locator('.ash-list-row').filter({ has: page.locator('.ash-quick-pick-row-label', { hasText: /^Format$/ }) });
+			const row = picker
+				.locator('.ash-list-row')
+				.filter({ has: page.locator('.ash-quick-pick-row-label', { hasText: /^Format$/ }) });
 			const shortcut = row.locator('.ash-keybinding-label');
 			const modifier = variant.os === 'windows' ? 'Ctrl' : '⌘';
 			await expect(shortcut.locator('kbd')).toHaveText([modifier, 'K', modifier, 'Enter']);
 			await expect(shortcut.locator('.ash-keybinding-label-chord')).toHaveCount(2);
-			await expect(shortcut).toHaveAttribute('aria-label', variant.os === 'windows' ? 'Control+K, Control+Enter' : 'Command+K, Command+Enter');
+			await expect(shortcut).toHaveAttribute(
+				'aria-label',
+				variant.os === 'windows' ? 'Control+K, Control+Enter' : 'Command+K, Command+Enter',
+			);
 			for (const cap of await shortcut.locator('kbd').all()) {
 				await expect(cap).toHaveCSS('height', '20px');
 				await expect(cap).toHaveCSS('border-radius', '4px');
@@ -724,7 +916,11 @@ suite('quickAccess browser component', () => {
 		});
 	}
 
-	for (const variant of [{ locale: 'en', theme: 'light' }, { locale: 'zh-CN', theme: 'dark' }, { locale: 'en', theme: 'hc' }]) {
+	for (const variant of [
+		{ locale: 'en', theme: 'light' },
+		{ locale: 'zh-CN', theme: 'dark' },
+		{ locale: 'en', theme: 'hc' },
+	]) {
 		test(`Quick Access switches Commands, Files, Issues and PR through one picker (${variant.locale}, ${variant.theme})`, async function () {
 			const { page } = browserTests;
 			const testInfo = browserTests.info;
@@ -734,7 +930,8 @@ suite('quickAccess browser component', () => {
 			const input = page.getByRole('combobox');
 			const picker = page.getByRole('dialog');
 			const tabs = picker.getByRole('tab');
-			const labels = variant.locale === 'zh-CN' ? ['命令', '文件', '议题', 'PR'] : ['Commands', 'Files', 'Issues', 'PR'];
+			const labels =
+				variant.locale === 'zh-CN' ? ['命令', '文件', '议题', 'PR'] : ['Commands', 'Files', 'Issues', 'PR'];
 			await expect(tabs).toHaveText(labels);
 			for (const tab of await tabs.all()) {
 				const offset = await tab.evaluate(element => {
@@ -751,7 +948,9 @@ suite('quickAccess browser component', () => {
 			await expect(tabs.nth(0)).toHaveAttribute('aria-selected', 'true');
 			await input.fill('>Fix');
 			await page.keyboard.press('Tab');
-			await expect(picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '清空输入' : 'Clear input' })).toBeFocused();
+			await expect(
+				picker.getByRole('button', { name: variant.locale === 'zh-CN' ? '清空输入' : 'Clear input' }),
+			).toBeFocused();
 			await page.keyboard.press('Tab');
 			await expect(tabs.nth(0)).toBeFocused();
 			await page.keyboard.press('ArrowRight');
@@ -780,7 +979,9 @@ suite('quickAccess browser component', () => {
 			await expect(input).toBeFocused();
 			await page.keyboard.press('Enter');
 			await expect(picker).toHaveCount(0);
-			await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText('ash-github://github.com/team/repo/pull/8?account=alice');
+			await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText(
+				'ash-github://github.com/team/repo/pull/8?account=alice',
+			);
 		});
 
 		test(`Quick Access keeps long file results readable and keyboard reachable (${variant.locale}, ${variant.theme})`, async function () {
@@ -796,16 +997,30 @@ suite('quickAccess browser component', () => {
 			await expect(input).toBeFocused();
 			await expect(picker).toHaveCSS('border-radius', '8px');
 			await expect(input).toHaveCSS('border-radius', '4px');
-			const borderColor = variant.theme === 'hc' ? 'rgb(255, 255, 255)' : variant.theme === 'dark' ? 'rgb(69, 69, 69)' : 'rgb(212, 212, 212)';
+			const borderColor =
+				variant.theme === 'hc'
+					? 'rgb(255, 255, 255)'
+					: variant.theme === 'dark'
+						? 'rgb(69, 69, 69)'
+						: 'rgb(212, 212, 212)';
 			await expect(picker).toHaveCSS('border-color', borderColor);
-			await expect(input).toHaveCSS('border-color', variant.theme === 'hc' ? 'rgb(255, 255, 255)' : 'rgba(0, 0, 0, 0)');
+			await expect(input).toHaveCSS(
+				'border-color',
+				variant.theme === 'hc' ? 'rgb(255, 255, 255)' : 'rgba(0, 0, 0, 0)',
+			);
 			await expect(input).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
 			const placeholder = await input.evaluate(element => {
 				const style = getComputedStyle(element, '::placeholder');
 				return { color: style.color, opacity: style.opacity };
 			});
 			expect(placeholder.opacity).toBe('1');
-			expect(placeholder.color).toBe(variant.theme === 'hc' ? 'rgb(255, 255, 255)' : variant.theme === 'dark' ? 'rgb(143, 143, 143)' : 'rgb(118, 118, 118)');
+			expect(placeholder.color).toBe(
+				variant.theme === 'hc'
+					? 'rgb(255, 255, 255)'
+					: variant.theme === 'dark'
+						? 'rgb(143, 143, 143)'
+						: 'rgb(118, 118, 118)',
+			);
 			const first = picker.getByRole('option').first();
 			const detail = first.locator('.ash-quick-pick-row-detail');
 			const label = first.locator('.ash-quick-pick-row-label');
@@ -814,13 +1029,23 @@ suite('quickAccess browser component', () => {
 			const detailBounds = (await detail.boundingBox())!;
 			expect(detailBounds.y).toBeGreaterThanOrEqual(labelBounds.y + labelBounds.height);
 			await expect(description).toHaveCSS('text-overflow', 'ellipsis');
-			await expect(description).toHaveAttribute('title', await description.textContent() ?? '');
+			await expect(description).toHaveAttribute('title', (await description.textContent()) ?? '');
 			const results = picker.locator('.ash-quick-pick-list-scrollable');
 			expect((await results.boundingBox())!.height).toBeLessThanOrEqual(700 * 0.4);
 			expect((await picker.boundingBox())!.width).toBeLessThanOrEqual(600);
 			await page.screenshot({ path: testInfo.outputPath('quick-access.png') });
-			const hoverColor = variant.theme === 'hc' ? 'rgb(51, 51, 51)' : variant.theme === 'dark' ? 'rgb(42, 45, 46)' : 'rgb(232, 232, 232)';
-			const foreground = variant.theme === 'hc' ? 'rgb(255, 255, 255)' : variant.theme === 'dark' ? 'rgb(204, 204, 204)' : 'rgb(59, 59, 59)';
+			const hoverColor =
+				variant.theme === 'hc'
+					? 'rgb(51, 51, 51)'
+					: variant.theme === 'dark'
+						? 'rgb(42, 45, 46)'
+						: 'rgb(232, 232, 232)';
+			const foreground =
+				variant.theme === 'hc'
+					? 'rgb(255, 255, 255)'
+					: variant.theme === 'dark'
+						? 'rgb(204, 204, 204)'
+						: 'rgb(59, 59, 59)';
 			await first.hover();
 			await expect(first).toHaveCSS('background-color', hoverColor);
 			await expect(first).toHaveCSS('color', foreground);
@@ -828,21 +1053,32 @@ suite('quickAccess browser component', () => {
 			await second.hover();
 			await expect(second).toHaveClass(/is-active/);
 			await expect(second).toHaveCSS('background-color', hoverColor);
-			await expect(input).toHaveAttribute('aria-activedescendant', await second.getAttribute('id') ?? '');
+			await expect(input).toHaveAttribute('aria-activedescendant', (await second.getAttribute('id')) ?? '');
 			await picker.screenshot({ path: testInfo.outputPath('quick-access-hover.png') });
 			await page.keyboard.press('ArrowUp');
 			// Returning to the row under a stationary pointer must restore keyboard selection styling.
 			await page.keyboard.press('ArrowDown');
 			const active = picker.locator('.ash-list-row.is-active');
 			await expect(active.locator('.ash-quick-pick-row-label')).toHaveText('file-1.ts');
-			await expect(active).toHaveCSS('background-color', variant.theme === 'hc' ? 'rgb(255, 255, 255)' : variant.theme === 'dark' ? 'rgb(4, 57, 94)' : 'rgb(0, 96, 192)');
-			await expect(input).toHaveAttribute('aria-activedescendant', await active.getAttribute('id') ?? '');
+			await expect(active).toHaveCSS(
+				'background-color',
+				variant.theme === 'hc'
+					? 'rgb(255, 255, 255)'
+					: variant.theme === 'dark'
+						? 'rgb(4, 57, 94)'
+						: 'rgb(0, 96, 192)',
+			);
+			await expect(input).toHaveAttribute('aria-activedescendant', (await active.getAttribute('id')) ?? '');
 			await page.keyboard.press('PageDown');
 			await page.keyboard.press('PageDown');
-			await expect.poll(() => results.locator('.ash-scrollbar-viewport').evaluate(element => element.scrollTop)).toBeGreaterThan(0);
+			await expect
+				.poll(() => results.locator('.ash-scrollbar-viewport').evaluate(element => element.scrollTop))
+				.toBeGreaterThan(0);
 			await page.setViewportSize({ width: 360, height: 240 });
 			await expect.poll(async () => (await results.boundingBox())!.height).toBeLessThanOrEqual(240 * 0.4);
-			await expect.poll(() => description.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+			await expect
+				.poll(() => description.evaluate(element => element.scrollWidth > element.clientWidth))
+				.toBe(true);
 			const bounds = (await picker.boundingBox())!;
 			expect(bounds.x).toBeGreaterThanOrEqual(0);
 			expect(bounds.x + bounds.width).toBeLessThanOrEqual(360);
@@ -870,7 +1106,9 @@ suite('quickAccess browser component', () => {
 				await expect(input).toHaveCount(0);
 				await expect(open).toBeFocused();
 			}
-			await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText('Zulu Format, Alpha Format, Zulu Format');
+			await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText(
+				'Zulu Format, Alpha Format, Zulu Format',
+			);
 			await open.click();
 			await expect(labels.nth(0)).toHaveText('Zulu Format');
 			await expect(labels.nth(1)).toHaveText('Alpha Format');
@@ -879,7 +1117,11 @@ suite('quickAccess browser component', () => {
 			await expect(page.getByRole('separator', { name: recent })).toHaveCount(1);
 			await expect(page.getByRole('separator', { name: other })).toHaveCount(1);
 			await input.fill('>for');
-			await expect(labels).toHaveText(variant.locale === 'en' ? ['Zulu Format', 'Alpha Format', 'Focus Status Bar', 'Format', 'Go to File'] : ['Zulu Format', 'Alpha Format', 'Format', '聚焦状态栏']);
+			await expect(labels).toHaveText(
+				variant.locale === 'en'
+					? ['Zulu Format', 'Alpha Format', 'Focus Status Bar', 'Format', 'Go to File']
+					: ['Zulu Format', 'Alpha Format', 'Format', '聚焦状态栏'],
+			);
 			await expect(input).toBeFocused();
 			await input.fill('>Format');
 			await expect(labels.nth(0)).toHaveText('Format');
@@ -889,11 +1131,15 @@ suite('quickAccess browser component', () => {
 			const remove = page.getByRole('button', { name: removeName });
 			await expect(remove.locator('.ash-icon')).toHaveAttribute('aria-hidden', 'true');
 			await page.keyboard.press('Tab');
-			await expect(page.getByRole('button', { name: variant.locale === 'zh-CN' ? '清空输入' : 'Clear input' })).toBeFocused();
+			await expect(
+				page.getByRole('button', { name: variant.locale === 'zh-CN' ? '清空输入' : 'Clear input' }),
+			).toBeFocused();
 			await page.keyboard.press('Tab');
 			await expect(page.getByRole('tab').first()).toBeFocused();
 			await page.keyboard.press('Tab');
-			await expect(page.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' })).toBeFocused();
+			await expect(
+				page.getByRole('button', { name: variant.locale === 'zh-CN' ? '配置快捷键' : 'Configure Keybinding' }),
+			).toBeFocused();
 			await page.keyboard.press('ArrowRight');
 			await expect(remove).toBeFocused();
 			await expect(remove).toHaveCSS('opacity', '1');
@@ -901,16 +1147,26 @@ suite('quickAccess browser component', () => {
 			await expect(input).toBeFocused();
 			await expect(remove).toHaveCount(0);
 			await expect(labels).toHaveText(['Zulu Format']);
-			await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText('Zulu Format, Alpha Format, Zulu Format');
+			await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText(
+				'Zulu Format, Alpha Format, Zulu Format',
+			);
 			await page.keyboard.press('Escape');
 			await page.reload();
 			await open.click();
 			await expect(labels.nth(0)).toHaveText('Alpha Format');
 			await input.fill('>for');
-			await expect(labels).toHaveText(variant.locale === 'en' ? ['Alpha Format', 'Focus Status Bar', 'Format', 'Go to File', 'Zulu Format'] : ['Alpha Format', 'Format', 'Zulu Format', '聚焦状态栏']);
+			await expect(labels).toHaveText(
+				variant.locale === 'en'
+					? ['Alpha Format', 'Focus Status Bar', 'Format', 'Go to File', 'Zulu Format']
+					: ['Alpha Format', 'Format', 'Zulu Format', '聚焦状态栏'],
+			);
 			await page.evaluate(() => window.ashQuickAccessIntegration.setHistoryLength(0));
 			await expect(page.getByRole('separator', { name: recent })).toHaveCount(0);
-			await expect(labels).toHaveText(variant.locale === 'en' ? ['Alpha Format', 'Focus Status Bar', 'Format', 'Go to File', 'Zulu Format'] : ['Alpha Format', 'Format', 'Zulu Format', '聚焦状态栏']);
+			await expect(labels).toHaveText(
+				variant.locale === 'en'
+					? ['Alpha Format', 'Focus Status Bar', 'Format', 'Go to File', 'Zulu Format']
+					: ['Alpha Format', 'Format', 'Zulu Format', '聚焦状态栏'],
+			);
 			await input.fill('>Zulu');
 			await page.keyboard.press('Enter');
 			await page.evaluate(() => window.ashQuickAccessIntegration.setHistoryLength(50));
@@ -928,14 +1184,30 @@ suite('quickAccess browser component', () => {
 			window.ashQuickAccessIntegration.holdNextRequest();
 			window.ashQuickAccessIntegration.show('pr ');
 		});
-		await expect.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.requests.some(request => request.kind === 'prs'))).toBe(true);
+		await expect
+			.poll(() =>
+				page.evaluate(() => window.ashQuickAccessIntegration.requests.some(request => request.kind === 'prs')),
+			)
+			.toBe(true);
 		const input = page.getByRole('combobox');
 		await page.getByRole('tab', { name: 'Commands', exact: true }).click();
 		await expect(input).toHaveValue('>');
 		await input.fill('>for');
-		await expect(page.locator('.ash-quick-pick-row-label')).toHaveText(['Alpha Format', 'Focus Status Bar', 'Format', 'Go to File', 'Zulu Format']);
+		await expect(page.locator('.ash-quick-pick-row-label')).toHaveText([
+			'Alpha Format',
+			'Focus Status Bar',
+			'Format',
+			'Go to File',
+			'Zulu Format',
+		]);
 		await page.evaluate(() => window.ashQuickAccessIntegration.releaseRequest());
-		await expect(page.locator('.ash-quick-pick-row-label')).toHaveText(['Alpha Format', 'Focus Status Bar', 'Format', 'Go to File', 'Zulu Format']);
+		await expect(page.locator('.ash-quick-pick-row-label')).toHaveText([
+			'Alpha Format',
+			'Focus Status Bar',
+			'Format',
+			'Go to File',
+			'Zulu Format',
+		]);
 		await page.keyboard.press('Escape');
 		await page.evaluate(() => window.ashQuickAccessIntegration.show('>', true));
 		await expect(page.getByRole('tab')).toHaveCount(0);
@@ -951,12 +1223,13 @@ suite('quickAccess browser component', () => {
 			window.ashQuickAccessIntegration.setSignedIn(false);
 			window.ashQuickAccessIntegration.show('issue ');
 		});
-		await expect(page.locator('.ash-quick-pick-row-label')).toHaveText('Open GitHub to sign in or choose a repository');
+		await expect(page.locator('.ash-quick-pick-row-label')).toHaveText(
+			'Open GitHub to sign in or choose a repository',
+		);
 		await page.keyboard.press('Enter');
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 		await expect(page.getByRole('status', { name: 'Executed commands' })).toHaveText('ash-github:/');
 	});
-
 
 	test('Quick Input navigation uses live user bindings and blockers', async function () {
 		const { page } = browserTests;
@@ -983,7 +1256,6 @@ suite('quickAccess browser component', () => {
 		await expect(page.getByRole('button', { name: 'Open files' })).toBeFocused();
 	});
 
-
 	test('Quick Access Files background acceptance preserves the picker for both keyboard and pointer modifiers', async function () {
 		const { page } = browserTests;
 
@@ -1003,7 +1275,6 @@ suite('quickAccess browser component', () => {
 		await expect(page.getByRole('dialog')).toHaveCount(0);
 	});
 
-
 	test('Quick Access workspace symbols cancel stale queries and accept through the shared service', async function () {
 		const { page } = browserTests;
 
@@ -1013,7 +1284,15 @@ suite('quickAccess browser component', () => {
 			window.ashQuickAccessIntegration.holdNextRequest();
 			window.ashQuickAccessIntegration.show('@old');
 		});
-		await expect.poll(() => page.evaluate(() => window.ashQuickAccessIntegration.requests.some(request => request.kind === 'symbols' && request.query === 'old'))).toBe(true);
+		await expect
+			.poll(() =>
+				page.evaluate(() =>
+					window.ashQuickAccessIntegration.requests.some(
+						request => request.kind === 'symbols' && request.query === 'old',
+					),
+				),
+			)
+			.toBe(true);
 		const input = page.getByRole('combobox');
 		await input.fill('@new');
 		await expect(page.locator('.ash-quick-pick-row-label')).toHaveText('newSymbol');
@@ -1088,7 +1367,9 @@ suite('quickAccess browser component', () => {
 		expect(initial.containerOverflow).toBe('hidden');
 		expect(initial.containerScrollHeight).toBeLessThanOrEqual(initial.containerHeight + 1);
 		expect(initial.listScrollHeight).toBeGreaterThan(initial.listHeight);
-		expect(Math.abs(initial.listHeight / initial.rowHeight - Math.round(initial.listHeight / initial.rowHeight))).toBeLessThan(0.03);
+		expect(
+			Math.abs(initial.listHeight / initial.rowHeight - Math.round(initial.listHeight / initial.rowHeight)),
+		).toBeLessThan(0.03);
 		expect(initial.scrollbarRightInset).toBeLessThanOrEqual(2);
 		expect(initial.thumbBorder).toBe('0px');
 		expect(initial.thumbWidth).toBe(initial.trackWidth);
@@ -1110,7 +1391,11 @@ suite('quickAccess browser component', () => {
 		const combobox = picker.getByRole('combobox');
 		const firstId = await combobox.getAttribute('aria-activedescendant');
 		await combobox.press('PageDown');
-		await expect.poll(() => picker.locator('.ash-list-row.is-active').evaluate(row => Number((row as HTMLElement).dataset.index))).toBeGreaterThan(1);
+		await expect
+			.poll(() =>
+				picker.locator('.ash-list-row.is-active').evaluate(row => Number((row as HTMLElement).dataset.index)),
+			)
+			.toBeGreaterThan(1);
 		await expect(picker.locator('.ash-list-row.is-active')).toBeInViewport();
 		await expect(combobox).toBeFocused();
 		await expect(combobox).toHaveValue('>');
@@ -1127,7 +1412,9 @@ suite('quickAccess browser component', () => {
 		await expect(scrollbar).toHaveAttribute('aria-orientation', 'vertical');
 		await picker.getByRole('combobox').fill('>Narrow scroll result');
 		await expect(picker.locator('.ash-list-row')).toHaveCount(2);
-		await expect.poll(() => scrollable.evaluate(element => element.getBoundingClientRect().height)).toBeLessThan(initial.listHeight);
+		await expect
+			.poll(() => scrollable.evaluate(element => element.getBoundingClientRect().height))
+			.toBeLessThan(initial.listHeight);
 		await picker.getByRole('combobox').fill('>no-such-command-quick-access-scroll');
 		await expect(scrollable).toBeHidden();
 		await expect(picker.locator('.ash-quick-pick-empty')).toBeVisible();
@@ -1139,7 +1426,9 @@ suite('quickAccess browser component', () => {
 			const compactListHeight = await viewport.evaluate(element => element.clientHeight);
 			expect(compactListHeight).toBeGreaterThan(0);
 			expect(compactListHeight).toBeLessThan(initial.listHeight);
-			expect(Math.abs(compactListHeight / initial.rowHeight - Math.round(compactListHeight / initial.rowHeight))).toBeLessThan(0.03);
+			expect(
+				Math.abs(compactListHeight / initial.rowHeight - Math.round(compactListHeight / initial.rowHeight)),
+			).toBeLessThan(0.03);
 			const resized = await picker.evaluate(element => ({
 				bottom: element.getBoundingClientRect().bottom,
 				viewportHeight: window.innerHeight,

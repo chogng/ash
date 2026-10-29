@@ -15,7 +15,7 @@ class PieceTreeTextBufferFactory implements ITextBufferFactory {
 		private readonly _containsUnusualLineTerminators: boolean,
 		private readonly _isBasicASCII: boolean,
 		private readonly _normalizeEOL: boolean,
-	) { }
+	) {}
 
 	private _getEOL(defaultEOL: DefaultEndOfLine): '\r\n' | '\n' {
 		const totalEOLCount = this._cr + this._lf + this._crlf;
@@ -23,7 +23,7 @@ class PieceTreeTextBufferFactory implements ITextBufferFactory {
 		return this._cr + this._crlf > totalEOLCount / 2 ? '\r\n' : '\n';
 	}
 
-	create(defaultEOL: DefaultEndOfLine): { textBuffer: PieceTreeTextBuffer; disposable: IDisposable; } {
+	create(defaultEOL: DefaultEndOfLine): { textBuffer: PieceTreeTextBuffer; disposable: IDisposable } {
 		const eol = this._getEOL(defaultEOL);
 		let value = this._chunks.join('');
 		if (this._normalizeEOL) value = value.replace(/\r\n|\r|\n/g, eol);
@@ -32,8 +32,12 @@ class PieceTreeTextBufferFactory implements ITextBufferFactory {
 	}
 
 	getFirstLineText(lengthLimit: number): string {
-		if (!Number.isSafeInteger(lengthLimit) || lengthLimit < 0) throw new RangeError('First-line length limit must be a non-negative safe integer');
-		return this._chunks.join('').slice(0, lengthLimit).split(/\r\n|\r|\n/, 1)[0]!;
+		if (!Number.isSafeInteger(lengthLimit) || lengthLimit < 0)
+			throw new RangeError('First-line length limit must be a non-negative safe integer');
+		return this._chunks
+			.join('')
+			.slice(0, lengthLimit)
+			.split(/\r\n|\r|\n/, 1)[0]!;
 	}
 }
 
@@ -71,7 +75,7 @@ export class PieceTreeTextBufferBuilder implements ITextBufferBuilder {
 			chunk = chunk.slice(1);
 		}
 		const lastCharacter = chunk.charCodeAt(chunk.length - 1);
-		if (lastCharacter === CharCode.CarriageReturn || (lastCharacter >= 0xD800 && lastCharacter <= 0xDBFF)) {
+		if (lastCharacter === CharCode.CarriageReturn || (lastCharacter >= 0xd800 && lastCharacter <= 0xdbff)) {
 			this._acceptChunk1(chunk.slice(0, -1), false);
 			this._hasPreviousChar = true;
 			this._previousChar = lastCharacter;
@@ -101,7 +105,8 @@ export class PieceTreeTextBufferBuilder implements ITextBufferBuilder {
 		if (!isBasicASCII(chunk)) {
 			this.isBasicASCII = false;
 			if (!this.containsRTL) this.containsRTL = containsRTL(chunk);
-			if (!this.containsUnusualLineTerminators) this.containsUnusualLineTerminators = chunk.includes('\u2028') || chunk.includes('\u2029');
+			if (!this.containsUnusualLineTerminators)
+				this.containsUnusualLineTerminators = chunk.includes('\u2028') || chunk.includes('\u2029');
 		}
 	}
 
@@ -129,7 +134,10 @@ export class PieceTreeTextBufferBuilder implements ITextBufferBuilder {
 }
 
 /** Selects the private TextBuffer implementation used by TextModel and worker mirrors. */
-export function createPieceTreeTextBuffer(text: string, defaultEOL: DefaultEndOfLine = DefaultEndOfLine.LF): ITextBuffer {
+export function createPieceTreeTextBuffer(
+	text: string,
+	defaultEOL: DefaultEndOfLine = DefaultEndOfLine.LF,
+): ITextBuffer {
 	const builder = new PieceTreeTextBufferBuilder();
 	builder.acceptChunk(text);
 	return builder.finish().create(defaultEOL).textBuffer;

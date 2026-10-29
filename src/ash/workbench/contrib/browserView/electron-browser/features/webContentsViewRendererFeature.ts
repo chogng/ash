@@ -14,31 +14,57 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 	private model: IBrowserViewModel | undefined;
 	private visible = false;
 	private readonly welcome: BrowserWelcomeFeature;
-	constructor(editor: BrowserEditor,
+	constructor(
+		editor: BrowserEditor,
 		@IInstantiationService instantiation: IInstantiationService,
 		@IEditorPart private readonly editors: IEditorPart,
 		@ICommandService private readonly commands: ICommandService,
 	) {
 		super(editor);
-		this.host = this._register(instantiation.createInstance(WebContentsViewHost, editor.browserContainer.ownerDocument.defaultView!));
+		this.host = this._register(
+			instantiation.createInstance(WebContentsViewHost, editor.browserContainer.ownerDocument.defaultView!),
+		);
 		this.welcome = this._register(new BrowserWelcomeFeature(editor.browserContainer));
 	}
-	override onContainerCreated(container: HTMLElement): void { this.host.onContainerCreated(container); }
+	override onContainerCreated(container: HTMLElement): void {
+		this.host.onContainerCreated(container);
+	}
 	protected override onModelAttached(model: IBrowserViewModel, store: DisposableStore): void {
 		this.model = model;
 		this.host.setModel(model);
 		store.add(model.onDidChangeState(() => this.update()));
-		store.add(model.onDidEvent(event => {
-			if (event.type === 'focusAddress' && this.host.isActive) { this.editor.focus(); }
-			if (event.type !== 'keyDown' || !this.host.isActive) { return; }
-			const group = this.editors.groups.find(group => group.activePane === this.editor);
-			if (group) { this.editors.activateGroup(group.id); }
-			const key = event.event;
-			if (key.key === 'F6' || ((key.ctrlKey || key.metaKey) && key.key.toLowerCase() === 'l')) { this.editor.focus(); }
-			else if ((key.ctrlKey || key.metaKey) && key.key.toLowerCase() === 'f') { void this.commands.executeCommand(BrowserViewCommandId.ShowFind).catch(error => this.editor.report(error)); }
-			else if (key.key === 'F3') { void this.commands.executeCommand(key.shiftKey ? BrowserViewCommandId.FindPrevious : BrowserViewCommandId.FindNext).catch(error => this.editor.report(error)); }
-			else { this.editor.browserContainer.dispatchEvent(new KeyboardEvent('keydown', { ...key, bubbles: true, cancelable: true })); }
-		}));
+		store.add(
+			model.onDidEvent(event => {
+				if (event.type === 'focusAddress' && this.host.isActive) {
+					this.editor.focus();
+				}
+				if (event.type !== 'keyDown' || !this.host.isActive) {
+					return;
+				}
+				const group = this.editors.groups.find(group => group.activePane === this.editor);
+				if (group) {
+					this.editors.activateGroup(group.id);
+				}
+				const key = event.event;
+				if (key.key === 'F6' || ((key.ctrlKey || key.metaKey) && key.key.toLowerCase() === 'l')) {
+					this.editor.focus();
+				} else if ((key.ctrlKey || key.metaKey) && key.key.toLowerCase() === 'f') {
+					void this.commands
+						.executeCommand(BrowserViewCommandId.ShowFind)
+						.catch(error => this.editor.report(error));
+				} else if (key.key === 'F3') {
+					void this.commands
+						.executeCommand(
+							key.shiftKey ? BrowserViewCommandId.FindPrevious : BrowserViewCommandId.FindNext,
+						)
+						.catch(error => this.editor.report(error));
+				} else {
+					this.editor.browserContainer.dispatchEvent(
+						new KeyboardEvent('keydown', { ...key, bubbles: true, cancelable: true }),
+					);
+				}
+			}),
+		);
 		this.update();
 	}
 	override onModelDetached(): void {
@@ -46,11 +72,18 @@ export class WebContentsViewRendererFeature extends BrowserEditorContribution {
 		this.host.setModel(undefined);
 		this.update();
 	}
-	override onPaneVisibilityChanged(visible: boolean): void { this.visible = visible; this.update(); }
-	override afterContainerLayout(): void { this.host.layout(); }
+	override onPaneVisibilityChanged(visible: boolean): void {
+		this.visible = visible;
+		this.update();
+	}
+	override afterContainerLayout(): void {
+		this.host.layout();
+	}
 	private update(): void {
 		this.welcome.update(this.model?.state);
 		// Chromium paints above the DOM: the welcome content requires hiding the blank native view.
-		this.host.setVisible(this.visible && !!this.model && (this.model.state.url !== 'about:blank' || this.model.state.loading));
+		this.host.setVisible(
+			this.visible && !!this.model && (this.model.state.url !== 'about:blank' || this.model.state.loading),
+		);
 	}
 }

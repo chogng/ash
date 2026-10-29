@@ -7,17 +7,23 @@ export function hash<T>(value: T extends NotSyncHashable ? never : T): number {
 export function doHash(value: unknown, initialHash: number): number {
 	if (value === null) return numberHash(349, initialHash);
 	switch (typeof value) {
-		case 'string': return stringHash(value, initialHash);
-		case 'number': return numberHash(value, initialHash);
-		case 'boolean': return numberHash(value ? 433 : 863, initialHash);
-		case 'undefined': return numberHash(937, initialHash);
-		case 'object': return Array.isArray(value) ? arrayHash(value, initialHash) : objectHash(value, initialHash);
-		default: return numberHash(617, initialHash);
+		case 'string':
+			return stringHash(value, initialHash);
+		case 'number':
+			return numberHash(value, initialHash);
+		case 'boolean':
+			return numberHash(value ? 433 : 863, initialHash);
+		case 'undefined':
+			return numberHash(937, initialHash);
+		case 'object':
+			return Array.isArray(value) ? arrayHash(value, initialHash) : objectHash(value, initialHash);
+		default:
+			return numberHash(617, initialHash);
 	}
 }
 
 export function numberHash(value: number, initialHash: number): number {
-	return (((initialHash << 5) - initialHash) + value) | 0;
+	return ((initialHash << 5) - initialHash + value) | 0;
 }
 
 export function stringHash(value: string, initialHash: number): number {
@@ -74,9 +80,15 @@ function sha1(input: Uint8Array): string {
 	for (let offset = 0; offset < bytes.length; offset += 64) {
 		for (let index = 0; index < 16; index += 1) {
 			const start = offset + index * 4;
-			words[index] = ((bytes[start]! << 24) | (bytes[start + 1]! << 16) | (bytes[start + 2]! << 8) | bytes[start + 3]!) >>> 0;
+			words[index] =
+				((bytes[start]! << 24) | (bytes[start + 1]! << 16) | (bytes[start + 2]! << 8) | bytes[start + 3]!) >>>
+				0;
 		}
-		for (let index = 16; index < 80; index += 1) words[index] = rotateLeft(words[index - 3]! ^ words[index - 8]! ^ words[index - 14]! ^ words[index - 16]!, 1);
+		for (let index = 16; index < 80; index += 1)
+			words[index] = rotateLeft(
+				words[index - 3]! ^ words[index - 8]! ^ words[index - 14]! ^ words[index - 16]!,
+				1,
+			);
 		let a = h0;
 		let b = h1;
 		let c = h2;
@@ -85,14 +97,31 @@ function sha1(input: Uint8Array): string {
 		for (let index = 0; index < 80; index += 1) {
 			let f: number;
 			let k: number;
-			if (index < 20) { f = (b & c) | (~b & d); k = 0x5a827999; }
-			else if (index < 40) { f = b ^ c ^ d; k = 0x6ed9eba1; }
-			else if (index < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8f1bbcdc; }
-			else { f = b ^ c ^ d; k = 0xca62c1d6; }
+			if (index < 20) {
+				f = (b & c) | (~b & d);
+				k = 0x5a827999;
+			} else if (index < 40) {
+				f = b ^ c ^ d;
+				k = 0x6ed9eba1;
+			} else if (index < 60) {
+				f = (b & c) | (b & d) | (c & d);
+				k = 0x8f1bbcdc;
+			} else {
+				f = b ^ c ^ d;
+				k = 0xca62c1d6;
+			}
 			const next = (rotateLeft(a, 5) + f + e + k + words[index]!) | 0;
-			e = d; d = c; c = rotateLeft(b, 30); b = a; a = next;
+			e = d;
+			d = c;
+			c = rotateLeft(b, 30);
+			b = a;
+			a = next;
 		}
-		h0 = (h0 + a) | 0; h1 = (h1 + b) | 0; h2 = (h2 + c) | 0; h3 = (h3 + d) | 0; h4 = (h4 + e) | 0;
+		h0 = (h0 + a) | 0;
+		h1 = (h1 + b) | 0;
+		h2 = (h2 + c) | 0;
+		h3 = (h3 + d) | 0;
+		h4 = (h4 + e) | 0;
 	}
 	return [h0, h1, h2, h3, h4].map(value => (value >>> 0).toString(16).padStart(8, '0')).join('');
 }

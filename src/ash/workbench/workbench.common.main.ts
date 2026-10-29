@@ -28,12 +28,12 @@ import './contrib/localHistory/browser/localHistory.contribution.js';
  * or `workbench.desktop.main.ts`. Product entries initialize localization
  * before loading this bundle and keep Sessions composition outside Workbench.
  */
-import "./browser/workbench.contribution.js";
+import './browser/workbench.contribution.js';
 import './contrib/speech/browser/speech.contribution.js';
 import './contrib/accessibilitySignals/browser/accessibilitySignal.contribution.js';
 import './browser/actions/layoutActions.js';
 import './contrib/workspace/browser/workspace.contribution.js';
-import "./contrib/modernUI/browser/modernUI.contribution.js";
+import './contrib/modernUI/browser/modernUI.contribution.js';
 import './contrib/mediaPreview/browser/mediaPreview.contribution.js';
 
 import './contrib/extensions/browser/extensions.contribution.js';
@@ -84,13 +84,10 @@ import { Disposable } from '../base/common/lifecycle.js';
 registerCollabViews();
 registerCallView();
 
-registerWorkbenchContribution(
-	'code.contrib.appServerSyntax',
-	WorkbenchPhase.BlockStartup,
-	accessor => accessor.get(IRendererHostService).hasAppServer ? new AppServerSyntaxProviders(
-		accessor.get(ILanguageFeaturesService),
-		accessor.get(ISyntaxApi),
-	) : Disposable.None,
+registerWorkbenchContribution('code.contrib.appServerSyntax', WorkbenchPhase.BlockStartup, accessor =>
+	accessor.get(IRendererHostService).hasAppServer
+		? new AppServerSyntaxProviders(accessor.get(ILanguageFeaturesService), accessor.get(ISyntaxApi))
+		: Disposable.None,
 );
 
 registerSingleton(IWebWorkerService, WebWorkerService, InstantiationType.Delayed);

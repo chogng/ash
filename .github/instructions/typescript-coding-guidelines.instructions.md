@@ -7,9 +7,7 @@ applyTo: "**/src/ash/**"
 
 ## Formatting
 
-- New files use tabs, single quotes and semicolons. Preserve existing files' indentation, quotes and private-member style; do not reformat unrelated lines.
-- Keep each import declaration on one physical line.
-- Keep short calls, signatures, conditions and expressions on one line. When wrapping, use one logical item per line and a trailing comma.
+- Use the repository-pinned `bun fmt` through `pnpm format:ts:fix [file|directory ...]`; `.prettierrc.toml` owns tabs, single quotes, semicolons, 120-column wrapping and trailing commas. Let the formatter wrap imports, signatures and expressions; do not maintain competing manual layout rules or reformat unrelated files.
 - Always use braces with the opening brace on the same line.
 
 ## Naming

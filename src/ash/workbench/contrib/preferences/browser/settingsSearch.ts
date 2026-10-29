@@ -48,22 +48,32 @@ export class SettingsSearchQuery {
 			}
 			textTokens.push(token);
 		}
-		this.text = textTokens.join(' ')
-			.replace(/[":]/gu, ' ')
-			.replace(/\s+/gu, ' ')
-			.trim()
-			.toLocaleLowerCase();
+		this.text = textTokens.join(' ').replace(/[":]/gu, ' ').replace(/\s+/gu, ' ').trim().toLocaleLowerCase();
 		this.terms = this.text ? this.text.split(' ') : [];
 		this.idFilter = idFilter;
 		this.hasModifiedFilter = hasModifiedFilter;
 		this.tagFilters = [...tagFilters].sort();
 		this.stableOnly = stableOnly;
 		this.languageFilter = languageFilter;
-		this.key = JSON.stringify([this.text, idFilter, hasModifiedFilter, this.tagFilters, stableOnly, languageFilter]);
+		this.key = JSON.stringify([
+			this.text,
+			idFilter,
+			hasModifiedFilter,
+			this.tagFilters,
+			stableOnly,
+			languageFilter,
+		]);
 	}
 
 	public get isEmpty(): boolean {
-		return this.terms.length === 0 && !this.idFilter && !this.hasModifiedFilter && !this.tagFilters.length && !this.stableOnly && !this.languageFilter;
+		return (
+			this.terms.length === 0 &&
+			!this.idFilter &&
+			!this.hasModifiedFilter &&
+			!this.tagFilters.length &&
+			!this.stableOnly &&
+			!this.languageFilter
+		);
 	}
 
 	public matches(target: SettingsSearchTarget): boolean {
@@ -78,7 +88,13 @@ export class SettingsSearchQuery {
 			if (!matchesId) return false;
 		}
 		if (this.terms.length === 0) return true;
-		const searchableText = [target.id, target.title, target.description, ...(target.keywords ?? []), ...(target.tags ?? [])]
+		const searchableText = [
+			target.id,
+			target.title,
+			target.description,
+			...(target.keywords ?? []),
+			...(target.tags ?? []),
+		]
 			.join(' ')
 			.toLocaleLowerCase();
 		return this.terms.every(term => searchableText.includes(term));

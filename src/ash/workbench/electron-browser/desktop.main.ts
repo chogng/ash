@@ -20,8 +20,14 @@ import { EnterMultiRootWorkspaceSupportContext } from '../common/contextkeys.js'
 import { WORKSPACE_EDIT_ERROR_CHANNEL } from '../../platform/workspace/common/workspaceIpc.js';
 import { INotificationService } from '../../platform/notification/common/notification.js';
 import { localize } from '../../nls.js';
-import { WORKSPACE_RECOVERY_CHANNEL, WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL } from '../../platform/window/common/window.js';
-import { serializeWorkspaceIdentifier, type IAnyWorkspaceIdentifier } from '../../platform/workspace/common/workspace.js';
+import {
+	WORKSPACE_RECOVERY_CHANNEL,
+	WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL,
+} from '../../platform/window/common/window.js';
+import {
+	serializeWorkspaceIdentifier,
+	type IAnyWorkspaceIdentifier,
+} from '../../platform/workspace/common/workspace.js';
 import { WorkingCopyBackupService } from '../services/workingCopy/browser/workingCopyBackupService.js';
 import { IndexedDbWorkingCopyBackupService } from '../services/workingCopy/browser/indexedDbWorkingCopyBackupService.js';
 import { AppServerProtocolClient } from '../../platform/agentHost/browser/appServerProtocolClient.js';
@@ -77,7 +83,10 @@ import { getSingletonServiceDescriptors } from '../../platform/instantiation/com
 export class DesktopMain extends Disposable {
 	private opened = false;
 
-	constructor(private readonly options: Pick<IStartWorkbenchOptions, 'productName'>, private readonly rendererCapabilities: readonly ElectronRendererCapabilityContribution[]) {
+	constructor(
+		private readonly options: Pick<IStartWorkbenchOptions, 'productName'>,
+		private readonly rendererCapabilities: readonly ElectronRendererCapabilityContribution[],
+	) {
 		super();
 	}
 
@@ -96,15 +105,29 @@ export class DesktopMain extends Disposable {
 			const permissionDialog = this._register(new DirectoryPermissionDialog(container));
 			const transcriptionServices = this._register(new InstantiationService());
 			// Browser requests arrive during backend initialization, before the Parts exist.
-			const profileServices = this._register(new InstantiationService(new ServiceCollection(...getSingletonServiceDescriptors().filter(([id]) => id === IPlaywrightService))));
+			const profileServices = this._register(
+				new InstantiationService(
+					new ServiceCollection(
+						...getSingletonServiceDescriptors().filter(([id]) => id === IPlaywrightService),
+					),
+				),
+			);
 			const windowId = await invoke<unknown>('ash:ipc:window-id');
-			if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) { throw new TypeError('Invalid Main IPC window ID'); }
+			if (!Number.isSafeInteger(windowId) || (windowId as number) <= 0) {
+				throw new TypeError('Invalid Main IPC window ID');
+			}
 			// The scope releases its dependent services before closing their Main connection.
-			profileServices.registerSingleton(IMainProcessService, () => profileServices.createInstance(ElectronIPCMainProcessService, windowId as number));
+			profileServices.registerSingleton(IMainProcessService, () =>
+				profileServices.createInstance(ElectronIPCMainProcessService, windowId as number),
+			);
 			const mainProcessService = profileServices.get(IMainProcessService);
 			const expectsTerminalTransfer = await invoke<unknown>(WINDOW_TERMINAL_TRANSFER_STARTUP_CHANNEL);
-			if (typeof expectsTerminalTransfer !== 'boolean') throw new TypeError('Invalid terminal window startup intent');
-			const environment = new ElectronWorkbenchEnvironmentService(await mainProcessService.getChannel('logger').call('getDefaultLogLevels'), expectsTerminalTransfer);
+			if (typeof expectsTerminalTransfer !== 'boolean')
+				throw new TypeError('Invalid terminal window startup intent');
+			const environment = new ElectronWorkbenchEnvironmentService(
+				await mainProcessService.getChannel('logger').call('getDefaultLogLevels'),
+				expectsTerminalTransfer,
+			);
 			profileServices.registerInstance(IWorkbenchEnvironmentService, environment);
 			const logger = this._register(profileServices.createInstance(NativeLogService, 'workbench'));
 			const playwrightService = profileServices.get(IPlaywrightService);
@@ -113,28 +136,55 @@ export class DesktopMain extends Disposable {
 			const resolverScope = this._register(new MutableDisposable<DisposableStore>());
 			let documentClient: AppServerProtocolClient | undefined;
 			let localResolver: NativeExtensionService | undefined;
-			const api = this._register(await createElectronRendererApi([
-				client => { documentClient = client; return {}; },
-				...this.rendererCapabilities,
-				(_client, _appServer, localClient) => registerLocalTranscriptionService(transcriptionServices, localClient),
-			], { browser: true, textDocuments: true }, permissionDialog, mainProcessService, async (localApi, factories, authority, attempt) => {
-				if (!resolverScope.value) {
-					const scope = new DisposableStore();
-					resolverScope.value = scope;
-					const services = scope.add(profileServices.createChild(new ServiceCollection([IExtensionHostApi, localApi], [IRemoteSocketFactoryService, factories])));
-					localResolver = scope.add(services.createInstance(NativeExtensionService));
-				}
-				await localResolver!.resolveAuthority(authority, attempt);
-				const address = resolver.getConnectionData(authority);
-				if (!address) { throw new Error('Remote address was retired before connecting'); }
-				return address;
-			}, async (remoteApi, authority) => localResolver!.startRemoteExtensionHost(remoteApi, authority)));
+			const api = this._register(
+				await createElectronRendererApi(
+					[
+						client => {
+							documentClient = client;
+							return {};
+						},
+						...this.rendererCapabilities,
+						(_client, _appServer, localClient) =>
+							registerLocalTranscriptionService(transcriptionServices, localClient),
+					],
+					{ browser: true, textDocuments: true },
+					permissionDialog,
+					mainProcessService,
+					async (localApi, factories, authority, attempt) => {
+						if (!resolverScope.value) {
+							const scope = new DisposableStore();
+							resolverScope.value = scope;
+							const services = scope.add(
+								profileServices.createChild(
+									new ServiceCollection(
+										[IExtensionHostApi, localApi],
+										[IRemoteSocketFactoryService, factories],
+									),
+								),
+							);
+							localResolver = scope.add(services.createInstance(NativeExtensionService));
+						}
+						await localResolver!.resolveAuthority(authority, attempt);
+						const address = resolver.getConnectionData(authority);
+						if (!address) {
+							throw new Error('Remote address was retired before connecting');
+						}
+						return address;
+					},
+					async (remoteApi, authority) => localResolver!.startRemoteExtensionHost(remoteApi, authority),
+				),
+			);
 			performance.mark('ash.desktop.api-ready');
 			const profileFiles = this._register(profileServices.createInstance(FileService));
 			const profileProvider = this._register(new FileUserDataProvider(api.localFiles, api.userDataHome));
 			this._register(profileFiles.registerProvider(Schemas.vscodeUserData, profileProvider));
 			profileServices.registerInstance(IFileService, profileFiles);
-			const userThemes = this._register(await loadUserThemes(profileServices, URI.from({ scheme: Schemas.vscodeUserData, path: '/user/themes' })));
+			const userThemes = this._register(
+				await loadUserThemes(
+					profileServices,
+					URI.from({ scheme: Schemas.vscodeUserData, path: '/user/themes' }),
+				),
+			);
 			performance.mark('ash.desktop.themes-ready');
 			const workspace = parseWorkspace(await api.workspace.getWorkspace());
 			performance.mark('ash.desktop.workspace-ready');
@@ -143,108 +193,210 @@ export class DesktopMain extends Disposable {
 			let desktopWindow!: ElectronWindow;
 			const hostColorScheme = await api.nativeHost.getOSColorScheme();
 			performance.mark('ash.desktop.workbench-start');
-			const workbench = this._register(await startWorkbench({
-				...this.options,
-				serviceCollection: new ServiceCollection(
-					[IWorkspaceEditingService, new SyncDescriptor(WorkspaceEditingService, [api.workspace])],
-					[ILoggerService, logger],
-					[IPolicyService, this._register(new PolicyChannelClient(mainProcessService.getChannel('policy')))],
-					[IBrowserPasswordService, ProxyChannel.toService<IBrowserPasswordService>(mainProcessService.getChannel('browserPasswords'))],
-					[IBrowserViewService, ProxyChannel.toService<IBrowserViewService>(mainProcessService.getChannel(ipcBrowserViewChannelName))],
-					[IMainProcessService, mainProcessService],
-					[ISecretStorageService, this._register(profileServices.createInstance(SecretStorageService))],
-					[IRemoteAuthorityResolverService, resolver],
-					[IPlaywrightService, playwrightService],
-				),
-				environmentService: environment,
-				createURLService: services => {
-					return services.createInstance(RelayURLService, windowId as number);
-				},
-				createTextDocumentHost: documentClient ? services => {
-					const editing = services.get(IChatEditingService);
-					const hosts = new DisposableStore();
-					hosts.add(services.createInstance(AppServerTextDocumentHost, documentClient!, { applyEdits: editing.applyEdits.bind(editing), finishTurn: editing.finishTurn.bind(editing) }));
-					const ide = hosts.add(services.createInstance(AppServerIdeHost, documentClient!));
-					hosts.add(services.get(IEnvironmentVariableService).registerCollectionProvider('ash.ide', async () => {
-						const key = await ide.readTerminalWindowKey();
-						return {
-							persistent: false,
-							map: key ? new Map([['ASH_IDE_WINDOW', { variable: 'ASH_IDE_WINDOW', type: EnvironmentVariableMutatorType.Replace, value: key }]]) : new Map(),
-						};
-					}));
-					return hosts;
-				} : undefined,
-				createBrowserHost: documentClient ? services => registerAppServerBrowserHost(documentClient!, playwrightService, mainProcessService, services.get(IConfigurationService), services.get(IAgentHostCanvasCollection)) : undefined,
-				createLogService: () => {
-					// The factory owns failure cleanup and transfers the logger to the Workbench.
-					this._store.delete(logger);
-					return logger;
-				},
-				createWorkingCopyBackupService: (services, workspaceId) => {
-					if (!api.backup) return new IndexedDbWorkingCopyBackupService(workspaceId);
-					return services.createChild(new ServiceCollection([IBackupService, api.backup])).createInstance(WorkingCopyBackupService);
-				},
-				createStorageService: async options => {
-					const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
-					try { await storage.initialize(); return storage; }
-					catch (error) { storage.dispose(); throw error; }
-				},
-				api,
-				container,
-				workspace,
-				createLifecycleService: services => {
-					lifecycleService = services.createInstance(ElectronLifecycleService, { ownerWindow: window, onError: onUnexpectedError });
-					this._register(lifecycleService.onWillShutdown(event => event.join(logger.flush().catch(error => console.error('Could not flush Desktop logs during shutdown', error)), 'Desktop logs flush')));
-					return lifecycleService;
-				},
-				createWindow: services => {
-					const context = services.get(IWorkspaceContextService);
-					if (api.workspace.onWillChangeFolders) this._register(api.workspace.onWillChangeFolders(event => {
-						try { services.get(IWorkspaceEditingService).validateFolders(event.folders); }
-						catch (error) { event.veto(error instanceof Error ? error : new Error(String(error))); }
-					}));
-					const support = EnterMultiRootWorkspaceSupportContext.bindTo(services.get(IContextKeyService));
-					const update = () => support.set(true);
-					update();
-					this._register(context.onDidChangeWorkspace(update));
-					this._register(toDisposable(() => support.reset()));
-					const errors = subscribe(WORKSPACE_EDIT_ERROR_CHANNEL, value => {
-						if (typeof value === 'string') services.get(INotificationService).error(localize('workspace.reloadFailed', 'Could not update workspace folders. The last accepted folders were kept. {0}', value));
-					});
-					this._register(toDisposable(() => errors.dispose()));
-					return desktopWindow = services.createInstance(ElectronWindow, { invoke, subscribe });
-				},
-				createUserDataFileSystemProvider: async () => new FileUserDataProvider(api.localFiles, api.userDataHome),
-				keyboardLayoutProvider: api.keyboardLayout,
-				userKeyboardLayoutApi: api.userKeyboardLayout,
-				nativeHostApi: api.nativeHost,
-				createHostColorSchemeService: services => {
-					const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
-					void colors.initialize().catch(onUnexpectedError);
-					return colors;
-				},
-				clipboardService: new ElectronRendererClipboardService(),
-				dialogHandler: new NativeDialogHandler(api.nativeHost, container),
-				userThemeService: userThemes,
-				createContextMenuService: services => services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
-				createAuxiliaryWindowService: (owner, root, services) => services.createInstance(ElectronAuxiliaryWindowService, owner, root),
-				createTitleService: (container, productName, groups, services) => services.createInstance(ElectronTitleService, container, productName, createElectronTitlebarPartFactory(), groups),
-			}));
+			const workbench = this._register(
+				await startWorkbench({
+					...this.options,
+					serviceCollection: new ServiceCollection(
+						[IWorkspaceEditingService, new SyncDescriptor(WorkspaceEditingService, [api.workspace])],
+						[ILoggerService, logger],
+						[
+							IPolicyService,
+							this._register(new PolicyChannelClient(mainProcessService.getChannel('policy'))),
+						],
+						[
+							IBrowserPasswordService,
+							ProxyChannel.toService<IBrowserPasswordService>(
+								mainProcessService.getChannel('browserPasswords'),
+							),
+						],
+						[
+							IBrowserViewService,
+							ProxyChannel.toService<IBrowserViewService>(
+								mainProcessService.getChannel(ipcBrowserViewChannelName),
+							),
+						],
+						[IMainProcessService, mainProcessService],
+						[ISecretStorageService, this._register(profileServices.createInstance(SecretStorageService))],
+						[IRemoteAuthorityResolverService, resolver],
+						[IPlaywrightService, playwrightService],
+					),
+					environmentService: environment,
+					createURLService: services => {
+						return services.createInstance(RelayURLService, windowId as number);
+					},
+					createTextDocumentHost: documentClient
+						? services => {
+								const editing = services.get(IChatEditingService);
+								const hosts = new DisposableStore();
+								hosts.add(
+									services.createInstance(AppServerTextDocumentHost, documentClient!, {
+										applyEdits: editing.applyEdits.bind(editing),
+										finishTurn: editing.finishTurn.bind(editing),
+									}),
+								);
+								const ide = hosts.add(services.createInstance(AppServerIdeHost, documentClient!));
+								hosts.add(
+									services
+										.get(IEnvironmentVariableService)
+										.registerCollectionProvider('ash.ide', async () => {
+											const key = await ide.readTerminalWindowKey();
+											return {
+												persistent: false,
+												map: key
+													? new Map([
+															[
+																'ASH_IDE_WINDOW',
+																{
+																	variable: 'ASH_IDE_WINDOW',
+																	type: EnvironmentVariableMutatorType.Replace,
+																	value: key,
+																},
+															],
+														])
+													: new Map(),
+											};
+										}),
+								);
+								return hosts;
+							}
+						: undefined,
+					createBrowserHost: documentClient
+						? services =>
+								registerAppServerBrowserHost(
+									documentClient!,
+									playwrightService,
+									mainProcessService,
+									services.get(IConfigurationService),
+									services.get(IAgentHostCanvasCollection),
+								)
+						: undefined,
+					createLogService: () => {
+						// The factory owns failure cleanup and transfers the logger to the Workbench.
+						this._store.delete(logger);
+						return logger;
+					},
+					createWorkingCopyBackupService: (services, workspaceId) => {
+						if (!api.backup) return new IndexedDbWorkingCopyBackupService(workspaceId);
+						return services
+							.createChild(new ServiceCollection([IBackupService, api.backup]))
+							.createInstance(WorkingCopyBackupService);
+					},
+					createStorageService: async options => {
+						const storage = profileServices.createInstance(NativeWorkbenchStorageService, options);
+						try {
+							await storage.initialize();
+							return storage;
+						} catch (error) {
+							storage.dispose();
+							throw error;
+						}
+					},
+					api,
+					container,
+					workspace,
+					createLifecycleService: services => {
+						lifecycleService = services.createInstance(ElectronLifecycleService, {
+							ownerWindow: window,
+							onError: onUnexpectedError,
+						});
+						this._register(
+							lifecycleService.onWillShutdown(event =>
+								event.join(
+									logger
+										.flush()
+										.catch(error =>
+											console.error('Could not flush Desktop logs during shutdown', error),
+										),
+									'Desktop logs flush',
+								),
+							),
+						);
+						return lifecycleService;
+					},
+					createWindow: services => {
+						const context = services.get(IWorkspaceContextService);
+						if (api.workspace.onWillChangeFolders)
+							this._register(
+								api.workspace.onWillChangeFolders(event => {
+									try {
+										services.get(IWorkspaceEditingService).validateFolders(event.folders);
+									} catch (error) {
+										event.veto(error instanceof Error ? error : new Error(String(error)));
+									}
+								}),
+							);
+						const support = EnterMultiRootWorkspaceSupportContext.bindTo(services.get(IContextKeyService));
+						const update = () => support.set(true);
+						update();
+						this._register(context.onDidChangeWorkspace(update));
+						this._register(toDisposable(() => support.reset()));
+						const errors = subscribe(WORKSPACE_EDIT_ERROR_CHANNEL, value => {
+							if (typeof value === 'string')
+								services
+									.get(INotificationService)
+									.error(
+										localize(
+											'workspace.reloadFailed',
+											'Could not update workspace folders. The last accepted folders were kept. {0}',
+											value,
+										),
+									);
+						});
+						this._register(toDisposable(() => errors.dispose()));
+						return (desktopWindow = services.createInstance(ElectronWindow, { invoke, subscribe }));
+					},
+					createUserDataFileSystemProvider: async () =>
+						new FileUserDataProvider(api.localFiles, api.userDataHome),
+					keyboardLayoutProvider: api.keyboardLayout,
+					userKeyboardLayoutApi: api.userKeyboardLayout,
+					nativeHostApi: api.nativeHost,
+					createHostColorSchemeService: services => {
+						const colors = services.createInstance(NativeHostColorSchemeService, hostColorScheme);
+						void colors.initialize().catch(onUnexpectedError);
+						return colors;
+					},
+					clipboardService: new ElectronRendererClipboardService(),
+					dialogHandler: new NativeDialogHandler(api.nativeHost, container),
+					userThemeService: userThemes,
+					createContextMenuService: services =>
+						services.createInstance(ElectronContextMenuService, api.nativeContextMenu),
+					createAuxiliaryWindowService: (owner, root, services) =>
+						services.createInstance(ElectronAuxiliaryWindowService, owner, root),
+					createTitleService: (container, productName, groups, services) =>
+						services.createInstance(
+							ElectronTitleService,
+							container,
+							productName,
+							createElectronTitlebarPartFactory(),
+							groups,
+						),
+				}),
+			);
 			performance.mark('ash.desktop.workbench-created');
 			const subscription = api.workspace.onDidChange(workspace => {
 				void this.updateWorkspace(workbench, workspace);
 			});
 			this._register(toDisposable(() => subscription.dispose()));
-			this._register(addDisposableListener(window, 'pagehide', () => {
-				void workbench.shutdown('pageHide').catch(error => console.error('Failed to shut down Workbench', error)).finally(() => {
-					try {
-						this.dispose();
-						tracker?.assertNoLeaks();
-					} finally {
-						tracking?.[Symbol.dispose]();
-					}
-				});
-			}, { once: true }));
+			this._register(
+				addDisposableListener(
+					window,
+					'pagehide',
+					() => {
+						void workbench
+							.shutdown('pageHide')
+							.catch(error => console.error('Failed to shut down Workbench', error))
+							.finally(() => {
+								try {
+									this.dispose();
+									tracker?.assertNoLeaks();
+								} finally {
+									tracking?.[Symbol.dispose]();
+								}
+							});
+					},
+					{ once: true },
+				),
+			);
 			await lifecycleService.initialize();
 			performance.mark('ash.desktop.lifecycle-ready');
 			await workbench.whenRestored;
@@ -253,8 +405,14 @@ export class DesktopMain extends Disposable {
 				try {
 					const pending = await api.backup.getWorkspaces();
 					const workspaces = pending.map(scope => {
-						const identifier: IAnyWorkspaceIdentifier = scope.configuration ? { id: scope.id, configPath: scope.configuration }
-							: scope.folders.length === 1 ? { id: scope.id, uri: scope.folders[0]! } : { id: scope.id, ...(scope.remoteAuthority ? { remoteAuthority: scope.remoteAuthority } : {}) };
+						const identifier: IAnyWorkspaceIdentifier = scope.configuration
+							? { id: scope.id, configPath: scope.configuration }
+							: scope.folders.length === 1
+								? { id: scope.id, uri: scope.folders[0]! }
+								: {
+										id: scope.id,
+										...(scope.remoteAuthority ? { remoteAuthority: scope.remoteAuthority } : {}),
+									};
 						return serializeWorkspaceIdentifier(identifier);
 					});
 					await invoke<void>(WORKSPACE_RECOVERY_CHANNEL, workspaces);
@@ -285,6 +443,9 @@ export class DesktopMain extends Disposable {
 	}
 }
 
-export function main(options: Pick<IStartWorkbenchOptions, 'productName'>, rendererCapabilities: readonly ElectronRendererCapabilityContribution[] = []): Promise<void> {
+export function main(
+	options: Pick<IStartWorkbenchOptions, 'productName'>,
+	rendererCapabilities: readonly ElectronRendererCapabilityContribution[] = [],
+): Promise<void> {
 	return new DesktopMain(options, rendererCapabilities).open();
 }

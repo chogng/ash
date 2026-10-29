@@ -25,14 +25,21 @@ export class SessionFileSystemContribution extends Disposable {
 		this.update();
 	}
 	private update(): void {
-		const desired = new Map<string, { sessionId: string; directory: IFileSystemDirectory; }>();
+		const desired = new Map<string, { sessionId: string; directory: IFileSystemDirectory }>();
 		const roots = new Set<string>();
 		for (const session of this.sessions.sessions) {
-			if (!session.providerId || session.providerId === this.defaultProviderId || !this.providers.getProvider(session.providerId)) continue;
+			if (
+				!session.providerId ||
+				session.providerId === this.defaultProviderId ||
+				!this.providers.getProvider(session.providerId)
+			)
+				continue;
 			const provider = this.providers.getProvider(session.providerId)!;
 			const environment = provider.currentWorkspace();
-			const environmentRoot = environment.type === 'ssh' || environment.type === 'local' || environment.type === 'provider'
-				? sessionWorkspaceUri(buildAgentHostSessionWorkspace(environment)!) : undefined;
+			const environmentRoot =
+				environment.type === 'ssh' || environment.type === 'local' || environment.type === 'provider'
+					? sessionWorkspaceUri(buildAgentHostSessionWorkspace(environment)!)
+					: undefined;
 			for (const workspace of [session.workspace, ...session.chats.map(chat => chat.workspace)]) {
 				if (!workspace) continue;
 				const uri = sessionWorkspaceUri(workspace);
@@ -43,7 +50,13 @@ export class SessionFileSystemContribution extends Disposable {
 				if (roots.has(rootKey)) continue;
 				roots.add(rootKey);
 				const key = JSON.stringify([session.providerId, session.backendSessionId, rootKey]);
-				desired.set(key, { sessionId: session.sessionId, directory: { uri, target: { type: 'session', sessionId: session.backendSessionId!, path: workspace.root } } });
+				desired.set(key, {
+					sessionId: session.sessionId,
+					directory: {
+						uri,
+						target: { type: 'session', sessionId: session.backendSessionId!, path: workspace.root },
+					},
+				});
 			}
 		}
 		for (const key of this.mounts.keys()) if (!desired.has(key)) this.mounts.deleteAndDispose(key);
@@ -52,9 +65,13 @@ export class SessionFileSystemContribution extends Disposable {
 			const scope = this.scopes.getScope(value.sessionId);
 			const host = scope.services.host;
 			const registration = this.files.registerAuthority(value.directory.uri.authority, {
-				api: host.fs, resourceApi: host.resource, directories: () => [value.directory],
+				api: host.fs,
+				resourceApi: host.resource,
+				directories: () => [value.directory],
 				onDidChange: listener => {
-					const subscription = host.events.subscribe(event => { if (event.method === 'fs/changed') listener(event.params); });
+					const subscription = host.events.subscribe(event => {
+						if (event.method === 'fs/changed') listener(event.params);
+					});
 					return toDisposable(() => subscription.dispose());
 				},
 			});

@@ -2,7 +2,13 @@ import { DisposableStore } from '../../../base/common/lifecycle.js';
 import { generateUuid } from '../../../base/common/uuid.js';
 import { localize, localize2 } from '../../../nls.js';
 import { Action2, registerAction2 } from '../../../platform/actions/common/actions.js';
-import { IApprovalEnvironmentService, type ReviewEnvironmentEntry, type ReviewEnvironmentHistoryCoverage, type ReviewEnvironmentScanOptions, type ReviewEnvironmentScope } from '../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
+import {
+	IApprovalEnvironmentService,
+	type ReviewEnvironmentEntry,
+	type ReviewEnvironmentHistoryCoverage,
+	type ReviewEnvironmentScanOptions,
+	type ReviewEnvironmentScope,
+} from '../../../platform/approvalEnvironment/common/approvalEnvironmentService.js';
 import type { ServicesAccessor } from '../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../platform/quickinput/common/quickInput.js';
 import { INotificationService } from '../../../platform/notification/common/notification.js';
@@ -12,166 +18,512 @@ import { OPEN_GUARDIAN_SETUP_COMMAND_ID } from '../../../workbench/contrib/chat/
 import { ISessionsManagementService } from '../../services/sessions/common/sessionsManagement.js';
 import { selectionFromWorkspace } from '../workspaceSelection.js';
 
-interface Item extends IQuickPickItem { readonly id: string; }
+interface Item extends IQuickPickItem {
+	readonly id: string;
+}
 
-registerAction2(class PrepareApprovalEnvironment extends Action2 {
-	constructor() {
-		super({ id: OPEN_GUARDIAN_SETUP_COMMAND_ID, title: localize2('approvalEnvironment.title', 'Prepare review environment…') });
-	}
-	override async run(accessor: ServicesAccessor, model: IChatWidgetModel, argument = ''): Promise<void> {
-		if (argument.trim() && argument.trim() !== 'setup') { throw new Error(localize('approvalEnvironment.commandUsage', 'Use /guardian or /guardian setup to prepare review background.')); }
-		const input = accessor.get(IQuickInputService);
-		const service = accessor.get(IApprovalEnvironmentService);
-		const notifications = accessor.get(INotificationService);
-		const sessions = accessor.get(ISessionsManagementService);
-		const threadId = model.threadId;
-		const taskModel = model.inputState.selectedModel;
-		let selectedRoot: string | undefined;
-		const unsupportedRemote = (): Error => new Error(localize('approvalEnvironment.remoteUnsupported', 'Preparing a review environment for a remote project is not supported yet. No project files were scanned.'));
-		if (threadId) {
-			const session = sessions.sessions.find(session => session.sessionId === model.sessionId);
-			const workspace = session?.chats.find(chat => chat.threadId === threadId)?.workspace ?? session?.workspace;
-			if (workspace && workspace.authorityId !== 'local') { throw unsupportedRemote(); }
-		} else if (model.untitledSessionId) {
-			let workspace = sessions.untitledSessions.find(session => session.untitledSessionId === model.untitledSessionId)?.workspace;
-			if (workspace?.type === 'current') { workspace = selectionFromWorkspace(accessor.get(IWorkspaceContextService).getWorkspace()); }
-			if (workspace?.type === 'multiple') {
-				const folders = workspace.folders;
-				const selected = await pick(input, localize('approvalEnvironment.project', 'Choose the project to prepare'), folders.map((folder, index) => ({
-					id: String(index), label: folder.label,
-					description: folder.target.type === 'ssh' ? `${folder.target.host}:${folder.target.root}` : folder.target.root,
-				})));
-				if (!selected) { return; }
-				workspace = folders[Number(selected.id)]!.target;
-			}
-			// Directory scope addresses the current backend. Dropping a remote host would read a different machine.
-			if (workspace?.type === 'ssh' || workspace?.type === 'provider') { throw unsupportedRemote(); }
-			if (workspace?.type === 'local') { selectedRoot = workspace.root; }
+registerAction2(
+	class PrepareApprovalEnvironment extends Action2 {
+		constructor() {
+			super({
+				id: OPEN_GUARDIAN_SETUP_COMMAND_ID,
+				title: localize2('approvalEnvironment.title', 'Prepare review environment…'),
+			});
 		}
-		if (!threadId && !selectedRoot) { throw new Error(localize('approvalEnvironment.noProject', 'Choose a project for this chat before preparing its review environment.')); }
-		const scope: ReviewEnvironmentScope = threadId ? { type: 'thread', threadId } : { type: 'directory', root: selectedRoot! };
-		const profile = await service.read(scope);
-		const root = profile.root;
-		let entries = [...profile.entries];
-		let revision = profile.revision;
-		let draftId: string | undefined;
-		let history: ReviewEnvironmentHistoryCoverage | undefined;
-		let options: ReviewEnvironmentScanOptions = { ...profile.scanOptions, summarizeWithModel: true };
-		const editedSources = new Set<string>();
-		for (; ;) {
-			const choice = await pick(input, localize('approvalEnvironment.review', 'Review environment: {0}', root) + (history ? ` — ${localize('approvalEnvironment.coverage', 'Scanned {0}/{1} sessions, {2}/{3} commands; kept {4}/{5} facts', history.sessionsScanned, history.sessionsAvailable, history.commandsScanned, history.commandsAvailable, history.factsIncluded, history.factsAvailable)}` : ''), [
-				{ id: 'scan', label: localize('approvalEnvironment.scan', 'Scan project…'), description: localize('approvalEnvironment.scanDetail', 'Choose scope and create a draft; nothing is accepted automatically') },
-				{ id: 'add', label: localize('approvalEnvironment.add', 'Add a description…') },
-				...entries.map(entry => ({ id: entry.id, label: entry.title, picked: entry.accepted && entry.current, description: entry.current ? entry.accepted ? localize('approvalEnvironment.accepted', 'Accepted') : localize('approvalEnvironment.pending', 'Pending review') : localize('approvalEnvironment.stale', 'Source changed — excluded from review'), detail: `${sourceLabel(entry)}\n${entry.content}` })),
-				{ id: 'save', label: localize('approvalEnvironment.save', 'Save accepted entries'), description: localize('approvalEnvironment.following', 'Saved project sources refresh before review. New observations remain unconfirmed; changed target descriptions need confirmation.') },
-			]);
-			if (!choice) { return; }
-			if (choice.id === 'scan') {
-				const selectedOptions = await scanOptions(input, options);
-				if (!selectedOptions) { continue; }
-				options = selectedOptions;
-				const operationId = generateUuid();
-				using progress = new DisposableStore();
-				const waiting = progress.add(input.createQuickPick<Item>());
-				waiting.ariaLabel = localize('approvalEnvironment.scanning', 'Preparing review environment');
-				waiting.placeholder = localize('approvalEnvironment.cancelHint', 'Press Escape to cancel the scan.');
-				waiting.items = [{ id: 'cancel', label: localize('approvalEnvironment.cancel', 'Cancel scan') }];
-				let cancelled = false;
-				let finished = false;
-				const cancel = (): void => {
-					if (finished || cancelled) { return; }
-					cancelled = true;
-					void service.cancel(operationId).catch(error => notifications.error(error instanceof Error ? error.message : String(error)));
-				};
-				progress.add(waiting.onDidAccept(() => { cancel(); waiting.hide(); }));
-				progress.add(waiting.onDidHide(cancel));
-				progress.add(waiting.onDidBlur(cancel));
-				waiting.show();
-				try {
-					const draft = await service.scan(scope, operationId, options, taskModel);
-					if (!cancelled) {
-						const edited = new Map(entries.filter(entry => editedSources.has(sourceKey(entry))).map(entry => [sourceKey(entry), entry]));
-						const retained = entries.filter(entry => entry.source.kind === 'manual' && !draft.entries.some(scanned => scanned.id === entry.id));
-						entries = [...draft.entries.map(entry => entry.current && edited.has(sourceKey(entry)) ? edited.get(sourceKey(entry))! : entry), ...retained];
-						revision = draft.baseRevision;
-						draftId = draft.id;
-						history = draft.history;
+		override async run(accessor: ServicesAccessor, model: IChatWidgetModel, argument = ''): Promise<void> {
+			if (argument.trim() && argument.trim() !== 'setup') {
+				throw new Error(
+					localize(
+						'approvalEnvironment.commandUsage',
+						'Use /guardian or /guardian setup to prepare review background.',
+					),
+				);
+			}
+			const input = accessor.get(IQuickInputService);
+			const service = accessor.get(IApprovalEnvironmentService);
+			const notifications = accessor.get(INotificationService);
+			const sessions = accessor.get(ISessionsManagementService);
+			const threadId = model.threadId;
+			const taskModel = model.inputState.selectedModel;
+			let selectedRoot: string | undefined;
+			const unsupportedRemote = (): Error =>
+				new Error(
+					localize(
+						'approvalEnvironment.remoteUnsupported',
+						'Preparing a review environment for a remote project is not supported yet. No project files were scanned.',
+					),
+				);
+			if (threadId) {
+				const session = sessions.sessions.find(session => session.sessionId === model.sessionId);
+				const workspace =
+					session?.chats.find(chat => chat.threadId === threadId)?.workspace ?? session?.workspace;
+				if (workspace && workspace.authorityId !== 'local') {
+					throw unsupportedRemote();
+				}
+			} else if (model.untitledSessionId) {
+				let workspace = sessions.untitledSessions.find(
+					session => session.untitledSessionId === model.untitledSessionId,
+				)?.workspace;
+				if (workspace?.type === 'current') {
+					workspace = selectionFromWorkspace(accessor.get(IWorkspaceContextService).getWorkspace());
+				}
+				if (workspace?.type === 'multiple') {
+					const folders = workspace.folders;
+					const selected = await pick(
+						input,
+						localize('approvalEnvironment.project', 'Choose the project to prepare'),
+						folders.map((folder, index) => ({
+							id: String(index),
+							label: folder.label,
+							description:
+								folder.target.type === 'ssh'
+									? `${folder.target.host}:${folder.target.root}`
+									: folder.target.root,
+						})),
+					);
+					if (!selected) {
+						return;
 					}
-				} catch (error) { if (!cancelled) { notifications.error(error instanceof Error ? error.message : String(error)); } }
-				finally { finished = true; waiting.hide(); }
-			} else if (choice.id === 'add') {
-				const content = await input.input({ title: localize('approvalEnvironment.description', 'Describe project tools, environments, or a target you own'), placeHolder: localize('approvalEnvironment.noSecrets', 'Do not include credentials. This description does not grant permissions.') });
-				if (!content?.trim()) { continue; }
-				const title = await input.input({ title: localize('approvalEnvironment.entryTitle', 'Description title'), value: content.slice(0, 80) });
-				if (!title?.trim()) { continue; }
-				const id = generateUuid();
-				entries.push({ id, kind: 'fact', title, content, accepted: true, current: true, source: { id: `manual:${id}`, kind: 'manual', label: '', revision: '' } });
-			} else if (choice.id === 'save') {
-				try {
-					await service.save(scope, generateUuid(), revision, entries.filter(entry => entry.accepted && entry.current).map(entry => ({ id: entry.id, kind: entry.kind, title: entry.title, content: entry.content, sourceId: entry.source.kind === 'manual' ? undefined : entry.source.id })), draftId);
-					notifications.info(localize('approvalEnvironment.saved', 'Review environment saved for this project.'));
+					workspace = folders[Number(selected.id)]!.target;
+				}
+				// Directory scope addresses the current backend. Dropping a remote host would read a different machine.
+				if (workspace?.type === 'ssh' || workspace?.type === 'provider') {
+					throw unsupportedRemote();
+				}
+				if (workspace?.type === 'local') {
+					selectedRoot = workspace.root;
+				}
+			}
+			if (!threadId && !selectedRoot) {
+				throw new Error(
+					localize(
+						'approvalEnvironment.noProject',
+						'Choose a project for this chat before preparing its review environment.',
+					),
+				);
+			}
+			const scope: ReviewEnvironmentScope = threadId
+				? { type: 'thread', threadId }
+				: { type: 'directory', root: selectedRoot! };
+			const profile = await service.read(scope);
+			const root = profile.root;
+			let entries = [...profile.entries];
+			let revision = profile.revision;
+			let draftId: string | undefined;
+			let history: ReviewEnvironmentHistoryCoverage | undefined;
+			let options: ReviewEnvironmentScanOptions = { ...profile.scanOptions, summarizeWithModel: true };
+			const editedSources = new Set<string>();
+			for (;;) {
+				const choice = await pick(
+					input,
+					localize('approvalEnvironment.review', 'Review environment: {0}', root) +
+						(history
+							? ` — ${localize('approvalEnvironment.coverage', 'Scanned {0}/{1} sessions, {2}/{3} commands; kept {4}/{5} facts', history.sessionsScanned, history.sessionsAvailable, history.commandsScanned, history.commandsAvailable, history.factsIncluded, history.factsAvailable)}`
+							: ''),
+					[
+						{
+							id: 'scan',
+							label: localize('approvalEnvironment.scan', 'Scan project…'),
+							description: localize(
+								'approvalEnvironment.scanDetail',
+								'Choose scope and create a draft; nothing is accepted automatically',
+							),
+						},
+						{ id: 'add', label: localize('approvalEnvironment.add', 'Add a description…') },
+						...entries.map(entry => ({
+							id: entry.id,
+							label: entry.title,
+							picked: entry.accepted && entry.current,
+							description: entry.current
+								? entry.accepted
+									? localize('approvalEnvironment.accepted', 'Accepted')
+									: localize('approvalEnvironment.pending', 'Pending review')
+								: localize('approvalEnvironment.stale', 'Source changed — excluded from review'),
+							detail: `${sourceLabel(entry)}\n${entry.content}`,
+						})),
+						{
+							id: 'save',
+							label: localize('approvalEnvironment.save', 'Save accepted entries'),
+							description: localize(
+								'approvalEnvironment.following',
+								'Saved project sources refresh before review. New observations remain unconfirmed; changed target descriptions need confirmation.',
+							),
+						},
+					],
+				);
+				if (!choice) {
 					return;
-				} catch (error) { notifications.error(error instanceof Error ? error.message : String(error)); }
-			} else {
-				const entry = entries.find(entry => entry.id === choice.id)!;
-				const action = await pick(input, entry.title, [
-					...(entry.current ? [{ id: 'accept', label: localize('approvalEnvironment.acceptFact', 'Accept as project background') }] : []),
-					...(entry.current && (entry.source.kind === 'projectFile' || entry.source.kind === 'manual') ? [{ id: 'target', label: localize('approvalEnvironment.confirmTarget', 'Confirm target ownership…'), description: localize('approvalEnvironment.targetDetail', 'Describe exactly which target is yours and its purpose; this does not authorize actions') }] : []),
-					{ id: 'edit', label: localize('approvalEnvironment.edit', 'Edit description…') },
-					{ id: 'exclude', label: localize('approvalEnvironment.exclude', 'Exclude this entry') },
-				]);
-				if (!action) { continue; }
-				let updated: ReviewEnvironmentEntry;
-				if (action.id === 'edit' || action.id === 'target') {
-					const content = await input.input({ title: action.id === 'target' ? localize('approvalEnvironment.targetPrompt', 'Which exact target do you own, and what is it used for?') : localize('approvalEnvironment.edit', 'Edit description…'), value: entry.content });
-					if (!content?.trim()) { continue; }
-					updated = { ...entry, content, kind: action.id === 'target' ? 'target' : entry.kind, accepted: entry.current };
-				} else { updated = { ...entry, kind: 'fact', accepted: action.id === 'accept' }; }
-				entries = entries.map(old => old === entry ? updated : old);
-				editedSources.add(sourceKey(updated));
+				}
+				if (choice.id === 'scan') {
+					const selectedOptions = await scanOptions(input, options);
+					if (!selectedOptions) {
+						continue;
+					}
+					options = selectedOptions;
+					const operationId = generateUuid();
+					using progress = new DisposableStore();
+					const waiting = progress.add(input.createQuickPick<Item>());
+					waiting.ariaLabel = localize('approvalEnvironment.scanning', 'Preparing review environment');
+					waiting.placeholder = localize(
+						'approvalEnvironment.cancelHint',
+						'Press Escape to cancel the scan.',
+					);
+					waiting.items = [{ id: 'cancel', label: localize('approvalEnvironment.cancel', 'Cancel scan') }];
+					let cancelled = false;
+					let finished = false;
+					const cancel = (): void => {
+						if (finished || cancelled) {
+							return;
+						}
+						cancelled = true;
+						void service
+							.cancel(operationId)
+							.catch(error =>
+								notifications.error(error instanceof Error ? error.message : String(error)),
+							);
+					};
+					progress.add(
+						waiting.onDidAccept(() => {
+							cancel();
+							waiting.hide();
+						}),
+					);
+					progress.add(waiting.onDidHide(cancel));
+					progress.add(waiting.onDidBlur(cancel));
+					waiting.show();
+					try {
+						const draft = await service.scan(scope, operationId, options, taskModel);
+						if (!cancelled) {
+							const edited = new Map(
+								entries
+									.filter(entry => editedSources.has(sourceKey(entry)))
+									.map(entry => [sourceKey(entry), entry]),
+							);
+							const retained = entries.filter(
+								entry =>
+									entry.source.kind === 'manual' &&
+									!draft.entries.some(scanned => scanned.id === entry.id),
+							);
+							entries = [
+								...draft.entries.map(entry =>
+									entry.current && edited.has(sourceKey(entry))
+										? edited.get(sourceKey(entry))!
+										: entry,
+								),
+								...retained,
+							];
+							revision = draft.baseRevision;
+							draftId = draft.id;
+							history = draft.history;
+						}
+					} catch (error) {
+						if (!cancelled) {
+							notifications.error(error instanceof Error ? error.message : String(error));
+						}
+					} finally {
+						finished = true;
+						waiting.hide();
+					}
+				} else if (choice.id === 'add') {
+					const content = await input.input({
+						title: localize(
+							'approvalEnvironment.description',
+							'Describe project tools, environments, or a target you own',
+						),
+						placeHolder: localize(
+							'approvalEnvironment.noSecrets',
+							'Do not include credentials. This description does not grant permissions.',
+						),
+					});
+					if (!content?.trim()) {
+						continue;
+					}
+					const title = await input.input({
+						title: localize('approvalEnvironment.entryTitle', 'Description title'),
+						value: content.slice(0, 80),
+					});
+					if (!title?.trim()) {
+						continue;
+					}
+					const id = generateUuid();
+					entries.push({
+						id,
+						kind: 'fact',
+						title,
+						content,
+						accepted: true,
+						current: true,
+						source: { id: `manual:${id}`, kind: 'manual', label: '', revision: '' },
+					});
+				} else if (choice.id === 'save') {
+					try {
+						await service.save(
+							scope,
+							generateUuid(),
+							revision,
+							entries
+								.filter(entry => entry.accepted && entry.current)
+								.map(entry => ({
+									id: entry.id,
+									kind: entry.kind,
+									title: entry.title,
+									content: entry.content,
+									sourceId: entry.source.kind === 'manual' ? undefined : entry.source.id,
+								})),
+							draftId,
+						);
+						notifications.info(
+							localize('approvalEnvironment.saved', 'Review environment saved for this project.'),
+						);
+						return;
+					} catch (error) {
+						notifications.error(error instanceof Error ? error.message : String(error));
+					}
+				} else {
+					const entry = entries.find(entry => entry.id === choice.id)!;
+					const action = await pick(input, entry.title, [
+						...(entry.current
+							? [
+									{
+										id: 'accept',
+										label: localize(
+											'approvalEnvironment.acceptFact',
+											'Accept as project background',
+										),
+									},
+								]
+							: []),
+						...(entry.current && (entry.source.kind === 'projectFile' || entry.source.kind === 'manual')
+							? [
+									{
+										id: 'target',
+										label: localize(
+											'approvalEnvironment.confirmTarget',
+											'Confirm target ownership…',
+										),
+										description: localize(
+											'approvalEnvironment.targetDetail',
+											'Describe exactly which target is yours and its purpose; this does not authorize actions',
+										),
+									},
+								]
+							: []),
+						{ id: 'edit', label: localize('approvalEnvironment.edit', 'Edit description…') },
+						{ id: 'exclude', label: localize('approvalEnvironment.exclude', 'Exclude this entry') },
+					]);
+					if (!action) {
+						continue;
+					}
+					let updated: ReviewEnvironmentEntry;
+					if (action.id === 'edit' || action.id === 'target') {
+						const content = await input.input({
+							title:
+								action.id === 'target'
+									? localize(
+											'approvalEnvironment.targetPrompt',
+											'Which exact target do you own, and what is it used for?',
+										)
+									: localize('approvalEnvironment.edit', 'Edit description…'),
+							value: entry.content,
+						});
+						if (!content?.trim()) {
+							continue;
+						}
+						updated = {
+							...entry,
+							content,
+							kind: action.id === 'target' ? 'target' : entry.kind,
+							accepted: entry.current,
+						};
+					} else {
+						updated = { ...entry, kind: 'fact', accepted: action.id === 'accept' };
+					}
+					entries = entries.map(old => (old === entry ? updated : old));
+					editedSources.add(sourceKey(updated));
+				}
 			}
 		}
-	}
-});
+	},
+);
 
-function sourceKey(entry: ReviewEnvironmentEntry): string { return `${entry.source.id}:${entry.source.revision}`; }
+function sourceKey(entry: ReviewEnvironmentEntry): string {
+	return `${entry.source.id}:${entry.source.revision}`;
+}
 
 function sourceLabel(entry: ReviewEnvironmentEntry): string {
 	switch (entry.source.kind) {
-		case 'projectFile': return localize('approvalEnvironment.projectSource', 'Project file: {0} · {1}', entry.source.label, entry.source.revision.slice(0, 8));
+		case 'projectFile':
+			return localize(
+				'approvalEnvironment.projectSource',
+				'Project file: {0} · {1}',
+				entry.source.label,
+				entry.source.revision.slice(0, 8),
+			);
 		case 'recentCommand': {
 			const source = entry.source.command;
-			if (source) { return [localize('approvalEnvironment.commandCounts', '{0} occurrences in {1} sessions; newest source samples:', source.occurrences, source.sessionCount), ...source.samples.map(sample => localize('approvalEnvironment.commandSource', 'Session {0} · Chat {1} · Turn {2} · {3}', sample.sessionId, sample.threadId, sample.turnId, new Date(sample.recordedAtUnixMs).toLocaleString()))].join('\n'); }
+			if (source) {
+				return [
+					localize(
+						'approvalEnvironment.commandCounts',
+						'{0} occurrences in {1} sessions; newest source samples:',
+						source.occurrences,
+						source.sessionCount,
+					),
+					...source.samples.map(sample =>
+						localize(
+							'approvalEnvironment.commandSource',
+							'Session {0} · Chat {1} · Turn {2} · {3}',
+							sample.sessionId,
+							sample.threadId,
+							sample.turnId,
+							new Date(sample.recordedAtUnixMs).toLocaleString(),
+						),
+					),
+				].join('\n');
+			}
 			return localize('approvalEnvironment.sessionSource', 'Historical session command');
 		}
-		case 'shellHistory': return localize('approvalEnvironment.historySource', 'Historical executable names');
-		case 'otherRepository': return localize('approvalEnvironment.repositorySource', 'Historical remote observation: {0}', entry.source.label.split(': ').at(-1)!);
-		case 'manual': return localize('approvalEnvironment.manualSource', 'Your description');
+		case 'shellHistory':
+			return localize('approvalEnvironment.historySource', 'Historical executable names');
+		case 'otherRepository':
+			return localize(
+				'approvalEnvironment.repositorySource',
+				'Historical remote observation: {0}',
+				entry.source.label.split(': ').at(-1)!,
+			);
+		case 'manual':
+			return localize('approvalEnvironment.manualSource', 'Your description');
 	}
 }
 
-async function scanOptions(input: IQuickInputService, initial: ReviewEnvironmentScanOptions): Promise<ReviewEnvironmentScanOptions | undefined> {
+async function scanOptions(
+	input: IQuickInputService,
+	initial: ReviewEnvironmentScanOptions,
+): Promise<ReviewEnvironmentScanOptions | undefined> {
 	let options = initial;
-	for (; ;) {
-		const choice = await pick(input, localize('approvalEnvironment.scope', 'Scan scope — current project is included'), [
-			{ id: 'summarizeWithModel', label: localize('approvalEnvironment.summarize', 'Summarize with the current task model'), description: localize('approvalEnvironment.modelPrivacy', 'Sends filtered observations to this model; no tools or automatic permissions'), picked: options.summarizeWithModel },
-			{ id: 'recentCommands', label: localize('approvalEnvironment.recent', 'Include recent project sessions'), description: localize('approvalEnvironment.recentDetail', 'Reads this directory’s sessions by recency; aggregates command names and targets; excludes messages and ordinary arguments'), picked: options.recentCommands },
-			...(options.recentCommands ? [
-				{ id: 'historySessions', label: localize('approvalEnvironment.historySessions', 'Session limit: {0}', options.history.sessions), description: localize('approvalEnvironment.historySessionsDetail', 'Enter a number from 1 to 200') },
-				{ id: 'historyCommands', label: localize('approvalEnvironment.historyCommands', 'Commands per session: {0}', options.history.commandsPerSession), description: localize('approvalEnvironment.historyCommandsDetail', 'Enter a number from 1 to 2000; each session has its own budget') },
-				{ id: 'historyDays', label: options.history.days === null ? localize('approvalEnvironment.historyAllDates', 'Time range: all dates') : localize('approvalEnvironment.historyDays', 'Time range: last {0} days', options.history.days), description: localize('approvalEnvironment.historyDaysDetail', 'Leave empty for all dates, or enter 1 to 3650 days') },
-			] : []),
-			{ id: 'shellHistory', label: localize('approvalEnvironment.history', 'Include shell history executable names'), description: localize('approvalEnvironment.historyDetail', 'Reads bounded history on the execution machine; excludes arguments'), picked: options.shellHistory },
-			{ id: 'otherRepositories', label: localize('approvalEnvironment.repositories', 'Include other repositories in the home directory'), description: localize('approvalEnvironment.repositoriesDetail', 'Reads bounded Git remote metadata on the execution machine; excludes source code'), picked: options.otherRepositories },
-			{ id: 'continue', label: localize('approvalEnvironment.continue', 'Continue — generate draft') },
-		]);
-		if (!choice) { return undefined; }
-		if (choice.id === 'continue') { return options; }
+	for (;;) {
+		const choice = await pick(
+			input,
+			localize('approvalEnvironment.scope', 'Scan scope — current project is included'),
+			[
+				{
+					id: 'summarizeWithModel',
+					label: localize('approvalEnvironment.summarize', 'Summarize with the current task model'),
+					description: localize(
+						'approvalEnvironment.modelPrivacy',
+						'Sends filtered observations to this model; no tools or automatic permissions',
+					),
+					picked: options.summarizeWithModel,
+				},
+				{
+					id: 'recentCommands',
+					label: localize('approvalEnvironment.recent', 'Include recent project sessions'),
+					description: localize(
+						'approvalEnvironment.recentDetail',
+						'Reads this directory’s sessions by recency; aggregates command names and targets; excludes messages and ordinary arguments',
+					),
+					picked: options.recentCommands,
+				},
+				...(options.recentCommands
+					? [
+							{
+								id: 'historySessions',
+								label: localize(
+									'approvalEnvironment.historySessions',
+									'Session limit: {0}',
+									options.history.sessions,
+								),
+								description: localize(
+									'approvalEnvironment.historySessionsDetail',
+									'Enter a number from 1 to 200',
+								),
+							},
+							{
+								id: 'historyCommands',
+								label: localize(
+									'approvalEnvironment.historyCommands',
+									'Commands per session: {0}',
+									options.history.commandsPerSession,
+								),
+								description: localize(
+									'approvalEnvironment.historyCommandsDetail',
+									'Enter a number from 1 to 2000; each session has its own budget',
+								),
+							},
+							{
+								id: 'historyDays',
+								label:
+									options.history.days === null
+										? localize('approvalEnvironment.historyAllDates', 'Time range: all dates')
+										: localize(
+												'approvalEnvironment.historyDays',
+												'Time range: last {0} days',
+												options.history.days,
+											),
+								description: localize(
+									'approvalEnvironment.historyDaysDetail',
+									'Leave empty for all dates, or enter 1 to 3650 days',
+								),
+							},
+						]
+					: []),
+				{
+					id: 'shellHistory',
+					label: localize('approvalEnvironment.history', 'Include shell history executable names'),
+					description: localize(
+						'approvalEnvironment.historyDetail',
+						'Reads bounded history on the execution machine; excludes arguments',
+					),
+					picked: options.shellHistory,
+				},
+				{
+					id: 'otherRepositories',
+					label: localize(
+						'approvalEnvironment.repositories',
+						'Include other repositories in the home directory',
+					),
+					description: localize(
+						'approvalEnvironment.repositoriesDetail',
+						'Reads bounded Git remote metadata on the execution machine; excludes source code',
+					),
+					picked: options.otherRepositories,
+				},
+				{ id: 'continue', label: localize('approvalEnvironment.continue', 'Continue — generate draft') },
+			],
+		);
+		if (!choice) {
+			return undefined;
+		}
+		if (choice.id === 'continue') {
+			return options;
+		}
 		if (choice.id === 'historySessions' || choice.id === 'historyCommands' || choice.id === 'historyDays') {
-			const field = choice.id === 'historySessions' ? 'sessions' : choice.id === 'historyCommands' ? 'commandsPerSession' : 'days';
+			const field =
+				choice.id === 'historySessions'
+					? 'sessions'
+					: choice.id === 'historyCommands'
+						? 'commandsPerSession'
+						: 'days';
 			const maximum = field === 'sessions' ? 200 : field === 'commandsPerSession' ? 2000 : 3650;
-			const value = await input.input({ title: choice.label, value: options.history[field]?.toString() ?? '', validateInput: async value => field === 'days' && !value.trim() || /^[0-9]+$/.test(value) && Number(value) >= 1 && Number(value) <= maximum ? undefined : localize('approvalEnvironment.historyInvalid', 'Enter a whole number from 1 to {0}.', maximum) });
-			if (value !== undefined) { options = { ...options, history: { ...options.history, [field]: field === 'days' && !value.trim() ? null : Number(value) } }; }
+			const value = await input.input({
+				title: choice.label,
+				value: options.history[field]?.toString() ?? '',
+				validateInput: async value =>
+					(field === 'days' && !value.trim()) ||
+					(/^[0-9]+$/.test(value) && Number(value) >= 1 && Number(value) <= maximum)
+						? undefined
+						: localize(
+								'approvalEnvironment.historyInvalid',
+								'Enter a whole number from 1 to {0}.',
+								maximum,
+							),
+			});
+			if (value !== undefined) {
+				options = {
+					...options,
+					history: { ...options.history, [field]: field === 'days' && !value.trim() ? null : Number(value) },
+				};
+			}
 			continue;
 		}
 		const key = choice.id as 'recentCommands' | 'shellHistory' | 'otherRepositories' | 'summarizeWithModel';
@@ -187,12 +539,20 @@ function pick(input: IQuickInputService, title: string, items: readonly Item[]):
 		picker.placeholder = title;
 		picker.items = items;
 		let selected: Item | undefined;
-		store.add(picker.onDidAccept(() => {
-			const item = picker.selectedItems[0];
-			if (!item) return;
-			selected = item; picker.hide();
-		}));
-		store.add(picker.onDidHide(() => { store.dispose(); resolve(selected); }));
+		store.add(
+			picker.onDidAccept(() => {
+				const item = picker.selectedItems[0];
+				if (!item) return;
+				selected = item;
+				picker.hide();
+			}),
+		);
+		store.add(
+			picker.onDidHide(() => {
+				store.dispose();
+				resolve(selected);
+			}),
+		);
 		picker.show();
 	});
 }

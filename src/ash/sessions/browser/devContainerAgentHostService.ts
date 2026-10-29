@@ -8,24 +8,36 @@ import type { SessionExecutionTarget } from '../services/sessions/common/session
 
 export class DevContainerAgentHostService implements IDevContainerAgentHostService {
 	declare readonly _serviceBrand: undefined;
-	constructor(@IAgentSessionService private readonly sessions: IAgentSessionService) { }
+	constructor(@IAgentSessionService private readonly sessions: IAgentSessionService) {}
 	private async invoke(request: SessionRuntimeRequest, token: CancellationToken): Promise<SessionRuntimeResult> {
-		if (token.isCancellationRequested) { throw canceled(); }
-		if (!this.sessions.invokeRuntime) { throw new Error(localize('sessions.devContainer.unavailable', 'The Dev Container Provider is unavailable.')); }
+		if (token.isCancellationRequested) {
+			throw canceled();
+		}
+		if (!this.sessions.invokeRuntime) {
+			throw new Error(
+				localize('sessions.devContainer.unavailable', 'The Dev Container Provider is unavailable.'),
+			);
+		}
 		const controller = new AbortController();
 		using cancellation = token.onCancellationRequested(() => controller.abort());
 		try {
 			const result = await this.sessions.invokeRuntime('ash.dev-containers', request, controller.signal);
-			if (token.isCancellationRequested) { throw canceled(); }
+			if (token.isCancellationRequested) {
+				throw canceled();
+			}
 			return result;
 		} catch (error) {
-			if (token.isCancellationRequested) { throw canceled(); }
+			if (token.isCancellationRequested) {
+				throw canceled();
+			}
 			throw error;
 		}
 	}
 	async getTargets(token: CancellationToken): Promise<readonly SessionExecutionTarget[]> {
 		const result = await this.invoke({ operation: 'list' }, token);
-		return result.type === 'targets' ? result.targets.filter(target => target.type === 'provider' && target.providerId === 'ash.dev-containers') : [];
+		return result.type === 'targets'
+			? result.targets.filter(target => target.type === 'provider' && target.providerId === 'ash.dev-containers')
+			: [];
 	}
 	async isAvailable(workspace: string, token: CancellationToken): Promise<boolean> {
 		const result = await this.invoke({ workspace, operation: 'probe' }, token);
@@ -33,11 +45,24 @@ export class DevContainerAgentHostService implements IDevContainerAgentHostServi
 	}
 	async connect(workspace: string, token: CancellationToken): Promise<SessionExecutionTarget> {
 		const result = await this.invoke({ workspace, operation: 'prepare' }, token);
-		if (result.type !== 'target' || result.target.type !== 'provider' || result.target.providerId !== 'ash.dev-containers') {
-			throw new Error(localize('sessions.devContainer.invalidTarget', 'The Dev Container Provider returned an invalid execution target.'));
+		if (
+			result.type !== 'target' ||
+			result.target.type !== 'provider' ||
+			result.target.providerId !== 'ash.dev-containers'
+		) {
+			throw new Error(
+				localize(
+					'sessions.devContainer.invalidTarget',
+					'The Dev Container Provider returned an invalid execution target.',
+				),
+			);
 		}
 		return result.target;
 	}
-	async stopContainer(workspace: string, token: CancellationToken): Promise<void> { await this.invoke({ workspace, operation: 'stop' }, token); }
-	async removeContainer(workspace: string, token: CancellationToken): Promise<void> { await this.invoke({ workspace, operation: 'remove' }, token); }
+	async stopContainer(workspace: string, token: CancellationToken): Promise<void> {
+		await this.invoke({ workspace, operation: 'stop' }, token);
+	}
+	async removeContainer(workspace: string, token: CancellationToken): Promise<void> {
+		await this.invoke({ workspace, operation: 'remove' }, token);
+	}
 }

@@ -3,7 +3,10 @@ import { after as afterCodeFeatures } from 'mocha';
 import { LanguageCompletionTriggerKind } from '../../../common/languages.js';
 import { LanguageCompletionProviderRegistry } from '../../../common/languageFeatureRegistry.js';
 import { LanguageCompletionService } from '../../../contrib/suggest/browser/suggest.js';
-import { WordBasedCompletionItemProvider, VersionedEditorWorkerClient } from '../../../browser/services/editorWorkerService.js';
+import {
+	WordBasedCompletionItemProvider,
+	VersionedEditorWorkerClient,
+} from '../../../browser/services/editorWorkerService.js';
 import assert from 'node:assert/strict';
 import { test } from 'mocha';
 import { Emitter, type Event } from '../../../../base/common/event.js';
@@ -13,15 +16,23 @@ import { Range } from '../../../common/core/range.js';
 import { TextModel } from '../../../common/model/textModel.js';
 import { EditorWorker, editorWorkerWireCodec } from '../../../common/services/editorWebWorker.js';
 import { EndOfLineSequence } from '../../../common/model.js';
-import { WorkerTextModelSyncClient, WorkerTextModelSyncServer } from '../../../common/services/textModelSync/textModelSync.impl.js';
+import {
+	WorkerTextModelSyncClient,
+	WorkerTextModelSyncServer,
+} from '../../../common/services/textModelSync/textModelSync.impl.js';
 import { type WebWorkerClientPort } from '../../../../base/common/worker/webWorker.js';
 
 test('worker wire preserves EOL-only edits after text minimization', async () => {
 	using model = new TextModel('alpha');
 	const [clientPort, serverPort] = createPortPair();
 	using server = new WorkerTextModelSyncServer(serverPort, editorWorkerWireCodec, new EditorWorker());
-	using client = new VersionedEditorWorkerClient(model, () => new WorkerTextModelSyncClient(clientPort, editorWorkerWireCodec));
-	const result = await client.computeMoreMinimalEdits([{ range: model.getFullModelRange(), text: 'alpha', eol: EndOfLineSequence.CRLF }]);
+	using client = new VersionedEditorWorkerClient(
+		model,
+		() => new WorkerTextModelSyncClient(clientPort, editorWorkerWireCodec),
+	);
+	const result = await client.computeMoreMinimalEdits([
+		{ range: model.getFullModelRange(), text: 'alpha', eol: EndOfLineSequence.CRLF },
+	]);
 	assert.deepEqual(result, [{ range: new Range(1, 1, 1, 1), text: '', eol: EndOfLineSequence.CRLF }]);
 });
 
@@ -29,16 +40,24 @@ test('Editor worker client synchronizes model versions across the structured-clo
 	const [clientPort, serverPort] = createPortPair();
 	using server = new WorkerTextModelSyncServer(serverPort, editorWorkerWireCodec, new EditorWorker());
 	using model = new TextModel('const value = true;');
-	using client = new VersionedEditorWorkerClient(model, () => new WorkerTextModelSyncClient(clientPort, editorWorkerWireCodec));
+	using client = new VersionedEditorWorkerClient(
+		model,
+		() => new WorkerTextModelSyncClient(clientPort, editorWorkerWireCodec),
+	);
 
-	const first = await client.navigateValueSet(Range.fromPositions(new Position((0) + 1, (14) + 1)), true, /[A-Za-z]+/g);
-	model.applyEdits([{ range: Range.fromPositions(new Position((0) + 1, (14) + 1), new Position((0) + 1, (18) + 1)), text: 'false' }]);
-	const second = await client.navigateValueSet(Range.fromPositions(new Position((0) + 1, (14) + 1)), true, /[A-Za-z]+/g);
+	const first = await client.navigateValueSet(Range.fromPositions(new Position(0 + 1, 14 + 1)), true, /[A-Za-z]+/g);
+	model.applyEdits([
+		{ range: Range.fromPositions(new Position(0 + 1, 14 + 1), new Position(0 + 1, 18 + 1)), text: 'false' },
+	]);
+	const second = await client.navigateValueSet(Range.fromPositions(new Position(0 + 1, 14 + 1)), true, /[A-Za-z]+/g);
 
 	assert.equal(first?.value, 'false');
 	assert.equal(first?.range instanceof Range, true);
 	assert.equal(second?.value, 'true');
-	assert.deepEqual(clientPort.sentMessages.map(message => message.kind), ['request', 'sync', 'request']);
+	assert.deepEqual(
+		clientPort.sentMessages.map(message => message.kind),
+		['request', 'sync', 'request'],
+	);
 	assert.equal(clientPort.sentMessages[0]!.snapshot?.kind, 'full');
 	assert.equal(clientPort.sentMessages[2]!.snapshot?.kind, 'reference');
 });
@@ -53,7 +72,7 @@ function createPortPair(): readonly [MemoryWirePort, MemoryWirePort] {
 
 interface WireMessage {
 	readonly kind: string;
-	readonly snapshot?: { readonly kind: string; };
+	readonly snapshot?: { readonly kind: string };
 }
 
 class MemoryWirePort extends Disposable implements WebWorkerClientPort {
@@ -66,9 +85,11 @@ class MemoryWirePort extends Disposable implements WebWorkerClientPort {
 
 	constructor() {
 		super();
-		this._register(toDisposable(() => {
-			this.peer = undefined;
-		}));
+		this._register(
+			toDisposable(() => {
+				this.peer = undefined;
+			}),
+		);
 	}
 
 	connect(peer: MemoryWirePort): void {
@@ -97,10 +118,13 @@ test('formatting can run again after an overlapping response fails across the wo
 		servers.add(new WorkerTextModelSyncServer(serverPort, editorWorkerWireCodec, new EditorWorker()));
 		return new WorkerTextModelSyncClient(clientPort, editorWorkerWireCodec);
 	});
-	await assert.rejects(client.computeMoreMinimalEdits([
-		{ range: new Range(1, 1, 1, 4), text: 'ALP' },
-		{ range: new Range(1, 3, 1, 6), text: 'PHA' },
-	]), /must not overlap/);
+	await assert.rejects(
+		client.computeMoreMinimalEdits([
+			{ range: new Range(1, 1, 1, 4), text: 'ALP' },
+			{ range: new Range(1, 3, 1, 6), text: 'PHA' },
+		]),
+		/must not overlap/,
+	);
 	const edits = await client.computeMoreMinimalEdits([{ range: model.getFullModelRange(), text: 'ALPHA' }]);
 	assert.deepEqual(edits, [{ range: model.getFullModelRange(), text: 'ALPHA' }]);
 	assert.equal(starts, 2);
@@ -110,16 +134,34 @@ test('word completion shares the general editor worker and retains dynamic provi
 	using model = new TextModel('alpha alphabet\nal', { languageId: 'typescript' });
 	const [clientPort, serverPort] = createPortPair();
 	using server = new WorkerTextModelSyncServer(serverPort, editorWorkerWireCodec, new EditorWorker());
-	using client = new VersionedEditorWorkerClient(model, () => new WorkerTextModelSyncClient(clientPort, editorWorkerWireCodec));
+	using client = new VersionedEditorWorkerClient(
+		model,
+		() => new WorkerTextModelSyncClient(clientPort, editorWorkerWireCodec),
+	);
 	using registry = new LanguageCompletionProviderRegistry();
-	using completions = new LanguageCompletionService(model, registry, { providers: [new WordBasedCompletionItemProvider(client)] });
+	using completions = new LanguageCompletionService(model, registry, {
+		providers: [new WordBasedCompletionItemProvider(client)],
+	});
 	await completions.request('typescript', new Position(2, 3), { kind: LanguageCompletionTriggerKind.Invoke });
-	assert.deepEqual(completions.results.result?.value.items.map(item => item.label), ['alpha', 'alphabet']);
-	using provider = registry.register({ id: 'test.dynamic', languageIds: ['typescript'], provideCompletions: () => undefined });
-	assert.deepEqual(completions.providerCatalog.providers.map(provider => provider.id), ['language.word', 'test.dynamic']);
+	assert.deepEqual(
+		completions.results.result?.value.items.map(item => item.label),
+		['alpha', 'alphabet'],
+	);
+	using provider = registry.register({
+		id: 'test.dynamic',
+		languageIds: ['typescript'],
+		provideCompletions: () => undefined,
+	});
+	assert.deepEqual(
+		completions.providerCatalog.providers.map(provider => provider.id),
+		['language.word', 'test.dynamic'],
+	);
 	model.setValue('alpine\nal');
 	await completions.request('typescript', new Position(2, 3), { kind: LanguageCompletionTriggerKind.Invoke });
-	assert.deepEqual(completions.results.result?.value.items.map(item => item.label), ['alpine']);
+	assert.deepEqual(
+		completions.results.result?.value.items.map(item => item.label),
+		['alpine'],
+	);
 	assert.ok(clientPort.sentMessages.some(message => message.kind === 'sync'));
 });
 
@@ -127,9 +169,29 @@ test('editor worker transport rejects invalid edit coordinates and EOL before ex
 	using model = new TextModel('text');
 	const snapshot = model.createVersionedSnapshot();
 	const range = { start: { lineIndex: 0, columnIndex: 0 }, end: { lineIndex: 0, columnIndex: 4 } };
-	assert.throws(() => editorWorkerWireCodec.decodePayload('minimalEdits', { edits: [{ range, text: '', eol: 2 }] }, snapshot), /EOL/);
-	assert.throws(() => editorWorkerWireCodec.decodePayload('minimalEdits', { edits: [{ range: { ...range, end: { lineIndex: 1, columnIndex: 0 } }, text: '' }] }, snapshot), /outside its snapshot/);
-	assert.throws(() => editorWorkerWireCodec.decodeResult('minimalEdits', [{ range: { ...range, start: { lineIndex: -1, columnIndex: 0 } }, text: '' }], snapshot, undefined), /non-negative safe integer/);
+	assert.throws(
+		() => editorWorkerWireCodec.decodePayload('minimalEdits', { edits: [{ range, text: '', eol: 2 }] }, snapshot),
+		/EOL/,
+	);
+	assert.throws(
+		() =>
+			editorWorkerWireCodec.decodePayload(
+				'minimalEdits',
+				{ edits: [{ range: { ...range, end: { lineIndex: 1, columnIndex: 0 } }, text: '' }] },
+				snapshot,
+			),
+		/outside its snapshot/,
+	);
+	assert.throws(
+		() =>
+			editorWorkerWireCodec.decodeResult(
+				'minimalEdits',
+				[{ range: { ...range, start: { lineIndex: -1, columnIndex: 0 } }, text: '' }],
+				snapshot,
+				undefined,
+			),
+		/non-negative safe integer/,
+	);
 	assert.equal(model.getValue(), 'text');
 });
 

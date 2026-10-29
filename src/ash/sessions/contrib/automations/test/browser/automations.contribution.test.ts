@@ -10,13 +10,21 @@ import { DeferredPromise } from '../../../../../base/common/async.js';
 import { CancellationTokenSource } from '../../../../../base/common/cancellation.js';
 import { DisposableStore, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { observableValue } from '../../../../../base/common/observable.js';
-import type { Automation, AutomationDefinition, AutomationRun, IAutomationBackendService } from '../../../../../platform/agentHost/common/automation.js';
+import type {
+	Automation,
+	AutomationDefinition,
+	AutomationRun,
+	IAutomationBackendService,
+} from '../../../../../platform/agentHost/common/automation.js';
 import { IRendererHostService, type IRendererHost } from '../../../../../platform/renderer/common/rendererHost.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { INotificationService, Severity } from '../../../../../platform/notification/common/notification.js';
 import { TestNotificationService } from '../../../../../workbench/services/notification/test/common/testNotificationService.js';
 import { IAutomationService } from '../../../../../workbench/contrib/chat/common/automations/automationService.js';
-import { SessionsProvidersService, ISessionsProvidersService } from '../../../../services/sessions/browser/sessionsProvidersService.js';
+import {
+	SessionsProvidersService,
+	ISessionsProvidersService,
+} from '../../../../services/sessions/browser/sessionsProvidersService.js';
 import type { ISessionsProvider } from '../../../../services/sessions/common/sessionsProvider.js';
 import { AgentHostAutomationStore } from '../../../providers/agentHost/browser/agentHostAutomationStore.js';
 import { ProviderAutomationService } from '../../browser/providerAutomationService.js';
@@ -35,7 +43,10 @@ import { Menus } from '../../../../browser/menus.js';
 import { StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { AUTOMATIONS_CUSTOM_VIEW_ID } from '../../../sessions/browser/automationsConstants.js';
 import '../../../sessions/browser/sessions.contribution.js';
-import { AutomationsCardsWidget, AutomationsCustomViewContribution } from '../../../sessions/browser/views/automationsView.js';
+import {
+	AutomationsCardsWidget,
+	AutomationsCustomViewContribution,
+} from '../../../sessions/browser/views/automationsView.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { InMemoryConfigurationService } from '../../../../../platform/configuration/common/inMemoryConfigurationService.js';
 import { IAutomationDialogService } from '../../../../../workbench/contrib/chat/common/automations/automationDialogService.js';
@@ -52,28 +63,32 @@ function fixture() {
 	services.registerInstance(IAutomationService, facade);
 	const errors: string[] = [];
 	const notifications = resources.add(new TestNotificationService());
-	resources.add(notifications.model.onDidAdd(item => {
-		if (item.severity === Severity.Error) errors.push(String(item.message));
-	}));
+	resources.add(
+		notifications.model.onDidAdd(item => {
+			if (item.severity === Severity.Error) errors.push(String(item.message));
+		}),
+	);
 	services.registerInstance(INotificationService, notifications);
 	function host(id: string) {
 		const changed = resources.add(new Emitter<void>());
 		const connection = observableValue<'connecting' | 'connected' | 'disconnected'>(id, 'connected');
-		let plans: Automation[] = [{
-			id: 'same-id',
-			revision: 1,
-			status: 'enabled',
-			createdAt: 1,
-			updatedAt: 1,
-			nextRunAt: null,
-			definition: {
-				title: id,
-				prompt: 'Review changes',
-				directory: '/saved',
-				session: { type: 'new' },
-				schedule: { type: 'interval', anchor: 1, minutes: 60 }
-			}
-		}];
+		let plans: Automation[] = [
+			{
+				id: 'same-id',
+				revision: 1,
+				status: 'enabled',
+				createdAt: 1,
+				updatedAt: 1,
+				nextRunAt: null,
+				definition: {
+					title: id,
+					prompt: 'Review changes',
+					directory: '/saved',
+					session: { type: 'new' },
+					schedule: { type: 'interval', anchor: 1, minutes: 60 },
+				},
+			},
+		];
 		let history: AutomationRun[] = [];
 		const records = new Map<string, AutomationRun>();
 		const saves: AutomationDefinition[] = [];
@@ -110,7 +125,7 @@ function fixture() {
 					finishedAt: null,
 					sessionId: null,
 					threadId: null,
-					message: null
+					message: null,
 				};
 				history = [value];
 				records.set(value.id, value);
@@ -136,7 +151,9 @@ function fixture() {
 		const scope = resources.add(new InstantiationService());
 		scope.registerInstance(IRendererHostService, { automation: backend } as unknown as IRendererHost);
 		const store = resources.add(scope.createInstance(AgentHostAutomationStore, id, connection));
-		const registration = resources.add(registry.registerProvider({ id, label: id, order: 0, automations: store } as unknown as ISessionsProvider));
+		const registration = resources.add(
+			registry.registerProvider({ id, label: id, order: 0, automations: store } as unknown as ISessionsProvider),
+		);
 		return {
 			backend,
 			store,
@@ -147,12 +164,16 @@ function fixture() {
 			requests,
 			stops,
 			reads,
-			setPlans(value: Automation[]) { plans = value; },
+			setPlans(value: Automation[]) {
+				plans = value;
+			},
 			setHistory(value: AutomationRun[]) {
 				history = value;
 				for (const run of value) records.set(run.id, run);
 			},
-			setRun(value: AutomationRun) { records.set(value.id, value); },
+			setRun(value: AutomationRun) {
+				records.set(value.id, value);
+			},
 		};
 	}
 	return { resources, services, registry, facade, host, errors };
@@ -175,7 +196,9 @@ test('Automations routes provider-scoped identities and never falls back after d
 		first.registration.dispose();
 		await assert.rejects(async () => value.facade.runAutomation(a!.id), /owning provider/);
 		assert.deepEqual(second.requests, []);
-	} finally { value.resources.dispose(); }
+	} finally {
+		value.resources.dispose();
+	}
 });
 
 test('Stale host reads cannot replace the catalogue after disconnect; reconnect reads it again', async () => {
@@ -207,7 +230,9 @@ test('Stale host reads cannot replace the catalogue after disconnect; reconnect 
 		await reconnecting;
 		assert.equal(host.store.catalogueState.get(), 'ready');
 		assert.equal(host.store.automations.get()[0]?.name, 'one');
-	} finally { value.resources.dispose(); }
+	} finally {
+		value.resources.dispose();
+	}
 });
 
 test('Reviewed edits reject changed revisions and changes cannot transfer an automation to another provider', async () => {
@@ -216,27 +241,34 @@ test('Reviewed edits reject changed revisions and changes cannot transfer an aut
 		const host = value.host('one');
 		await host.store.refresh();
 		const captured = host.store.automations.get()[0]!;
-		await assert.rejects(value.facade.updateAutomation(captured.id, { target: { ...captured.target, providerId: 'two' } }), /another provider/);
-		host.setPlans([{
-			id: 'same-id',
-			revision: 2,
-			status: 'enabled',
-			createdAt: 1,
-			updatedAt: 2,
-			nextRunAt: null,
-			definition: {
-				title: 'Changed remotely',
-				prompt: captured.prompt,
-				directory: captured.target.directory,
-				session: captured.target.session,
-				schedule: captured.schedule
-			}
-		}]);
+		await assert.rejects(
+			value.facade.updateAutomation(captured.id, { target: { ...captured.target, providerId: 'two' } }),
+			/another provider/,
+		);
+		host.setPlans([
+			{
+				id: 'same-id',
+				revision: 2,
+				status: 'enabled',
+				createdAt: 1,
+				updatedAt: 2,
+				nextRunAt: null,
+				definition: {
+					title: 'Changed remotely',
+					prompt: captured.prompt,
+					directory: captured.target.directory,
+					session: captured.target.session,
+					schedule: captured.schedule,
+				},
+			},
+		]);
 		await host.store.refresh();
 		const result = await value.facade.updateAutomationIfUnchanged(captured.id, { name: 'Overwrite' }, captured);
 		assert.equal(result.kind, 'conflict');
 		assert.deepEqual(host.saves, []);
-	} finally { value.resources.dispose(); }
+	} finally {
+		value.resources.dispose();
+	}
 });
 
 test('A confirmed save completes while history is pending, and history failure cannot repeat the write', async () => {
@@ -248,7 +280,10 @@ test('A confirmed save completes while history is pending, and history failure c
 		const existing = host.store.automations.get()[0]!;
 		host.backend.runs = () => history.p;
 		let settled = false;
-		const creating = value.facade.createAutomation({ ...existing, name: 'Created once' }).then(result => { settled = true; return result; });
+		const creating = value.facade.createAutomation({ ...existing, name: 'Created once' }).then(result => {
+			settled = true;
+			return result;
+		});
 		await new Promise<void>(resolve => setImmediate(resolve));
 		assert.equal(settled, true, 'Saving must not wait for run history');
 		const created = await creating;
@@ -274,17 +309,36 @@ test('A failed history read retains cached rows without hiding successfully read
 	try {
 		const host = value.host('one');
 		const original = (await host.backend.list())[0]!;
-		const previous: AutomationRun = { id: 'previous', automationId: original.id, revision: original.revision, definition: original.definition, turnId: 'turn', status: 'completed', scheduledAt: 1, startedAt: 1, finishedAt: 2, sessionId: 'session', threadId: 'thread', message: null };
+		const previous: AutomationRun = {
+			id: 'previous',
+			automationId: original.id,
+			revision: original.revision,
+			definition: original.definition,
+			turnId: 'turn',
+			status: 'completed',
+			scheduledAt: 1,
+			startedAt: 1,
+			finishedAt: 2,
+			sessionId: 'session',
+			threadId: 'thread',
+			message: null,
+		};
 		host.setHistory([previous]);
 		await host.store.refresh();
-		host.setPlans([{ ...original, revision: 2, definition: { ...original.definition, title: 'Fresh definition' } }]);
-		host.backend.runs = async () => { throw new Error('History unavailable'); };
+		host.setPlans([
+			{ ...original, revision: 2, definition: { ...original.definition, title: 'Fresh definition' } },
+		]);
+		host.backend.runs = async () => {
+			throw new Error('History unavailable');
+		};
 		await assert.rejects(host.store.refresh(), /History unavailable/);
 		assert.equal(host.store.automations.get()[0]?.name, 'Fresh definition');
 		assert.equal(host.store.runs.get()[0]?.status, 'completed');
 		assert.equal(host.store.catalogueState.get(), 'ready');
 		assert.equal(host.store.historyState.get(), 'error');
-	} finally { value.resources.dispose(); }
+	} finally {
+		value.resources.dispose();
+	}
 });
 
 test('Manual dispatch observes terminal failure without duplicating catalogue notifications', async () => {
@@ -296,13 +350,26 @@ test('Manual dispatch observes terminal failure without duplicating catalogue no
 		const operation = runner.runOnce(host.store.automations.get()[0]!);
 		assert.deepEqual(await operation.whenDispatched, { kind: 'accepted' });
 		const pending = host.store.runs.get()[0]!;
-		host.setHistory([{ ...(await host.backend.runs('same-id'))[0]!, status: 'failed', scheduledAt: pending.scheduledAt, startedAt: null, finishedAt: 2, sessionId: null, threadId: null, message: 'Could not create session' }]);
+		host.setHistory([
+			{
+				...(await host.backend.runs('same-id'))[0]!,
+				status: 'failed',
+				scheduledAt: pending.scheduledAt,
+				startedAt: null,
+				finishedAt: 2,
+				sessionId: null,
+				threadId: null,
+				message: 'Could not create session',
+			},
+		]);
 		await host.store.refresh();
 		await operation.whenCompleted;
 		assert.deepEqual(value.errors, []);
 		await host.store.refresh();
 		assert.equal(value.errors.length, 0);
-	} finally { value.resources.dispose(); }
+	} finally {
+		value.resources.dispose();
+	}
 });
 
 suite('Automation run observation', () => {
@@ -317,7 +384,11 @@ suite('Automation run observation', () => {
 				const operation = await host.store.runAutomation(host.store.automations.get()[0]!.id);
 				const pending = (await host.backend.runs('same-id'))[0]!;
 				const skipped: AutomationRun[] = Array.from({ length: 51 }, (_, index) => ({
-					...pending, id: `skipped-${index}`, status: 'skipped', scheduledAt: index + 2, finishedAt: index + 2,
+					...pending,
+					id: `skipped-${index}`,
+					status: 'skipped',
+					scheduledAt: index + 2,
+					finishedAt: index + 2,
 				}));
 				host.setHistory([...skipped.slice(1), pending]);
 				await host.store.refresh();
@@ -326,7 +397,10 @@ suite('Automation run observation', () => {
 				host.setHistory(skipped.slice(1));
 				host.changed.fire();
 				await host.store.refresh();
-				assert.equal(host.store.runs.get().some(run => run.id === operation.run.id), false);
+				assert.equal(
+					host.store.runs.get().some(run => run.id === operation.run.id),
+					false,
+				);
 				await operation.whenCompleted;
 				assert.ok(host.reads.length > 0);
 				assert.ok(host.reads.every(id => id === pending.id));
@@ -335,7 +409,9 @@ suite('Automation run observation', () => {
 				await host.store.refresh();
 				assert.equal(host.reads.length, reads, 'Completion releases the run observer');
 				assert.deepEqual(host.stops, []);
-			} finally { value.resources.dispose(); }
+			} finally {
+				value.resources.dispose();
+			}
 		});
 	}
 
@@ -343,13 +419,13 @@ suite('Automation run observation', () => {
 		const value = fixture();
 		const first = new DeferredPromise<AutomationRun>();
 		const refreshing = new DeferredPromise<readonly AutomationRun[]>();
-		void first.p.catch(() => { });
+		void first.p.catch(() => {});
 		try {
 			const host = value.host('one');
 			await host.store.refresh();
 			let reads = 0;
 			const getRun = host.backend.getRun;
-			host.backend.getRun = id => ++reads === 1 ? first.p : getRun(id);
+			host.backend.getRun = id => (++reads === 1 ? first.p : getRun(id));
 			const operation = await host.store.runAutomation(host.store.automations.get()[0]!.id);
 			const pending = (await host.backend.runs('same-id'))[0]!;
 			host.backend.runs = () => refreshing.p;
@@ -378,15 +454,21 @@ suite('Automation run observation', () => {
 			const operation = await host.store.runAutomation(host.store.automations.get()[0]!.id);
 			await host.store.refresh();
 			const pending = (await host.backend.runs('same-id'))[0]!;
-			host.backend.runs = async () => { throw new Error('History unavailable'); };
+			host.backend.runs = async () => {
+				throw new Error('History unavailable');
+			};
 			await assert.rejects(host.store.refresh(), /History unavailable/);
-			host.backend.list = async () => { throw new Error('Catalogue unavailable'); };
+			host.backend.list = async () => {
+				throw new Error('Catalogue unavailable');
+			};
 			await assert.rejects(host.store.refresh(), /Catalogue unavailable/);
 			host.setRun({ ...pending, status: 'completed', finishedAt: 2 });
 			host.changed.fire();
 			await operation.whenCompleted;
 			assert.deepEqual(host.stops, []);
-		} finally { value.resources.dispose(); }
+		} finally {
+			value.resources.dispose();
+		}
 	});
 
 	test('A failed run read rejects observation and releases its listeners', async () => {
@@ -408,19 +490,24 @@ suite('Automation run observation', () => {
 			await host.store.refresh();
 			assert.equal(reads, 1);
 			assert.deepEqual(host.stops, []);
-		} finally { value.resources.dispose(); }
+		} finally {
+			value.resources.dispose();
+		}
 	});
 
 	for (const ending of ['disconnect', 'dispose'] as const) {
 		test(`A ${ending} ends observation during a pending read and ignores its late result`, async () => {
 			const value = fixture();
 			const read = new DeferredPromise<AutomationRun>();
-			void read.p.catch(() => { });
+			void read.p.catch(() => {});
 			try {
 				const host = value.host('one');
 				await host.store.refresh();
 				let reads = 0;
-				host.backend.getRun = () => { reads++; return read.p; };
+				host.backend.getRun = () => {
+					reads++;
+					return read.p;
+				};
 				const operation = await host.store.runAutomation(host.store.automations.get()[0]!.id);
 				const pending = (await host.backend.runs('same-id'))[0]!;
 				const observing = assert.rejects(operation.whenCompleted, /may still be active/);
@@ -452,26 +539,51 @@ test('Catalogue and history ordering changes retain card identity and keyboard f
 		value.services.registerInstance(IAutomationDialogService, { showAutomationDialog: async () => undefined });
 		value.services.registerInstance(IAutomationRunner, value.services.createInstance(AutomationRunner));
 		value.services.registerInstance(IChatSessionNavigationService, {} as IChatSessionNavigationService);
-		const widget = value.resources.add(value.services.createInstance(AutomationsCardsWidget, browserEnvironment.window.document.body));
+		const widget = value.resources.add(
+			value.services.createInstance(AutomationsCardsWidget, browserEnvironment.window.document.body),
+		);
 		browserEnvironment.window.document.body.append(widget.element);
 		const oldTitle = widget.element.querySelector<HTMLButtonElement>('h3 button')!;
 		oldTitle.focus();
 		const old = (await host.backend.list())[0]!;
 		const readHistory = host.backend.runs;
-		host.backend.runs = id => id === old.id ? readHistory(id) : Promise.resolve([]);
+		host.backend.runs = id => (id === old.id ? readHistory(id) : Promise.resolve([]));
 		host.setPlans([{ ...old, id: 'new', createdAt: 2, definition: { ...old.definition, title: 'Newest' } }, old]);
 		await host.store.refresh();
-		assert.deepEqual([...widget.element.querySelectorAll('h3 button')].map(element => element.textContent), ['Newest', 'one']);
+		assert.deepEqual(
+			[...widget.element.querySelectorAll('h3 button')].map(element => element.textContent),
+			['Newest', 'one'],
+		);
 		assert.equal(browserEnvironment.window.document.activeElement, oldTitle);
-		const row = (id: string, scheduledAt: number): AutomationRun => ({ id, automationId: old.id, revision: old.revision, definition: old.definition, turnId: null, status: 'completed', scheduledAt, startedAt: 1, finishedAt: 2, sessionId: null, threadId: null, message: id });
+		const row = (id: string, scheduledAt: number): AutomationRun => ({
+			id,
+			automationId: old.id,
+			revision: old.revision,
+			definition: old.definition,
+			turnId: null,
+			status: 'completed',
+			scheduledAt,
+			startedAt: 1,
+			finishedAt: 2,
+			sessionId: null,
+			threadId: null,
+			message: id,
+		});
 		host.setHistory([row('older-run', 1)]);
 		await host.store.refresh();
 		const oldRow = widget.element.querySelector('[data-run-id]');
 		host.setHistory([row('newer-run', 2), row('older-run', 1)]);
 		await host.store.refresh();
-		assert.deepEqual([...widget.element.querySelectorAll('[data-run-id]')].map(element => JSON.parse(element.getAttribute('data-run-id')!)[1]), ['newer-run', 'older-run']);
+		assert.deepEqual(
+			[...widget.element.querySelectorAll('[data-run-id]')].map(
+				element => JSON.parse(element.getAttribute('data-run-id')!)[1],
+			),
+			['newer-run', 'older-run'],
+		);
 		assert.equal(widget.element.querySelectorAll('[data-run-id]')[1], oldRow);
-	} finally { value.resources.dispose(); }
+	} finally {
+		value.resources.dispose();
+	}
 });
 
 test('Run cancellation after admission stops the host run once; disposing the frontend does not stop runs', async () => {
@@ -501,7 +613,7 @@ test('Run cancellation after admission stops the host run once; disposing the fr
 			finishedAt: null,
 			sessionId: null,
 			threadId: null,
-			message: null
+			message: null,
 		};
 		host.setHistory([run]);
 		await admission.complete(run);
@@ -514,7 +626,9 @@ test('Run cancellation after admission stops the host run once; disposing the fr
 		host.store.dispose();
 		await observing;
 		assert.deepEqual(host.stops, ['run']);
-	} finally { value.resources.dispose(); }
+	} finally {
+		value.resources.dispose();
+	}
 });
 
 test('Automations entry opens a Custom View and never registers a Panel in either window catalog', async () => {
@@ -524,15 +638,38 @@ test('Automations entry opens a Custom View and never registers a Panel in eithe
 		value.services.registerInstance(IContextKeyService, contexts);
 		const storageWindow = new JSDOM('', { url: 'https://automations.test' });
 		value.resources.add(toDisposable(() => storageWindow.window.close()));
-		const storage = value.resources.add(new BrowserStorageService({ ownerWindow: storageWindow.window as unknown as Window, workspaceId: 'automation-test', flushInterval: 0 }));
-		storage.store('sessions.activeCustomView', AUTOMATIONS_CUSTOM_VIEW_ID, StorageScope.WORKSPACE, StorageTarget.MACHINE);
+		const storage = value.resources.add(
+			new BrowserStorageService({
+				ownerWindow: storageWindow.window as unknown as Window,
+				workspaceId: 'automation-test',
+				flushInterval: 0,
+			}),
+		);
+		storage.store(
+			'sessions.activeCustomView',
+			AUTOMATIONS_CUSTOM_VIEW_ID,
+			StorageScope.WORKSPACE,
+			StorageTarget.MACHINE,
+		);
 		const custom = value.resources.add(new CustomViewService(new NullLoggerService(), storage));
 		value.services.registerInstance(ICustomViewService, custom);
 		using commands = new CommandService(value.services);
 		value.services.registerInstance(ICommandService, commands);
 		const menus = new MenuService(commands, contexts);
-		const navigation = () => menus.getMenuActions(Menus.CodeActivityBar).flatMap(([, actions]) => actions).filter(action => action.id === 'sessionsView.manageAutomations');
-		const host = value.resources.add(WorkbenchContributionsRegistry.createHost(value.services, error => { throw error; }, ['sessions.contrib.automationsCustomView']));
+		const navigation = () =>
+			menus
+				.getMenuActions(Menus.CodeActivityBar)
+				.flatMap(([, actions]) => actions)
+				.filter(action => action.id === 'sessionsView.manageAutomations');
+		const host = value.resources.add(
+			WorkbenchContributionsRegistry.createHost(
+				value.services,
+				error => {
+					throw error;
+				},
+				['sessions.contrib.automationsCustomView'],
+			),
+		);
 		host.advance(WorkbenchPhase.BlockStartup);
 		assert.equal(custom.activeCustomView.get(), undefined);
 		assert.deepEqual(navigation(), []);
@@ -541,9 +678,18 @@ test('Automations entry opens a Custom View and never registers a Panel in eithe
 		const provider = value.host('one');
 		await value.facade.refresh();
 		assert.equal(custom.activeCustomViewOpen.get()?.source, 'restore');
-		assert.deepEqual(navigation().map(action => ({ id: action.id, checked: action.checked, enabled: action.enabled })), [{ id: 'sessionsView.manageAutomations', checked: true, enabled: true }]);
+		assert.deepEqual(
+			navigation().map(action => ({ id: action.id, checked: action.checked, enabled: action.enabled })),
+			[{ id: 'sessionsView.manageAutomations', checked: true, enabled: true }],
+		);
 		assert.equal(navigation()[0]?.icon?.id, 'clockface');
-		assert.equal(menus.getMenuActions(Menus.SidebarSessionsHeader).flatMap(([, actions]) => actions).some(action => action.id === 'sessionsView.manageAutomations'), false);
+		assert.equal(
+			menus
+				.getMenuActions(Menus.SidebarSessionsHeader)
+				.flatMap(([, actions]) => actions)
+				.some(action => action.id === 'sessionsView.manageAutomations'),
+			false,
+		);
 		custom.hideCustomView();
 		assert.equal(navigation()[0]?.icon?.id, 'clockface');
 		provider.connection.set('disconnected', undefined);
@@ -556,7 +702,9 @@ test('Automations entry opens a Custom View and never registers a Panel in eithe
 		assert.equal(custom.activeCustomView.get(), undefined);
 		assert.deepEqual(navigation(), []);
 		assert.equal(CommandsRegistry.getCommand('ash.automation.open'), undefined);
-	} finally { value.resources.dispose(); }
+	} finally {
+		value.resources.dispose();
+	}
 });
 
 test('An offline automation host does not suppress another host failure or duplicate it on refresh', async () => {
@@ -565,8 +713,17 @@ test('An offline automation host does not suppress another host failure or dupli
 		value.services.registerInstance(IContextKeyService, value.resources.add(new ContextKeyService()));
 		const storageWindow = new JSDOM('', { url: 'https://automation-notifications.test' });
 		value.resources.add(toDisposable(() => storageWindow.window.close()));
-		const storage = value.resources.add(new BrowserStorageService({ ownerWindow: storageWindow.window as unknown as Window, workspaceId: 'automation-notifications', flushInterval: 0 }));
-		value.services.registerInstance(ICustomViewService, value.resources.add(new CustomViewService(new NullLoggerService(), storage)));
+		const storage = value.resources.add(
+			new BrowserStorageService({
+				ownerWindow: storageWindow.window as unknown as Window,
+				workspaceId: 'automation-notifications',
+				flushInterval: 0,
+			}),
+		);
+		value.services.registerInstance(
+			ICustomViewService,
+			value.resources.add(new CustomViewService(new NullLoggerService(), storage)),
+		);
 		value.services.registerInstance(ICommandService, value.resources.add(new CommandService(value.services)));
 		const offline = value.host('offline');
 		const online = value.host('online');
@@ -579,12 +736,19 @@ test('An offline automation host does not suppress another host failure or dupli
 		assert.deepEqual(value.errors, ['Automation online: Failed on online host']);
 		await online.store.refresh();
 		assert.equal(value.errors.length, 1);
-	} finally { value.resources.dispose(); }
+	} finally {
+		value.resources.dispose();
+	}
 });
 
 suite('automations browser component', () => {
 	const browserTests = useBrowserTests();
-	for (const [locale, theme] of [['en', 'light'], ['zh-CN', 'dark'], ['zh-CN', 'hcDark'], ['en', 'hcLight']] as const) {
+	for (const [locale, theme] of [
+		['en', 'light'],
+		['zh-CN', 'dark'],
+		['zh-CN', 'hcDark'],
+		['en', 'hcLight'],
+	] as const) {
 		test(`Automations uses cards, a commit-aware dialog and host dispatch (${locale}, ${theme})`, async function () {
 			const { page } = browserTests;
 
@@ -592,7 +756,12 @@ suite('automations browser component', () => {
 			page.on('pageerror', error => errors.push(error.message));
 			await page.goto(`/automations.html?locale=${locale}&theme=${theme}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
-			expect(await page.evaluate(() => ({ sessions: window.ashAutomations.registered, workbench: window.ashAutomations.workbenchRegistered }))).toEqual({ sessions: true, workbench: false });
+			expect(
+				await page.evaluate(() => ({
+					sessions: window.ashAutomations.registered,
+					workbench: window.ashAutomations.workbenchRegistered,
+				})),
+			).toEqual({ sessions: true, workbench: false });
 			const zh = locale === 'zh-CN';
 			await expect(page.locator('[data-part="customview"]')).toBeVisible();
 			await expect(page.getByRole('heading', { name: zh ? '自动化' : 'Automations', exact: true })).toBeVisible();
@@ -601,8 +770,12 @@ suite('automations browser component', () => {
 			await expect(existing).toContainText(zh ? '每 60 分钟' : 'Every 60 minutes');
 			await expect(existing).toContainText(zh ? '运行目录：/saved' : 'Runs in /saved');
 			await expect(page.locator('.ash-automation-summary')).toContainText(zh ? '1 项需要输入' : '1 need input');
-			await expect(page.locator('.ash-automation-run[data-status="needsInput"]')).toContainText(zh ? '需要输入' : 'Needs input');
-			await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automations-overview.png') });
+			await expect(page.locator('.ash-automation-run[data-status="needsInput"]')).toContainText(
+				zh ? '需要输入' : 'Needs input',
+			);
+			await page
+				.locator('[data-part="customview"]')
+				.screenshot({ path: browserTests.info.outputPath('automations-overview.png') });
 			await page.getByRole('button', { name: zh ? '新建自动化' : 'New automation', exact: true }).press('Enter');
 			const dialog = page.getByRole('dialog');
 			const name = dialog.getByLabel(zh ? '名称' : 'Name', { exact: true });
@@ -616,14 +789,21 @@ suite('automations browser component', () => {
 			await name.focus();
 			const style = await name.evaluate(element => {
 				const style = getComputedStyle(element);
-				return { outline: style.outlineStyle, border: style.borderTopStyle, color: style.color, width: element.getBoundingClientRect().width };
+				return {
+					outline: style.outlineStyle,
+					border: style.borderTopStyle,
+					color: style.color,
+					width: element.getBoundingClientRect().width,
+				};
 			});
 			expect(style.outline).toBe('solid');
 			expect(style.border).toBe('solid');
 			expect(style.color).not.toBe('rgba(0, 0, 0, 0)');
 			expect(style.width).toBeGreaterThan(0);
 			await dialog.screenshot({ path: browserTests.info.outputPath('automation-dialog.png') });
-			await dialog.getByRole('button', { name: zh ? '保存自动化' : 'Save automation', exact: true }).press('Enter');
+			await dialog
+				.getByRole('button', { name: zh ? '保存自动化' : 'Save automation', exact: true })
+				.press('Enter');
 			await expect(dialog).toHaveCount(0);
 			expect(await page.evaluate(() => window.ashAutomations.saved[0]?.directory)).toBe('/captured');
 			await expect(page.getByRole('button', { name: 'Keyboard review', exact: true })).toBeVisible();
@@ -653,10 +833,18 @@ suite('automations browser component', () => {
 			await dialog.screenshot({ path: browserTests.info.outputPath('automation-dialog-narrow.png') });
 			await page.keyboard.press('Escape');
 			await expect(dialog).toHaveCount(0);
-			expect(await page.locator('.ash-custom-view-page').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
-			await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automations-cards.png') });
+			expect(
+				await page
+					.locator('.ash-custom-view-page')
+					.evaluate(element => element.scrollWidth <= element.clientWidth),
+			).toBe(true);
+			await page
+				.locator('[data-part="customview"]')
+				.screenshot({ path: browserTests.info.outputPath('automations-cards.png') });
 			await page.getByRole('button', { name: zh ? '打开对话' : 'Open conversation', exact: true }).press('Enter');
-			await expect.poll(() => page.evaluate(() => window.ashAutomations.opened)).toEqual([['background-session', 'background-thread']]);
+			await expect
+				.poll(() => page.evaluate(() => window.ashAutomations.opened))
+				.toEqual([['background-session', 'background-thread']]);
 			await expect(page.locator('[data-part="customview"]')).toBeHidden();
 			expect(await page.evaluate(() => window.ashAutomations.stops())).toBe(1);
 			await page.evaluate(() => window.ashAutomations.reopen());
@@ -724,10 +912,14 @@ suite('automations browser component', () => {
 		await dialog.getByRole('button', { name: '保存自动化', exact: true }).click();
 		await expect(dialog).toHaveCount(0);
 		await expect(page.getByRole('button', { name: 'Saved once', exact: true })).toBeEnabled();
-		await expect(page.getByText('无法刷新运行历史。当前显示上次可用的历史，可使用“刷新”重试。', { exact: true })).toBeVisible();
+		await expect(
+			page.getByText('无法刷新运行历史。当前显示上次可用的历史，可使用“刷新”重试。', { exact: true }),
+		).toBeVisible();
 		expect(await page.evaluate(() => window.ashAutomations.saved.length)).toBe(1);
 		await page.evaluate(() => window.ashAutomations.retryHistory());
-		await expect(page.getByText('无法刷新运行历史。当前显示上次可用的历史，可使用“刷新”重试。', { exact: true })).toBeHidden();
+		await expect(
+			page.getByText('无法刷新运行历史。当前显示上次可用的历史，可使用“刷新”重试。', { exact: true }),
+		).toBeHidden();
 		expect(await page.evaluate(() => window.ashAutomations.saved.length)).toBe(1);
 	});
 
@@ -762,7 +954,9 @@ suite('automations browser component', () => {
 		await page.getByRole('button', { name: 'Run now', exact: true }).click();
 		await expect(page.locator('.ash-automation-history')).toContainText('Pending');
 		await page.evaluate(() => window.ashAutomations.failRun());
-		await expect.poll(() => page.evaluate(() => window.ashAutomations.errors)).toEqual(['Automation Scheduled review: Could not create session']);
+		await expect
+			.poll(() => page.evaluate(() => window.ashAutomations.errors))
+			.toEqual(['Automation Scheduled review: Could not create session']);
 		await expect(page.locator('.ash-automation-history')).toContainText('Failed');
 	});
 
@@ -801,7 +995,10 @@ suite('automations browser component', () => {
 		await filters.getByRole('button', { name: '已暂停', exact: true }).press('Enter');
 		await expect(cards).toHaveCount(1);
 		await expect(cards).toHaveAttribute('aria-label', 'Daily briefing');
-		await expect(filters.getByRole('button', { name: '已暂停', exact: true })).toHaveAttribute('aria-pressed', 'true');
+		await expect(filters.getByRole('button', { name: '已暂停', exact: true })).toHaveAttribute(
+			'aria-pressed',
+			'true',
+		);
 		const search = page.getByRole('searchbox', { name: '搜索自动化' });
 		await search.fill('missing');
 		await expect(cards).toHaveCount(0);
@@ -817,15 +1014,23 @@ suite('automations browser component', () => {
 		await expect(cards).toHaveCount(2);
 		const focusStyle = await search.evaluate(element => ({
 			input: getComputedStyle(element).outlineStyle,
-			container: getComputedStyle(element.closest('.ash-automation-search')!).outlineStyle
+			container: getComputedStyle(element.closest('.ash-automation-search')!).outlineStyle,
 		}));
 		expect(focusStyle).toEqual({ input: 'none', container: 'solid' });
-		await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automations-designed-page.png') });
+		await page
+			.locator('[data-part="customview"]')
+			.screenshot({ path: browserTests.info.outputPath('automations-designed-page.png') });
 		await page.setViewportSize({ width: 360, height: 740 });
-		await expect.poll(() => page.locator('.ash-custom-view-page').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		await expect
+			.poll(() =>
+				page.locator('.ash-custom-view-page').evaluate(element => element.scrollWidth <= element.clientWidth),
+			)
+			.toBe(true);
 		const bounds = await cards.evaluateAll(elements => elements.map(element => element.getBoundingClientRect().x));
 		expect(bounds[0]).toBe(bounds[1]);
-		await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automations-designed-narrow.png') });
+		await page
+			.locator('[data-part="customview"]')
+			.screenshot({ path: browserTests.info.outputPath('automations-designed-narrow.png') });
 		await filters.getByRole('button', { name: '已启用', exact: true }).press('Enter');
 		await cards.getByRole('button', { name: '暂停', exact: true }).press('Enter');
 		await expect(cards).toHaveCount(0);
@@ -841,11 +1046,15 @@ suite('automations browser component', () => {
 		await expect(page.getByRole('heading', { name: '创建第一项自动化' })).toBeVisible();
 		const template = page.getByRole('button', { name: '每日简报', exact: true });
 		await expect(template).toBeFocused();
-		await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automations-designed-empty.png') });
+		await page
+			.locator('[data-part="customview"]')
+			.screenshot({ path: browserTests.info.outputPath('automations-designed-empty.png') });
 		await template.press('Enter');
 		const dialog = page.getByRole('dialog');
 		await expect(dialog.getByLabel('名称', { exact: true })).toHaveValue('每日简报');
-		await expect(dialog.getByLabel('指令', { exact: true })).toHaveValue('查看此项目的近期活动，总结进展、指出阻碍，并建议接下来的优先事项。');
+		await expect(dialog.getByLabel('指令', { exact: true })).toHaveValue(
+			'查看此项目的近期活动，总结进展、指出阻碍，并建议接下来的优先事项。',
+		);
 		await expect(dialog.getByLabel('计划', { exact: true })).toHaveValue('daily');
 		await expect(dialog.getByLabel('时间', { exact: true })).toHaveValue('09:00');
 		expect(await page.evaluate(() => window.ashAutomations.saved)).toEqual([]);
@@ -872,7 +1081,9 @@ suite('automations browser component', () => {
 		const details = page.getByRole('region', { name: '自动化详情' });
 		await expect(details).toContainText('Updated instructions');
 		await expect(details.locator('dd').nth(2)).toHaveText('2');
-		await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automation-task-details.png') });
+		await page
+			.locator('[data-part="customview"]')
+			.screenshot({ path: browserTests.info.outputPath('automation-task-details.png') });
 		await details.locator('.ash-automation-detail-history button').press('Enter');
 		await expect(details.getByRole('heading', { name: 'Scheduled review', exact: true })).toBeFocused();
 		await expect(details).toContainText('Review changes');
@@ -882,11 +1093,17 @@ suite('automations browser component', () => {
 		await expect(details.getByRole('list')).toContainText('src/scheduler.test.ts · +24 −0');
 		expect(await page.evaluate(() => window.ashAutomations.opened)).toEqual([]);
 		expect((await page.evaluate(() => window.ashAutomations.help())).view).toContain('Added regression coverage');
-		await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automation-run-result.png') });
+		await page
+			.locator('[data-part="customview"]')
+			.screenshot({ path: browserTests.info.outputPath('automation-run-result.png') });
 		await page.setViewportSize({ width: 360, height: 740 });
-		expect(await page.locator('.ash-custom-view-page').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+		expect(
+			await page.locator('.ash-custom-view-page').evaluate(element => element.scrollWidth <= element.clientWidth),
+		).toBe(true);
 		await details.locator('.ash-automation-result').scrollIntoViewIfNeeded();
-		await page.locator('[data-part="customview"]').screenshot({ path: browserTests.info.outputPath('automation-run-narrow.png') });
+		await page
+			.locator('[data-part="customview"]')
+			.screenshot({ path: browserTests.info.outputPath('automation-run-narrow.png') });
 		await details.getByRole('button', { name: '返回任务详情', exact: true }).press('Enter');
 		await details.getByRole('button', { name: '返回自动化列表', exact: true }).press('Enter');
 		await expect(title).toBeFocused();
@@ -933,21 +1150,30 @@ suite('automations browser component', () => {
 		await expect(details).toContainText('Could not create session');
 		expect(await page.evaluate(() => window.ashAutomations.opened)).toEqual([]);
 		await page.evaluate(() => window.ashAutomations.finish());
-		await expect.poll(() => page.evaluate(() => window.ashAutomations.notifications())).toEqual([
-			{ message: 'Automation Scheduled review: Could not create session', closed: true },
-			{ message: 'Automation Scheduled review: Completed', closed: false },
-		]);
+		await expect
+			.poll(() => page.evaluate(() => window.ashAutomations.notifications()))
+			.toEqual([
+				{ message: 'Automation Scheduled review: Could not create session', closed: true },
+				{ message: 'Automation Scheduled review: Completed', closed: false },
+			]);
 	});
 
-	for (const [locale, theme] of [['en', 'hcLight'], ['zh-CN', 'dark']] as const) {
+	for (const [locale, theme] of [
+		['en', 'hcLight'],
+		['zh-CN', 'dark'],
+	] as const) {
 		test(`Agents connects two hosts with equal automation IDs and disconnects one through the keyboard (${locale}, ${theme})`, async function () {
 			const { page } = browserTests;
 
 			await page.goto(`/automations.html?hosts=1&locale=${locale}&theme=${theme}`);
 			await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 			const chinese = locale === 'zh-CN';
-			const prompt = chinese ? '连接宿主，或选择已连接宿主以断开连接' : 'Connect a host, or select a connected host to disconnect';
-			const targetPrompt = chinese ? '选择要在此 Agents 窗口中连接的已保存 SSH 宿主' : 'Select a saved SSH host to connect in this Agents window';
+			const prompt = chinese
+				? '连接宿主，或选择已连接宿主以断开连接'
+				: 'Connect a host, or select a connected host to disconnect';
+			const targetPrompt = chinese
+				? '选择要在此 Agents 窗口中连接的已保存 SSH 宿主'
+				: 'Select a saved SSH host to connect in this Agents window';
 			await page.getByRole('button', { name: chinese ? '新建自动化' : 'New automation', exact: true }).click();
 			const initialForm = page.getByRole('dialog');
 			// An unowned destination is unsafe even when only one Automation provider is available.
@@ -955,7 +1181,9 @@ suite('automations browser component', () => {
 			await page.keyboard.press('Escape');
 			await expect(initialForm).toHaveCount(0);
 			for (const name of ['build-a', 'build-b']) {
-				await page.evaluate(() => { void window.ashAutomations.manageHosts(); });
+				await page.evaluate(() => {
+					void window.ashAutomations.manageHosts();
+				});
 				const picker = page.getByRole('dialog', { name: prompt, exact: true });
 				await expect(picker.getByRole('combobox')).toBeFocused();
 				await picker.getByRole('combobox').fill(chinese ? '连接已保存' : 'Connect a Saved');
@@ -967,9 +1195,13 @@ suite('automations browser component', () => {
 				await expect(targets).toHaveCount(0);
 				await expect.poll(() => page.evaluate(() => window.ashAutomations.connectedHosts())).toContain(name);
 				await expect(page.getByRole('article', { name: `Shared review · ${name}`, exact: true })).toBeVisible();
-				await expect(page.getByRole('article', { name: `Shared review · ${name}`, exact: true })).toContainText(name);
+				await expect(page.getByRole('article', { name: `Shared review · ${name}`, exact: true })).toContainText(
+					name,
+				);
 			}
-			await expect(page.getByRole('article', { name: 'Scheduled review · Local host', exact: true })).toBeVisible();
+			await expect(
+				page.getByRole('article', { name: 'Scheduled review · Local host', exact: true }),
+			).toBeVisible();
 			const accessible = await page.evaluate(() => window.ashAutomations.help());
 			expect(accessible.help).toContain(chinese ? '切换宿主' : 'Changing hosts');
 			expect(accessible.view).toContain('Shared review · build-b');
@@ -985,14 +1217,22 @@ suite('automations browser component', () => {
 			await expect(conversation).toHaveValue('new');
 			await page.keyboard.press('Escape');
 			await expect(form).toHaveCount(0);
-			await page.evaluate(() => { void window.ashAutomations.manageHosts(); });
+			await page.evaluate(() => {
+				void window.ashAutomations.manageHosts();
+			});
 			let input = page.getByRole('dialog', { name: prompt, exact: true }).getByRole('combobox');
 			await input.fill('build-a');
 			await input.press('Enter');
 			await expect(page.getByRole('article', { name: 'Shared review · build-a', exact: true })).toHaveCount(0);
 			await expect(page.getByRole('article', { name: 'Shared review · build-b', exact: true })).toBeVisible();
-			expect(await page.evaluate(() => window.ashAutomations.hostChanges)).toEqual(['open:build-a', 'open:build-b', 'close:build-a']);
-			await page.evaluate(() => { void window.ashAutomations.manageHosts(); });
+			expect(await page.evaluate(() => window.ashAutomations.hostChanges)).toEqual([
+				'open:build-a',
+				'open:build-b',
+				'close:build-a',
+			]);
+			await page.evaluate(() => {
+				void window.ashAutomations.manageHosts();
+			});
 			input = page.getByRole('dialog', { name: prompt, exact: true }).getByRole('combobox');
 			await input.press('Escape');
 			await expect(page.getByRole('dialog', { name: prompt, exact: true })).toHaveCount(0);

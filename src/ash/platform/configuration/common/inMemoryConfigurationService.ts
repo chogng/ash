@@ -18,7 +18,11 @@ import {
 	type IConfigurationUpdateOverrides,
 	type IConfigurationValue,
 } from './configuration.js';
-import { Extensions as ConfigurationExtensions, type IConfigurationRegistry, type IRegisteredConfiguration } from './configurationRegistry.js';
+import {
+	Extensions as ConfigurationExtensions,
+	type IConfigurationRegistry,
+	type IRegisteredConfiguration,
+} from './configurationRegistry.js';
 
 interface ConfigurationState {
 	readonly values: ReadonlyMap<string, unknown>;
@@ -43,7 +47,11 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 	private readonly changeEmitter = this._register(new Emitter<IConfigurationChangeEvent>());
 	public readonly onDidChangeConfiguration = this.changeEmitter.event;
 
-	constructor(private readonly registry: IConfigurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)) {
+	constructor(
+		private readonly registry: IConfigurationRegistry = Registry.as<IConfigurationRegistry>(
+			ConfigurationExtensions.Configuration,
+		),
+	) {
 		super();
 	}
 
@@ -55,15 +63,26 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 		this.assertNotDisposed();
 		const section = typeof arg1 === 'string' ? arg1 : undefined;
 		const overrides = typeof arg1 === 'string' ? arg2 : arg1;
-		if (overrides !== undefined && !isConfigurationOverrides(overrides)) throw new TypeError('Configuration overrides are invalid');
+		if (overrides !== undefined && !isConfigurationOverrides(overrides))
+			throw new TypeError('Configuration overrides are invalid');
 
 		return this.getSectionValue(this.currentState(), section, overrides?.overrideIdentifier) as T;
 	}
 
 	public updateValue(key: string, value: unknown): Promise<void>;
 	public updateValue(key: string, value: unknown, target: ConfigurationTarget): Promise<void>;
-	public updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides): Promise<void>;
-	public updateValue(key: string, value: unknown, overrides: IConfigurationOverrides | IConfigurationUpdateOverrides, target: ConfigurationTarget, options?: IConfigurationUpdateOptions): Promise<void>;
+	public updateValue(
+		key: string,
+		value: unknown,
+		overrides: IConfigurationOverrides | IConfigurationUpdateOverrides,
+	): Promise<void>;
+	public updateValue(
+		key: string,
+		value: unknown,
+		overrides: IConfigurationOverrides | IConfigurationUpdateOverrides,
+		target: ConfigurationTarget,
+		options?: IConfigurationUpdateOptions,
+	): Promise<void>;
 	public async updateValue(
 		key: string,
 		value: unknown,
@@ -75,7 +94,8 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 		const configuration = this.getRegisteredConfiguration(key);
 		const { identifiers, overrides, target } = parseUpdateArguments(arg3, arg4);
 		assertNoResourceOverride(overrides, 'In-memory configuration');
-		if (target !== undefined && target !== ConfigurationTarget.MEMORY) throw new Error(`Unable to write ${key} to target ${target}.`);
+		if (target !== undefined && target !== ConfigurationTarget.MEMORY)
+			throw new Error(`Unable to write ${key} to target ${target}.`);
 
 		const normalizedValue = value === undefined ? undefined : normalizeValue(configuration, value);
 		const previous = this.snapshot();
@@ -114,14 +134,15 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 		const overrideValue = matchingOverride?.get(key) as Readonly<T> | undefined;
 		const overrideEntries = this.getOverrideEntries<T>(key);
 		const memoryValue = hasOverrideValue ? overrideValue : hasBaseValue ? baseValue : undefined;
-		const value = memoryValue === undefined ? configuration.defaultValue as Readonly<T> : memoryValue;
-		const memory = hasBaseValue || overrideEntries.length > 0
-			? {
-				...(hasBaseValue ? { value: baseValue } : {}),
-				...(hasOverrideValue ? { override: overrideValue } : {}),
-				...(overrideEntries.length > 0 ? { overrides: overrideEntries } : {}),
-			}
-			: undefined;
+		const value = memoryValue === undefined ? (configuration.defaultValue as Readonly<T>) : memoryValue;
+		const memory =
+			hasBaseValue || overrideEntries.length > 0
+				? {
+						...(hasBaseValue ? { value: baseValue } : {}),
+						...(hasOverrideValue ? { override: overrideValue } : {}),
+						...(overrideEntries.length > 0 ? { overrides: overrideEntries } : {}),
+					}
+				: undefined;
 
 		return {
 			defaultValue: configuration.defaultValue as Readonly<T>,
@@ -129,18 +150,30 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 			default: { value: configuration.defaultValue as Readonly<T> },
 			...(memoryValue === undefined ? {} : { memoryValue }),
 			...(memory === undefined ? {} : { memory }),
-			...(overrideEntries.length === 0 ? {} : { overrideIdentifiers: [...new Set(overrideEntries.flatMap(entry => entry.identifiers))] }),
+			...(overrideEntries.length === 0
+				? {}
+				: { overrideIdentifiers: [...new Set(overrideEntries.flatMap(entry => entry.identifiers))] }),
 		};
 	}
 
 	public async reloadConfiguration(target?: ConfigurationTarget | IWorkspaceFolder): Promise<void> {
 		this.assertNotDisposed();
 		if (target === undefined || target === ConfigurationTarget.MEMORY) return;
-		if (typeof target === 'number' && !isConfigurationTarget(target)) throw new TypeError(`Configuration target is invalid: ${target}`);
-		throw new Error(`Unable to reload in-memory configuration target ${typeof target === 'number' ? target : 'workspace folder'}.`);
+		if (typeof target === 'number' && !isConfigurationTarget(target))
+			throw new TypeError(`Configuration target is invalid: ${target}`);
+		throw new Error(
+			`Unable to reload in-memory configuration target ${typeof target === 'number' ? target : 'workspace folder'}.`,
+		);
 	}
 
-	public keys(): { default: string[]; policy: string[]; user: string[]; workspace: string[]; workspaceFolder: string[]; memory: string[]; } {
+	public keys(): {
+		default: string[];
+		policy: string[];
+		user: string[];
+		workspace: string[];
+		workspaceFolder: string[];
+		memory: string[];
+	} {
 		this.assertNotDisposed();
 		const memory = new Set(this.values.keys());
 		for (const values of this.overrideValues.values()) {
@@ -184,14 +217,20 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 	}
 
 	private getRegisteredConfiguration(key: string): IRegisteredConfiguration {
-		if (typeof key !== 'string' || key.length === 0) throw new TypeError('Configuration key must be a non-empty string');
+		if (typeof key !== 'string' || key.length === 0)
+			throw new TypeError('Configuration key must be a non-empty string');
 		const configuration = this.registry.getConfiguration(key);
 		if (!configuration) throw new ReferenceError(`Configuration key is not registered: ${key}`);
 		return configuration;
 	}
 
-	private getSectionValue(state: ConfigurationState, section: string | undefined, identifier: string | null | undefined): unknown {
-		if (section !== undefined && this.registry.owns(section)) return this.getRegisteredValue(state, section, identifier);
+	private getSectionValue(
+		state: ConfigurationState,
+		section: string | undefined,
+		identifier: string | null | undefined,
+	): unknown {
+		if (section !== undefined && this.registry.owns(section))
+			return this.getRegisteredValue(state, section, identifier);
 		const prefix = section === undefined ? '' : `${section}.`;
 		const keys = this.registry.getConfigurations().filter(key => key.startsWith(prefix));
 		if (keys.length === 0) return undefined;
@@ -207,8 +246,8 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 		return this.getRegisteredConfiguration(key).defaultValue;
 	}
 
-	private getOverrideEntries<T>(key: string): { identifiers: string[]; value: Readonly<T>; }[] {
-		const result: { identifiers: string[]; value: Readonly<T>; }[] = [];
+	private getOverrideEntries<T>(key: string): { identifiers: string[]; value: Readonly<T> }[] {
+		const result: { identifiers: string[]; value: Readonly<T> }[] = [];
 		for (const block of this.overrideBlocks.values()) {
 			if (!block.values.has(key)) continue;
 			result.push({ identifiers: [...block.identifiers], value: block.values.get(key) as Readonly<T> });
@@ -261,7 +300,8 @@ export class InMemoryConfigurationService extends Disposable implements IConfigu
 			affectedKeys,
 			change,
 			affectsConfiguration: (section, overrides) => {
-				if (overrides !== undefined && !isConfigurationOverrides(overrides)) throw new TypeError('Configuration overrides are invalid');
+				if (overrides !== undefined && !isConfigurationOverrides(overrides))
+					throw new TypeError('Configuration overrides are invalid');
 				if (!affectedSections.hasKeyOrChildren(section.split('.'))) return false;
 				if (!overrides) return true;
 				const before = this.getSectionValue(previous, section, overrides.overrideIdentifier);
@@ -286,21 +326,27 @@ function parseUpdateArguments(arg3: unknown, arg4: unknown): ParsedUpdateArgumen
 		if (isConfigurationUpdateOverrides(arg3)) {
 			overrides = { resource: arg3.resource, overrideIdentifiers: arg3.overrideIdentifiers };
 		} else if (isConfigurationOverrides(arg3)) {
-			overrides = { resource: arg3.resource, overrideIdentifiers: arg3.overrideIdentifier ? [arg3.overrideIdentifier] : undefined };
+			overrides = {
+				resource: arg3.resource,
+				overrideIdentifiers: arg3.overrideIdentifier ? [arg3.overrideIdentifier] : undefined,
+			};
 		} else {
 			throw new TypeError('Configuration update overrides are invalid');
 		}
 	}
-	if (overrides === undefined && arg4 !== undefined) throw new TypeError('Configuration target cannot be passed without configuration overrides');
+	if (overrides === undefined && arg4 !== undefined)
+		throw new TypeError('Configuration target cannot be passed without configuration overrides');
 	const target = (overrides === undefined ? arg3 : arg4) as unknown;
-	if (target !== undefined && (typeof target !== 'number' || !isConfigurationTarget(target))) throw new TypeError(`Configuration target is invalid: ${String(target)}`);
+	if (target !== undefined && (typeof target !== 'number' || !isConfigurationTarget(target)))
+		throw new TypeError(`Configuration target is invalid: ${String(target)}`);
 	const identifiers = [...new Set(overrides?.overrideIdentifiers ?? [])].sort();
 	return { identifiers, overrides, target };
 }
 
 function normalizeValue(configuration: IRegisteredConfiguration, value: unknown): unknown {
 	const serialized = configuration.serialize(value);
-	if (serialized === undefined) throw new TypeError(`Configuration key '${configuration.key}' did not serialize to a value`);
+	if (serialized === undefined)
+		throw new TypeError(`Configuration key '${configuration.key}' did not serialize to a value`);
 	return configuration.parse(serialized);
 }
 
@@ -308,11 +354,18 @@ function isConfigurationTarget(value: number): value is ConfigurationTarget {
 	return Number.isInteger(value) && value >= ConfigurationTarget.APPLICATION && value <= ConfigurationTarget.MEMORY;
 }
 
-function assertNoResourceOverride(overrides: IConfigurationOverrides | IConfigurationUpdateOverrides | undefined, owner: string): void {
+function assertNoResourceOverride(
+	overrides: IConfigurationOverrides | IConfigurationUpdateOverrides | undefined,
+	owner: string,
+): void {
 	if (overrides?.resource != null) throw new Error(`${owner} does not support resource overrides.`);
 }
 
-function createConfigurationObject(keys: readonly string[], getValue: (key: string) => unknown, prefix = ''): Record<string, unknown> {
+function createConfigurationObject(
+	keys: readonly string[],
+	getValue: (key: string) => unknown,
+	prefix = '',
+): Record<string, unknown> {
 	const result: Record<string, unknown> = {};
 	for (const key of keys) setConfigurationValue(result, key.slice(prefix.length), getValue(key));
 	return result;

@@ -8,7 +8,13 @@ export async function revealResourcesInOS(
 	nativeHostService: INativeHostApi,
 	workspaceContextService: IWorkspaceContextService,
 ): Promise<void> {
-	const targets = resources.length > 0 ? resources : workspaceContextService.getWorkspace().folders.map(folder => folder.uri).slice(0, 1);
+	const targets =
+		resources.length > 0
+			? resources
+			: workspaceContextService
+					.getWorkspace()
+					.folders.map(folder => folder.uri)
+					.slice(0, 1);
 	for (const resource of targets) {
 		if (resource.scheme === 'file' && !resource.authority) {
 			await nativeHostService.revealFile(resource.fsPath);

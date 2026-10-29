@@ -39,23 +39,38 @@ export function validateMultiDiffEditorOptions(options: IMultiDiffEditorWidgetOp
 	if (!options || typeof options !== 'object' || !isHTMLElement(options.container)) {
 		throw new TypeError('Multi-diff editor widget requires a browser container');
 	}
-	if (!options.model || typeof options.model.onDidChangeItems !== 'function') throw new TypeError('Multi-diff editor widget requires a comparison model');
+	if (!options.model || typeof options.model.onDidChangeItems !== 'function')
+		throw new TypeError('Multi-diff editor widget requires a comparison model');
 	validateDocumentDiffItems(options.model.items);
 	const lineHeight = options.lineHeight ?? DEFAULT_LINE_HEIGHT;
 	const overscanRowCount = options.overscanRowCount ?? DEFAULT_OVERSCAN_ROW_COUNT;
-	if (!isFiniteNumber(lineHeight) || lineHeight < 0) throw new RangeError('Multi-diff editor line height must be non-negative and finite');
-	if (!isNonNegativeSafeInteger(overscanRowCount)) throw new RangeError('Multi-diff editor overscan row count must be a non-negative safe integer');
-	if (options.fontFamily !== undefined && (typeof options.fontFamily !== 'string' || !options.fontFamily.trim())) throw new TypeError('Multi-diff editor font family must be a non-empty string');
-	if (options.fontSize !== undefined && (!isFiniteNumber(options.fontSize) || options.fontSize <= 0)) throw new RangeError('Multi-diff editor font size must be positive and finite');
+	if (!isFiniteNumber(lineHeight) || lineHeight < 0)
+		throw new RangeError('Multi-diff editor line height must be non-negative and finite');
+	if (!isNonNegativeSafeInteger(overscanRowCount))
+		throw new RangeError('Multi-diff editor overscan row count must be a non-negative safe integer');
+	if (options.fontFamily !== undefined && (typeof options.fontFamily !== 'string' || !options.fontFamily.trim()))
+		throw new TypeError('Multi-diff editor font family must be a non-empty string');
+	if (options.fontSize !== undefined && (!isFiniteNumber(options.fontSize) || options.fontSize <= 0))
+		throw new RangeError('Multi-diff editor font size must be positive and finite');
 	for (const [name, value] of [
 		['fontLigatures', options.fontLigatures],
 		['showLineNumbers', options.showLineNumbers],
 		['showInlineChanges', options.showInlineChanges],
 		['loopChanges', options.loopChanges],
 	] as const) {
-		if (value !== undefined && typeof value !== 'boolean') throw new TypeError(`Multi-diff editor option '${name}' must be boolean`);
+		if (value !== undefined && typeof value !== 'boolean')
+			throw new TypeError(`Multi-diff editor option '${name}' must be boolean`);
 	}
-	if (options.ariaLabel !== undefined && (typeof options.ariaLabel !== 'string' || options.ariaLabel.trim().length === 0)) throw new TypeError('Multi-diff editor ARIA label must be a non-empty string');
-	if (options.workbenchUIElementFactory !== undefined && typeof options.workbenchUIElementFactory.createItemActions !== 'function') throw new TypeError('Multi-diff editor Workbench factory must create item actions');
-	if (options.container.ownerDocument.defaultView !== getWindow(options.container)) throw new Error('Multi-diff editor container must belong to its owner window');
+	if (
+		options.ariaLabel !== undefined &&
+		(typeof options.ariaLabel !== 'string' || options.ariaLabel.trim().length === 0)
+	)
+		throw new TypeError('Multi-diff editor ARIA label must be a non-empty string');
+	if (
+		options.workbenchUIElementFactory !== undefined &&
+		typeof options.workbenchUIElementFactory.createItemActions !== 'function'
+	)
+		throw new TypeError('Multi-diff editor Workbench factory must create item actions');
+	if (options.container.ownerDocument.defaultView !== getWindow(options.container))
+		throw new Error('Multi-diff editor container must belong to its owner window');
 }

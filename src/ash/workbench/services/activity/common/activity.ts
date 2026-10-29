@@ -14,7 +14,10 @@ export interface IActivity {
 
 /** Numeric activity with a description that retains the full count. */
 export class NumberBadge implements IBadge {
-	constructor(readonly number: number, private readonly descriptorFn: (number: number) => string) { }
+	constructor(
+		readonly number: number,
+		private readonly descriptorFn: (number: number) => string,
+	) {}
 
 	getDescription(): string {
 		return this.descriptorFn(this.number);

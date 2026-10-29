@@ -5,12 +5,20 @@ import { localize } from '../../../nls.js';
 export class AppServerRemoteError extends Error {
 	readonly errorName: AppServerErrorName;
 
-	constructor(readonly code: number, message: string, readonly data: AppServerErrorData) {
-		super(data.kind === 'ServerShuttingDown' ? localize('appServer.shuttingDown', 'App Server is stopping. Wait for it to finish, then reconnect.') : message);
-		this.name = "AppServerRemoteError";
+	constructor(
+		readonly code: number,
+		message: string,
+		readonly data: AppServerErrorData,
+	) {
+		super(
+			data.kind === 'ServerShuttingDown'
+				? localize('appServer.shuttingDown', 'App Server is stopping. Wait for it to finish, then reconnect.')
+				: message,
+		);
+		this.name = 'AppServerRemoteError';
 		this.errorName = data.kind;
 	}
 }
 
 /** The peer withdrew authorization or changed scope; a fresh launch is required. */
-export class AppServerConnectionStoppedError extends Error { }
+export class AppServerConnectionStoppedError extends Error {}

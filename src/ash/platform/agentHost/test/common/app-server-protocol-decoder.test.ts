@@ -11,17 +11,62 @@ import {
 import type { MethodResult } from '../../../../../../.build/protocol/typescript/index.js';
 
 test('debug log collection rejects client paths and oversized remote resource collections', () => {
-	assert.throws(() => decodeAppServerRequestParams('session/debugLogs/collect', { sessionId: 'session', path: '/outside/profile' }), AppServerProtocolDecodeError);
-	const file = { name: 'app-server.log', truncated: false, resource: { resourceId: 'resource', mimeType: 'text/plain', size: 10, sha256: `sha256:${'a'.repeat(64)}` } };
-	assert.doesNotThrow(() => decodeAppServerResponse('session/debugLogs/collect', { jsonrpc: '2.0', id: 1, result: { files: Array.from({ length: 32 }, () => file), omittedFiles: 0 } }));
-	assert.throws(() => decodeAppServerResponse('session/debugLogs/collect', { jsonrpc: '2.0', id: 1, result: { files: Array.from({ length: 33 }, () => file), omittedFiles: 0 } }), AppServerProtocolDecodeError);
+	assert.throws(
+		() =>
+			decodeAppServerRequestParams('session/debugLogs/collect', {
+				sessionId: 'session',
+				path: '/outside/profile',
+			}),
+		AppServerProtocolDecodeError,
+	);
+	const file = {
+		name: 'app-server.log',
+		truncated: false,
+		resource: { resourceId: 'resource', mimeType: 'text/plain', size: 10, sha256: `sha256:${'a'.repeat(64)}` },
+	};
+	assert.doesNotThrow(() =>
+		decodeAppServerResponse('session/debugLogs/collect', {
+			jsonrpc: '2.0',
+			id: 1,
+			result: { files: Array.from({ length: 32 }, () => file), omittedFiles: 0 },
+		}),
+	);
+	assert.throws(
+		() =>
+			decodeAppServerResponse('session/debugLogs/collect', {
+				jsonrpc: '2.0',
+				id: 1,
+				result: { files: Array.from({ length: 33 }, () => file), omittedFiles: 0 },
+			}),
+		AppServerProtocolDecodeError,
+	);
 });
 
 function usageResponse() {
 	const count = { reported: 0, complete: true };
-	const usage = { modelInvocations: 0, inputTokens: { ...count }, outputTokens: { ...count }, cachedInputTokens: { ...count }, cacheWriteInputTokens: { ...count }, reasoningTokens: { ...count } };
+	const usage = {
+		modelInvocations: 0,
+		inputTokens: { ...count },
+		outputTokens: { ...count },
+		cachedInputTokens: { ...count },
+		cacheWriteInputTokens: { ...count },
+		reasoningTokens: { ...count },
+	};
 	const result: MethodResult<'session/thread/read'> = {
-		thread: { sessionId: 'session', threadId: 'thread', agentId: 'agent', origin: { type: 'root' }, title: 'Counters', status: 'active', sequence: 0, advisor: { type: 'off' }, usage, referenceCost: { knownAmounts: [], complete: true }, hookRuns: [], turns: [] },
+		thread: {
+			sessionId: 'session',
+			threadId: 'thread',
+			agentId: 'agent',
+			origin: { type: 'root' },
+			title: 'Counters',
+			status: 'active',
+			sequence: 0,
+			advisor: { type: 'off' },
+			usage,
+			referenceCost: { knownAmounts: [], complete: true },
+			hookRuns: [],
+			turns: [],
+		},
 		transcript: { sessionId: 'session', threadId: 'thread', durableSequence: 0, revision: 0, entries: [] },
 	};
 	return { jsonrpc: '2.0', id: 1, result };
@@ -30,15 +75,23 @@ function usageResponse() {
 test('Skill catalog decoding preserves author metadata and rejects non-string values', () => {
 	const skill = {
 		id: { source: 'builtin:skill-source:ash-release', name: 'create-instructions' },
-		description: 'Create project instructions.', sourceKind: 'builtIn',
-		contentDigest: `sha256:${'a'.repeat(64)}`, enablement: 'enabled', compatibility: { type: 'compatible' },
+		description: 'Create project instructions.',
+		sourceKind: 'builtIn',
+		contentDigest: `sha256:${'a'.repeat(64)}`,
+		enablement: 'enabled',
+		compatibility: { type: 'compatible' },
 		metadata: { author: 'Ash', version: '1.0.0', 'updated-at': '2026-10-22' },
 	};
 	const response = { jsonrpc: '2.0', id: 1, result: { generation: 1, skills: [skill], diagnostics: [] } };
 	assert.deepEqual(decodeAppServerResponse('skills/list', response), response);
-	assert.throws(() => decodeAppServerResponse('skills/list', {
-		...response, result: { ...response.result, skills: [{ ...skill, metadata: { author: 42 } }] },
-	}), AppServerProtocolDecodeError);
+	assert.throws(
+		() =>
+			decodeAppServerResponse('skills/list', {
+				...response,
+				result: { ...response.result, skills: [{ ...skill, metadata: { author: 42 } }] },
+			}),
+		AppServerProtocolDecodeError,
+	);
 });
 
 test('warmed record checks preserve nested optional fields, false, zero and allowed extensions', () => {
@@ -56,9 +109,19 @@ test('record rejection retains precise field paths after valid values warm schem
 	for (const reported of [-1, 1.5, Number.MAX_SAFE_INTEGER + 1, Infinity, NaN, '0', null]) {
 		const response = usageResponse();
 		Object.assign(response.result.thread.usage.inputTokens, { reported });
-		assert.throws(() => decodeAppServerResponse('session/thread/read', response), error => error instanceof AppServerProtocolDecodeError && error.path === '$.result.thread.usage.inputTokens.reported');
+		assert.throws(
+			() => decodeAppServerResponse('session/thread/read', response),
+			error =>
+				error instanceof AppServerProtocolDecodeError &&
+				error.path === '$.result.thread.usage.inputTokens.reported',
+		);
 	}
-	for (const invalid of [{ reported: 0 }, { complete: true }, { reported: 0, complete: 'true' }, Object.assign(Object.create({ complete: true }), { reported: 0 })]) {
+	for (const invalid of [
+		{ reported: 0 },
+		{ complete: true },
+		{ reported: 0, complete: 'true' },
+		Object.assign(Object.create({ complete: true }), { reported: 0 }),
+	]) {
 		const response = usageResponse();
 		Object.assign(response.result.thread.usage, { inputTokens: invalid });
 		assert.throws(() => decodeAppServerResponse('session/thread/read', response), AppServerProtocolDecodeError);
@@ -69,20 +132,48 @@ test('closed records retain constant, unknown-field and own-property checks', ()
 	const value = { kind: 'app-server-listen-info', version: 1, endpoint: 'ws://127.0.0.1:9000' };
 	for (let warm = 0; warm < 2; warm++) assert.deepEqual(decodeAppServerListenInfo(value), value);
 	for (const invalid of [
-		{ ...value, kind: 'other' }, { ...value, version: 2 }, { ...value, extra: true },
+		{ ...value, kind: 'other' },
+		{ ...value, version: 2 },
+		{ ...value, extra: true },
 		JSON.parse('{"kind":"app-server-listen-info","version":1,"endpoint":"ws://127.0.0.1:9000","__proto__":null}'),
 		Object.assign(Object.create({ kind: value.kind }), { version: 1, endpoint: value.endpoint }),
-	]) assert.throws(() => decodeAppServerListenInfo(invalid), AppServerProtocolDecodeError);
+	])
+		assert.throws(() => decodeAppServerListenInfo(invalid), AppServerProtocolDecodeError);
 });
 
 test('literal union alternatives retain all turn kinds and validate the selected record', () => {
 	for (const kind of ['coding', 'review', 'advisor', 'shell', 'tool', 'contextCompaction'] as const) {
 		const response = usageResponse();
-		const turn = { turnId: 'turn', status: 'completed' as const, kind, mode: 'agent' as const, toolMode: 'direct' as const, approvalMode: 'manual' as const, usage: response.result.thread.usage, items: [] };
+		const turn = {
+			turnId: 'turn',
+			status: 'completed' as const,
+			kind,
+			mode: 'agent' as const,
+			toolMode: 'direct' as const,
+			approvalMode: 'manual' as const,
+			usage: response.result.thread.usage,
+			items: [],
+		};
 		response.result.thread.turns.push(turn);
 		assert.deepEqual(decodeAppServerResponse('session/thread/read', response), response);
-		for (const invalid of [{ kind: 'future' }, { kind: null }, { kind: { coding: true } }, { kind: 'coding', status: 'future' }, { kind: 'coding', usage: { modelInvocations: -1 } }]) {
-			assert.throws(() => decodeAppServerResponse('session/thread/read', { ...response, result: { ...response.result, thread: { ...response.result.thread, turns: [{ ...turn, ...invalid }] } } }), AppServerProtocolDecodeError);
+		for (const invalid of [
+			{ kind: 'future' },
+			{ kind: null },
+			{ kind: { coding: true } },
+			{ kind: 'coding', status: 'future' },
+			{ kind: 'coding', usage: { modelInvocations: -1 } },
+		]) {
+			assert.throws(
+				() =>
+					decodeAppServerResponse('session/thread/read', {
+						...response,
+						result: {
+							...response.result,
+							thread: { ...response.result.thread, turns: [{ ...turn, ...invalid }] },
+						},
+					}),
+				AppServerProtocolDecodeError,
+			);
 		}
 	}
 });
@@ -90,80 +181,179 @@ test('literal union alternatives retain all turn kinds and validate the selected
 test('backend state watches retain strict callback shapes and legacy one-shot calls', () => {
 	const context = { protocolVersion: 1, requestId: 1, incarnation: 1, activationGeneration: 1 };
 	const envelope = {
-		jsonrpc: '2.0', id: 'state', method: 'extensionClient/request', params: {
-			extensionId: 'ash.git', incarnation: 1, activationGeneration: 1,
+		jsonrpc: '2.0',
+		id: 'state',
+		method: 'extensionClient/request',
+		params: {
+			extensionId: 'ash.git',
+			incarnation: 1,
+			activationGeneration: 1,
 			operation: { operation: 'backendState', capability: 'git.repository', after: 0 },
-		}
+		},
 	};
 	assert.deepEqual(decodeAppServerServerRequest(envelope), envelope);
-	const watching = { ...envelope, params: { ...envelope.params, operation: { ...envelope.params.operation, waitForChange: true } } };
+	const watching = {
+		...envelope,
+		params: { ...envelope.params, operation: { ...envelope.params.operation, waitForChange: true } },
+	};
 	assert.deepEqual(decodeAppServerServerRequest(watching), watching);
 	for (const operation of [
 		{ ...watching.params.operation, waitForChange: 'yes' },
 		{ ...watching.params.operation, operation: 'unknown' },
 		{ ...watching.params.operation, context },
-	]) assert.throws(() => decodeAppServerServerRequest({ ...envelope, params: { ...envelope.params, operation } }), AppServerProtocolDecodeError);
+	])
+		assert.throws(
+			() => decodeAppServerServerRequest({ ...envelope, params: { ...envelope.params, operation } }),
+			AppServerProtocolDecodeError,
+		);
 });
 
 test('message phases and loop decisions survive the generated notification boundary', () => {
-	const params = { sessionId: 'session', threadId: 'thread', durableSequence: 7, update: { type: 'itemDelta', itemId: 'message', turnId: 'turn', delta: { type: 'agentMessagePhase', phase: 'final_answer' } } };
+	const params = {
+		sessionId: 'session',
+		threadId: 'thread',
+		durableSequence: 7,
+		update: {
+			type: 'itemDelta',
+			itemId: 'message',
+			turnId: 'turn',
+			delta: { type: 'agentMessagePhase', phase: 'final_answer' },
+		},
+	};
 	const notification = { jsonrpc: '2.0', method: 'session/thread/update', params };
 	assert.deepEqual(decodeAppServerNotification(notification), notification);
-	const decision = { action: 'continue', reason: 'nonterminalMessage', stopReason: { type: 'completed' }, messagePhases: ['partial_answer', null, { other: 'future_phase' }], toolCallCount: 0 };
-	const committed = { ...notification, params: { ...params, update: { type: 'committed', event: { type: 'modelResponseEvaluated', threadId: 'thread', turnId: 'turn', sourceThreadSequence: 6, decision } } } };
+	const decision = {
+		action: 'continue',
+		reason: 'nonterminalMessage',
+		stopReason: { type: 'completed' },
+		messagePhases: ['partial_answer', null, { other: 'future_phase' }],
+		toolCallCount: 0,
+	};
+	const committed = {
+		...notification,
+		params: {
+			...params,
+			update: {
+				type: 'committed',
+				event: {
+					type: 'modelResponseEvaluated',
+					threadId: 'thread',
+					turnId: 'turn',
+					sourceThreadSequence: 6,
+					decision,
+				},
+			},
+		},
+	};
 	assert.deepEqual(decodeAppServerNotification(committed), committed);
-	assert.throws(() => decodeAppServerNotification({ ...committed, params: { ...committed.params, update: { ...committed.params.update, event: { ...committed.params.update.event, decision: { ...decision, action: 'unknown' } } } } }), AppServerProtocolDecodeError);
+	assert.throws(
+		() =>
+			decodeAppServerNotification({
+				...committed,
+				params: {
+					...committed.params,
+					update: {
+						...committed.params.update,
+						event: { ...committed.params.update.event, decision: { ...decision, action: 'unknown' } },
+					},
+				},
+			}),
+		AppServerProtocolDecodeError,
+	);
 });
 
 test('directory grants reject unknown capabilities and retired names at the generated boundary', () => {
-	const params = { commandId: 'set-permissions', expectedRevision: 1, path: '/workspace', permissions: ['readFiles'] };
+	const params = {
+		commandId: 'set-permissions',
+		expectedRevision: 1,
+		path: '/workspace',
+		permissions: ['readFiles'],
+	};
 	assert.deepEqual(decodeAppServerRequestParams('config/directoryGrants/set', params), params);
-	assert.throws(() => decodeAppServerRequestParams('config/directoryGrants/set', { ...params, permissions: ['futurePermission'] }), AppServerProtocolDecodeError);
-	assert.throws(() => Reflect.apply(decodeAppServerRequestParams, undefined, ['config/dirPermissions/set', params]), AppServerProtocolDecodeError);
-	const initialized = { clientInfo: { name: 'fixture', version: '1' }, capabilities: { directoryGrantsHost: { version: 1 } } };
+	assert.throws(
+		() =>
+			decodeAppServerRequestParams('config/directoryGrants/set', {
+				...params,
+				permissions: ['futurePermission'],
+			}),
+		AppServerProtocolDecodeError,
+	);
+	assert.throws(
+		() => Reflect.apply(decodeAppServerRequestParams, undefined, ['config/dirPermissions/set', params]),
+		AppServerProtocolDecodeError,
+	);
+	const initialized = {
+		clientInfo: { name: 'fixture', version: '1' },
+		capabilities: { directoryGrantsHost: { version: 1 } },
+	};
 	assert.deepEqual(decodeAppServerRequestParams('initialize', initialized), initialized);
-	const legacy = decodeAppServerRequestParams('initialize', { ...initialized, capabilities: { dirPermissionsHost: { version: 1 } } });
+	const legacy = decodeAppServerRequestParams('initialize', {
+		...initialized,
+		capabilities: { dirPermissionsHost: { version: 1 } },
+	});
 	assert.equal(legacy.capabilities.directoryGrantsHost, undefined);
 });
 
 test('search reads accept optional index diagnostics and validate their counts', () => {
-	const result = { searchId: 'search-1', matches: [], nextMatch: 0, completed: true, limitHit: false, error: null, freshness: 'indexed' };
+	const result = {
+		searchId: 'search-1',
+		matches: [],
+		nextMatch: 0,
+		completed: true,
+		limitHit: false,
+		error: null,
+		freshness: 'indexed',
+	};
 	const response = { jsonrpc: '2.0', id: 1, result };
 	assert.deepEqual(decodeAppServerResponse('grep/search/read', response), response);
-	const indexed = { ...response, result: { ...result, indexStats: { queryPlan: 'AND(3 trigrams)', rawCandidates: 7, candidates: 2, totalFiles: 50 } } };
+	const indexed = {
+		...response,
+		result: {
+			...result,
+			indexStats: { queryPlan: 'AND(3 trigrams)', rawCandidates: 7, candidates: 2, totalFiles: 50 },
+		},
+	};
 	assert.deepEqual(decodeAppServerResponse('grep/search/read', indexed), indexed);
-	assert.throws(() => decodeAppServerResponse('grep/search/read', { ...indexed, result: { ...indexed.result, indexStats: { ...indexed.result.indexStats, candidates: '2' } } }), AppServerProtocolDecodeError);
+	assert.throws(
+		() =>
+			decodeAppServerResponse('grep/search/read', {
+				...indexed,
+				result: { ...indexed.result, indexStats: { ...indexed.result.indexStats, candidates: '2' } },
+			}),
+		AppServerProtocolDecodeError,
+	);
 });
 
 test('Agent identity and replacement origins survive the generated RPC boundary', () => {
 	const response = {
-		jsonrpc: '2.0', id: 1,
+		jsonrpc: '2.0',
+		id: 1,
 		result: {
-			agentId: 'agent-1', createdAtUnixMs: 1,
-			threads: [{ sessionId: 'session-1', threadId: 'thread-2', origin: { type: 'replacement', sourceThreadId: 'thread-1', sourceSequence: 7 } }],
+			agentId: 'agent-1',
+			createdAtUnixMs: 1,
+			threads: [
+				{
+					sessionId: 'session-1',
+					threadId: 'thread-2',
+					origin: { type: 'replacement', sourceThreadId: 'thread-1', sourceSequence: 7 },
+				},
+			],
 		},
 	};
 	assert.deepEqual(decodeAppServerResponse('agent/read', response), response);
-	assert.deepEqual(decodeAppServerRequestParams('session/create', { commandId: 'create', title: 'Task', agentId: 'agent-1' }), { commandId: 'create', title: 'Task', agentId: 'agent-1' });
+	assert.deepEqual(
+		decodeAppServerRequestParams('session/create', { commandId: 'create', title: 'Task', agentId: 'agent-1' }),
+		{ commandId: 'create', title: 'Task', agentId: 'agent-1' },
+	);
 	assert.throws(() => decodeAppServerRequestParams('agent/read', { agentId: '' }), AppServerProtocolDecodeError);
 });
 
 test('App Server listen info accepts only the generated loopback record', () => {
-	const listenInfo = {
-		kind: 'app-server-listen-info',
-		version: 1,
-		endpoint: 'ws://127.0.0.1:41789',
-	};
+	const listenInfo = { kind: 'app-server-listen-info', version: 1, endpoint: 'ws://127.0.0.1:41789' };
 
 	assert.deepEqual(decodeAppServerListenInfo(listenInfo), listenInfo);
-	assert.throws(
-		() => decodeAppServerListenInfo({ ...listenInfo, kind: 'other' }),
-		AppServerProtocolDecodeError,
-	);
-	assert.throws(
-		() => decodeAppServerListenInfo({ ...listenInfo, version: 2 }),
-		AppServerProtocolDecodeError,
-	);
+	assert.throws(() => decodeAppServerListenInfo({ ...listenInfo, kind: 'other' }), AppServerProtocolDecodeError);
+	assert.throws(() => decodeAppServerListenInfo({ ...listenInfo, version: 2 }), AppServerProtocolDecodeError);
 	assert.throws(
 		() => decodeAppServerListenInfo({ kind: listenInfo.kind, version: listenInfo.version }),
 		(error: unknown) => error instanceof AppServerProtocolDecodeError && error.path === '$.endpoint',
@@ -179,10 +369,11 @@ test('App Server listen info accepts only the generated loopback record', () => 
 });
 
 test('App Server response decoding selects the result schema from its pending method', () => {
-	assert.deepEqual(
-		decodeAppServerResponse('resource/release', { jsonrpc: '2.0', id: 7, result: null }),
-		{ jsonrpc: '2.0', id: 7, result: null },
-	);
+	assert.deepEqual(decodeAppServerResponse('resource/release', { jsonrpc: '2.0', id: 7, result: null }), {
+		jsonrpc: '2.0',
+		id: 7,
+		result: null,
+	});
 	assert.throws(
 		() => decodeAppServerResponse('resource/release', { jsonrpc: '2.0', id: 7, result: {} }),
 		AppServerProtocolDecodeError,
@@ -200,49 +391,71 @@ test('App Server response decoding selects the result schema from its pending me
 		},
 	);
 	assert.throws(
-		() => decodeAppServerResponse('resource/release', {
-			jsonrpc: '2.0',
-			id: 9,
-			error: { code: -32013, message: 'Resource not found', data: null },
-		}),
+		() =>
+			decodeAppServerResponse('resource/release', {
+				jsonrpc: '2.0',
+				id: 9,
+				error: { code: -32013, message: 'Resource not found', data: null },
+			}),
 		AppServerProtocolDecodeError,
 	);
 });
 
 test('directory responses validate every entry while accepting unspecified fields', () => {
 	const response = {
-		jsonrpc: '2.0', id: 12,
-		result: { entries: [{ name: 'one.txt', fileType: 'file', extensionData: true }, { name: 'two', fileType: 'directory' }] },
+		jsonrpc: '2.0',
+		id: 12,
+		result: {
+			entries: [
+				{ name: 'one.txt', fileType: 'file', extensionData: true },
+				{ name: 'two', fileType: 'directory' },
+			],
+		},
 	};
 	assert.deepEqual(decodeAppServerResponse('fs/readDirectory', response), response);
-	assert.throws(() => decodeAppServerResponse('fs/readDirectory', {
-		...response,
-		result: { entries: [response.result.entries[0], { name: 'broken', fileType: 'invalid' }] },
-	}), AppServerProtocolDecodeError);
+	assert.throws(
+		() =>
+			decodeAppServerResponse('fs/readDirectory', {
+				...response,
+				result: { entries: [response.result.entries[0], { name: 'broken', fileType: 'invalid' }] },
+			}),
+		AppServerProtocolDecodeError,
+	);
 });
 
 test('account revisions preserve the full unsigned 64-bit value across the generated boundary', () => {
 	const result = {
 		revision: '18446744073709551615',
-		accounts: [{
-			provider: 'openai', accountId: 'account-1', email: null, displayName: null,
-			organization: null, plan: null, status: 'ready', credentialRevision: '18446744073709551615',
-		}],
+		accounts: [
+			{
+				provider: 'openai',
+				accountId: 'account-1',
+				email: null,
+				displayName: null,
+				organization: null,
+				plan: null,
+				status: 'ready',
+				credentialRevision: '18446744073709551615',
+			},
+		],
 	};
 	const response = { jsonrpc: '2.0', id: 8, result };
 	assert.deepEqual(decodeAppServerResponse('account/read', response), response);
-	assert.throws(() => decodeAppServerResponse('account/read', {
-		...response,
-		result: { ...result, accounts: [{ ...result.accounts[0], credentialRevision: Number.MAX_SAFE_INTEGER + 1 }] },
-	}), AppServerProtocolDecodeError);
+	assert.throws(
+		() =>
+			decodeAppServerResponse('account/read', {
+				...response,
+				result: {
+					...result,
+					accounts: [{ ...result.accounts[0], credentialRevision: Number.MAX_SAFE_INTEGER + 1 }],
+				},
+			}),
+		AppServerProtocolDecodeError,
+	);
 });
 
 test('App Server notification decoding rejects unknown methods and envelope fields', () => {
-	const notification = {
-		jsonrpc: '2.0',
-		method: 'session/deleted',
-		params: { sessionId: 'session-1' },
-	};
+	const notification = { jsonrpc: '2.0', method: 'session/deleted', params: { sessionId: 'session-1' } };
 
 	assert.deepEqual(decodeAppServerNotification(notification), notification);
 	assert.throws(
@@ -272,10 +485,7 @@ test('App Server server-request decoding validates method, request ID, and param
 		() => decodeAppServerServerRequest({ ...request, id: Number.MAX_SAFE_INTEGER + 1 }),
 		(error: unknown) => error instanceof AppServerProtocolDecodeError && error.path === '$.id',
 	);
-	assert.throws(
-		() => decodeAppServerServerRequest({ ...request, params: {} }),
-		AppServerProtocolDecodeError,
-	);
+	assert.throws(() => decodeAppServerServerRequest({ ...request, params: {} }), AppServerProtocolDecodeError);
 	assert.throws(
 		() => decodeAppServerServerRequest({ ...request, params: { targetId: 'target-1' } }),
 		AppServerProtocolDecodeError,
@@ -284,9 +494,15 @@ test('App Server server-request decoding validates method, request ID, and param
 
 test('Resource operations reject the removed Session selector', () => {
 	for (const method of ['resource/metadata', 'resource/read', 'resource/release'] as const) {
-		const params = { resourceId: 'gateway-resource:0:resource-1', ...(method === 'resource/read' ? { offset: 0, maxBytes: 1024 } : {}) };
+		const params = {
+			resourceId: 'gateway-resource:0:resource-1',
+			...(method === 'resource/read' ? { offset: 0, maxBytes: 1024 } : {}),
+		};
 		assert.deepEqual(decodeAppServerRequestParams(method, params), params);
-		assert.throws(() => decodeAppServerRequestParams(method, { ...params, sessionId: 'session' }), AppServerProtocolDecodeError);
+		assert.throws(
+			() => decodeAppServerRequestParams(method, { ...params, sessionId: 'session' }),
+			AppServerProtocolDecodeError,
+		);
 	}
 });
 
@@ -296,28 +512,38 @@ test('App Server params decoding rejects integers that JSON cannot preserve exac
 		{ resourceId: 'resource-1', offset: 0, maxBytes: 1024 },
 	);
 	assert.throws(
-		() => decodeAppServerRequestParams('resource/read', {
-			resourceId: 'resource-1',
-			offset: Number.MAX_SAFE_INTEGER + 1,
-			maxBytes: 1024,
-		}),
+		() =>
+			decodeAppServerRequestParams('resource/read', {
+				resourceId: 'resource-1',
+				offset: Number.MAX_SAFE_INTEGER + 1,
+				maxBytes: 1024,
+			}),
 		AppServerProtocolDecodeError,
 	);
 });
 
-
 test('Feature map keys and queue edits are validated from the generated schema', () => {
 	const params = { commandId: 'config', expectedRevision: 0, features: { codeMode: false } };
 	assert.deepEqual(decodeAppServerRequestParams('config/update', params), params);
-	assert.throws(() => decodeAppServerRequestParams('config/update', {
-		...params, features: { code_mode: true },
-	}), AppServerProtocolDecodeError);
-	assert.throws(() => decodeAppServerRequestParams('queue/edit', {
-		sessionId: 'session', threadId: 'thread', commandId: 'message', expectedRevision: -1,
-		action: { type: 'pause' },
-	}), AppServerProtocolDecodeError);
+	assert.throws(
+		() => decodeAppServerRequestParams('config/update', { ...params, features: { code_mode: true } }),
+		AppServerProtocolDecodeError,
+	);
+	assert.throws(
+		() =>
+			decodeAppServerRequestParams('queue/edit', {
+				sessionId: 'session',
+				threadId: 'thread',
+				commandId: 'message',
+				expectedRevision: -1,
+				action: { type: 'pause' },
+			}),
+		AppServerProtocolDecodeError,
+	);
 	assert.deepEqual(decodeAppServerNotification({ jsonrpc: '2.0', method: 'queue/changed', params: {} }), {
-		jsonrpc: '2.0', method: 'queue/changed', params: {},
+		jsonrpc: '2.0',
+		method: 'queue/changed',
+		params: {},
 	});
 });
 
@@ -326,8 +552,18 @@ test('trace configuration patches preserve explicit disable and reject malformed
 	assert.deepEqual(decodeAppServerRequestParams('config/update', params), params);
 	const reset = { ...params, trace: null };
 	assert.deepEqual(decodeAppServerRequestParams('config/update', reset), reset);
-	assert.throws(() => decodeAppServerRequestParams('config/update', { ...params, trace: { enabled: 'true', directory: '/recordings' } }), AppServerProtocolDecodeError);
-	assert.throws(() => decodeAppServerRequestParams('config/update', { ...params, trace: { ...params.trace, upload: true } }), AppServerProtocolDecodeError);
+	assert.throws(
+		() =>
+			decodeAppServerRequestParams('config/update', {
+				...params,
+				trace: { enabled: 'true', directory: '/recordings' },
+			}),
+		AppServerProtocolDecodeError,
+	);
+	assert.throws(
+		() => decodeAppServerRequestParams('config/update', { ...params, trace: { ...params.trace, upload: true } }),
+		AppServerProtocolDecodeError,
+	);
 });
 
 test('Memory records and process memory diagnostics use disjoint generated methods', () => {
@@ -347,28 +583,31 @@ test('Memory records and process memory diagnostics use disjoint generated metho
 		() => decodeAppServerRequestParams('memory/add', { ...add, scope: { type: 'profile', extra: true } }),
 		AppServerProtocolDecodeError,
 	);
-	assert.deepEqual(
-		decodeAppServerRequestParams('memoryDiagnostics/read', { sessionId: 'diagnostic-1' }),
-		{ sessionId: 'diagnostic-1' },
-	);
+	assert.deepEqual(decodeAppServerRequestParams('memoryDiagnostics/read', { sessionId: 'diagnostic-1' }), {
+		sessionId: 'diagnostic-1',
+	});
 	assert.deepEqual(
 		decodeAppServerNotification({
 			jsonrpc: '2.0',
 			method: 'memory/changed',
 			params: { scope: { type: 'profile' }, catalogRevision: 2 },
 		}),
-		{
-			jsonrpc: '2.0',
-			method: 'memory/changed',
-			params: { scope: { type: 'profile' }, catalogRevision: 2 },
-		},
+		{ jsonrpc: '2.0', method: 'memory/changed', params: { scope: { type: 'profile' }, catalogRevision: 2 } },
 	);
 });
 
 test('Git repository invalidation and tag references cross the generated protocol boundary', () => {
 	const notification = { jsonrpc: '2.0', method: 'git/repositoriesChanged', params: {} };
 	assert.deepEqual(decodeAppServerNotification(notification), notification);
-	const result = { streamInstanceId: 'test-stream', historyRevision: 1, graphRevision: 1, commits: [], references: [{ name: 'reviewed', objectId: 'commit', kind: 'tag', remoteName: null, current: false }], remotes: [], hasMore: false };
+	const result = {
+		streamInstanceId: 'test-stream',
+		historyRevision: 1,
+		graphRevision: 1,
+		commits: [],
+		references: [{ name: 'reviewed', objectId: 'commit', kind: 'tag', remoteName: null, current: false }],
+		remotes: [],
+		hasMore: false,
+	};
 	const response = { jsonrpc: '2.0', id: 1, result };
 	assert.deepEqual(decodeAppServerResponse('git/graph', response), response);
 });
@@ -376,12 +615,36 @@ test('Git repository invalidation and tag references cross the generated protoco
 test('Git command and partial index requests accept reviewed intents and reject malformed commands', () => {
 	const command = { repositoryId: 'repo', command: { kind: 'continue', operation: 'cherryPick' } };
 	assert.deepEqual(decodeAppServerRequestParams('git/command', command), command);
-	assert.throws(() => decodeAppServerRequestParams('git/command', { command: { kind: 'exec', arguments: ['reset', '--hard'] } }), AppServerProtocolDecodeError);
-	assert.throws(() => decodeAppServerRequestParams('git/command', { command: { kind: 'continue', operation: 'reset' } }), AppServerProtocolDecodeError);
-	const selection = { repositoryId: 'repo', path: 'file.txt', comparison: 'unstaged', expectedOriginal: null, expectedModified: 'new\n', selection: { kind: 'lines', start: 1, end: 2 } };
+	assert.throws(
+		() =>
+			decodeAppServerRequestParams('git/command', { command: { kind: 'exec', arguments: ['reset', '--hard'] } }),
+		AppServerProtocolDecodeError,
+	);
+	assert.throws(
+		() => decodeAppServerRequestParams('git/command', { command: { kind: 'continue', operation: 'reset' } }),
+		AppServerProtocolDecodeError,
+	);
+	const selection = {
+		repositoryId: 'repo',
+		path: 'file.txt',
+		comparison: 'unstaged',
+		expectedOriginal: null,
+		expectedModified: 'new\n',
+		selection: { kind: 'lines', start: 1, end: 2 },
+	};
 	assert.deepEqual(decodeAppServerRequestParams('git/indexEdit', selection), selection);
-	assert.throws(() => decodeAppServerRequestParams('git/indexEdit', { ...selection, selection: { kind: 'lines', start: 0, end: 2 } }), AppServerProtocolDecodeError);
-	assert.throws(() => decodeAppServerRequestParams('git/indexEdit', { ...selection, expectedModified: 'x'.repeat(2097153) }), AppServerProtocolDecodeError);
+	assert.throws(
+		() =>
+			decodeAppServerRequestParams('git/indexEdit', {
+				...selection,
+				selection: { kind: 'lines', start: 0, end: 2 },
+			}),
+		AppServerProtocolDecodeError,
+	);
+	assert.throws(
+		() => decodeAppServerRequestParams('git/indexEdit', { ...selection, expectedModified: 'x'.repeat(2097153) }),
+		AppServerProtocolDecodeError,
+	);
 });
 
 test('generated DAP start decoder admits connection descriptors and rejects invalid endpoint fields', () => {
@@ -402,37 +665,74 @@ test('generated DAP start decoder admits connection descriptors and rejects inva
 	}
 });
 
-
 test('extension package location and execution platform survive the generated catalog response', () => {
-	const extension = { id: 'test.debugger', name: 'debugger', publisher: 'test', version: '1.0.0', displayName: 'Debugger', sourceKind: 'plugin', manifestJson: '{}', manifestSha256: 'sha256:' + 'a'.repeat(64), packageSha256: 'sha256:' + 'b'.repeat(64), extensionLocation: 'file:///installed/package%20with%20spaces', targetPlatform: 'darwin-arm64' };
-	const response = { jsonrpc: '2.0', id: 1, result: { status: 'updated', generation: 1, extensions: [extension], diagnostics: [] } };
+	const extension = {
+		id: 'test.debugger',
+		name: 'debugger',
+		publisher: 'test',
+		version: '1.0.0',
+		displayName: 'Debugger',
+		sourceKind: 'plugin',
+		manifestJson: '{}',
+		manifestSha256: 'sha256:' + 'a'.repeat(64),
+		packageSha256: 'sha256:' + 'b'.repeat(64),
+		extensionLocation: 'file:///installed/package%20with%20spaces',
+		targetPlatform: 'darwin-arm64',
+	};
+	const response = {
+		jsonrpc: '2.0',
+		id: 1,
+		result: { status: 'updated', generation: 1, extensions: [extension], diagnostics: [] },
+	};
 	assert.deepEqual(decodeAppServerResponse('extensions/list', response), response);
 	for (const field of ['extensionLocation', 'targetPlatform']) {
-		assert.throws(() => decodeAppServerResponse('extensions/list', { ...response, result: { ...response.result, extensions: [{ ...extension, [field]: 1 }] } }), AppServerProtocolDecodeError);
+		assert.throws(
+			() =>
+				decodeAppServerResponse('extensions/list', {
+					...response,
+					result: { ...response.result, extensions: [{ ...extension, [field]: 1 }] },
+				}),
+			AppServerProtocolDecodeError,
+		);
 	}
 });
 
 test('backend credential services are rejected at the renderer extension boundary', () => {
 	const params = {
-		extensionId: 'ash.github-authentication', activationGeneration: 1, incarnation: 1,
+		extensionId: 'ash.github-authentication',
+		activationGeneration: 1,
+		incarnation: 1,
 		operation: { operation: 'coreService', request: { service: 'secretLoad', key: 'provider/github/accounts' } },
 	};
-	const envelope = { jsonrpc: '2.0', id: 'core-service', method: 'extensionClient/request', params: { ...params, operation: { operation: 'readInitialization' } } };
+	const envelope = {
+		jsonrpc: '2.0',
+		id: 'core-service',
+		method: 'extensionClient/request',
+		params: { ...params, operation: { operation: 'readInitialization' } },
+	};
 	assert.deepEqual(decodeAppServerServerRequest(envelope), envelope);
 	assert.throws(() => decodeAppServerServerRequest({ ...envelope, params }), AppServerProtocolDecodeError);
 });
 
 test('syntax facts tuples validate fixed fields, coordinates and exact lengths', () => {
 	const response = {
-		jsonrpc: '2.0', id: 1, result: {
-			revision: 2, rows: [], brackets: [], parseMs: 1, queryMs: 1, incremental: true,
+		jsonrpc: '2.0',
+		id: 1,
+		result: {
+			revision: 2,
+			rows: [],
+			brackets: [],
+			parseMs: 1,
+			queryMs: 1,
+			incremental: true,
 			facts: {
-				baseRevision: 1, edits: [[0, 0, 0, 0, 1, 0]],
+				baseRevision: 1,
+				edits: [[0, 0, 0, 0, 1, 0]],
 				symbols: { start: 0, deleteCount: 1, items: [['item', 'function', [1, 0, 3, 1], [1, 9, 1, 13]]] },
 				folds: { start: 0, deleteCount: 0, items: [[1, 3, null]] },
 				diagnostics: { start: 0, deleteCount: 0, items: [[[1, 0, 1, 1], 'error']] },
 			},
-		}
+		},
 	};
 	assert.deepEqual(decodeAppServerResponse('syntax/query', response), response);
 	for (const malformed of [
@@ -444,11 +744,11 @@ test('syntax facts tuples validate fixed fields, coordinates and exact lengths',
 		['item', 'function', [1, 0, 3, 1], [1, 9, 1, 13], 'extra'],
 	]) {
 		const invalid = {
-			...response, result: {
-				...response.result, facts: {
-					...response.result.facts, symbols: { ...response.result.facts.symbols, items: [malformed] },
-				}
-			}
+			...response,
+			result: {
+				...response.result,
+				facts: { ...response.result.facts, symbols: { ...response.result.facts.symbols, items: [malformed] } },
+			},
 		};
 		assert.throws(() => decodeAppServerResponse('syntax/query', invalid), AppServerProtocolDecodeError);
 	}
@@ -459,10 +759,18 @@ test('syntax facts tuples validate fixed fields, coordinates and exact lengths',
 
 test('cached numeric syntax tuples retain all coordinate and edit boundary checks', () => {
 	const response = {
-		jsonrpc: '2.0', id: 1, result: {
-			revision: 2, rows: [], brackets: [], parseMs: 1, queryMs: 1, incremental: true,
+		jsonrpc: '2.0',
+		id: 1,
+		result: {
+			revision: 2,
+			rows: [],
+			brackets: [],
+			parseMs: 1,
+			queryMs: 1,
+			incremental: true,
 			facts: {
-				baseRevision: 1, edits: [[0, 0, 0, 0, 1, 0]],
+				baseRevision: 1,
+				edits: [[0, 0, 0, 0, 1, 0]],
 				symbols: { start: 0, deleteCount: 0, items: [['item', 'function', [1, 0, 3, 1], [1, 9, 1, 13]]] },
 				folds: { start: 0, deleteCount: 0, items: [] },
 				diagnostics: { start: 0, deleteCount: 0, items: [] },
@@ -474,9 +782,16 @@ test('cached numeric syntax tuples retain all coordinate and edit boundary check
 		for (let index = 0; index < (tuple === 'edit' ? 6 : 4); index++) {
 			for (const value of [-1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '0', null, undefined]) {
 				const invalid = structuredClone(response);
-				const target: unknown[] = tuple === 'edit' ? invalid.result.facts.edits[0] : invalid.result.facts.symbols.items[0][tuple === 'range' ? 2 : 3] as number[];
+				const target: unknown[] =
+					tuple === 'edit'
+						? invalid.result.facts.edits[0]
+						: (invalid.result.facts.symbols.items[0][tuple === 'range' ? 2 : 3] as number[]);
 				target[index] = value;
-				assert.throws(() => decodeAppServerResponse('syntax/query', invalid), AppServerProtocolDecodeError, `${tuple}[${index}]=${String(value)}`);
+				assert.throws(
+					() => decodeAppServerResponse('syntax/query', invalid),
+					AppServerProtocolDecodeError,
+					`${tuple}[${index}]=${String(value)}`,
+				);
 			}
 		}
 		// A previous invalid value must not poison the immutable schema cache.
@@ -485,21 +800,59 @@ test('cached numeric syntax tuples retain all coordinate and edit boundary check
 });
 
 test('renderer snapshot callbacks enforce bounded, closed connection-handle requests', () => {
-	const request = { jsonrpc: '2.0', id: 'snapshot', method: 'hostResource/read', params: { handle: 'capture', offset: 0, maxBytes: 262144 } };
+	const request = {
+		jsonrpc: '2.0',
+		id: 'snapshot',
+		method: 'hostResource/read',
+		params: { handle: 'capture', offset: 0, maxBytes: 262144 },
+	};
 	assert.deepEqual(decodeAppServerServerRequest(request), request);
-	for (const invalid of [{ maxBytes: 0 }, { maxBytes: 262145 }, { offset: -1 }, { offset: 8388609 }, { handle: '' }, { handle: 'x'.repeat(129) }, { path: '/arbitrary/file' }]) {
-		assert.throws(() => decodeAppServerServerRequest({ ...request, params: { ...request.params, ...invalid } }), AppServerProtocolDecodeError);
+	for (const invalid of [
+		{ maxBytes: 0 },
+		{ maxBytes: 262145 },
+		{ offset: -1 },
+		{ offset: 8388609 },
+		{ handle: '' },
+		{ handle: 'x'.repeat(129) },
+		{ path: '/arbitrary/file' },
+	]) {
+		assert.throws(
+			() => decodeAppServerServerRequest({ ...request, params: { ...request.params, ...invalid } }),
+			AppServerProtocolDecodeError,
+		);
 	}
 	const release = { jsonrpc: '2.0', id: 'release', method: 'hostResource/release', params: { handle: 'capture' } };
 	assert.deepEqual(decodeAppServerServerRequest(release), release);
-	assert.throws(() => decodeAppServerServerRequest({ ...release, params: { ...release.params, connectionId: 5 } }), AppServerProtocolDecodeError);
+	assert.throws(
+		() => decodeAppServerServerRequest({ ...release, params: { ...release.params, connectionId: 5 } }),
+		AppServerProtocolDecodeError,
+	);
 });
 
 test('transport snapshot input retains integrity metadata without granting paths or durable handle variants', () => {
 	const resource = { handle: 'capture', byteLength: 10, sha256: `sha256:${'a'.repeat(64)}` };
-	const params = { commandId: 'start', sessionId: 'session', request: { type: 'startTurn', threadId: 'thread', expectedSequence: 1, input: [{ type: 'hostResource', name: 'selected.ts', resource }] } };
+	const params = {
+		commandId: 'start',
+		sessionId: 'session',
+		request: {
+			type: 'startTurn',
+			threadId: 'thread',
+			expectedSequence: 1,
+			input: [{ type: 'hostResource', name: 'selected.ts', resource }],
+		},
+	};
 	assert.deepEqual(decodeAppServerRequestParams('session/request', params), params);
 	for (const invalid of [{ byteLength: 0 }, { byteLength: 8388609 }, { sha256: 'a' }, { path: '/arbitrary/file' }]) {
-		assert.throws(() => decodeAppServerRequestParams('session/request', { ...params, request: { ...params.request, input: [{ ...params.request.input[0], resource: { ...resource, ...invalid } }] } }), AppServerProtocolDecodeError);
+		assert.throws(
+			() =>
+				decodeAppServerRequestParams('session/request', {
+					...params,
+					request: {
+						...params.request,
+						input: [{ ...params.request.input[0], resource: { ...resource, ...invalid } }],
+					},
+				}),
+			AppServerProtocolDecodeError,
+		);
 	}
 });

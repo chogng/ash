@@ -16,10 +16,15 @@ test('Quick Access keeps an empty search open and accepts a matching command wit
 	await expect(quickaccess.items).toContainText('New Untitled Text Editor');
 	await quickaccess.input.press('Enter');
 	await expect(quickaccess.element).toHaveCount(0);
-	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveAttribute('aria-selected', 'true');
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'Untitled-1' })).toHaveAttribute(
+		'aria-selected',
+		'true',
+	);
 });
 
-test('Quick Access opens from its title button and cancellation restores focus without running the command', async ({ workbench }) => {
+test('Quick Access opens from its title button and cancellation restores focus without running the command', async ({
+	workbench,
+}) => {
 	const quickaccess = workbench.quickaccess;
 	const search = workbench.page.getByRole('button', { name: 'Search commands', exact: true });
 	await search.click();

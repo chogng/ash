@@ -1,7 +1,7 @@
-import type { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from "../contextview/contextview.js";
-import type { HoverContent, HoverPersistence, IDelayedHoverOptions, IHoverLifecycleOptions } from "./hover.js";
-import type { IDisposable } from "../../../common/lifecycle.js";
-import { toDisposable } from "../../../common/lifecycle.js";
+import type { AnchorAlignment, AnchorAxisAlignment, AnchorPosition } from '../contextview/contextview.js';
+import type { HoverContent, HoverPersistence, IDelayedHoverOptions, IHoverLifecycleOptions } from './hover.js';
+import type { IDisposable } from '../../../common/lifecycle.js';
+import { toDisposable } from '../../../common/lifecycle.js';
 import { CancellationToken } from '../../../common/cancellation.js';
 
 /** Base-owned inputs understood by any managed Hover implementation. */
@@ -33,17 +33,19 @@ export interface IManagedHover extends IDisposable {
  */
 export interface IHoverDelegate {
 	setupHover(options: HoverDelegateSetupOptions): IManagedHover;
-	setupDelayedHover(target: HTMLElement, hoverOptions: (() => IDelayedHoverOptions) | IDelayedHoverOptions, lifecycleOptions?: IHoverLifecycleOptions): IDisposable;
+	setupDelayedHover(
+		target: HTMLElement,
+		hoverOptions: (() => IDelayedHoverOptions) | IDelayedHoverOptions,
+		lifecycleOptions?: IHoverLifecycleOptions,
+	): IDisposable;
 }
 
 const defaultHoverDelegate: IHoverDelegate = {
-	setupDelayedHover: (target, options) => new NativeTitleHover(target, () => {
-		return (typeof options === 'function' ? options() : options).content;
-	}),
-	setupHover: (options) => new NativeTitleHover(
-		options.target,
-		options.content,
-	),
+	setupDelayedHover: (target, options) =>
+		new NativeTitleHover(target, () => {
+			return (typeof options === 'function' ? options() : options).content;
+		}),
+	setupHover: options => new NativeTitleHover(options.target, options.content),
 };
 
 let hoverDelegate = defaultHoverDelegate;
@@ -67,23 +69,26 @@ class NativeTitleHover implements IManagedHover {
 	private readonly previousTitle: string | null;
 	private disposed = false;
 
-	constructor(private readonly target: HTMLElement, content: HoverContent) {
-		this.previousTitle = target.getAttribute("title");
+	constructor(
+		private readonly target: HTMLElement,
+		content: HoverContent,
+	) {
+		this.previousTitle = target.getAttribute('title');
 		this.update(content);
 	}
 
-	show(): void { }
+	show(): void {}
 
-	hide(): void { }
+	hide(): void {}
 
 	update(content: HoverContent): void {
 		if (this.disposed) return;
-		const value = typeof content === "function" ? content(CancellationToken.None) : content;
-		const title = typeof value === "string" ? value : value?.textContent;
+		const value = typeof content === 'function' ? content(CancellationToken.None) : content;
+		const title = typeof value === 'string' ? value : value?.textContent;
 		if (title) {
-			this.target.setAttribute("title", title);
+			this.target.setAttribute('title', title);
 		} else {
-			this.target.removeAttribute("title");
+			this.target.removeAttribute('title');
 		}
 	}
 
@@ -91,9 +96,9 @@ class NativeTitleHover implements IManagedHover {
 		if (this.disposed) return;
 		this.disposed = true;
 		if (this.previousTitle === null) {
-			this.target.removeAttribute("title");
+			this.target.removeAttribute('title');
 		} else {
-			this.target.setAttribute("title", this.previousTitle);
+			this.target.setAttribute('title', this.previousTitle);
 		}
 	}
 

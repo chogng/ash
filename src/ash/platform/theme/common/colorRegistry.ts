@@ -1,8 +1,8 @@
-import { Color, RGBA } from "../../../base/common/color.js";
-import { Emitter } from "../../../base/common/event.js";
-import { Disposable } from "../../../base/common/lifecycle.js";
-import { localize } from "../../../nls.js";
-import { ColorScheme } from "./theme.js";
+import { Color, RGBA } from '../../../base/common/color.js';
+import { Emitter } from '../../../base/common/event.js';
+import { Disposable } from '../../../base/common/lifecycle.js';
+import { localize } from '../../../nls.js';
+import { ColorScheme } from './theme.js';
 
 export type ColorIdentifier = string;
 
@@ -14,11 +14,11 @@ export interface ColorDefaults {
 }
 
 export type ColorTransform =
-	| { readonly op: "transparent"; readonly value: ColorValue; readonly factor: number; }
-	| { readonly op: "lighten"; readonly value: ColorValue; readonly factor: number; }
-	| { readonly op: "darken"; readonly value: ColorValue; readonly factor: number; }
-	| { readonly op: "mix"; readonly value: ColorValue; readonly other: ColorValue; readonly factor: number; }
-	| { readonly op: "opaque"; readonly value: ColorValue; readonly background: ColorValue; };
+	| { readonly op: 'transparent'; readonly value: ColorValue; readonly factor: number }
+	| { readonly op: 'lighten'; readonly value: ColorValue; readonly factor: number }
+	| { readonly op: 'darken'; readonly value: ColorValue; readonly factor: number }
+	| { readonly op: 'mix'; readonly value: ColorValue; readonly other: ColorValue; readonly factor: number }
+	| { readonly op: 'opaque'; readonly value: ColorValue; readonly background: ColorValue };
 
 export type ColorValue = Color | string | ColorTransform | null;
 
@@ -51,7 +51,7 @@ export class ColorRegistry extends Disposable {
 
 	registerColor(id: ColorIdentifier, defaults: ColorDefaults, metadata: ColorRegistrationMetadata): ColorIdentifier {
 		this.assertNotDisposed();
-		validateTokenId(id, "color");
+		validateTokenId(id, 'color');
 		if (this.colors.has(id)) throw new Error(`Color token is already registered: ${id}`);
 		const contribution = Object.freeze({ id, defaults: Object.freeze({ ...defaults }), ...metadata });
 		this.colors.set(id, contribution);
@@ -63,43 +63,73 @@ export class ColorRegistry extends Disposable {
 	/** A group is validated as a whole before publishing, so alias cycles never enter active themes. */
 	public replaceColors(owner: symbol, contributions: readonly ColorContribution[]): void {
 		const previous = this.groups.get(owner) ?? [];
-		if (!previous.length && !contributions.length) { return; }
+		if (!previous.length && !contributions.length) {
+			return;
+		}
 		const next = new Map([...this.colors].filter(([id]) => !previous.includes(id)));
 		for (const contribution of contributions) {
 			validateTokenId(contribution.id, 'color');
-			if (next.has(contribution.id)) { throw new TypeError(`Duplicate color token: ${contribution.id}`); }
+			if (next.has(contribution.id)) {
+				throw new TypeError(`Duplicate color token: ${contribution.id}`);
+			}
 			next.set(contribution.id, contribution);
 		}
 		using validation = new ColorRegistry();
-		for (const [id, contribution] of next) { validation.colors.set(id, contribution); }
+		for (const [id, contribution] of next) {
+			validation.colors.set(id, contribution);
+		}
 		validation.publishCatalog();
-		for (const scheme of [ColorScheme.Dark, ColorScheme.Light, ColorScheme.HighContrastDark, ColorScheme.HighContrastLight]) { validation.resolve(scheme); }
+		for (const scheme of [
+			ColorScheme.Dark,
+			ColorScheme.Light,
+			ColorScheme.HighContrastDark,
+			ColorScheme.HighContrastLight,
+		]) {
+			validation.resolve(scheme);
+		}
 		this.colors.clear();
-		for (const [id, contribution] of next) { this.colors.set(id, contribution); }
-		if (contributions.length) { this.groups.set(owner, contributions.map(color => color.id)); } else { this.groups.delete(owner); }
+		for (const [id, contribution] of next) {
+			this.colors.set(id, contribution);
+		}
+		if (contributions.length) {
+			this.groups.set(
+				owner,
+				contributions.map(color => color.id),
+			);
+		} else {
+			this.groups.delete(owner);
+		}
 		this.publishCatalog();
 		this.changed.fire();
 	}
 
 	/** Bootstrap fixes the language before theme modules register their descriptions. */
 	private publishCatalog(): void {
-		this.catalog = Object.freeze([...this.colors.values()].map(contribution => Object.freeze({
-			...contribution,
-			description: localize(`color.${contribution.id}`, contribution.description),
-		})));
+		this.catalog = Object.freeze(
+			[...this.colors.values()].map(contribution =>
+				Object.freeze({
+					...contribution,
+					description: localize(`color.${contribution.id}`, contribution.description),
+				}),
+			),
+		);
 	}
 
 	getColors(): readonly ColorContribution[] {
 		return this.catalog;
 	}
 
-	resolve(scheme: ColorScheme, overrides: Readonly<Record<string, ColorValue>> = {}): readonly ResolvedColorContribution[] {
+	resolve(
+		scheme: ColorScheme,
+		overrides: Readonly<Record<string, ColorValue>> = {},
+	): readonly ResolvedColorContribution[] {
 		const cache = new Map<string, Color | null>();
 		const resolving: string[] = [];
 		const resolveIdentifier = (id: string): Color | null => {
 			if (cache.has(id)) return cache.get(id) ?? null;
 			const cycleStart = resolving.indexOf(id);
-			if (cycleStart >= 0) throw new Error(`Color token cycle: ${[...resolving.slice(cycleStart), id].join(" -> ")}`);
+			if (cycleStart >= 0)
+				throw new Error(`Color token cycle: ${[...resolving.slice(cycleStart), id].join(' -> ')}`);
 			const contribution = this.colors.get(id);
 			if (!contribution) throw new Error(`Unknown color token reference: ${id}`);
 			resolving.push(id);
@@ -115,25 +145,32 @@ export class ColorRegistry extends Disposable {
 		for (const id of Object.keys(overrides)) {
 			if (!this.colors.has(id)) throw new Error(`Unknown color token override: ${id}`);
 		}
-		return Object.freeze(this.getColors().map((contribution) => Object.freeze({ ...contribution, value: resolveIdentifier(contribution.id) })));
+		return Object.freeze(
+			this.getColors().map(contribution =>
+				Object.freeze({ ...contribution, value: resolveIdentifier(contribution.id) }),
+			),
+		);
 	}
 }
 
 function resolveColorValue(value: ColorValue, resolveIdentifier: (id: string) => Color | null): Color | null {
 	if (value === null) return null;
 	if (value instanceof Color) return value;
-	if (typeof value === "string") return value.startsWith("#") ? Color.fromHex(value) : resolveIdentifier(value);
+	if (typeof value === 'string') return value.startsWith('#') ? Color.fromHex(value) : resolveIdentifier(value);
 	const source = resolveColorValue(value.value, resolveIdentifier);
 	if (!source) return null;
 	switch (value.op) {
-		case "transparent": return source.transparent(value.factor);
-		case "lighten": return source.lighten(value.factor);
-		case "darken": return source.darken(value.factor);
-		case "mix": {
+		case 'transparent':
+			return source.transparent(value.factor);
+		case 'lighten':
+			return source.lighten(value.factor);
+		case 'darken':
+			return source.darken(value.factor);
+		case 'mix': {
 			const other = resolveColorValue(value.other, resolveIdentifier);
 			return other ? mixColor(source, other, value.factor) : null;
 		}
-		case "opaque": {
+		case 'opaque': {
 			const background = resolveColorValue(value.background, resolveIdentifier);
 			return background ? source.makeOpaque(background) : null;
 		}
@@ -144,12 +181,14 @@ function mixColor(source: Color, other: Color, factor: number): Color {
 	const amount = Math.min(Math.max(factor, 0), 1);
 	const start = source.rgba;
 	const end = other.rgba;
-	return new Color(new RGBA(
-		Math.round(start.r + (end.r - start.r) * amount),
-		Math.round(start.g + (end.g - start.g) * amount),
-		Math.round(start.b + (end.b - start.b) * amount),
-		start.a + (end.a - start.a) * amount,
-	));
+	return new Color(
+		new RGBA(
+			Math.round(start.r + (end.r - start.r) * amount),
+			Math.round(start.g + (end.g - start.g) * amount),
+			Math.round(start.b + (end.b - start.b) * amount),
+			start.a + (end.a - start.a) * amount,
+		),
+	);
 }
 
 export function validateTokenId(id: string, kind: string): void {

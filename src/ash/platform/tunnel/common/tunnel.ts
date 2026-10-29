@@ -26,8 +26,17 @@ export interface ITunnelService {
 	readonly tunnels: Promise<readonly RemoteTunnel[]>;
 	readonly onDidChange: Event<void>;
 	readonly onTunnelOpened: Event<RemoteTunnel>;
-	readonly onTunnelClosed: Event<{ host: string; port: number; }>;
-	openTunnel(addressProvider: IAddressProvider | undefined, remoteHost: string | undefined, remotePort: number, localHost?: string, localPort?: number, elevateIfNeeded?: boolean, privacy?: string, protocol?: string): Promise<RemoteTunnel | string | undefined> | undefined;
+	readonly onTunnelClosed: Event<{ host: string; port: number }>;
+	openTunnel(
+		addressProvider: IAddressProvider | undefined,
+		remoteHost: string | undefined,
+		remotePort: number,
+		localHost?: string,
+		localPort?: number,
+		elevateIfNeeded?: boolean,
+		privacy?: string,
+		protocol?: string,
+	): Promise<RemoteTunnel | string | undefined> | undefined;
 	getExistingTunnel(remoteHost: string, remotePort: number): Promise<RemoteTunnel | undefined>;
 	/** Stops visible forwards and cancels pending starts in the authenticated window. */
 	closeAll(): Promise<void>;

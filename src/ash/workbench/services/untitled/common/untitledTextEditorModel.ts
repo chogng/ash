@@ -4,7 +4,10 @@ import type { URI } from '../../../../base/common/uri.js';
 import type { ITextModel, ITextSnapshot } from '../../../../editor/common/model.js';
 import type { IResolvedTextEditorModel, ITextEditorModel } from '../../../../editor/common/services/resolverService.js';
 import { EditorModel } from '../../../common/editor/editorModel.js';
-import { ITextModelResourceService, type TextModelReference } from '../../textmodelResolver/common/textModelResourceService.js';
+import {
+	ITextModelResourceService,
+	type TextModelReference,
+} from '../../textmodelResolver/common/textModelResourceService.js';
 
 export interface IUntitledTextEditorModel extends ITextEditorModel {
 	readonly resource: URI;
@@ -46,7 +49,7 @@ export class UntitledTextEditorModel extends EditorModel implements IUntitledTex
 	}
 
 	public get textEditorModel(): ITextModel | null {
-		return this.isDisposed() ? null : this.reference?.model ?? null;
+		return this.isDisposed() ? null : (this.reference?.model ?? null);
 	}
 
 	public override resolve(): Promise<void> {
@@ -88,7 +91,10 @@ export class UntitledTextEditorModel extends EditorModel implements IUntitledTex
 	}
 
 	private async acquireModel(): Promise<void> {
-		const reference = await this.models.acquire({ resource: this.resource, initialText: this.initialValue, languageId: this.languageId }, this.resolutionController.signal);
+		const reference = await this.models.acquire(
+			{ resource: this.resource, initialText: this.initialValue, languageId: this.languageId },
+			this.resolutionController.signal,
+		);
 		this._register(reference);
 		this.reference = reference;
 		this._register(reference.model.onWillDispose(() => this.dispose()));

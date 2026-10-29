@@ -7,17 +7,20 @@ import { FontInfo } from '../../../common/config/fontInfo.js';
 import { DisposableTracker, installDisposableTracker, toDisposable } from '../../../../base/common/lifecycle.js';
 
 function savedFontInfo(): ISerializedFontInfo {
-	return new FontInfo({
-		...createBareFontInfoFromRawSettings({ fontSize: 14 }, 1, true),
-		isMonospace: true,
-		typicalHalfwidthCharacterWidth: 8,
-		typicalFullwidthCharacterWidth: 16,
-		canUseHalfwidthRightwardsArrow: true,
-		spaceWidth: 8,
-		middotWidth: 8,
-		wsmiddotWidth: 8,
-		maxDigitWidth: 8,
-	}, true);
+	return new FontInfo(
+		{
+			...createBareFontInfoFromRawSettings({ fontSize: 14 }, 1, true),
+			isMonospace: true,
+			typicalHalfwidthCharacterWidth: 8,
+			typicalFullwidthCharacterWidth: 16,
+			canUseHalfwidthRightwardsArrow: true,
+			spaceWidth: 8,
+			middotWidth: 8,
+			wsmiddotWidth: 8,
+			maxDigitWidth: 8,
+		},
+		true,
+	);
 }
 
 test('restored font metrics preserve persisted values until the window measures again', () => {
@@ -52,11 +55,17 @@ test('restored font validation rejects stale versions and malformed metrics with
 	const target = dom.window as unknown as Window;
 	const saved = savedFontInfo();
 	const invalid = [
-		null, {}, { ...saved, version: saved.version - 1 },
-		{ ...saved, fontFamily: 5 }, { ...saved, isMonospace: 'true' },
-		{ ...saved, pixelRatio: 0 }, { ...saved, fontSize: -1 },
-		{ ...saved, typicalHalfwidthCharacterWidth: null }, { ...saved, spaceWidth: 0 },
-		{ ...saved, letterSpacing: '1' }, { ...saved, middotWidth: -1 },
+		null,
+		{},
+		{ ...saved, version: saved.version - 1 },
+		{ ...saved, fontFamily: 5 },
+		{ ...saved, isMonospace: 'true' },
+		{ ...saved, pixelRatio: 0 },
+		{ ...saved, fontSize: -1 },
+		{ ...saved, typicalHalfwidthCharacterWidth: null },
+		{ ...saved, spaceWidth: 0 },
+		{ ...saved, letterSpacing: '1' },
+		{ ...saved, middotWidth: -1 },
 	];
 	measurements.restoreFontInfo(target, JSON.parse(JSON.stringify(invalid)));
 	assert.equal(measurements.serializeFontInfo(target), undefined);
@@ -75,10 +84,13 @@ test('page teardown preserves saved font metrics after releasing restored readin
 	assert.equal(measurements.serializeFontInfo(target), undefined);
 });
 
-test('failed fresh font measurements do not preserve another window\'s restored state', () => {
+test("failed fresh font measurements do not preserve another window's restored state", () => {
 	const first = new JSDOM('<body></body>');
 	const second = new JSDOM('<body></body>');
-	using cleanup = toDisposable(() => { first.window.close(); second.window.close(); });
+	using cleanup = toDisposable(() => {
+		first.window.close();
+		second.window.close();
+	});
 	using measurements = new FontMeasurementsImpl();
 	const target = first.window as unknown as Window;
 	measurements.restoreFontInfo(target, [savedFontInfo()]);
@@ -111,11 +123,14 @@ test('FontMeasurements expires unreliable readings independently in every window
 		firstTimers.runPending();
 		secondTimers.runPending();
 		const after = windows.map(target => measurements.readFontInfo(target, font));
-		assert.deepEqual({
-			expired: after.map((value, index) => value !== before[index]),
-			trusted: after.map(value => value.isTrusted),
-			changes,
-		}, { expired: [true, true], trusted: [false, false], changes: 2 });
+		assert.deepEqual(
+			{
+				expired: after.map((value, index) => value !== before[index]),
+				trusted: after.map(value => value.isTrusted),
+				changes,
+			},
+			{ expired: [true, true], trusted: [false, false], changes: 2 },
+		);
 	} finally {
 		measurements.clearAllFontInfos();
 		listener.dispose();
@@ -130,7 +145,7 @@ test('FontMeasurements expires unreliable readings independently in every window
 });
 
 /** Runs the window-owned expiry callbacks without waiting for the five-second cache lifetime. */
-function installWindowTimeouts(dom: JSDOM): { runPending(): void;[Symbol.dispose](): void; } {
+function installWindowTimeouts(dom: JSDOM): { runPending(): void; [Symbol.dispose](): void } {
 	const setTimeoutDescriptor = Object.getOwnPropertyDescriptor(dom.window, 'setTimeout');
 	const clearTimeoutDescriptor = Object.getOwnPropertyDescriptor(dom.window, 'clearTimeout');
 	assert.ok(setTimeoutDescriptor);
@@ -163,15 +178,18 @@ function installWindowTimeouts(dom: JSDOM): { runPending(): void;[Symbol.dispose
 	};
 }
 
-
 test('fresh font measurements preserve fractional glyph advances rather than accumulating integer rounding', () => {
 	const dom = new JSDOM('<body></body>');
 	using cleanup = toDisposable(() => dom.window.close());
 	using measurements = new FontMeasurementsImpl();
-	Object.defineProperty(dom.window.HTMLElement.prototype, 'offsetWidth', { get() { return this.style.display === 'inline-block' ? 2048 : 100000; } });
+	Object.defineProperty(dom.window.HTMLElement.prototype, 'offsetWidth', {
+		get() {
+			return this.style.display === 'inline-block' ? 2048 : 100000;
+		},
+	});
 	dom.window.HTMLElement.prototype.getBoundingClientRect = function () {
 		const width = this.style.display === 'inline-block' ? 2047.5 : 100000;
-		return { x: 0, y: 0, top: 0, left: 0, width, height: 0, right: width, bottom: 0, toJSON() { } };
+		return { x: 0, y: 0, top: 0, left: 0, width, height: 0, right: width, bottom: 0, toJSON() {} };
 	};
 	const measured = measurements.readFontInfo(dom.window as unknown as Window, new FontInfo(savedFontInfo(), false));
 	assert.equal(measured.spaceWidth * 256, 2047.5);

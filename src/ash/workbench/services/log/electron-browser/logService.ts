@@ -10,13 +10,25 @@ import { LogService } from '../../../../platform/log/common/logServiceImpl.js';
 export class NativeLogService extends LogService {
 	readonly files: ILogFileService;
 
-	constructor(category: string, @IMainProcessService mainProcessService: IMainProcessService, @IWorkbenchEnvironmentService environment: IWorkbenchEnvironmentService) {
+	constructor(
+		category: string,
+		@IMainProcessService mainProcessService: IMainProcessService,
+		@IWorkbenchEnvironmentService environment: IWorkbenchEnvironmentService,
+	) {
 		const client = new LoggerChannelClient(mainProcessService.getChannel('logger'));
 		super({
-			level: environment.initialLogLevel ?? (environment.logLevel ? parseLogLevel(environment.logLevel) : undefined),
-			sinks: [new ConsoleLogSink(), {
-				log: entry => client.log({ ...entry, category: entry.category === 'application' ? category : entry.category }),
-			}],
+			level:
+				environment.initialLogLevel ?? (environment.logLevel ? parseLogLevel(environment.logLevel) : undefined),
+			sinks: [
+				new ConsoleLogSink(),
+				{
+					log: entry =>
+						client.log({
+							...entry,
+							category: entry.category === 'application' ? category : entry.category,
+						}),
+				},
+			],
 			flush: () => client.flush(),
 		});
 		this._register(client);

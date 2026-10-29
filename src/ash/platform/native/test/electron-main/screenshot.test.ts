@@ -8,7 +8,17 @@ test('screenshot rectangles reject malformed IPC and cannot select another windo
 	assert.equal(validateScreenshotRectangle(undefined), undefined);
 	const rect = { x: 0, y: 10, width: 20, height: 30 };
 	assert.deepEqual(validateScreenshotRectangle(rect), rect);
-	for (const value of [null, [], {}, { ...rect, windowId: 2 }, { ...rect, x: -1 }, { ...rect, y: Infinity }, { ...rect, width: 0 }, { ...rect, height: NaN }, { ...rect, width: '20' }]) {
+	for (const value of [
+		null,
+		[],
+		{},
+		{ ...rect, windowId: 2 },
+		{ ...rect, x: -1 },
+		{ ...rect, y: Infinity },
+		{ ...rect, width: 0 },
+		{ ...rect, height: NaN },
+		{ ...rect, width: '20' },
+	]) {
 		assert.throws(() => validateScreenshotRectangle(value), /Invalid screenshot rectangle/);
 	}
 });
@@ -24,7 +34,10 @@ test('window capture converts CSS pixels once, retains PNG bytes and checks the 
 		webContents: {
 			isDestroyed: () => closed,
 			getZoomFactor: () => zoom,
-			capturePage: async (clip: unknown) => { clips.push(clip); return { toPNG: () => bytes, isEmpty: () => false }; },
+			capturePage: async (clip: unknown) => {
+				clips.push(clip);
+				return { toPNG: () => bytes, isEmpty: () => false };
+			},
 		},
 	} as unknown as BrowserWindow;
 	assert.deepEqual((await getScreenshot(window, { x: 10, y: 20, width: 40, height: 30 }))?.buffer, bytes);
@@ -47,8 +60,12 @@ test('a window closed during capture produces no late screenshot', async () => {
 		isDestroyed: () => closed,
 		getContentBounds: () => ({ width: 800, height: 600 }),
 		webContents: {
-			isDestroyed: () => closed, getZoomFactor: () => 1,
-			capturePage: async () => { closed = true; return { toPNG: () => assert.fail('Closed window bytes must not be read') }; },
+			isDestroyed: () => closed,
+			getZoomFactor: () => 1,
+			capturePage: async () => {
+				closed = true;
+				return { toPNG: () => assert.fail('Closed window bytes must not be read') };
+			},
 		},
 	} as unknown as BrowserWindow;
 	assert.equal(await getScreenshot(window), undefined);

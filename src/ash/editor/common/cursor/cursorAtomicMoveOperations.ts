@@ -7,7 +7,11 @@ export const enum Direction {
 }
 
 export class AtomicTabMoveOperations {
-	public static whitespaceVisibleColumn(lineContent: string, position: number, tabSize: number): [number, number, number] {
+	public static whitespaceVisibleColumn(
+		lineContent: string,
+		position: number,
+		tabSize: number,
+	): [number, number, number] {
 		let visibleColumn = 0;
 		let previousTabStopPosition = -1;
 		let previousTabStopVisibleColumn = -1;
@@ -26,14 +30,21 @@ export class AtomicTabMoveOperations {
 				return [-1, -1, -1];
 			}
 		}
-		return position === lineContent.length ? [previousTabStopPosition, previousTabStopVisibleColumn, visibleColumn] : [-1, -1, -1];
+		return position === lineContent.length
+			? [previousTabStopPosition, previousTabStopVisibleColumn, visibleColumn]
+			: [-1, -1, -1];
 	}
 
 	public static atomicPosition(lineContent: string, position: number, tabSize: number, direction: Direction): number {
-		const [previousTabStopPosition, previousTabStopVisibleColumn, visibleColumn] = this.whitespaceVisibleColumn(lineContent, position, tabSize);
+		const [previousTabStopPosition, previousTabStopVisibleColumn, visibleColumn] = this.whitespaceVisibleColumn(
+			lineContent,
+			position,
+			tabSize,
+		);
 		if (visibleColumn === -1) return -1;
 		if (direction === Direction.Nearest && visibleColumn % tabSize === 0) return position;
-		const movesLeft = direction === Direction.Left || direction === Direction.Nearest && visibleColumn % tabSize <= tabSize / 2;
+		const movesLeft =
+			direction === Direction.Left || (direction === Direction.Nearest && visibleColumn % tabSize <= tabSize / 2);
 		if (movesLeft) {
 			if (previousTabStopPosition === -1) return -1;
 			let currentVisibleColumn = previousTabStopVisibleColumn;

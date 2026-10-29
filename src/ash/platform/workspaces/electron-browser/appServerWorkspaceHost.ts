@@ -12,20 +12,40 @@ import { parseWorkspace } from '../../workspace/common/workspace.js';
 import type { IWorkspaceContextApi } from '../../workspace/common/workspaceIpc.js';
 import { getRemoteWorkspacePath, isRemoteResource } from '../../remote/common/remote.js';
 import type { EnvDirSetEntry, PermissionDto } from '../../../../../.build/protocol/typescript/index.js';
-import { DEVELOPMENT_DIR_PERMISSIONS, READ_DIR_PERMISSIONS, type IWorkspaceTrustApi, type IDirectoryPermissionRequestService } from '../../workspace/common/workspaceTrust.js';
+import {
+	DEVELOPMENT_DIR_PERMISSIONS,
+	READ_DIR_PERMISSIONS,
+	type IWorkspaceTrustApi,
+	type IDirectoryPermissionRequestService,
+} from '../../workspace/common/workspaceTrust.js';
 
-export async function initializeWorkspace(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, workspaceApi: IWorkspaceContextApi): Promise<void> {
+export async function initializeWorkspace(
+	client: AppServerProtocolClient,
+	workspaceTrust: IDirectoryPermissionRequestService,
+	trustApi: IWorkspaceTrustApi,
+	workspaceApi: IWorkspaceContextApi,
+): Promise<void> {
 	const generation = client.generation;
 	const workspace = parseWorkspace(await workspaceApi.getWorkspace());
 	if (generation !== client.generation || client.state !== 'ready') throw canceled();
-	await initializeWorkspaceDirectories(client, workspaceTrust, trustApi, workspace.folders.map(folder => ({
-		id: folder.id,
-		path: isRemoteResource(folder.uri) ? getRemoteWorkspacePath(folder.uri) : folder.uri.fsPath,
-	})));
+	await initializeWorkspaceDirectories(
+		client,
+		workspaceTrust,
+		trustApi,
+		workspace.folders.map(folder => ({
+			id: folder.id,
+			path: isRemoteResource(folder.uri) ? getRemoteWorkspacePath(folder.uri) : folder.uri.fsPath,
+		})),
+	);
 }
 
 /** Binds only these directories on this connection; a label affects the trust prompt, never authorization. */
-export async function initializeWorkspaceDirectories(client: AppServerProtocolClient, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, folders: readonly { readonly id: string; readonly path: string; readonly label?: string; }[]): Promise<void> {
+export async function initializeWorkspaceDirectories(
+	client: AppServerProtocolClient,
+	workspaceTrust: IDirectoryPermissionRequestService,
+	trustApi: IWorkspaceTrustApi,
+	folders: readonly { readonly id: string; readonly path: string; readonly label?: string }[],
+): Promise<void> {
 	const generation = client.generation;
 	let retired = client.state !== 'ready';
 	const cancellation = new AbortController();
@@ -36,7 +56,9 @@ export async function initializeWorkspaceDirectories(client: AppServerProtocolCl
 		}
 	});
 	const assertCurrent = (): void => {
-		if (retired || client.generation !== generation) { throw canceled(); }
+		if (retired || client.generation !== generation) {
+			throw canceled();
+		}
 	};
 	try {
 		assertCurrent();
@@ -50,14 +72,25 @@ export async function initializeWorkspaceDirectories(client: AppServerProtocolCl
 				continue;
 			}
 			// The frontend prompt can outlive its connection; retiring setup must not wait for its answer.
-			const choice = await raceCancellationError(workspaceTrust.requestDirectoryPermissions(folder.label ?? path, cancellation.signal), cancellation.signal);
+			const choice = await raceCancellationError(
+				workspaceTrust.requestDirectoryPermissions(folder.label ?? path, cancellation.signal),
+				cancellation.signal,
+			);
 			assertCurrent();
-			if (choice === 'cancel') { throw canceled(); }
-			if (choice !== 'development' && choice !== 'readOnly') { throw new TypeError('Invalid directory permission selection'); }
-			const permissions: PermissionDto[] = [...(choice === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS)];
+			if (choice === 'cancel') {
+				throw canceled();
+			}
+			if (choice !== 'development' && choice !== 'readOnly') {
+				throw new TypeError('Invalid directory permission selection');
+			}
+			const permissions: PermissionDto[] = [
+				...(choice === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS),
+			];
 			const grant = await trustApi.createGrant(path, permissions);
 			assertCurrent();
-			await client.request(APP_SERVER_METHODS['env/dirs/set'], { dirs: [...dirs, { id: folder.id, path, grant: { ...grant, permissions: [...grant.permissions] } }] });
+			await client.request(APP_SERVER_METHODS['env/dirs/set'], {
+				dirs: [...dirs, { id: folder.id, path, grant: { ...grant, permissions: [...grant.permissions] } }],
+			});
 			assertCurrent();
 			dirs.push({ id: folder.id, path, grant: { type: 'config' } });
 		}
@@ -68,9 +101,18 @@ export async function initializeWorkspaceDirectories(client: AppServerProtocolCl
 	}
 }
 
-export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, ready: () => Promise<void>, workspaceTrust: IDirectoryPermissionRequestService, trustApi: IWorkspaceTrustApi, validateFolders: (folders: readonly URI[]) => void = () => { }, resourceForPath: (path: string) => URI = URI.file): IDisposable {
+export function registerAppServerWorkspaceHost(
+	client: AppServerProtocolClient,
+	ready: () => Promise<void>,
+	workspaceTrust: IDirectoryPermissionRequestService,
+	trustApi: IWorkspaceTrustApi,
+	validateFolders: (folders: readonly URI[]) => void = () => {},
+	resourceForPath: (path: string) => URI = URI.file,
+): IDisposable {
 	const subscription = subscribe('ash:workspace:operation', (value: unknown) => {
-		if (!isRecord(value) || typeof value.nonce !== 'string' || !isRecord(value.params)) { return; }
+		if (!isRecord(value) || typeof value.nonce !== 'string' || !isRecord(value.params)) {
+			return;
+		}
 		const { nonce, operation, params } = value;
 		const execute = async (): Promise<unknown> => {
 			await ready();
@@ -84,8 +126,13 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 					return (await trustApi.readDirectory(request.path)).permissions;
 				}
 				case 'createGrant': {
-					if (typeof params.path !== 'string' || !Array.isArray(params.permissions)
-						|| !params.permissions.every(value => DEVELOPMENT_DIR_PERMISSIONS.some(permission => permission === value))) {
+					if (
+						typeof params.path !== 'string' ||
+						!Array.isArray(params.permissions) ||
+						!params.permissions.every(value =>
+							DEVELOPMENT_DIR_PERMISSIONS.some(permission => permission === value),
+						)
+					) {
 						throw new TypeError('Invalid workspace trust grant');
 					}
 					return trustApi.createGrant(params.path, params.permissions);
@@ -100,18 +147,38 @@ export function registerAppServerWorkspaceHost(client: AppServerProtocolClient, 
 						path: params.path,
 						permissions: params.grant.permissions,
 					});
-					return trustApi.persistGrant(request.path, { type: 'user', commandId: request.commandId, expectedRevision: request.expectedRevision, permissions: request.permissions });
+					return trustApi.persistGrant(request.path, {
+						type: 'user',
+						commandId: request.commandId,
+						expectedRevision: request.expectedRevision,
+						permissions: request.permissions,
+					});
 				}
 				case 'validateFolders': {
 					const request = decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders });
 					validateFolders(request.dirs.map(folder => resourceForPath(folder.path)));
 					return;
 				}
-				case 'setFolders': return client.request(APP_SERVER_METHODS['env/dirs/set'], decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }));
-				default: throw new Error('Unknown workspace operation');
+				case 'setFolders':
+					return client.request(
+						APP_SERVER_METHODS['env/dirs/set'],
+						decodeAppServerRequestParams('env/dirs/set', { dirs: params.folders }),
+					);
+				default:
+					throw new Error('Unknown workspace operation');
 			}
 		};
-		void execute().then(result => invoke('ash:workspace:completed', { nonce, result }), error => invoke('ash:workspace:completed', { nonce, error: error instanceof Error ? error.message : 'Workspace operation failed', failure: error instanceof AppServerRemoteError ? error.errorName : undefined })).catch(console.error);
+		void execute()
+			.then(
+				result => invoke('ash:workspace:completed', { nonce, result }),
+				error =>
+					invoke('ash:workspace:completed', {
+						nonce,
+						error: error instanceof Error ? error.message : 'Workspace operation failed',
+						failure: error instanceof AppServerRemoteError ? error.errorName : undefined,
+					}),
+			)
+			.catch(console.error);
 	});
 	return toDisposable(() => subscription.dispose());
 }

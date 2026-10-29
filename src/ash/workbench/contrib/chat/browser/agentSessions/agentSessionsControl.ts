@@ -12,7 +12,11 @@ export class AgentSessionsControl extends Disposable {
 	private readonly emptyDomNode: HTMLParagraphElement;
 	private readonly viewer: AgentSessionsViewer;
 
-	constructor(container: HTMLElement, private readonly model: IAgentSessionsModel, @IContextMenuService contextMenus: IContextMenuService) {
+	constructor(
+		container: HTMLElement,
+		private readonly model: IAgentSessionsModel,
+		@IContextMenuService contextMenus: IContextMenuService,
+	) {
 		super();
 		const document = container.ownerDocument;
 		this.domNode = h(document, 'div');
@@ -24,18 +28,26 @@ export class AgentSessionsControl extends Disposable {
 		this.searchInput.setAttribute('aria-label', this.searchInput.placeholder);
 		this.domNode.append(this.searchInput);
 		this.viewer = this._register(new AgentSessionsViewer(this.domNode));
-		this._register(this.viewer.onDidRequestContextMenu(event => {
-			contextMenus.showContextMenu({ getAnchor: () => event.anchor, getActions: () => event.item.getActions(), onHide: () => event.onHide() });
-		}));
+		this._register(
+			this.viewer.onDidRequestContextMenu(event => {
+				contextMenus.showContextMenu({
+					getAnchor: () => event.anchor,
+					getActions: () => event.item.getActions(),
+					onHide: () => event.onHide(),
+				});
+			}),
+		);
 		this.emptyDomNode = h(document, 'p');
 		this.emptyDomNode.className = 'ash-agent-sessions-empty';
 		this.domNode.append(this.emptyDomNode);
 		container.append(this.domNode);
 		this._register(toDisposable(() => this.domNode.remove()));
 		this._register(addDisposableListener(this.searchInput, 'input', () => this.update()));
-		this._register(addDisposableListener(this.searchInput, 'keydown', event => {
-			if (event.key === 'ArrowDown' && this.viewer.focusFirst()) event.preventDefault();
-		}));
+		this._register(
+			addDisposableListener(this.searchInput, 'keydown', event => {
+				if (event.key === 'ArrowDown' && this.viewer.focusFirst()) event.preventDefault();
+			}),
+		);
 		this._register(this.model.onDidChange(() => this.update()));
 		this.update();
 	}
@@ -46,12 +58,17 @@ export class AgentSessionsControl extends Disposable {
 
 	private update(): void {
 		const query = this.searchInput.value.trim().toLocaleLowerCase();
-		const items = this.model.items.filter(item => !query || item.title.toLocaleLowerCase().includes(query) || item.description.toLocaleLowerCase().includes(query));
+		const items = this.model.items.filter(
+			item =>
+				!query ||
+				item.title.toLocaleLowerCase().includes(query) ||
+				item.description.toLocaleLowerCase().includes(query),
+		);
 		this.emptyDomNode.hidden = this.viewer.update(items) > 0;
 		this.emptyDomNode.textContent = query
 			? localize('sessions.list.noResults', 'No matching sessions')
 			: this.model.state === 'loading'
 				? localize('chat.sessions.loading', 'Loading sessions…')
-				: this.model.error ?? localize('chat.sessions.empty', 'Start a chat to begin.');
+				: (this.model.error ?? localize('chat.sessions.empty', 'Start a chat to begin.'));
 	}
 }

@@ -16,13 +16,25 @@ export class ChatGeneratedImageResultSubPart extends Disposable {
 	private readonly changed = this._register(new Emitter<void>());
 	readonly onDidChangeHeight = this.changed.event;
 
-	constructor(document: Document, content: readonly ChatContentPart[], source: IChatListItem['attachmentSource'], imageReveal: IChatImageRevealOrigin | undefined,
+	constructor(
+		document: Document,
+		content: readonly ChatContentPart[],
+		source: IChatListItem['attachmentSource'],
+		imageReveal: IChatImageRevealOrigin | undefined,
 		@IInstantiationService instantiation: IInstantiationService,
 	) {
 		super();
 		this.domNode = h(document, 'section');
 		this.domNode.className = 'ash-chat-generated-image-result';
-		this.media = this._register(instantiation.createInstance(ChatAttachmentsContentPart, { ownerDocument: document, variables: [], source, imagePresentation: 'inline', imageReveal }));
+		this.media = this._register(
+			instantiation.createInstance(ChatAttachmentsContentPart, {
+				ownerDocument: document,
+				variables: [],
+				source,
+				imagePresentation: 'inline',
+				imageReveal,
+			}),
+		);
 		this.domNode.append(this.media.domNode);
 		this._register(this.media.onDidChangeHeight(() => this.changed.fire()));
 		this._register(toDisposable(() => this.domNode.remove()));
@@ -31,10 +43,20 @@ export class ChatGeneratedImageResultSubPart extends Disposable {
 
 	render(content: readonly ChatContentPart[], source: IChatListItem['attachmentSource']): void {
 		const images = content.filter(part => part.type === 'imageUrl' || part.type === 'imageAttachment');
-		this.domNode.setAttribute('aria-label', localize('chat.imageGeneration.results', 'Generated images ({0})', images.length));
+		this.domNode.setAttribute(
+			'aria-label',
+			localize('chat.imageGeneration.results', 'Generated images ({0})', images.length),
+		);
 		// Preserve tool-result content indices: filtering would read the wrong persisted attachment.
-		this.media.updateVariables(content.map(part => part.type === 'imageUrl' || part.type === 'imageAttachment' ? part : { type: 'text', text: '' }), source);
+		this.media.updateVariables(
+			content.map(part =>
+				part.type === 'imageUrl' || part.type === 'imageAttachment' ? part : { type: 'text', text: '' },
+			),
+			source,
+		);
 	}
 
-	setVisible(visible: boolean): void { this.media.setVisible(visible); }
+	setVisible(visible: boolean): void {
+		this.media.setVisible(visible);
+	}
 }

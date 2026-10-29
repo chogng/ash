@@ -33,7 +33,10 @@ export function desktopStartupTracePlugin(): Plugin {
 		name: 'ash-desktop-startup-trace',
 		apply: 'build',
 		generateBundle(_options, bundle) {
-			const code = Object.values(bundle).filter(output => output.type === 'chunk').map(chunk => chunk.code).join('\n');
+			const code = Object.values(bundle)
+				.filter(output => output.type === 'chunk')
+				.map(chunk => chunk.code)
+				.join('\n');
 			const missing = requiredMarks.filter(name => !code.includes(name));
 			if (missing.length > 0) {
 				throw new Error(`Desktop startup marks missing from build: ${missing.join(', ')}`);

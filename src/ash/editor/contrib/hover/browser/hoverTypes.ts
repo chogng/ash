@@ -34,11 +34,16 @@ export interface IEditorHoverParticipant {
 type HoverParticipantConstructor = Constructor<IEditorHoverParticipant>;
 
 /** Contributions register behavior; each editor creates its own participants and owns their rendered parts. */
-export const HoverParticipantRegistry = new class {
+export const HoverParticipantRegistry = new (class {
 	private readonly participants: HoverParticipantConstructor[] = [];
 	public register(participant: HoverParticipantConstructor): IDisposable {
 		this.participants.push(participant);
-		return toDisposable(() => { const index = this.participants.indexOf(participant); if (index >= 0) this.participants.splice(index, 1); });
+		return toDisposable(() => {
+			const index = this.participants.indexOf(participant);
+			if (index >= 0) this.participants.splice(index, 1);
+		});
 	}
-	public getAll(): readonly HoverParticipantConstructor[] { return this.participants; }
-}();
+	public getAll(): readonly HoverParticipantConstructor[] {
+		return this.participants;
+	}
+})();
