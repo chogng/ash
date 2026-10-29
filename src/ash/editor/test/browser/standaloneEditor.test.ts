@@ -5714,6 +5714,85 @@ suite('standalone browser component', () => {
 		await page.evaluate(() => window.ashStandaloneIntegration.dispose());
 	});
 
+	for (const overlap of [false, true]) {
+		test(`find match highlights follow themes and navigation with overlapping matches ${overlap}`, async function () {
+			const { page } = browserTests;
+
+			await page.goto('/standalone.html');
+			try {
+				await page.evaluate(overlap => {
+					window.ashStandaloneIntegration.prepareFindHighlights(overlap);
+					window.ashStandaloneIntegration.invokeLanguageAction('actions.find');
+				}, overlap);
+				const find = page.locator('#caller .stanza-editor-find-widget');
+				const search = find.getByRole('textbox', { name: 'Find', exact: true });
+				const result = find.locator('.stanza-editor-find-result');
+				const ordinary = page.locator('#caller .view-overlays .cdr.findMatch');
+				const current = page.locator('#caller .view-overlays .cdr.currentFindMatch');
+				await search.fill('alpha');
+				await expect(result).toHaveText('1 of 2');
+				await expect(ordinary).toHaveCount(overlap ? 2 : 1);
+				await expect(current).toHaveCount(1);
+				const first = (await current.boundingBox())!;
+				expect(first.width).toBeGreaterThan(0);
+				if (overlap) {
+					expect(await ordinary.first().boundingBox()).toEqual(first);
+				}
+				for (const [theme, background, activeBackground, outline] of [
+					['find-test-light', 'rgb(255, 0, 0)', 'color(srgb 0.7 0 0.3)', 'rgb(0, 0, 255)'],
+					['find-test-dark', 'rgb(0, 255, 0)', 'color(srgb 0.3 0.7 0)', 'rgb(255, 0, 0)'],
+					['find-test-hc-dark', 'rgb(255, 0, 0)', 'color(srgb 0.7 0 0.3)', 'rgb(0, 0, 255)'],
+					['find-test-hc-light', 'rgb(0, 255, 0)', 'color(srgb 0.3 0.7 0)', 'rgb(255, 0, 0)'],
+				]) {
+					await page.evaluate(theme => window.ashStandaloneIntegration.setStickyTheme(theme), theme);
+					await expect(ordinary.first()).toHaveCSS('background-color', background);
+					await expect(current).toHaveCSS('background-color', activeBackground);
+					await expect(current).toHaveCSS('outline-color', outline);
+					await expect(current).toHaveCSS('outline-style', 'solid');
+					if (overlap) {
+						// These absolute siblings share a stacking context; the last one paints on top.
+						await expect(current).toHaveCSS('z-index', 'auto');
+						await expect(ordinary.first()).toHaveCSS('z-index', 'auto');
+						await expect(page.locator('#caller .view-overlays .cdr').last()).toHaveClass(/\bcurrentFindMatch\b/);
+					}
+					await search.press('Enter');
+					await expect(result).toHaveText('2 of 2');
+					await expect.poll(async () => (await current.boundingBox())?.x ?? first.x).toBeGreaterThan(first.x);
+					await expect(current).toHaveCSS('background-color', activeBackground);
+					await search.press('Shift+Enter');
+					await expect(result).toHaveText('1 of 2');
+					await expect.poll(() => current.boundingBox()).toEqual(first);
+				}
+				await search.press('Escape');
+				await expect(current).toHaveCount(0);
+				await expect(ordinary).toHaveCount(overlap ? 2 : 0);
+			} finally { await page.evaluate(() => window.ashStandaloneIntegration.dispose()); }
+		});
+	}
+
+	test('find match highlights retain visible outlines in forced colors', async function () {
+		const { page } = browserTests;
+
+		await page.emulateMedia({ forcedColors: 'active' });
+		await page.goto('/standalone.html');
+		try {
+			await page.evaluate(() => {
+				window.ashStandaloneIntegration.prepareFindHighlights(false);
+				window.ashStandaloneIntegration.invokeLanguageAction('actions.find');
+			});
+			const search = page.locator('#caller .stanza-editor-find-widget').getByRole('textbox', { name: 'Find', exact: true });
+			await search.fill('alpha');
+			for (const className of ['findMatch', 'currentFindMatch']) {
+				const highlight = page.locator(`#caller .view-overlays .cdr.${className}`);
+				await expect(highlight).toHaveCount(1);
+				await expect(highlight).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+				await expect(highlight).toHaveCSS('outline-style', 'solid');
+				await expect(highlight).toHaveCSS('outline-width', '1px');
+				await expect(highlight).not.toHaveCSS('outline-color', 'rgba(0, 0, 0, 0)');
+			}
+		} finally { await page.evaluate(() => window.ashStandaloneIntegration.dispose()); }
+	});
+
 	test('standard contribution commands operate the existing find, fold and goto widgets', async function () {
 		const { page } = browserTests;
 

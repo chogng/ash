@@ -10,7 +10,8 @@ import { type TrackedRange } from '../../../common/model/trackedRange.js';
 /** Owns search highlights and tracked selection scopes for one editor model. */
 export class FindDecorations extends Disposable {
 	public static readonly _FIND_MATCH_DECORATION = { description: 'find-match', className: 'findMatch' };
-	public static readonly _CURRENT_FIND_MATCH_DECORATION = { description: 'current-find-match', className: 'currentFindMatch' };
+	// Paint above ordinary matches retained by independent decoration owners.
+	public static readonly _CURRENT_FIND_MATCH_DECORATION = { description: 'current-find-match', className: 'currentFindMatch', zIndex: 1 };
 
 	private readonly model: TextModel;
 	private readonly matches: TextDecorationCollection<void>;
