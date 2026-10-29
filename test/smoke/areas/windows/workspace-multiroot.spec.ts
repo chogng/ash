@@ -34,7 +34,7 @@ test('local multi-root commands, live folders and retained second-root terminals
 		await page.keyboard.press('ControlOrMeta+End');
 		await page.keyboard.insertText('// kept across workspace creation');
 		await workbench.quickaccess.runCommand('workbench.action.addRootFolder');
-		await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+		await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder', exact: true }).click();
 		await expect.poll(async () => (await workspace(page)).folders.length).toBe(2);
 		await editor.waitForEditorContents(text => text.includes('kept across workspace creation'));
 		await editor.waitForEditorFocus();
@@ -161,7 +161,7 @@ test.describe('Workspace menu entrypoints', () => {
 		const rootRow = (uri: string) => page.locator('.ash-explorer .ash-tree-row').filter({ has: page.locator(`[data-resource=${JSON.stringify(uri)}]`) });
 		try {
 			await runFileMenu('Add Folder to Workspace...');
-			await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+			await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder', exact: true }).click();
 			await expect.poll(async () => (await workspace(page)).folders.length).toBe(2);
 			const roots = (await workspace(page)).folders;
 			const secondRoot = roots[1]!;

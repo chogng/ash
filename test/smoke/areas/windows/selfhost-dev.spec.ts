@@ -146,7 +146,7 @@ test('full checkout self-hosting retains edits across Renderer HMR, Main restart
 				Reflect.apply(saved, this, options === undefined ? [message] : [message, options]);
 			};
 		});
-		const trust = page.getByRole('button', { name: 'Trust Folder & Enable Features', exact: true });
+		const trust = page.getByRole('button', { name: 'Trust Folder', exact: true });
 		await expect.poll(async () => await trust.isVisible() || await page!.locator('.ash-workbench').isVisible(), { timeout: 60_000 }).toBe(true);
 		if (await trust.isVisible()) await trust.click();
 		workbench = new Workbench(page);

@@ -355,7 +355,7 @@ test.describe('SCM commit authorization', () => {
 		const parentPrompt = await workbench.dialogs.expectMessage(application, 'Confirm', async () => {
 			await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
 			if (target.kind === 'electron') {
-				await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+				await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder', exact: true }).click();
 			} else {
 				const picker = page.getByRole('dialog', { name: 'Choose a server folder', exact: true });
 				await picker.getByText('commit-child', { exact: true }).click();
@@ -400,7 +400,7 @@ test.describe('SCM commit authorization', () => {
 		}, cwd);
 		await workbench.quickaccess.runCommand('workbench.action.files.openFolder');
 		const page = workbench.page;
-		await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Open Read Only', exact: true }).click();
+		await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Open Read-Only', exact: true }).click();
 		await workbench.waitForReady();
 		await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('Read-only');
 		const banner = page.locator('[data-part="banner"]');

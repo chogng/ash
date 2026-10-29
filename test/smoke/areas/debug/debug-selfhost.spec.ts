@@ -85,7 +85,7 @@ async function start(workbench: Workbench, name: string): Promise<void> {
 }
 
 async function readyTarget(page: Page): Promise<void> {
-	const trust = page.getByRole('button', { name: 'Trust Folder & Enable Features', exact: true });
+	const trust = page.getByRole('button', { name: 'Trust Folder', exact: true });
 	await expect(page.locator('.ash-workbench').or(trust).first()).toBeVisible({ timeout: 120_000 });
 	if (await trust.isVisible()) await trust.click();
 	await expect(page.locator('.ash-workbench')).toBeVisible({ timeout: 60_000 });

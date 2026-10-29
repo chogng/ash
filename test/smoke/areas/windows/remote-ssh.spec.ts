@@ -170,7 +170,7 @@ test('SSH multi-root menus persist remote identities and retain a terminal in th
 			await fileMenu('Add Folder to Workspace...');
 			const input = page.locator('.ash-quick-pick input');
 			await input.fill(second); await input.press('Enter');
-			await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+			await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder', exact: true }).click();
 			await expect.poll(async () => (await context()).folders.length).toBe(2);
 			expect((await context()).folders.every(folder => folder.uri.startsWith(`ash-remote://ssh+${fixture.host}/`))).toBe(true);
 		});

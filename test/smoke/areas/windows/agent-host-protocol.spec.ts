@@ -215,7 +215,7 @@ test('Desktop MessagePort handshakes isolate equal IDs and closing one window pr
 		await electron.evaluate(({ app }, directory) => { app.emit('second-instance', {} as never, [process.execPath, app.getAppPath(), '--folder', directory], process.cwd(), {}); }, secondWorkspace.directory);
 		secondPage = await opening;
 		// A new folder restores its Workbench only after the real trust decision.
-		await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+		await secondPage.getByRole('dialog', { name: 'Ash' }).getByRole('button', { name: 'Trust Folder', exact: true }).click();
 		const peerWorkbench = new Workbench(secondPage);
 		await peerWorkbench.waitForReady();
 		await observeProtocol(secondPage);

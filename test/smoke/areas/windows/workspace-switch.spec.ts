@@ -45,7 +45,7 @@ test('repeated folder opens wait for the permission choice past 30 seconds', { t
 	}, nextFolder).then(() => undefined, error => String(error));
 	await page.waitForTimeout(31_000);
 	await expect(prompt).toBeVisible();
-	await prompt.getByRole('button', { name: 'Open Read Only' }).click();
+	await prompt.getByRole('button', { name: 'Open Read-Only' }).click();
 	expect(await Promise.all([opening, repeatedOpening])).toEqual([undefined, undefined]);
 	await expect.poll(async () => {
 		const workspace = await page.evaluate(() => {
@@ -69,7 +69,7 @@ test('opening a folder displays its files in Explorer', { tag: ['@electron-app-s
 	}, nextFolder);
 	const prompt = page.getByRole('dialog', { name: 'Ash' });
 	await expect(prompt).toBeVisible();
-	await prompt.getByRole('button', { name: 'Open Read Only' }).click();
+	await prompt.getByRole('button', { name: 'Open Read-Only' }).click();
 	await opening;
 	const file = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'visible.txt' });
 	await expect(file).toHaveCount(1);

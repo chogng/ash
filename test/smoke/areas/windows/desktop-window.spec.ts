@@ -48,7 +48,7 @@ for (const entry of ['welcome', 'explorer', 'recent'] as const) {
 			} else {
 				await page.getByRole('button', { name: 'Open folder', exact: true }).click();
 			}
-			await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+			await page.getByRole('dialog', { name: 'Ash', exact: true }).getByRole('button', { name: 'Trust Folder', exact: true }).click();
 			const showSidebar = page.getByRole('button', { name: 'Show Primary Side Bar', exact: true });
 			if (await showSidebar.isVisible()) await showSidebar.click();
 			const file = page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' });

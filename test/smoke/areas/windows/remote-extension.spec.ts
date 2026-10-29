@@ -270,7 +270,7 @@ test('inbound SSH hosting opens the Browser Workbench from a Chinese Desktop com
 		const ready = desktop.driver.workbench.waitForReady();
 		const trust = firstPage.getByRole('dialog', { name: 'Ash', exact: true });
 		await Promise.race([ready, trust.waitFor({ state: 'visible' })]);
-		if (await trust.isVisible()) { await trust.getByRole('button', { name: '信任文件夹并启用开发功能', exact: true }).click(); }
+		if (await trust.isVisible()) { await trust.getByRole('button', { name: '信任文件夹', exact: true }).click(); }
 		await ready;
 		const workbench = desktop.driver.workbench;
 		const page = workbench.page;

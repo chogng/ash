@@ -262,7 +262,7 @@ test('debugging routes colliding adapter IDs to their own workspace folders', { 
 	for (const { directory } of folders) {
 		const prompt = page.getByRole('dialog', { name: 'Ash', exact: true });
 		await expect(prompt.locator('.ash-dialog-detail')).toContainText(directory);
-		await prompt.getByRole('button', { name: 'Trust Folder & Enable Features', exact: true }).click();
+		await prompt.getByRole('button', { name: 'Trust Folder', exact: true }).click();
 	}
 	const workbench = new Workbench(page);
 	await workbench.waitForReady();
