@@ -278,6 +278,7 @@ pub(crate) fn clean_profile(
             "configuration.json",
             "keybindings.json",
             "keyboard-layout.json",
+            "History",
             "state.sqlite3",
             "state.sqlite3-wal",
             "state.sqlite3-shm",

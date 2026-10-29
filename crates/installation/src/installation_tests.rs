@@ -23,6 +23,8 @@ fn populate(profile: &Path) {
     fs::create_dir_all(profile.join("cache")).unwrap();
     fs::write(profile.join("cache/download"), "cached bytes").unwrap();
     fs::write(profile.join("settings.json"), "settings").unwrap();
+    fs::create_dir_all(profile.join("History")).unwrap();
+    fs::write(profile.join("History/snapshot"), "saved file").unwrap();
     fs::create_dir_all(profile.join("state/cloud-codebase")).unwrap();
     fs::write(profile.join("state/cloud-codebase/record"), "cloud state").unwrap();
     fs::create_dir_all(profile.join("ash-code/themes")).unwrap();
@@ -63,6 +65,7 @@ fn both_modes_preserve_worktrees_and_unknown_files() {
             mode == RemovalMode::KeepData
         );
         for (path, contents) in [
+            ("History/snapshot", "saved file"),
             ("state/cloud-codebase/record", "cloud state"),
             ("ash-code/themes/custom.json", "custom theme"),
         ] {
@@ -159,6 +162,10 @@ fn uninstalling_either_product_preserves_a_shared_profile() {
         assert!(profile.join("settings.json").exists());
         assert!(profile.join("cache/download").exists());
         assert_eq!(
+            fs::read_to_string(profile.join("History/snapshot")).unwrap(),
+            "saved file"
+        );
+        assert_eq!(
             fs::read_to_string(profile.join("state/cloud-codebase/record")).unwrap(),
             "cloud state"
         );
@@ -177,6 +184,7 @@ fn uninstalling_either_product_preserves_a_shared_profile() {
             .remove(second, root, RemovalMode::Purge, |_| Ok(()))
             .unwrap();
         assert!(!profile.join("settings.json").exists());
+        assert!(!profile.join("History").exists());
         assert!(
             profile
                 .join("worktrees/my-project/uncommitted.txt")

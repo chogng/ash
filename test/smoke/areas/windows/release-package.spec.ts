@@ -30,6 +30,7 @@ test('release installation runs its bundled backend, upgrades with retained data
 	const settingsPath = join(userData, 'profile', 'settings.json');
 	const keybindingsPath = join(userData, 'profile', 'keybindings.json');
 	const retainedData = [
+		[join(userData, 'profile', 'History', 'acceptance.txt'), 'saved file history'],
 		[join(userData, 'profile', 'state', 'cloud-codebase', 'acceptance.txt'), 'cloud state'],
 		[join(userData, 'profile', 'ash-code', 'themes', 'acceptance.txt'), 'terminal appearance'],
 	] as const;
