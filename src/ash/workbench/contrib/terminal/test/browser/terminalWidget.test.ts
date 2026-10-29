@@ -558,10 +558,31 @@ suite('terminal browser component', () => {
 		expect(observed.replaceAll('\x1b[0m', '')).toMatch(/^line-0\r\n.*line-4099\r\n$/su);
 		await page.evaluate(() => window.ashTerminalStreamIntegration.start());
 		const output = await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot());
-		expect(output).toMatch(/\[terminal output truncated\].*line-4099/su);
+		expect(output).toMatch(/line-4099/su);
+		expect(output).not.toContain('[terminal output truncated]');
 		expect(output).not.toMatch(/^line-0$/mu);
 		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 	});
+
+	for (const locale of ['en', 'zh-CN']) {
+		test(`terminal only appends an exit message for a nonzero exit code in ${locale}`, async function () {
+			const { page } = browserTests;
+			await page.goto(`/terminal.html?stream&reuseCommands&locale=${locale}`);
+			await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().state)).toBe('exited');
+			expect(await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe('中文🙂');
+			await page.evaluate(() => window.ashTerminalStreamIntegration.reuse());
+			const message = locale === 'zh-CN' ? '终端进程已终止，退出代码为 11。' : 'The terminal process terminated with exit code: 11.';
+			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain(message);
+			await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+			await page.goto(`/terminal.html?pane&profiles&browser&exited&locale=${locale}`);
+			await page.waitForFunction(() => Boolean(window.ashTerminalPaneIntegration));
+			await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
+			await expect(page.locator('.ash-terminal-instance')).toHaveAttribute('data-state', 'exited');
+			expect(await page.evaluate(() => window.ashTerminalPaneIntegration.snapshot())).toBeUndefined();
+			await page.evaluate(() => window.ashTerminalPaneIntegration.dispose());
+		});
+	}
 
 	test('closing a Shell while xterm loads stops reading and releases the process', async function () {
 		const { page } = browserTests;
@@ -1201,7 +1222,7 @@ suite('terminal browser component', () => {
 		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().cwd)).toBe('/workspace/changed; directory');
 		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().shellIntegration)).toEqual({ commandDetection: true, cwdDetection: true, hasRichCommandDetection: true, commandStorageDisabled: false, commands: [{ commandId: 'command', status: 'succeeded', exitCode: 0, cwd: '/workspace', command: 'echo 中文; printf \"quoted\"', isTrusted: true }] });
 		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.status().events)).toEqual(['succeeded', 'exit']);
-		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe('中文🙂\n\n[process exited with code 0]');
+		expect(await page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe('中文🙂');
 		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 	});
 

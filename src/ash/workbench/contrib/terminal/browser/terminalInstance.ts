@@ -308,9 +308,9 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		if (this.customProcess) {
 			const process = this.customProcess;
-			void process.start().catch(() => {
+			void process.start().catch(error => {
 				if (this.customProcess === process && !this.closed) {
-					this.setState('error');
+					this.handleProcessError(error);
 				}
 			});
 			return;
@@ -418,7 +418,6 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}));
 		const recorder = this.screenRecorder!;
 		const replay = recorder.generateReplayEventSync();
-		const truncated = recorder.isTruncated;
 		this.screenRecorder = undefined;
 		for (const { id, ctor } of TerminalExtensionsRegistry.getTerminalContributions()) {
 			this.contributions.set(id, screenServices.createInstance(ctor, { instance: this }));
@@ -433,7 +432,6 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 				screen.raw.write('\r\n'.repeat(screen.raw.rows));
 				this.preserveRevivedHistory(screen);
 			}
-			if (truncated) screen.raw.write(`\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`);
 			for (const entry of restored ? [] : replay.events) {
 				if (entry.cols > 0 && entry.rows > 0) screen.raw.resize(entry.cols, entry.rows);
 				await new Promise<void>(resolve => screen.write(entry.data, resolve));
@@ -481,7 +479,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		});
 		// Loading can start in a background instance without a View awaiting it.
 		void this.screenInitialization.catch(error => {
-			if (!isCancellationError(error) && !this.closed) { this.setState('error'); }
+			if (!isCancellationError(error) && !this.closed) { this.handleProcessError(error); }
 		});
 	}
 
@@ -664,10 +662,10 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		this._exitCode = code;
 		this.setState('exited');
-		const message = code === undefined
-			? localize('terminal.processExitedUnknown', '[process exited with unknown code]')
-			: localize('terminal.processExited', '[process exited with code {0}]', code);
-		this.writeScreenData(`\r\n${message}\r\n`);
+		if (code !== undefined && code !== 0) {
+			const message = localize('terminated.exitCodeOnly', 'The terminal process terminated with exit code: {0}.', code);
+			this.writeScreenData(`\r\n${message}\r\n`);
+		}
 		try {
 			const waitMessage = typeof this.waitOnExit === 'function' && code !== undefined ? this.waitOnExit(code) : typeof this.waitOnExit === 'string' ? this.waitOnExit : undefined;
 			if (waitMessage) this.writeScreenData(`${waitMessage}\r\n`);
@@ -776,7 +774,6 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			return;
 		}
 		this.setState("disconnected");
-		this.handleProcessData({ data: `\r\n${localize('terminal.connectionLost', '[terminal connection lost; process was not preserved]')}\r\n`, trackCommit: false });
 	}
 
 	restoreConnection(): void {
@@ -806,7 +803,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		if (replacement) {
 			// Old reads must stop before release yields; the retained screen belongs to the new process next.
 			try { await this.closeProcess(); }
-			catch (error) { this.setState('error'); throw error; }
+			catch (error) { this.handleProcessError(error); throw error; }
 		} else {
 			await this.closeProcess().catch(() => { });
 		}
@@ -885,12 +882,11 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			this.shellProcessManager = child;
 			this.createShellProcessManager();
 			this._exitCode = undefined;
-			if (!replacement) this.handleProcessData({ data: `\r\n${localize('terminal.relaunched', '[terminal relaunched]')}\r\n`, trackCommit: false });
 			this.writeInitialText();
 			this.setState("running");
 			if (!replacement?.deferStart) this.start();
 		} catch (error) {
-			this.setState("error");
+			this.handleProcessError(error);
 			throw error;
 		}
 	}
@@ -913,9 +909,6 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		lifetime.add(manager.onProcessData(event => this.handleProcessData(event)));
 		lifetime.add(manager.onDidChangeCommandStatus(event => this._onDidChangeCommandStatus.fire(event)));
 		lifetime.add(manager.onDidChangeMetadata(() => this.refreshCapabilities()));
-		lifetime.add(manager.onOutputGap(() => {
-			this.handleProcessData({ data: `\r\n${localize('terminal.outputTruncated', '[terminal output truncated]')}\r\n`, trackCommit: false });
-		}));
 		lifetime.add(manager.onPtyReconnect(() => {
 			this.setState("running");
 		}));
@@ -924,6 +917,7 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 	}
 
 	private handleProcessError(error: unknown): void {
+		if (this.closed || this.isDisposed) return;
 		this.statusList.add({
 			id: 'process-error', severity: Severity.Error,
 			tooltip: localize('terminal.status.processError', 'Terminal process failed: {0}', error instanceof Error ? error.message : String(error)),
@@ -995,9 +989,6 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 			await this.shellProcessManager!.start(initialState === "reconnecting");
 		} catch (error) {
 			if (!isCancellationError(error) && !this.closed && generation === this.pollGeneration) {
-				if (this._state === "reconnecting") {
-					this.handleProcessData({ data: `\r\n${localize('terminal.recoveryFailed', '[terminal recovery failed; relaunch required]')}\r\n`, trackCommit: false });
-				}
 				this.handleProcessError(error);
 			}
 		}
@@ -1018,7 +1009,6 @@ export class TerminalInstance extends Disposable implements ITerminalInstance {
 		}
 		if (state === 'error') {
 			this.shellProcessManager?.stop();
-			this.writeScreenData(`\r\n${localize('terminal.operationFailed', '[terminal operation failed]')}\r\n`);
 		}
 		this._onDidChangeState.fire(state);
 	}

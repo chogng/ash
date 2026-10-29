@@ -152,7 +152,9 @@ function createTerminalFixtureLayout(root: HTMLElement, lifetime: DisposableStor
 
 function setupTerminalFixtureServices(services: import('../../../src/ash/platform/instantiation/common/instantiationService.js').InstantiationService, lifetime: DisposableStore, fallbackProcess = true, provideLayout = true): void {
 	if (!services.has(IWorkspaceTrustManagementService)) services.registerSingleton(IWorkspaceTrustManagementService, () => services.createInstance(TestWorkspaceTrustManagementService));
-	if (!services.has(IWorkspaceTrustRequestService)) services.registerSingleton(IWorkspaceTrustRequestService, () => services.createInstance(WorkspaceTrustRequestService));
+	// The editor parent imports default registrations without a trust manager.
+	// Resolve requests here, alongside this terminal window's trust manager.
+	services.registerSingleton(IWorkspaceTrustRequestService, () => services.createInstance(WorkspaceTrustRequestService));
 	if (!services.has(IHostService)) services.registerInstance(IHostService, new TestHostService());
 	// Filename discovery is an explicit boundary of the terminal-only fixture.
 	if (!services.has(ISearchService)) services.registerInstance(ISearchService, {

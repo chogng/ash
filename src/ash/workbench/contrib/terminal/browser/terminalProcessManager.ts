@@ -24,7 +24,6 @@ export class TerminalProcessManager extends Disposable {
 	private readonly processDataEmitter = this._register(new Emitter<IProcessDataEvent>());
 	private readonly processExitEmitter = this._register(new Emitter<number | undefined>());
 	private readonly ptyReconnectEmitter = this._register(new Emitter<void>());
-	private readonly outputGapEmitter = this._register(new Emitter<void>());
 	private readonly commandSource = this._register(new AhpTerminalCommandSource());
 	private readonly processErrorEmitter = this._register(new Emitter<unknown>());
 	// Constructed only after the backend has acknowledged process readiness.
@@ -55,7 +54,6 @@ export class TerminalProcessManager extends Disposable {
 	public readonly onDidChangeMetadata = this.commandSource.onDidChangeMetadata;
 	public readonly onProcessExit = this.processExitEmitter.event;
 	public readonly onPtyReconnect = this.ptyReconnectEmitter.event;
-	public readonly onOutputGap = this.outputGapEmitter.event;
 
 	constructor(private readonly identity: ITerminalProcessCloseOptions, @ITerminalProcessService private readonly processService: ITerminalProcessService) {
 		super();
@@ -66,9 +64,7 @@ export class TerminalProcessManager extends Disposable {
 			// input now so the instance can expose its existing relaunch action.
 			this.processInvalidated = true;
 			this.stop();
-			this.processErrorEmitter.fire(new Error(event.reason === 'replacement'
-				? localize('terminal.connectionLost', '[terminal connection lost; process was not preserved]')
-				: localize('terminal.recoveryFailed', '[terminal recovery failed; relaunch required]')));
+			this.processErrorEmitter.fire(new Error(localize('disconnectStatus', 'Lost connection to process')));
 		}) ?? Disposable.None);
 	}
 
@@ -110,7 +106,6 @@ export class TerminalProcessManager extends Disposable {
 					const tail = this.decoder.decode();
 					this.pendingUtf8 = [];
 					if (tail) await this.emitProcessData(tail, token);
-					this.outputGapEmitter.fire();
 					await this.emitProcessData('', token, { type: 'outputGap' });
 				}
 				this.commandSource.receive(result);

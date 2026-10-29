@@ -390,7 +390,7 @@ for (const locale of ['en', 'zh-CN']) {
 		await expect(page.locator('.xterm')).toHaveCount(0);
 		await page.locator('#outside').focus();
 		await page.evaluate(() => window.ashTerminalStreamIntegration.start());
-		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe(`中文🙂\n\n${locale === 'zh-CN' ? '[进程已退出，代码为 0]' : '[process exited with code 0]'}`);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toBe('中文🙂');
 		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
 		await expect(page.locator('.ash-terminal-instance')).toHaveCount(0);
 		expect(errors).toEqual([]);

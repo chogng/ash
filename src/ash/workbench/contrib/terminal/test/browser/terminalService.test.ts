@@ -555,6 +555,9 @@ test("TerminalService resumes reconnectable terminals from their existing output
 	processService.emitConnectionState("ready");
 	await waitFor(() => processService.readCursors.length >= 2);
 	assert.equal(instance.state, "reconnecting");
+	assert.equal(instance.statusList?.primary?.id, TerminalStatus.Disconnected);
+	assert.equal(instance.statusList?.primary?.tooltip, 'Lost connection to process');
+	assert.equal(instance.statusList?.primary?.icon?.id, 'debug-disconnect');
 	assert.deepEqual(output, outputBeforeReconnect);
 
 	processService.emitConnectionState("crashed");
@@ -572,6 +575,7 @@ test("TerminalService resumes reconnectable terminals from their existing output
 	assert.deepEqual(processService.readCursors.slice(0, 3), [0, 4, 4]);
 	assert.deepEqual(processService.commandReadCursors.slice(0, 3), [0, 2, 2]);
 	assert.deepEqual(output, outputBeforeReconnect);
+	assert.equal(instance.statusList?.statuses.some(status => status.id === TerminalStatus.Disconnected), false);
 	await instance.sendText('after reconnect', false);
 	assert.deepEqual(processService.writeCalls.map(call => call.data), ['after reconnect']);
 });
@@ -596,7 +600,8 @@ test("TerminalService exposes failed reconnectable recovery as a relaunchable er
 	processService.emitConnectionState("ready");
 	await waitFor(() => instance.state === "error");
 
-	assert.ok(output.some(value => value.includes("terminal recovery failed; relaunch required")));
+	assert.deepEqual(output, []);
+	assert.equal(instance.statusList?.primary?.tooltip, 'Terminal process failed: old broker lease was abandoned');
 	const failedOutput = [...output];
 	const failedReads = processService.readCursors.length;
 	processService.emitConnectionState("stopping");
@@ -1331,8 +1336,10 @@ suite('TerminalService lifecycle', () => {
 				writes: [],
 				resizes: [],
 			});
-			if (persistence === 'reconnectable') assert.deepEqual(outputs, []);
-			else assert.match(outputs.join(''), /terminal connection lost/);
+			assert.deepEqual(outputs, []);
+			assert.equal(instance.statusList?.primary?.id, TerminalStatus.Disconnected);
+			assert.equal(instance.statusList?.primary?.tooltip, 'Lost connection to process');
+			assert.equal(instance.statusList?.primary?.icon?.id, 'debug-disconnect');
 			processService.emitConnectionState('ready');
 			if (persistence === 'reconnectable') {
 				await waitFor(() => instance.state === 'running');
@@ -1827,6 +1834,7 @@ suite('TerminalService lifecycle', () => {
 		creation.reject(failure);
 		await failed;
 		assert.equal(instance.state, 'error');
+		assert.equal(instance.statusList?.primary?.tooltip, 'Terminal process failed: PTY creation failed');
 		await service.relaunchTerminal(instance, { rows: 40, cols: 120 });
 		assert.equal(instance.state, 'running');
 		await instance.close();
@@ -1850,6 +1858,7 @@ suite('TerminalService lifecycle', () => {
 		creation.resolve();
 		await cancelled;
 		await instance.close();
+		assert.deepEqual(instance.statusList?.statuses, []);
 		assert.deepEqual({ output, instances: service.instances, closes: processService.closeCalls }, {
 			output: [],
 			instances: [],
@@ -1970,8 +1979,14 @@ suite('TerminalService output parsing', () => {
 		using manager = services.createInstance(TerminalProcessManager, { terminalId: 'terminal-1' });
 		const observed: string[] = [];
 		const boundaries: unknown[] = [];
-		using data = manager.onProcessData(event => { if (event.shellIntegration) boundaries.push(event.shellIntegration); else observed.push(event.data); });
-		using gap = manager.onOutputGap(() => observed.push('gap'));
+		using data = manager.onProcessData(event => {
+			if (event.shellIntegration) {
+				boundaries.push(event.shellIntegration);
+				if (event.shellIntegration.type === 'outputGap') observed.push('gap');
+			} else {
+				observed.push(event.data);
+			}
+		});
 		await manager.start();
 		assert.deepEqual(observed, ['', '�', 'gap', 'tail']);
 		assert.deepEqual(boundaries, [{ type: 'outputGap' }]);
@@ -2511,6 +2526,8 @@ test('Terminal process failure retains its display reason and relaunch clears th
 	using services = terminalServices(processes, workspace);
 	const terminals = services.get(ITerminalService);
 	const instance = await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	const output: string[] = [];
+	using listener = instance.onDidWriteData(event => output.push(event.data));
 	const acknowledgement = deferred<void>();
 	processes.writeGates.push(acknowledgement.promise);
 	const failure = new Error('execution host refused input');
@@ -2520,9 +2537,11 @@ test('Terminal process failure retains its display reason and relaunch clears th
 	await sending;
 	assert.equal(instance.state, 'error');
 	assert.equal(instance.statusList?.primary?.tooltip, 'Terminal process failed: execution host refused input');
+	assert.deepEqual(output, []);
 	await terminals.relaunchTerminal(instance, { rows: 24, cols: 80 });
 	assert.equal(instance.state, 'running');
 	assert.deepEqual(instance.statusList?.statuses.map(status => status.id), [TerminalStatus.ShellIntegrationInfo]);
+	assert.deepEqual(output, []);
 });
 
 

@@ -326,7 +326,6 @@ class TerminalViewItem extends Disposable {
 		super();
 		this._register(toDisposable(() => instance.detachFromElement()));
 		this._register(instance.onDidChangeState(onDidChangeState));
-		if (instance.statusList) this._register(instance.statusList.onDidChangePrimaryStatus(onDidChangeState));
 	}
 }
 

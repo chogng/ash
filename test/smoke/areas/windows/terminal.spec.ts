@@ -582,7 +582,7 @@ test('terminal relaunches an exited shell and accepts new commands', { tag: ['@b
 	await expect(terminal.activeInstance).toHaveAttribute('data-state', 'running');
 	await terminal.runCommand('exit 17');
 	await expect(terminal.activeInstance).toHaveAttribute('data-state', 'exited');
-	await expect(terminal.activeInstance.locator('.xterm-rows')).toContainText('[process exited with code 17]');
+	await expect(terminal.activeInstance.locator('.xterm-rows')).toContainText('The terminal process terminated with exit code: 17.');
 	await workbench.menus.select(application, () => workbench.page.locator('.ash-terminal-title-toolbar').getByRole('button', { name: 'More Actions', exact: true }).click(), ['Relaunch Terminal']);
 	await expect(terminal.instances).toHaveCount(1);
 	await expect(terminal.activeInstance).toHaveAttribute('data-state', 'running');
@@ -856,7 +856,15 @@ for (const locale of ['en', 'zh-CN'] as const) test.describe(`terminal close pro
 		const old = JSON.parse(await readFile(join(testWorkspace.directory, 'before-replacement.json'), 'utf8')) as { pid: number; count: number; };
 		const window = await application.browserWindow(page);
 		await window.evaluate(window => window.webContents.send('ash:terminal:prepareReplacement'));
-		await expect(pane.locator('.xterm-rows')).toContainText(zh ? '[终端操作失败]' : '[terminal operation failed]');
+		await expect(pane.locator('.ash-terminal-instance')).toHaveAttribute('data-state', 'error');
+		const title = page.locator('.ash-terminal-active-action button');
+		await title.focus();
+		await title.press('Alt+ArrowDown');
+		const hover = page.locator('.ash-terminal-instance-hover');
+		await expect(hover.locator('[data-severity="error"]')).toContainText(zh ? '与进程的连接已断开' : 'Lost connection to process');
+		await title.press('Escape');
+		await expect(hover).toHaveCount(0);
+		await expect(pane.locator('.xterm-rows')).not.toContainText(zh ? '[终端操作失败]' : '[terminal operation failed]');
 		await expect(pane.locator('.xterm-rows')).toContainText('BEFORE_REPLACEMENT:');
 		await expect(page.locator('.ash-terminal-active-action')).toHaveAttribute('data-state', 'error');
 		await expect(page.locator('.ash-terminal-title-toolbar').getByRole('button', { name: zh ? '拆分终端' : 'Split Terminal', exact: true })).toBeDisabled();
