@@ -761,7 +761,12 @@ pub(super) fn schedule_command(
             _ => false,
         };
         if !duplicate {
-            queued.push_back(command);
+            if matches!(command.command, AppCommand::Suspend) {
+                // Do not start queued capture on the way to suspending the UI.
+                queued.push_front(command);
+            } else {
+                queued.push_back(command);
+            }
         }
     }
     let runnable = queued

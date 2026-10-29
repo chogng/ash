@@ -1,0 +1,28 @@
+---
+source: crates/tui/src/app/state_tests.rs
+expression: "render_dictation_frame(&app).lines().map(str::trim_end).collect::<Vec<_>>().join(\"\\n\")"
+---
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                  听 写 已 停 止 。
+────────────────────────────────────────────────────────────────────────────────
+> keep this draft
+────────────────────────────────────────────────────────────────────────────────
+
+  ⏸ 手 动

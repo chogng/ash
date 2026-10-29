@@ -256,6 +256,60 @@ fn actual_tui_dictation_download_cancels_recovers_and_restarts() {
 
 #[cfg(unix)]
 #[test]
+fn actual_tui_suspend_cancels_dictation_before_releasing_the_terminal() {
+    use crate::scenario_http::DownloadProxy;
+
+    for mode in ["fullscreen", "inline"] {
+        let proxy = DownloadProxy::start();
+        let fixture = Fixture::new().with_model_download_proxy(proxy.address());
+        let server = ScenarioServer::start([]);
+        fixture.write_config(&server.base_url());
+        fixture.append_config(&format!(
+            "\n[tui]\nscreenMode = \"{mode}\"\ndictationShortcutEnabled = true\n"
+        ));
+        let mut process = TuiProcess::start(&fixture, &[], LARGE_SIZE);
+        process.wait_for_stable_screen(if mode == "fullscreen" {
+            "? for shortcuts"
+        } else {
+            "Manual"
+        });
+        process.submit("/voice");
+        let connection = proxy.connection();
+        process.type_text("KEEP-SUSPENDED-DRAFT");
+        process.wait_for_stable_screen("KEEP-SUSPENDED-DRAFT");
+        let clear = "\x1b]7501;state=clear\x1b\\";
+        let clears = process.raw_text().matches(clear).count();
+        process.send(&[0x1a]);
+        let deadline = Instant::now() + Duration::from_secs(5);
+        while process.raw_text().matches(clear).count() <= clears {
+            assert!(Instant::now() < deadline, "dictation prevented suspension");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        // Capture must be gone while the TUI is suspended, before SIGCONT.
+        DownloadProxy::assert_disconnected(connection);
+        assert_dictation_download_released(&fixture);
+        proxy.assert_no_pending_connections();
+        process.continue_process();
+        process.wait_for_stable_screen("Dictation stopped.");
+        assert!(process.screen().contains("KEEP-SUSPENDED-DRAFT"));
+        assert!(!process.screen().contains("ctrl+c to stop dictation"));
+        assert_eq!(server.request_count(), 0);
+        proxy.assert_no_pending_connections();
+        process.assert_snapshot(&format!("real/07-lifecycle/dictation-suspended-{mode}"));
+
+        // A fresh explicit request can record again; resume itself must not start it.
+        process.send(b"\x07");
+        let connection = proxy.connection();
+        process.send(b"\x03");
+        process.wait_for_stable_screen("Dictation stopped.");
+        DownloadProxy::assert_disconnected(connection);
+        assert_dictation_download_released(&fixture);
+        process.quit();
+    }
+}
+
+#[cfg(unix)]
+#[test]
 fn actual_tui_dictation_download_exit_releases_the_connection_owner() {
     use crate::scenario_http::DownloadProxy;
 

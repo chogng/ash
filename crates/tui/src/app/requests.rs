@@ -165,7 +165,10 @@ impl RequestTasks {
 pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
     match command {
         AppCommand::SaveSessionGrouping(_) => Some(RequestKey::SessionGrouping),
-        AppCommand::DictationStart { .. } | AppCommand::DictationStop { .. } => {
+        AppCommand::DictationStart { .. }
+        | AppCommand::DictationStop { .. }
+        | AppCommand::Suspend => {
+            // Suspension must not overtake a start or a stop that still owns capture.
             Some(RequestKey::Dictation)
         }
         AppCommand::SetPunctuationSettings(_) | AppCommand::SetDictationShortcutSettings(_) => {
@@ -184,7 +187,6 @@ pub(super) fn request_key(command: &AppCommand) -> Option<RequestKey> {
             HostCommand::ExportTranscript { .. } | HostCommand::OpenTextFile { .. },
         ) => Some(RequestKey::FileExport),
         AppCommand::Quit
-        | AppCommand::Suspend
         | AppCommand::OpenWorkspace { .. }
         | AppCommand::Thread(ThreadCommand::CycleNextApprovalMode) => None,
         AppCommand::Config(

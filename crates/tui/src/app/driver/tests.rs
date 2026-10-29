@@ -69,6 +69,104 @@ use std::sync::Arc;
 
 #[test]
 #[cfg(feature = "in-process-tests")]
+fn suspend_discards_queued_dictation_and_requires_cancellation_acknowledgement() {
+    let _guard = crate::test_support::in_process_test_guard();
+    let root = tempfile::tempdir().unwrap();
+    let session = AppServerSession::start_embedded(crate::test_support::in_process_options(
+        root.path(),
+        ClientInfo {
+            name: "ash-tui-suspend-test".into(),
+            version: "1".into(),
+        },
+    ))
+    .unwrap();
+    let mut client = session.client();
+    let model_picker = crate::models::ModelPickerData::new(
+        client.list_models().unwrap(),
+        client.read_config().unwrap(),
+    );
+    let runtime = state::StateRuntime::open(root.path()).unwrap();
+    let local_settings = Arc::new(
+        crate::config::LocalTuiSettings::open(root.path(), runtime.database_path()).unwrap(),
+    );
+    let mut driver = AppDriver::new(
+        App::new(),
+        client,
+        None,
+        AppDriverResources {
+            file_search: None,
+            host_dir_root: root.path().to_path_buf(),
+            theme_resource: crate::theme::ThemeResource::in_product_root(
+                root.path().to_path_buf(),
+                None,
+            ),
+            server_slash_commands: Vec::new(),
+            plugins_enabled: false,
+            local_settings,
+            model_picker,
+        },
+    )
+    .unwrap();
+    driver.queued_commands.clear();
+    driver.app_mut().insert_text("/voice");
+    let start = driver
+        .app_mut()
+        .handle_key(crate::keymap::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ))
+        .unwrap();
+    driver.queued_commands.push_back(scheduled(start));
+    let command = driver
+        .next_command(Some(AppCommand::Suspend), false)
+        .unwrap();
+    assert!(matches!(
+        driver.execute(command),
+        super::CommandEffect::Suspend
+    ));
+    assert!(driver.queued_commands.is_empty());
+    assert!(driver.app_mut().prepare_suspend().is_none());
+    assert!(driver.next_command(None, false).is_none());
+
+    // A rejected cancellation must keep terminal ownership and the recording state.
+    // No real microphone is acquired: only the presentation believes start succeeded.
+    driver.app_mut().insert_text("/voice");
+    let Some(AppCommand::DictationStart { resource_id }) =
+        driver.app_mut().handle_key(crate::keymap::KeyEvent::new(
+            crossterm::event::KeyCode::Enter,
+            crossterm::event::KeyModifiers::NONE,
+        ))
+    else {
+        panic!("expected dictation start");
+    };
+    driver.app_mut().update(AppEvent::DictationStarted {
+        resource_id: resource_id.clone(),
+        error: None,
+    });
+    let stop = driver
+        .app_mut()
+        .handle_key(crate::keymap::KeyEvent::new(
+            crossterm::event::KeyCode::Char('c'),
+            crossterm::event::KeyModifiers::CONTROL,
+        ))
+        .unwrap();
+    driver.queued_commands.push_back(scheduled(stop));
+    assert!(matches!(
+        driver.execute(scheduled(AppCommand::Suspend)),
+        super::CommandEffect::None
+    ));
+    assert_eq!(
+        driver.app_mut().prepare_suspend(),
+        Some(resource_id.clone())
+    );
+    assert_eq!(
+        driver.next_command(None, false).unwrap().command,
+        AppCommand::DictationStop { resource_id }
+    );
+}
+
+#[test]
+#[cfg(feature = "in-process-tests")]
 fn repeated_model_command_opens_the_fixed_catalog_without_loading() {
     let _guard = crate::test_support::in_process_test_guard();
     let root = tempfile::tempdir().unwrap();
@@ -350,6 +448,54 @@ fn quit_bypasses_a_pending_request() {
         Some(AppCommand::Quit)
     ));
     assert!(queued.is_empty());
+}
+
+#[test]
+fn suspend_waits_for_dictation_requests_and_precedes_queued_capture() {
+    let mut app = App::new();
+    let mut requests = RequestTasks::default();
+    let (release, wait) = std::sync::mpsc::sync_channel(0);
+    requests.spawn(
+        Some(RequestKey::Dictation),
+        "ash-tui-test-dictation-suspend",
+        move || {
+            wait.recv().unwrap();
+            Completion::Presentation(Err("finished".into()))
+        },
+        &mut app,
+        origin(),
+    );
+    let mut queued = VecDeque::from([scheduled(AppCommand::DictationStop {
+        resource_id: "recording".into(),
+    })]);
+    assert_eq!(
+        schedule_command(Some(AppCommand::Suspend), &requests, &mut queued),
+        None
+    );
+    assert!(matches!(
+        queued.front().unwrap().command,
+        AppCommand::Suspend
+    ));
+    release.send(()).unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !requests.is_idle(Some(RequestKey::Dictation)) {
+        assert!(std::time::Instant::now() < deadline);
+        requests.poll();
+        std::thread::yield_now();
+    }
+    assert_eq!(
+        schedule_command(None, &requests, &mut queued),
+        Some(AppCommand::Suspend)
+    );
+
+    queued.clear();
+    queued.push_back(scheduled(AppCommand::DictationStart {
+        resource_id: "not-started".into(),
+    }));
+    assert_eq!(
+        schedule_command(Some(AppCommand::Suspend), &requests, &mut queued),
+        Some(AppCommand::Suspend)
+    );
 }
 
 #[test]
