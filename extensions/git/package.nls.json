@@ -339,7 +339,7 @@
   "git.status.syncTooltip": "Synchronize Changes with {0}: {1}",
   "git.status.syncOne": "{0} incoming and {1} outgoing change",
   "git.status.syncMany": "{0} incoming and {1} outgoing changes",
-  "git.syncButton": "Sync ↓{0} ↑{1}",
+  "git.syncButton": "Sync Changes ↓{0} ↑{1}",
   "git.changedFile": "{0} changed file",
   "git.changedFiles": "{0} changed files",
   "git.autofetch.title": "Auto Fetch",
