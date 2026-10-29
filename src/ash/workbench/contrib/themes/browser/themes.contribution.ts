@@ -67,7 +67,7 @@ for (const [index, themeAction] of themeActions.entries()) {
 
 				picker.hide();
 				const update = themeAction.setting === WorkbenchConfiguration.colorTheme
-					? accessor.get(IWorkbenchThemeService).setColorTheme(item.value)
+					? accessor.get(IWorkbenchThemeService).setColorTheme(item.value, 'themePicker')
 					: configuration.updateValue(themeAction.setting, item.value);
 				void update.catch(onUnexpectedError);
 

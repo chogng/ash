@@ -1,9 +1,10 @@
 import { IconsStyleSheet } from '../../../../platform/theme/browser/iconsStyleSheet.js';
 import { IHostColorSchemeService } from '../common/hostColorSchemeService.js';
 import { WorkbenchFileIconThemesRegistry, WorkbenchProductIconThemesRegistry } from '../common/themeExtensionPoints.js';
-import type { IWorkbenchFileIconTheme, IWorkbenchThemeService } from '../common/workbenchThemeService.js';
+import type { ColorThemeChangeSource, IWorkbenchFileIconTheme, IWorkbenchThemeService } from '../common/workbenchThemeService.js';
 import { Emitter } from '../../../../base/common/event.js';
 import { RunOnceScheduler } from '../../../../base/common/async.js';
+import { equals } from '../../../../base/common/objects.js';
 import { setIconResolver } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Disposable, type IDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -12,6 +13,7 @@ import { ILanguageService } from '../../../../editor/common/languages/language.j
 import { EditorSemanticHighlightingConfiguration } from '../../../../editor/common/config/editorConfigurationSchema.js';
 import { getIconClasses } from '../../../../editor/common/services/getIconClasses.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
+import { ITelemetryService, TelemetryLevel } from '../../../../platform/telemetry/common/telemetry.js';
 import { FileKind, FileNotFoundError, FileRevisionConflictError, IFileService, type IFileContent } from '../../../../platform/files/common/files.js';
 import { type IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { getTokenClassificationRegistry } from '../../../../platform/theme/common/tokenClassificationRegistry.js';
@@ -31,12 +33,32 @@ import { loadUserColorTheme, parseUserColorTheme, userThemeId } from '../common/
 import { migrateUserTheme } from '../common/themeMigration.js';
 import { registerColorThemeSchemas } from '../common/colorThemeSchema.js';
 
+type ColorThemeChangedEvent = {
+	source: ColorThemeChangeSource | 'settings' | 'system' | 'themeRegistry';
+	change: 'selection' | 'content';
+	colorScheme: ColorScheme;
+};
+
+type ColorThemeChangedClassification = {
+	owner: 'chogng';
+	comment: 'Changes of the committed color theme; excludes previews and all theme identifiers or content.';
+	source: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'Product entry point, settings, system appearance or theme registry that changed the committed theme, to distinguish how themes are applied.'; };
+	change: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'Whether the selected theme changed or its resolved appearance changed, to distinguish selection from customization.'; };
+	colorScheme: { classification: 'SystemMetaData'; purpose: 'FeatureInsight'; comment: 'Light, dark or either high contrast scheme after the change, to measure appearance usage.'; };
+};
+
+type ReportedColorTheme = Pick<IColorTheme, 'id' | 'colorScheme' | 'colors' | 'semanticHighlighting' | 'semanticTokenRules'>;
+
 /** Owns active theme selection and its window-scoped visual resources. */
 export class WorkbenchThemeService extends Disposable implements IWorkbenchThemeService, IResourceIconRenderer {
 	private readonly colorThemeChange = this._register(new Emitter<IColorTheme>());
 	private colorTheme: IColorTheme;
 	private deferredColorTheme: IColorTheme | undefined;
 	private readonly previews = new Map<object, IColorTheme>();
+	private colorThemeWrites: Promise<void> = Promise.resolve();
+	private pendingSelection: { readonly setting: string; readonly themeId: string; readonly source: ColorThemeChangeSource; } | undefined;
+	/** Diagnostic baseline only; previews never replace the committed configuration being compared. */
+	private reportedColorTheme: ReportedColorTheme | undefined;
 	private initialized = false;
 	public readonly onDidColorThemeChange = this.colorThemeChange.event;
 	private readonly resourceIconChange = this._register(new Emitter<void>());
@@ -55,6 +77,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@ILanguageService private readonly languageService: ILanguageService,
 		@IHostColorSchemeService private readonly hostColorScheme: IHostColorSchemeService,
+		@ITelemetryService private readonly telemetryService: ITelemetryService,
 	) {
 		super();
 		this.colorTheme = this.resolveColorTheme();
@@ -93,7 +116,10 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 				this.deferredColorTheme = undefined;
 			}
 			if (Object.values(ThemeConfigurationSettings).some(key => event.affectsConfiguration(key))) {
-				this.updateColorTheme();
+				const selection = this.pendingSelection;
+				const source = selection && event.affectsConfiguration(selection.setting) && this.configurationService.getValue(selection.setting) === selection.themeId
+					? selection.source : 'settings';
+				this.updateColorTheme(source);
 			}
 			if (event.affectsConfiguration(EditorSemanticHighlightingConfiguration)) { this.colorThemeChange.fire(this.colorTheme); }
 			if (event.affectsConfiguration(WorkbenchConfiguration.iconTheme)) { this.updateFileIconTheme(); }
@@ -107,7 +133,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		this._register(toDisposable(() => setIconResolver(this.container.ownerDocument, icon => getIconDefinition(icon, defaultProductIconTheme.icons))));
 		this._register(WorkbenchThemesRegistry.onDidChange(() => {
 			if (this.deferredColorTheme && !WorkbenchThemesRegistry.getColorTheme(this.deferredColorTheme.id)) this.deferredColorTheme = undefined;
-			this.updateColorTheme();
+			this.updateColorTheme('themeRegistry');
 		}));
 		this._register(Colors.onDidChange(() => {
 			const previous = this.colorTheme;
@@ -115,7 +141,7 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 			if (previous === this.colorTheme) this.colorThemeChange.fire(this.colorTheme);
 		}));
 		this._register(getTokenClassificationRegistry().onDidChange(() => this.colorThemeChange.fire(this.colorTheme)));
-		this._register(this.hostColorScheme.onDidChangeColorScheme(() => this.updateColorTheme()));
+		this._register(this.hostColorScheme.onDidChangeColorScheme(() => this.updateColorTheme('system')));
 		this.updateColorTheme();
 		this.applyColorTheme();
 		this.updateFileIconTheme();
@@ -129,8 +155,8 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 	public getProductIconTheme(): IProductIconTheme { return this.productIconTheme; }
 	public getFileIconTheme(): IFileIconTheme { return this.fileIconTheme ?? noFileIconTheme; }
 
-	public async setColorTheme(themeId: string): Promise<IColorTheme> {
-		this.deferredColorTheme = undefined;
+	public setColorTheme(themeId: string, source: ColorThemeChangeSource): Promise<IColorTheme> {
+		this.assertNotDisposed();
 		const settings = ThemeConfigurationSettings;
 		let key = settings.colorTheme;
 		if (themeId !== SystemColorThemePreference) {
@@ -140,11 +166,26 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 				key = this.hostColorScheme.dark ? settings.preferredDarkColorTheme : settings.preferredLightColorTheme;
 			}
 		}
-		const previous = this.colorTheme;
-		await this.configurationService.updateValue(key, themeId);
-		// Selecting the same ID also applies a newly saved version.
-		if (this.colorTheme === previous) this.updateColorTheme();
-		return this.colorTheme;
+		// Capture the target before queueing: an OS appearance change must not retarget a selection.
+		const operation = this.colorThemeWrites.then(async () => {
+			this.assertNotDisposed();
+			this.pendingSelection = { setting: key, themeId, source };
+			try {
+				// Configuration events can arrive before this promise resolves. Serializing the
+				// whole selection keeps their attribution and same-ID reapplication together.
+				await this.configurationService.updateValue(key, themeId);
+				if (!this.isDisposed) {
+					this.deferredColorTheme = undefined;
+					this.updateColorTheme(source);
+				}
+				return this.colorTheme;
+			} finally {
+				this.pendingSelection = undefined;
+			}
+		});
+		// A failed write rejects its caller without blocking later selections.
+		this.colorThemeWrites = operation.then(() => { }, () => { });
+		return operation;
 	}
 
 	public deferColorThemeApplication(themeId: string): void {
@@ -171,10 +212,6 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 	}
 
 	private resolveColorTheme(): IColorTheme {
-		// Auxiliary editor windows share this service. Preview never changes settings,
-		// and keeps the same customization precedence as the persisted theme.
-		const preview = [...this.previews.values()].at(-1);
-		if (preview) return applyThemeCustomizations(preview, this.configurationService);
 		let preference = this.configurationService.getValue<string>(WorkbenchConfiguration.colorTheme);
 		const settings = ThemeConfigurationSettings;
 		if (this.hostColorScheme.highContrast && this.configurationService.getValue<boolean>(settings.autoDetectHighContrast)) {
@@ -208,14 +245,31 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 		}
 	}
 
-	private updateColorTheme(): void {
-		const theme = this.resolveColorTheme();
-		if (theme === this.colorTheme) {
-			return;
+	private updateColorTheme(source?: ColorThemeChangedEvent['source']): void {
+		const committedTheme = this.resolveColorTheme();
+		// Auxiliary windows share previews; their lifetime changes presentation, never configuration.
+		const preview = [...this.previews.values()].at(-1);
+		const theme = preview ? applyThemeCustomizations(preview, this.configurationService) : committedTheme;
+		const previous = this.reportedColorTheme;
+		// Capture values rather than getters or lazy token-color caches, which can change on reads.
+		const current: ReportedColorTheme = {
+			id: committedTheme.id, colorScheme: committedTheme.colorScheme, colors: committedTheme.colors,
+			semanticHighlighting: committedTheme.semanticHighlighting, semanticTokenRules: committedTheme.semanticTokenRules,
+		};
+		// Advance before notifying consumers: a listener may open or close a preview synchronously.
+		this.reportedColorTheme = current;
+		if (theme !== this.colorTheme) {
+			this.colorTheme = theme;
+			this.colorThemeChange.fire(theme);
+			this.resourceIconChange.fire();
 		}
-		this.colorTheme = theme;
-		this.colorThemeChange.fire(theme);
-		this.resourceIconChange.fire();
+		if (source && previous && !this.isDisposed && !equals(previous, current) && this.telemetryService.telemetryLevel === TelemetryLevel.USAGE) {
+			this.telemetryService.publicLog2<ColorThemeChangedEvent, ColorThemeChangedClassification>('workbenchColorThemeChanged', {
+				source,
+				change: previous.id === committedTheme.id ? 'content' : 'selection',
+				colorScheme: committedTheme.colorScheme,
+			});
+		}
 	}
 
 	private updateFileIconTheme(): void {

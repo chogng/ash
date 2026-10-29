@@ -6,6 +6,8 @@ import { LabelService } from '../../../../../services/label/common/labelService.
 import { ILanguageService } from '../../../../../../editor/common/languages/language.js';
 import { getKeybindingLabel } from '../../../../../../base/common/keybindingLabels.js';
 import { LanguageService } from '../../../../../../editor/common/services/languageService.js';
+import { ITelemetryService } from '../../../../../../platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../../../../../platform/telemetry/common/telemetryUtils.js';
 import { IHostColorSchemeService } from '../../../../../services/themes/common/hostColorSchemeService.js';
 import { WorkbenchThemeService } from '../../../../../services/themes/browser/workbenchThemeService.js';
 import { WindowTitle } from '../../../titlebar/windowTitle.js';
@@ -4119,9 +4121,10 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	services.registerInstance(IConfigurationService, configuration);
 	services.registerInstance(ILanguageService, languages);
 	services.registerInstance(IHostColorSchemeService, { dark: false, highContrast: false, onDidChangeColorScheme: Event.None });
+	services.registerInstance(ITelemetryService, NullTelemetryService);
 	const themes = services.createInstance(WorkbenchThemeService, root);
 	themes.initialize();
-	await themes.setColorTheme(lightColorTheme.id);
+	await themes.setColorTheme(lightColorTheme.id, 'themePicker');
 	services.registerInstance(IThemeService, themes);
 	const storage = new BrowserStorageService({ ownerWindow: opener.window as unknown as Window, workspaceId: 'workspace', backend: opener.window.localStorage, flushInterval: 0 });
 	services.registerInstance(IStorageService, storage);
@@ -4155,7 +4158,7 @@ test("BrowserAuxiliaryWindowService opens, registers, mirrors styles, and releas
 	assert.deepEqual(auxiliary.createState(), { width: 740, height: 560, left: 120, top: 90, featureWidthOffset: 0, featureHeightOffset: 0 });
 	let closed = 0;
 	auxiliary.onDidClose(() => closed++);
-	await themes.setColorTheme(highContrastDarkColorTheme.id);
+	await themes.setColorTheme(highContrastDarkColorTheme.id, 'themePicker');
 	root.classList.remove("ash-reduce-motion");
 	root.classList.add("ash-underline-links");
 	await nextTask();

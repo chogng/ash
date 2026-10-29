@@ -450,7 +450,7 @@ export class ThemeEditor extends EditorPane {
 			const pane = group.activePane;
 			savedEditor = pane instanceof ThemeEditor && pane.input?.resource.toString() === replacement.resource.toString() ? pane : undefined;
 		}
-		if (apply) await this.themes.setColorTheme(saved.theme.id);
+		if (apply) await this.themes.setColorTheme(saved.theme.id, 'themeEditor');
 		savedEditor?.showMessage(apply ? localize('themeEditor.applied', 'Theme saved and applied.') : localize('themeEditor.saved', 'Theme saved.'));
 	}
 
@@ -567,7 +567,7 @@ export class ThemeEditor extends EditorPane {
 		// Save participants can change the document. Only edits not acknowledged by
 		// the shared working copy should prevent applying the newly saved theme.
 		if (this.input !== input || this.workingCopy?.isDirty) return;
-		await this.themes.setColorTheme(id);
+		await this.themes.setColorTheme(id, 'themeEditor');
 		this.showMessage(localize('themeEditor.applied', 'Theme saved and applied.'));
 	}
 

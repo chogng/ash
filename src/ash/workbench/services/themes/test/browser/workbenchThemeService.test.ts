@@ -1,4 +1,6 @@
 import { createTestFileService } from '../../../../test/common/testEditorServices.js';
+import { ITelemetryService, TelemetryLevel } from '../../../../../platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../../../../platform/telemetry/common/telemetryUtils.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { IHostColorSchemeService } from '../../common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../../browser/browserHostColorSchemeService.js';
@@ -8,15 +10,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'mocha';
 import { JSDOM } from 'jsdom';
+import { DeferredPromise } from '../../../../../base/common/async.js';
+import { Emitter, Event } from '../../../../../base/common/event.js';
+import { Disposable, toDisposable } from '../../../../../base/common/lifecycle.js';
 import { ILanguageService } from '../../../../../editor/common/languages/language.js';
 import { LanguageService } from '../../../../../editor/common/services/languageService.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { WorkbenchConfiguration } from '../../../../common/configuration.js';
-import { TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
+import { TestConfigurationFiles, TestConfigurationService as WorkbenchConfigurationService } from '../../../configuration/test/common/testServices.js';
 import { resolveSemanticTokenPresentation } from '../../../../../editor/common/services/semanticTokensStyling.js';
 import { lightColorTheme } from '../../../../../platform/theme/common/colorTheme.js';
 import { registerColor } from '../../../../../platform/theme/common/colorUtils.js';
-import { IFileService } from '../../../../../platform/files/common/files.js';
+import { IFileService, type IFileWriteResult } from '../../../../../platform/files/common/files.js';
 import { InstantiationService } from '../../../../../platform/instantiation/common/instantiationService.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { WorkbenchThemesRegistry } from '../../../../common/theme.js';
@@ -37,6 +42,231 @@ import { registerIcon } from '../../../../../platform/theme/common/iconRegistry.
 
 const jsonRegistry = Registry.as<IJSONContributionRegistry>(JSONExtensions.JSONContribution);
 
+class ControlledThemeSettings extends TestConfigurationFiles {
+	public nextWrite: { readonly started: DeferredPromise<void>; readonly release: DeferredPromise<void>; readonly error?: Error; } | undefined;
+	public writes = 0;
+
+	public override async writeFile(...args: Parameters<TestConfigurationFiles['writeFile']>): Promise<IFileWriteResult> {
+		this.writes++;
+		const pending = this.nextWrite;
+		this.nextWrite = undefined;
+		if (pending) {
+			await pending.started.complete();
+			await pending.release.p;
+			if (pending.error) throw pending.error;
+		}
+		return super.writeFile(...args);
+	}
+}
+
+/** Real configuration and DI assembly, with controllable persistence at the file boundary. */
+class ThemeChanges extends Disposable {
+	public readonly browser = new JSDOM('<!doctype html><body></body>');
+	public readonly files = this._register(new ControlledThemeSettings());
+	public readonly configuration = this._register(new WorkbenchConfigurationService({ files: this.files }));
+	public readonly events: { name: string; data: unknown; }[] = [];
+	public readonly telemetry: ITelemetryService = Object.assign(Object.create(NullTelemetryService), {
+		telemetryLevel: TelemetryLevel.USAGE,
+		publicLog2: (name: string, data: unknown): void => { this.events.push({ name, data }); },
+	});
+	public readonly hostChanged = this._register(new Emitter<void>());
+	public readonly host = { dark: false, highContrast: false, onDidChangeColorScheme: this.hostChanged.event };
+	public readonly services = this._register(new InstantiationService());
+	public readonly themes: WorkbenchThemeService;
+
+	constructor() {
+		super();
+		this._register(toDisposable(() => this.browser.window.close()));
+		this.services.registerInstance(IConfigurationService, this.configuration);
+		this.services.registerInstance(ILanguageService, this._register(new LanguageService()));
+		this.services.registerInstance(IHostColorSchemeService, this.host);
+		this.services.registerInstance(ITelemetryService, this.telemetry);
+		this.themes = this._register(this.services.createInstance(WorkbenchThemeService, this.browser.window.document.body));
+		this.themes.initialize();
+	}
+}
+
+test('committed color theme changes report their source and bounded appearance without duplicate selections', async () => {
+	using changes = new ThemeChanges();
+	assert.deepEqual(changes.events, []);
+	await changes.themes.setColorTheme('ash-dark', 'themePicker');
+	await changes.themes.setColorTheme('ash-dark', 'themePicker');
+	await changes.configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-light');
+	await changes.themes.setColorTheme('ash-dark', 'themeEditor');
+	assert.equal(changes.browser.window.document.body.dataset.colorTheme, 'ash-dark');
+	assert.deepEqual(changes.events, [
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themePicker', change: 'selection', colorScheme: 'dark' } },
+		{ name: 'workbenchColorThemeChanged', data: { source: 'settings', change: 'selection', colorScheme: 'light' } },
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themeEditor', change: 'selection', colorScheme: 'dark' } },
+	]);
+});
+
+test('preview updates and restoration do not report changes while committed selections retain their source', async () => {
+	using changes = new ThemeChanges();
+	using preview = changes.themes.previewColorTheme(parseUserColorTheme('{"colors":{"editor.background":"#123456"}}', 'private-preview'));
+	preview.update(parseUserColorTheme('{"colors":{"editor.background":"#654321"}}', 'private-preview'));
+	assert.deepEqual(changes.events, []);
+	await changes.themes.setColorTheme('ash-dark', 'themePicker');
+	assert.equal(changes.themes.getColorTheme().id, 'private-preview');
+	preview.dispose();
+	assert.equal(changes.themes.getColorTheme().id, 'ash-dark');
+	assert.deepEqual(changes.events, [
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themePicker', change: 'selection', colorScheme: 'dark' } },
+	]);
+});
+
+test('same-ID saved content is reported only when applied and equivalent replacements stay silent', async () => {
+	using changes = new ThemeChanges();
+	const source = '{"name":"Private theme name","colors":{"editor.background":"#123456"},"semanticTokenColors":{"keyword":"#abcdef"}}';
+	using registration = WorkbenchThemesRegistry.registerColorThemes([parseUserColorTheme(source, 'private-theme')]);
+	await changes.themes.setColorTheme('private-theme', 'themeEditor');
+	changes.events.length = 0;
+	changes.themes.deferColorThemeApplication('private-theme');
+	const replacement = source.replace('#123456', '#654321');
+	registration.replace([parseUserColorTheme(replacement, 'private-theme')]);
+	assert.equal(changes.themes.getColorTheme().getColorCss('editor.background'), '#123456');
+	assert.deepEqual(changes.events, []);
+	await changes.themes.setColorTheme('private-theme', 'themeEditor');
+	assert.equal(changes.themes.getColorTheme().getColorCss('editor.background'), '#654321');
+	registration.replace([parseUserColorTheme(replacement.replace('Private theme name', 'Renamed private theme'), 'private-theme')]);
+	// Token colors are lazy caches, so merely reading a style must not look like a customization.
+	changes.themes.getColorTheme().getTokenStyleMetadata('keyword', [], 'typescript');
+	await changes.themes.setColorTheme('private-theme', 'themePicker');
+	assert.deepEqual(changes.events, [
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themeEditor', change: 'content', colorScheme: 'dark' } },
+	]);
+});
+
+test('preview changes from a theme listener do not swallow the committed change', async () => {
+	using changes = new ThemeChanges();
+	using listener = Event.once(changes.themes.onDidColorThemeChange)(() => {
+		using preview = changes.themes.previewColorTheme(parseUserColorTheme('{"type":"light"}', 'listener-preview'));
+	});
+	await changes.themes.setColorTheme('ash-dark', 'themePicker');
+	assert.equal(changes.themes.getColorTheme().id, 'ash-dark');
+	assert.deepEqual(changes.events, [
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themePicker', change: 'selection', colorScheme: 'dark' } },
+	]);
+});
+
+test('settings report resolved customization changes and ignore inactive or equivalent values', async () => {
+	using changes = new ThemeChanges();
+	await changes.configuration.updateValue('workbench.preferredDarkColorTheme', 'ash-high-contrast-dark');
+	await changes.configuration.updateValue('workbench.colorCustomizations', { '[Ash Dark]': { 'editor.background': '#123456' } });
+	assert.deepEqual(changes.events, []);
+	await changes.configuration.updateValue('workbench.colorCustomizations', { 'editor.background': '#abcdef' });
+	await changes.configuration.updateValue('workbench.colorCustomizations', { 'editor.background': '#abcdef', '[Ash Dark]': { 'editor.background': '#123456' } });
+	assert.deepEqual(changes.events, [
+		{ name: 'workbenchColorThemeChanged', data: { source: 'settings', change: 'content', colorScheme: 'light' } },
+	]);
+});
+
+test('system appearance and late theme registration have distinct sources', async () => {
+	using changes = new ThemeChanges();
+	await changes.configuration.updateValue('workbench.preferredDarkColorTheme', 'ash-high-contrast-dark');
+	changes.host.dark = true;
+	changes.hostChanged.fire();
+	await changes.configuration.updateValue('workbench.colorTheme', 'private-extension-theme');
+	using registration = WorkbenchThemesRegistry.registerColorThemes([parseUserColorTheme('{"type":"light"}', 'private-extension-theme')]);
+	assert.deepEqual(changes.events, [
+		{ name: 'workbenchColorThemeChanged', data: { source: 'system', change: 'selection', colorScheme: 'hcDark' } },
+		{ name: 'workbenchColorThemeChanged', data: { source: 'settings', change: 'selection', colorScheme: 'dark' } },
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themeRegistry', change: 'selection', colorScheme: 'light' } },
+	]);
+});
+
+test('overlapping theme selections preserve write order and each source across asynchronous persistence', async () => {
+	using changes = new ThemeChanges();
+	const started = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	changes.files.nextWrite = { started, release };
+	const first = changes.themes.setColorTheme('ash-dark', 'themePicker');
+	await started.p;
+	const second = changes.themes.setColorTheme('ash-light', 'themeEditor');
+	assert.equal(changes.files.writes, 1);
+	await release.complete();
+	assert.deepEqual((await Promise.all([first, second])).map(theme => theme.id), ['ash-dark', 'ash-light']);
+	assert.equal(changes.configuration.getValue(WorkbenchConfiguration.colorTheme), 'ash-light');
+	assert.deepEqual(changes.events, [
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themePicker', change: 'selection', colorScheme: 'dark' } },
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themeEditor', change: 'selection', colorScheme: 'light' } },
+	]);
+});
+
+test('queued theme selections keep the system preference targeted when each request was made', async () => {
+	using changes = new ThemeChanges();
+	await changes.configuration.updateValue('window.autoDetectColorScheme', true);
+	const started = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	changes.files.nextWrite = { started, release };
+	const first = changes.themes.setColorTheme('ash-high-contrast-light', 'themePicker');
+	await started.p;
+	const second = changes.themes.setColorTheme('ash-light', 'themeEditor');
+	changes.host.dark = true;
+	changes.hostChanged.fire();
+	await release.complete();
+	await Promise.all([first, second]);
+	assert.equal(changes.configuration.getValue('workbench.preferredLightColorTheme'), 'ash-light');
+	assert.equal(changes.configuration.getValue('workbench.preferredDarkColorTheme'), 'ash-dark');
+	assert.equal(changes.themes.getColorTheme().id, 'ash-dark');
+	assert.deepEqual(changes.events, [
+		{ name: 'workbenchColorThemeChanged', data: { source: 'system', change: 'selection', colorScheme: 'dark' } },
+	]);
+});
+
+test('failed theme writes report nothing, preserve deferred content, and do not poison later selections', async () => {
+	using changes = new ThemeChanges();
+	using registration = WorkbenchThemesRegistry.registerColorThemes([parseUserColorTheme('{"colors":{"editor.background":"#123456"}}', 'private-theme')]);
+	await changes.themes.setColorTheme('private-theme', 'themeEditor');
+	changes.themes.deferColorThemeApplication('private-theme');
+	registration.replace([parseUserColorTheme('{"colors":{"editor.background":"#654321"}}', 'private-theme')]);
+	changes.events.length = 0;
+	const started = new DeferredPromise<void>();
+	const release = new DeferredPromise<void>();
+	changes.files.nextWrite = { started, release, error: new Error('Cannot persist theme') };
+	const failed = changes.themes.setColorTheme('ash-light', 'themePicker');
+	const rejection = assert.rejects(failed, /Cannot persist theme/);
+	await started.p;
+	await release.complete();
+	await rejection;
+	assert.equal(changes.themes.getColorTheme().getColorCss('editor.background'), '#123456');
+	assert.deepEqual(changes.events, []);
+	await changes.configuration.updateValue(WorkbenchConfiguration.colorTheme, 'ash-light');
+	await changes.themes.setColorTheme('ash-dark', 'themeEditor');
+	assert.deepEqual(changes.events, [
+		{ name: 'workbenchColorThemeChanged', data: { source: 'settings', change: 'selection', colorScheme: 'light' } },
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themeEditor', change: 'selection', colorScheme: 'dark' } },
+	]);
+});
+
+test('theme events follow the host usage policy without replaying changes made while collection is disabled', async () => {
+	using changes = new ThemeChanges();
+	Object.defineProperty(changes.telemetry, 'telemetryLevel', { value: TelemetryLevel.NONE, configurable: true });
+	await changes.themes.setColorTheme('ash-dark', 'themePicker');
+	assert.deepEqual(changes.events, []);
+	Object.defineProperty(changes.telemetry, 'telemetryLevel', { value: TelemetryLevel.USAGE });
+	await changes.themes.setColorTheme('ash-dark', 'themePicker');
+	assert.deepEqual(changes.events, []);
+	await changes.themes.setColorTheme('ash-light', 'themeEditor');
+	assert.deepEqual(changes.events, [
+		{ name: 'workbenchColorThemeChanged', data: { source: 'themeEditor', change: 'selection', colorScheme: 'light' } },
+	]);
+});
+
+test('theme service creation requires the host telemetry registration', () => {
+	const browser = new JSDOM('<!doctype html><body></body>');
+	try {
+		using configuration = new WorkbenchConfigurationService();
+		using services = new InstantiationService();
+		services.registerInstance(IConfigurationService, configuration);
+		using languages = new LanguageService();
+		services.registerInstance(ILanguageService, languages);
+		using hostChanged = new Emitter<void>();
+		services.registerInstance(IHostColorSchemeService, { dark: false, highContrast: false, onDidChangeColorScheme: hostChanged.event });
+		assert.throws(() => services.createInstance(WorkbenchThemeService, browser.window.document.body), /telemetryService/);
+	} finally { browser.window.close(); }
+});
+
 test('selected product icon theme refreshes retained icon nodes and returns to defaults', async () => {
 	const browser = new JSDOM('<!doctype html><body></body>');
 	try {
@@ -47,6 +277,7 @@ test('selected product icon theme refreshes retained icon nodes and returns to d
 		using configuration = new WorkbenchConfigurationService();
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(ITelemetryService, NullTelemetryService);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
 		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
@@ -77,6 +308,7 @@ test('base colors support disconnected schemes and yield to a registered extensi
 		using configuration = new WorkbenchConfigurationService();
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(ITelemetryService, NullTelemetryService);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
 		const { Event } = await import('../../../../../base/common/event.js');
@@ -120,13 +352,14 @@ test('temporary previews update bound windows, keep settings unchanged, and rest
 		using configuration = new WorkbenchConfigurationService();
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(ITelemetryService, NullTelemetryService);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
 		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
 		services.registerInstance(IHostColorSchemeService, hostColors);
 		using active = services.createInstance(WorkbenchThemeService, browser.window.document.body);
 		active.initialize();
-		await active.setColorTheme('ash-dark');
+		await active.setColorTheme('ash-dark', 'themePicker');
 		const original = configuration.getValue(WorkbenchConfiguration.colorTheme);
 		const first = parseUserColorTheme('{"colors":{"editor.background":"#123456"}}', 'first-preview');
 		const second = parseUserColorTheme('{"colors":{"editor.background":"#abcdef"}}', 'second-preview');
@@ -137,7 +370,7 @@ test('temporary previews update bound windows, keep settings unchanged, and rest
 		using newer = active.previewColorTheme(second);
 		older.update(parseUserColorTheme('{"colors":{"editor.background":"#112233"}}', 'first-preview'));
 		assert.equal(active.getColorTheme(), second);
-		await active.setColorTheme('ash-light');
+		await active.setColorTheme('ash-light', 'themePicker');
 		assert.equal(active.getColorTheme(), second);
 		newer.dispose();
 		assert.equal(active.getColorTheme().getColorCss('editor.background'), '#112233');
@@ -159,6 +392,7 @@ test('persisted color customizations override themes, update live, and restore t
 		});
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(ITelemetryService, NullTelemetryService);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
 		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
@@ -230,6 +464,7 @@ test('active semantic theme styles follow the selected theme', async () => {
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, theme.id);
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(ITelemetryService, NullTelemetryService);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
 		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
@@ -350,6 +585,7 @@ test('active user themes apply overrides for colors registered after theme loadi
 		await configuration.updateValue(WorkbenchConfiguration.colorTheme, theme.id);
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(ITelemetryService, NullTelemetryService);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
 		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);
@@ -543,6 +779,7 @@ test('theme save, rename, reload, and delete keep identity in the filename', asy
 		using configuration = new WorkbenchConfigurationService();
 		using services = new InstantiationService();
 		services.registerInstance(IConfigurationService, configuration);
+		services.registerInstance(ITelemetryService, NullTelemetryService);
 		using languages = new LanguageService();
 		services.registerInstance(ILanguageService, languages);
 		using hostColors = new BrowserHostColorSchemeService(browser.window as unknown as Window);

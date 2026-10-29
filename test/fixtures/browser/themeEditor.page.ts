@@ -32,6 +32,8 @@ import { DisposableStore, toDisposable } from '../../../src/ash/base/common/life
 import { FileKind, IFileService, FileRevisionConflictError, type IFileChangeEvent, type IFileSystemProvider, type IFileWriteOptions, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type FileDeleteMode } from '../../../src/ash/platform/files/common/files.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { IWorkbenchThemeService } from '../../../src/ash/workbench/services/themes/common/workbenchThemeService.js';
+import { ITelemetryService } from '../../../src/ash/platform/telemetry/common/telemetry.js';
+import { NullTelemetryService } from '../../../src/ash/platform/telemetry/common/telemetryUtils.js';
 import { IHostColorSchemeService } from '../../../src/ash/workbench/services/themes/common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../../../src/ash/workbench/services/themes/browser/browserHostColorSchemeService.js';
 import { WorkbenchThemeService, loadUserThemes } from '../../../src/ash/workbench/services/themes/browser/workbenchThemeService.js';
@@ -171,13 +173,14 @@ resources.add(new WorkingCopyBackupTracker(services.get(IWorkingCopyService), ba
 const root = document.querySelector<HTMLElement>('#main')!;
 services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root })));
 services.registerInstance(IHostColorSchemeService, resources.add(new BrowserHostColorSchemeService(window)));
+services.registerInstance(ITelemetryService, NullTelemetryService);
 const themes = resources.add(services.createInstance(WorkbenchThemeService, root));
 services.registerInstance(IThemeService, themes);
 services.registerInstance(IWorkbenchThemeService, themes);
 themes.initialize();
 const users = resources.add(await loadUserThemes(services, URI.file('/themes')));
 services.registerInstance(IUserThemeService, users);
-await themes.setColorTheme('aurora');
+await themes.setColorTheme('aurora', 'themePicker');
 services.registerInstance(IFileDialogService, {
 	pickFolderAndOpen: async () => { throw new Error('Unexpected folder open'); },
 	pickWorkspaceAndOpen: async () => { throw new Error('Unexpected workspace open'); },
@@ -242,7 +245,7 @@ window.themeEditorTest = {
 	setSource: text => { const model = pane().getControl()!.getModel()!; model.pushStackElement(); pane().getControl()!.executeEdits('test.json', [{ range: model.getFullModelRange(), text }]); model.pushStackElement(); },
 	undo: () => { pane().getControl()!.getModel()!.undo(); },
 	close: () => parts.closeAuxiliaryEditorPart(parts.activePart),
-	selectTheme: id => themes.setColorTheme(id).then(() => { }),
+	selectTheme: id => themes.setColorTheme(id, 'themePicker').then(() => { }),
 	setSetting: (key, value) => configuration.updateValue(key, value),
 	open: async () => { await services.invokeFunction(accessor => CommandsRegistry.getCommand('workbench.action.openThemeEditor')!(accessor)); },
 	mainEditors: () => main.groups.flatMap(group => group.editors.map(editor => ({ resource: editor.input.resource.toString(), label: editor.input.label, dirty: editor.isDirty }))),
