@@ -787,7 +787,7 @@
     "sessions.changes.prSending": "正在向智能体发送任务…",
     "sessions.changes.prSent": "已将创建拉取请求的任务提交到发起操作的会话。",
     "sessions.changes.prAgentUncertain": "无法确认智能体任务是否已提交。再次发送前请检查发起操作的会话。",
-    "sessions.changes.prAgentHelp": "选择直接创建以调用 GitHub，或交给智能体创建以将显示的标题、描述、分支和合并选项提交到此会话。存在活动回合时，任务会进入队列，并遵循正常智能体权限。草稿和合并选项会按配置档记忆，但仍受当前仓库能力限制。无法确认提交结果时将禁用重试，请先检查会话或仓库。",
+    "sessions.changes.prAgentHelp": "主按钮重复上次使用的拉取请求操作。使用左右方向键在主按钮与拉取请求操作按钮之间移动，按下方向键打开菜单。选择直接创建以调用 GitHub，或交给智能体创建以将显示的标题、描述、分支和合并选项提交到此会话。选择菜单项会立即提交。按 Escape 关闭菜单并返回按钮。存在活动回合时，任务会进入队列，并遵循正常智能体权限。草稿和合并选项会按配置档记忆，但仍受当前仓库能力限制。无法确认提交结果时将禁用重试，请先检查会话或仓库。",
     "sessions.changes.trackingCounts": "{0}：{1} 个传入 · {2} 个传出",
     "sessions.changes.uncommittedCount": "{0} 个未提交文件",
     "sessions.changes.repositoryStatusError": "仓库状态不可用。",

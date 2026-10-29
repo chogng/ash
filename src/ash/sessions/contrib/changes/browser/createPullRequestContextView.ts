@@ -1,5 +1,5 @@
 import { CancellationError } from '../../../../base/common/errors.js';
-import { ContextViewFocusRestore } from '../../../../base/browser/ui/contextview/contextview.js';
+import { ContextView, ContextViewFocusRestore } from '../../../../base/browser/ui/contextview/contextview.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { Disposable, DisposableStore, MutableDisposable, toDisposable } from '../../../../base/common/lifecycle.js';
 import { extUriBiasedIgnorePathCase } from '../../../../base/common/resources.js';
@@ -19,6 +19,7 @@ import { CreatePullRequestWidget, type ICreatePullRequestWidgetOptions } from '.
 
 /** Captures the Session's repository before mounting a transient creation form. */
 export class CreatePullRequestContextView extends Disposable {
+	private readonly formContextView: ContextView;
 	private readonly widget = this._register(new MutableDisposable<CreatePullRequestWidget>());
 	private readonly pending = this._register(new CancellationTokenSource());
 	private readonly pickers = this._register(new DisposableStore());
@@ -34,6 +35,8 @@ export class CreatePullRequestContextView extends Disposable {
 		@INotificationService private readonly notifications: INotificationService,
 	) {
 		super();
+		// The form outlives action menus, which use the window's shared context view.
+		this.formContextView = this._register(new ContextView(contextViews.container));
 		this.owner = this.selectionKey();
 		this._register(sessions.onDidChange(() => { if (this.selectionKey() !== this.owner) { this.dispose(); } }));
 		const selected = sessions.activeSelection;
@@ -62,8 +65,8 @@ export class CreatePullRequestContextView extends Disposable {
 		if (!operation || this.isDisposed) { return; }
 		const options: ICreatePullRequestWidgetOptions = {
 			creation: operation,
-			onCancel: () => this.contextViews.hide(),
-			onCreated: (_options, message) => { if (!this.isDisposed) { this.contextViews.hide(); } this.notifications.info(message); },
+			onCancel: () => this.formContextView.hide(),
+			onCreated: (_options, message) => { if (!this.isDisposed) { this.formContextView.hide(); } this.notifications.info(message); },
 			onDetachedError: error => this.notifications.error(error.message),
 			onSendToChat: operation.prepareChatRequest ? async request => {
 				const selected = this.sessions.activeSelection;
@@ -71,22 +74,26 @@ export class CreatePullRequestContextView extends Disposable {
 				const chat = selected.active.session.chats.find(chat => chat.threadId === selected.active.threadId);
 				if (!chat) { throw new Error(localize('sessions.changes.prMissingChat', 'The initiating conversation is no longer available.')); }
 				await this.instantiation.createInstance(CreatePullRequestChatRequest).send(selected.active.session, request, operation, chat);
-				if (!this.isDisposed) { this.contextViews.hide(); }
+				if (!this.isDisposed) { this.formContextView.hide(); }
 				this.notifications.info(localize('sessions.changes.prSent', 'Pull request request submitted to the initiating conversation.'));
 			} : undefined,
 		};
 		const widget = this.instantiation.createInstance(CreatePullRequestWidget, options, anchor.ownerDocument);
 		this.widget.value = widget;
-		if (this.contextViews.show({ anchor, content: widget.domNode, presentation: 'plain', focusRestore: ContextViewFocusRestore.Previous, onHide: () => this.dispose() })) { widget.focus(); }
+		if (this.formContextView.show({
+			anchor, content: widget.domNode, presentation: 'plain', focusRestore: ContextViewFocusRestore.Previous,
+			isTargetWithin: target => [...this.contextViews.container.querySelectorAll('[role="menu"]')].some(menu => menu.contains(target)),
+			onHide: () => this.dispose(),
+		})) { widget.focus(); }
 		else { this.dispose(); }
 		// Default values and merge options can change the form's anchored geometry.
-		void widget.ready.then(() => { if (!this.isDisposed) { this.contextViews.layout(); } });
+		void widget.ready.then(() => { if (!this.isDisposed) { this.formContextView.layout(); } });
 	}
 
 	public override dispose(): void {
 		if (this.isDisposed) { return; }
 		this.pending.cancel();
-		if (this.widget.value?.domNode.isConnected) { this.contextViews.hide(); }
+		if (this.widget.value?.domNode.isConnected) { this.formContextView.hide(); }
 		super.dispose();
 	}
 

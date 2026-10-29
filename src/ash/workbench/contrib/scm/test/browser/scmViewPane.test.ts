@@ -2424,8 +2424,9 @@ test('SCM compound commit button dispatches provider commands and keeps menu own
 		isBusy: { get: () => busy },
 	});
 	fixture.refresh();
-	const main = fixture.pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit')!;
-	const dropdown = fixture.pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit-dropdown')!;
+	let main = fixture.pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit')!;
+	let dropdown = fixture.pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit-dropdown')!;
+	assert.ok(main.closest('.ash-button-dropdown'), 'Provider secondary commands use the shared split button');
 	assert.equal(main.textContent, 'Commit');
 	assert.ok(main.querySelector('[data-ash-icon-id="check"]'));
 	assert.equal(dropdown.hidden, false);
@@ -2453,6 +2454,9 @@ test('SCM compound commit button dispatches provider commands and keeps menu own
 	await actions[0].run();
 	assert.equal(calls.length, 2, 'An open menu never follows a later repository selection');
 	fixture.views.selectRepository('first');
+	// A provider with no secondary commands uses a plain button; returning restores a split button.
+	main = fixture.pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit')!;
+	dropdown = fixture.pane.element.querySelector<HTMLButtonElement>('.ash-scm-commit-dropdown')!;
 	busy = true;
 	spinning = true;
 	fixture.refresh();

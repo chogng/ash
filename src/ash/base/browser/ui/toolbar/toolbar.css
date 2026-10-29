@@ -44,7 +44,10 @@
 	padding: 0;
 }
 
-.ash-toolbar .ash-action-view-item.icon .ash-icon-label-container {
+.ash-toolbar
+	.ash-action-view-item.icon
+	:where(.ash-button:not(.ash-button-primary))
+	.ash-icon-label-container {
 	display: none;
 }
 

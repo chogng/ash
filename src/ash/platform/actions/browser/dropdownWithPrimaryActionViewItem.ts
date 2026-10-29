@@ -2,6 +2,7 @@ import { defaultButtonStyles } from '../../theme/browser/defaultStyles.js';
 import '../../../base/browser/ui/dropdown/dropdown.css';
 import type { IContextMenuProvider } from "../../../base/browser/contextmenu.js";
 import { addDisposableListener, stopEvent, h } from "../../../base/browser/dom.js";
+import { observeElementSize } from "../../../base/browser/observer.js";
 import { ActionViewItem, ButtonActionViewItem, type ActionViewItemOptions } from "../../../base/browser/ui/actionbar/actionViewItems.js";
 import { DropdownMenuActionViewItem, type DropdownMenuActions } from "../../../base/browser/ui/dropdown/dropdownMenuActionViewItem.js";
 import type { IAction } from "../../../base/common/actions.js";
@@ -55,21 +56,22 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 			throw new Error(`Action view item is already rendered: ${this.action.id}`);
 		}
 		container.classList.add("ash-dropdown-with-primary-action-view-item");
+		container.classList.toggle("primary", this.viewItemOptions.buttonPresentation === 'primary');
 		container.classList.toggle("disabled", !this.action.enabled);
 
 		const primaryContainer = h(container.ownerDocument, "div");
 		primaryContainer.className = "ash-dropdown-with-primary-primary";
 		primaryContainer.classList.toggle("icon", this.action.icon !== undefined);
 		this.primaryItem.render(primaryContainer);
+		const primaryButton = primaryContainer.querySelector<HTMLButtonElement>("button");
+		assertDefined(primaryButton, `Primary action button was not rendered: ${this.action.id}`);
+		this.primaryButton = primaryButton;
 
 		const dropdownContainer = h(container.ownerDocument, "div");
 		dropdownContainer.className = "ash-dropdown-with-primary-dropdown";
 		this.dropdownContainer = dropdownContainer;
 		this.renderDropdownItem();
 
-		const primaryButton = primaryContainer.querySelector<HTMLButtonElement>("button");
-		assertDefined(primaryButton, `Primary action button was not rendered: ${this.action.id}`);
-		this.primaryButton = primaryButton;
 		container.append(primaryContainer, dropdownContainer);
 		this._register(this.onDidChangeDropdownVisibility((visible) => {
 			container.classList.toggle("active", visible);
@@ -157,6 +159,15 @@ export class DropdownWithPrimaryActionViewItem extends ActionViewItem {
 			primaryButton.tabIndex = 0;
 			primaryButton.focus();
 		}));
+		if (this.viewItemOptions.buttonPresentation === 'primary') {
+			const primaryButton = this.primaryButton;
+			assertDefined(primaryButton, `Primary action button is not available: ${this.action.id}`);
+			renderStore.add(observeElementSize(primaryButton, size => {
+				if (size.height > 0) {
+					dropdownButton.style.width = `${size.height}px`;
+				}
+			}));
+		}
 		this.dropdownRenderStore.value = renderStore;
 	}
 }

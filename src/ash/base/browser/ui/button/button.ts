@@ -1,7 +1,11 @@
 import './button.css';
-import { h } from "../../dom.js";
+import { addDisposableListener, h, stopEvent } from "../../dom.js";
+import type { IContextMenuProvider } from "../../contextmenu.js";
+import { Separator, type IAction, type IActionRunner } from "../../../common/actions.js";
+import { CancellationTokenSource } from "../../../common/cancellation.js";
 import { DomEmitter, type DOMEventMap } from "../../event.js";
 import { FastDomNode } from "../../fastDomNode.js";
+import { observeElementSize } from "../../observer.js";
 import type { Icon } from "../../../common/icon.js";
 import type { Event } from "../../../common/event.js";
 import { Disposable, MutableDisposable, toDisposable } from "../../../common/lifecycle.js";
@@ -9,6 +13,9 @@ import { setAriaAttribute } from "../aria/aria.js";
 import type { AnchorPosition } from "../contextview/contextview.js";
 import { getHoverDelegate, type IManagedHover } from "../hover/hoverDelegate.js";
 import { IconLabel } from "../iconlabel/iconlabel.js";
+import type { IActionProvider } from "../dropdown/dropdown.js";
+import { Lxicon } from "../../../common/lxicons.js";
+import { localize } from "../../../../nls.js";
 
 /** Controls whether a button centers its complete content group or its text label. */
 export type ButtonContentAlignment = "groupCentered" | "labelCentered";
@@ -46,6 +53,13 @@ export interface IButtonOptions extends Partial<IButtonStyles> {
 	enabled?: boolean;
 	checked?: boolean;
 	onClick?: (event: DOMEventMap["click"]) => void;
+}
+
+export interface IButtonWithDropdownOptions extends IButtonOptions {
+	readonly contextMenuProvider: IContextMenuProvider;
+	readonly actions: readonly IAction[] | IActionProvider;
+	readonly actionRunner?: IActionRunner;
+	readonly addPrimaryActionToDropdown?: boolean;
 }
 
 /** A semantic button with an explicit enabled state. */
@@ -175,5 +189,132 @@ export class Button extends Disposable {
 			groupId: this.hoverGroupId,
 			anchorPosition: this.hoverAnchorPosition,
 		});
+	}
+}
+
+/** A primary button and a related action menu with one shared presentation and lifetime. */
+export class ButtonWithDropdown extends Disposable {
+	readonly element: HTMLElement;
+	readonly primaryButton: Button;
+	readonly dropdownButton: Button;
+	readonly onDidClick: Event<DOMEventMap["click"]>;
+	private readonly menu = this._register(new MutableDisposable<CancellationTokenSource>());
+
+	constructor(container: HTMLElement, private readonly options: IButtonWithDropdownOptions) {
+		super();
+		this.element = h(container.ownerDocument, "div", { className: "ash-button-dropdown" });
+		container.append(this.element);
+		this._register(toDisposable(() => this.element.remove()));
+		this.primaryButton = this._register(new Button(this.element, options));
+		this.onDidClick = this.primaryButton.onDidClick;
+		const menuLabel = localize('button.moreActions', 'More Actions...');
+		this.dropdownButton = this._register(new Button(this.element, {
+			...options,
+			label: menuLabel,
+			ariaLabel: menuLabel,
+			title: menuLabel,
+			icon: Lxicon.chevronDown,
+			iconOnly: true,
+			contentAlignment: 'groupCentered',
+			checked: undefined,
+			type: 'button',
+			onClick: () => {
+				if (this.menu.value) {
+					this.hideDropdown();
+				} else {
+					this.showDropdown();
+				}
+			},
+		}));
+		this.dropdownButton.domNode.setAttribute('aria-haspopup', 'menu');
+		this.dropdownButton.domNode.setAttribute('aria-expanded', 'false');
+		// Follow the rendered border box, including larger fonts and host-specific button sizing.
+		this._register(observeElementSize(this.primaryButton.domNode, size => {
+			if (size.height > 0) {
+				this.dropdownButton.domNode.style.width = `${size.height}px`;
+			}
+		}));
+		this._register(addDisposableListener(this.element, 'keydown', event => {
+			if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && this.dropdownButton.enabled) {
+				stopEvent(event);
+				this.showDropdown();
+			} else if (event.key === 'ArrowRight' && event.target === this.primaryButton.domNode && this.dropdownButton.enabled) {
+				stopEvent(event);
+				this.dropdownButton.focus();
+			} else if (event.key === 'ArrowLeft' && event.target === this.dropdownButton.domNode && this.primaryButton.enabled) {
+				stopEvent(event);
+				this.primaryButton.focus();
+			}
+		}));
+	}
+
+	focus(): void { this.primaryButton.focus(); }
+
+	get enabled(): boolean { return this.primaryButton.enabled; }
+	get label(): string { return this.primaryButton.label; }
+	set label(value: string) { this.primaryButton.label = value; }
+	set enabled(value: boolean) {
+		this.primaryButton.enabled = value;
+		this.dropdownButton.enabled = value;
+		if (!value) {
+			this.hideDropdown();
+		}
+	}
+
+	private showDropdown(): void {
+		if (this.isDisposed || !this.dropdownButton.enabled || this.menu.value) {
+			return;
+		}
+		const actions = 'getActions' in this.options.actions ? this.options.actions.getActions() : this.options.actions;
+		if (actions.length === 0) {
+			return;
+		}
+		const primary: IAction = {
+			id: 'button.primary', label: this.primaryButton.label, tooltip: '', enabled: this.primaryButton.enabled,
+			run: () => this.primaryButton.domNode.click(),
+		};
+		const menuActions = this.options.addPrimaryActionToDropdown === false ? actions : [primary, new Separator(), ...actions];
+		const menu = new CancellationTokenSource();
+		this.menu.value = menu;
+		this.dropdownButton.focus();
+		this.dropdownButton.domNode.setAttribute('aria-expanded', 'true');
+		this.element.classList.add('active');
+		try {
+			this.options.contextMenuProvider.showContextMenu({
+				getAnchor: () => this.dropdownButton.domNode,
+				getActions: () => menuActions,
+				actionRunner: this.options.actionRunner,
+				autoSelectFirstItem: true,
+				cancellationToken: menu.token,
+				onHide: () => this.didHideMenu(menu),
+			});
+		} catch (error) {
+			this.hideDropdown();
+			throw error;
+		}
+	}
+
+	private hideDropdown(): void {
+		const menu = this.menu.value;
+		if (!menu) {
+			return;
+		}
+		try { menu.cancel(); }
+		finally { this.didHideMenu(menu); }
+	}
+
+	private didHideMenu(menu: CancellationTokenSource): void {
+		// A late hide from a replaced presentation cannot close the current menu.
+		if (this.menu.value !== menu) {
+			return;
+		}
+		this.menu.clear();
+		this.dropdownButton.domNode.setAttribute('aria-expanded', 'false');
+		this.element.classList.remove('active');
+	}
+
+	protected override disposeCore(): void {
+		try { this.hideDropdown(); }
+		finally { super.disposeCore(); }
 	}
 }

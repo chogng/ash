@@ -1,7 +1,7 @@
 import { defaultButtonStyles, defaultInputBoxStyles } from '../../../../platform/theme/browser/defaultStyles.js';
 import './media/createPullRequest.css';
 import { h, addDisposableListener } from '../../../../base/browser/dom.js';
-import { Button } from '../../../../base/browser/ui/button/button.js';
+import { Button, ButtonWithDropdown } from '../../../../base/browser/ui/button/button.js';
 import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { CancellationTokenSource } from '../../../../base/common/cancellation.js';
 import { getErrorMessage, isCancellationError } from '../../../../base/common/errors.js';
@@ -15,6 +15,7 @@ import type { ISessionPullRequestCreation, ISessionPullRequestDetails, ISessionP
 import { CreatePullRequestFocusedContext } from '../common/changes.js';
 import { CreatePullRequestPreferences } from '../common/createPullRequestPreferences.js';
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { CreatePullRequestChatRequest } from './createPullRequestChatRequest.js';
 
 export interface ICreatePullRequestWidgetOptions {
@@ -34,9 +35,9 @@ export class CreatePullRequestWidget extends Disposable {
 	private readonly baseInput: InputBox;
 	private readonly draft: HTMLInputElement;
 	private readonly merge: HTMLSelectElement;
-	private readonly primaryAction: HTMLSelectElement;
+	private primaryAction: 'create' | 'sendToChat';
 	private readonly preferences: CreatePullRequestPreferences;
-	private readonly submit: Button;
+	private readonly submit: Button | ButtonWithDropdown;
 	private readonly cancel: Button;
 	private readonly message: HTMLElement;
 	private readonly generation = this._register(new CancellationTokenSource());
@@ -53,6 +54,7 @@ export class CreatePullRequestWidget extends Disposable {
 		@IAccessibleViewService accessibleViews: IAccessibleViewService,
 		@IConfigurationService configuration: IConfigurationService,
 		@IInstantiationService instantiation: IInstantiationService,
+		@IContextMenuService contextMenus: IContextMenuService,
 	) {
 		super();
 		this.preferences = instantiation.createInstance(CreatePullRequestPreferences);
@@ -113,17 +115,7 @@ export class CreatePullRequestWidget extends Disposable {
 		this.merge.hidden = true;
 		this._register(addDisposableListener(this.draft, 'change', () => { this.merge.disabled = this.draft.checked; if (this.draft.checked) { this.merge.value = ''; } }));
 		this.domNode.append(this.merge);
-		this.primaryAction = h(ownerDocument, 'select');
-		this.primaryAction.setAttribute('aria-label', localize('sessions.changes.prAction', 'Pull request action'));
-		this.primaryAction.hidden = !options.onSendToChat;
-		for (const [value, text] of [['create', localize('sessions.changes.prDirect', 'Create directly')], ['sendToChat', localize('sessions.changes.prAgent', 'Ask agent to create')]]) {
-			const option = h(ownerDocument, 'option');
-			option.value = value!;
-			option.textContent = text!;
-			this.primaryAction.append(option);
-		}
-		this.primaryAction.value = options.onSendToChat && preferences.primaryAction === 'sendToChat' ? 'sendToChat' : 'create';
-		this.domNode.append(this.primaryAction);
+		this.primaryAction = options.onSendToChat && preferences.primaryAction === 'sendToChat' ? 'sendToChat' : 'create';
 		this.message = h(ownerDocument, 'p');
 		this.message.setAttribute('role', 'status');
 		this.message.textContent = localize('sessions.changes.prLoading', 'Preparing pull request…');
@@ -135,16 +127,34 @@ export class CreatePullRequestWidget extends Disposable {
 			label: localize('sessions.changes.prCancel', 'Cancel'),
 			onClick: options.onCancel,
 		}));
-		this.submit = this._register(new Button(actions, {
+		const submitOptions = {
 			...defaultButtonStyles,
-			label: localize('sessions.changes.createPR', 'Create pull request'),
-			type: 'submit',
+			label: this.primaryAction === 'sendToChat' ? localize('sessions.changes.prSend', 'Send to agent') : localize('sessions.changes.createPR', 'Create pull request'),
+			type: 'submit' as const,
 			enabled: false,
-			presentation: 'primary',
-		}));
-		const updateSubmitLabel = (): void => { this.submit.label = this.primaryAction.value === 'sendToChat' ? localize('sessions.changes.prSend', 'Send to agent') : localize('sessions.changes.createPR', 'Create pull request'); };
-		updateSubmitLabel();
-		this._register(addDisposableListener(this.primaryAction, 'change', updateSubmitLabel));
+			presentation: 'primary' as const,
+		};
+		if (options.onSendToChat) {
+			this.submit = this._register(new ButtonWithDropdown(actions, {
+				...submitOptions, contextMenuProvider: contextMenus, addPrimaryActionToDropdown: false,
+				actions: {
+					getActions: () => (['create', 'sendToChat'] as const).map(action => ({
+						id: `sessions.createPullRequest.${action}`,
+						label: action === 'create' ? localize('sessions.changes.prDirect', 'Create directly') : localize('sessions.changes.prAgent', 'Ask agent to create'),
+						tooltip: '', checked: this.primaryAction === action, enabled: this.submit.enabled,
+						run: () => {
+							this.primaryAction = action;
+							this.submit.label = action === 'sendToChat' ? localize('sessions.changes.prSend', 'Send to agent') : localize('sessions.changes.createPR', 'Create pull request');
+							return this.create();
+						},
+					}))
+				},
+			}));
+			this.submit.dropdownButton.domNode.setAttribute('aria-label', localize('sessions.changes.prAction', 'Pull request action'));
+			this.submit.dropdownButton.setTitle(localize('sessions.changes.prAction', 'Pull request action'));
+		} else {
+			this.submit = this._register(new Button(actions, submitOptions));
+		}
 		this._register(addDisposableListener(this.domNode, 'submit', event => { event.preventDefault(); void this.create(); }));
 		this._register(addDisposableListener(this.domNode, 'keydown', event => {
 			if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); options.onCancel(); }
@@ -216,8 +226,9 @@ export class CreatePullRequestWidget extends Disposable {
 		this.submitting = true;
 		// Disabling a focused button drops focus to the document. Keep it in the
 		// form so dismissal can restore the anchor while the request is pending.
-		const formAction = this.primaryAction.value === 'sendToChat' && this.options.onSendToChat ? 'sendToChat' : 'create';
-		if (this.domNode.ownerDocument.activeElement === this.submit.domNode) { this.cancel.focus(); }
+		const formAction = this.primaryAction;
+		const submitRoot = this.submit instanceof ButtonWithDropdown ? this.submit.element : this.submit.domNode;
+		if (submitRoot.contains(this.domNode.ownerDocument.activeElement)) { this.cancel.focus(); }
 		this.submit.enabled = false;
 		this.domNode.setAttribute('aria-busy', 'true');
 		this.message.textContent = formAction === 'sendToChat' ? localize('sessions.changes.prSending', 'Sending request to agent…') : localize('sessions.changes.prCreating', 'Creating pull request…');

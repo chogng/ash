@@ -1,4 +1,5 @@
 import { Emitter } from "../../../common/event.js";
+import type { IAction } from "../../../common/actions.js";
 import type { Icon } from "../../../common/icon.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
 import { Lxicon } from "../../../common/lxicons.js";
@@ -10,6 +11,10 @@ import { appendIcon } from "../lxicons/lxicon.js";
 export type DropdownContent = HTMLElement | (() => HTMLElement);
 
 export type DropdownContentWidth = "intrinsic" | "at-least-trigger";
+
+export interface IActionProvider {
+	getActions(): readonly IAction[];
+}
 
 export interface DropdownOptions {
 	readonly label: string;

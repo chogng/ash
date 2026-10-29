@@ -108,6 +108,7 @@ export class Menus {
 
 	async isSystemMenu(application: PlaywrightApplication): Promise<boolean> {
 		if (!('windows' in application)) { return false; }
+		if (await this.page.locator('.ash-sessions-window').count()) { return false; }
 		const settings = await (async () => {
 			const snapshot = await readUserSettings(this.page);
 			return JSON.parse(snapshot.content) as Record<string, unknown>;

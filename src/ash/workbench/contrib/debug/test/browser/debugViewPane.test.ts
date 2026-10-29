@@ -182,8 +182,13 @@ test("Debug controls follow session state, dispatch actions, and retain collapse
 	const editor: IEditorService = { ...emptyEditorServiceState, openEditor: async () => { }, focusActiveEditor() { } };
 	try {
 		using debug = new MockDebugService();
+		let stopAllRuns = 0;
+		debug.stopAll = async () => { stopAllRuns++; };
+		let stopMenu: Parameters<IContextMenuService['showContextMenu']>[0] | undefined;
 		using support = new DebugViewTestServices();
-		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, contextMenus])));
+		using services = new InstantiationService(support.register(new ServiceCollection([IDebugService, debug], [IEditorService, editor], [IContextMenuService, {
+			...contextMenus, showContextMenu: (delegate: Parameters<IContextMenuService['showContextMenu']>[0]) => { stopMenu = delegate; },
+		}])));
 		const { container: view } = support.createContainer(services, browser.window.document.body);
 		const action = (label: string) => view.element.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
 		const toolbar = view.element.querySelector<HTMLElement>(".ash-toolbar")!;
@@ -203,6 +208,11 @@ test("Debug controls follow session state, dispatch actions, and retain collapse
 		assert.deepEqual([action("Pause").disabled, action("Step Over").disabled, variables.getAttribute("aria-expanded")], [false, true, "false"]);
 		action("Pause").click();
 		assert.deepEqual(session.operations, ["stepOver", "pause"]);
+		action('More Stop Actions').click();
+		assert.deepEqual(stopMenu!.getActions!().map(action => action.label), ['Stop All']);
+		stopMenu!.onHide?.(false);
+		await stopMenu!.getActions!()[0]!.run();
+		assert.equal(stopAllRuns, 1);
 
 		action("Stop").click();
 		assert.deepEqual(debug.operations, ["stop"]);

@@ -56,6 +56,7 @@ declare global {
 			readonly calls: readonly string[];
 			setSearch(engine: string): Promise<void>;
 			history(back: boolean, forward: boolean): void;
+			loading(value: boolean): void;
 			commands(): readonly string[];
 			attach(page: 'first' | 'second'): Promise<void>;
 			oldPageStatus(): void;
@@ -113,11 +114,13 @@ services.registerInstance(IBrowserViewWorkbenchService, {
 	getOrCreateLazy: () => { throw new Error('This fixture owns one browser input'); },
 	createBrowserView: async () => { throw new Error('This fixture owns one browser input'); },
 });
+const autoReloadChanged = resources.add(new Emitter<void>());
+let autoReloadEnabled = false;
 services.registerInstance(IBrowserAutoReloadService, {
-	onDidChangeState: Event.None,
-	isEnabled: () => false,
-	canReload: () => false,
-	toggle: () => { throw new Error('Auto reload requires a workspace in this fixture'); },
+	onDidChangeState: autoReloadChanged.event,
+	isEnabled: () => autoReloadEnabled,
+	canReload: () => true,
+	toggle: () => { autoReloadEnabled = !autoReloadEnabled; calls.push('autoReload'); autoReloadChanged.fire(); },
 });
 const info: IBrowserViewInfo = {
 	id: 'browser_target_00000000-0000-0000-0000-000000000000', host: { windowId: 1 }, owner: { type: 'user' }, session: { scope: BrowserViewStorageScope.Workspace },
@@ -131,6 +134,8 @@ services.registerInstance(IBrowserViewService, {
 	loadURL: async (_id: string, url: string) => { calls.push(url); },
 	onDidEvent: pageEvents.event, getOrCreateBrowserView: async (id: string) => ({ ...info, id, state: { ...info.state, targetId: id } }), getState: async (id: string) => ({ ...info.state, targetId: id }),
 	goBack: async () => { calls.push('back'); }, goForward: async () => { calls.push('forward'); },
+	reload: async (_id: string, hard?: boolean) => { calls.push(hard ? 'hardReload' : 'reload'); },
+	stop: async () => { calls.push('stop'); },
 	toggleElementSelection: async () => { }, toggleAreaSelection: async () => { }, stopFindInPage: async () => { },
 	setElementComments: async () => { },
 	layout: async () => { }, setVisible: async () => { }, getSharing: async () => [],
@@ -150,6 +155,7 @@ window.ashBrowserViewIntegration = {
 	calls,
 	setSearch: engine => services.get(IConfigurationService).updateValue(BrowserSearchEngineSettingId, engine, ConfigurationTarget.MEMORY),
 	history: (canGoBack, canGoForward) => { pageEvents.fire({ type: 'stateChanged', state: { ...editor.model!.state, canGoBack, canGoForward } }); },
+	loading: loading => { pageEvents.fire({ type: 'stateChanged', state: { ...editor.model!.state, loading } }); },
 	commands: () => services.get(IMenuService).getMenuActions(MenuId.CommandPalette).flatMap(([, actions]) => actions).filter(action => action.enabled && ['workbench.action.browser.goBack', 'workbench.action.browser.goForward'].includes(action.id)).map(action => action.id),
 	attach: async page => { await editor.setInput(page === 'first' ? input : second, new AbortController().signal); },
 	oldPageStatus: () => { pageEvents.fire({ type: 'stateChanged', state: { ...info.state, title: 'Retired page', loading: true } }); },

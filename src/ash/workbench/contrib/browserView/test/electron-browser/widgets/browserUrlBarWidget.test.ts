@@ -94,6 +94,37 @@ function fixture() {
 
 suite('browserView browser component', () => {
 	const browserTests = useBrowserTests();
+	test('reload split button localizes its menu and returns focus in Chinese', async () => {
+		const { page } = browserTests;
+		await page.goto('/browserView.html?locale=zh-CN');
+		const dropdown = page.getByRole('button', { name: '更多刷新操作', exact: true });
+		await dropdown.click();
+		await expect(page.getByRole('menuitem', { name: '忽略缓存重新加载', exact: true })).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(dropdown).toBeFocused();
+	});
+	test('reload split button dispatches page operations and follows loading and auto reload state', async () => {
+		const { page } = browserTests;
+		await page.goto('/browserView.html');
+		await page.waitForFunction(() => !!window.ashBrowserViewIntegration);
+		const primary = page.getByRole('button', { name: 'Reload', exact: true });
+		const dropdown = page.getByRole('button', { name: 'More Reload Actions', exact: true });
+		await primary.click();
+		await dropdown.focus();
+		await dropdown.press('ArrowDown');
+		await page.getByRole('menuitem', { name: 'Reload Without Cache', exact: true }).click();
+		await dropdown.click();
+		await page.getByRole('menuitemcheckbox', { name: 'Toggle auto reload', exact: true }).click();
+		await expect(primary.locator('[data-ash-icon-id="sync"]')).toHaveCount(1);
+		await dropdown.click();
+		await expect(page.getByRole('menuitemcheckbox', { name: 'Toggle auto reload', exact: true })).toHaveAttribute('aria-checked', 'true');
+		await page.keyboard.press('Escape');
+		await expect(dropdown).toBeFocused();
+		await page.evaluate(() => window.ashBrowserViewIntegration.loading(true));
+		await expect(dropdown).toHaveCount(0);
+		await page.getByRole('button', { name: 'Stop', exact: true }).click();
+		assert.deepEqual(await page.evaluate(() => [...window.ashBrowserViewIntegration.calls]), ['reload', 'hardReload', 'autoReload', 'stop']);
+	});
 	for (const locale of ['en', 'zh-CN']) {
 		test(`browser history search opens recorded pages and clears the session in ${locale}`, async function () {
 			const { page } = browserTests;
