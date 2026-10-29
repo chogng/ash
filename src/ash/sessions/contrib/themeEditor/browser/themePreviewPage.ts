@@ -48,14 +48,7 @@ const workbench = resources.add(await createSessionsWorkbench({
 	},
 	returnToWorkbench: () => { },
 	contributionIds: [
-		'workbench.contrib.snippets',
 		'workbench.contrib.sessionsLayout',
-		'sessions.contrib.multiDiffSource',
-		'chat.edits.editorOverlay',
-		'workbench.contrib.output',
-		'workbench.contrib.chatAccessibilitySignals',
-		'workbench.contrib.speechAccessibilitySignal',
-		'workbench.contrib.saveAccessibilitySignals',
 	],
 }));
 await workbench.whenRestored;

@@ -1,7 +1,7 @@
 import type { IAction } from '../../../../base/common/actions.js';
 import { MenuId, SubmenuItemAction } from '../../../../platform/actions/common/actions.js';
 import './media/themeEditor.css';
-import { addDisposableListener, getWindow, h, isHTMLElement, stopEvent } from '../../../../base/browser/dom.js';
+import { addDisposableListener, getWindow, h, isHTMLElement, scheduleAtNextAnimationFrame, stopEvent } from '../../../../base/browser/dom.js';
 import type { IDimension } from '../../../../base/browser/dom.js';
 import { Button } from '../../../../base/browser/ui/button/button.js';
 import { ColorPicker } from '../../../../base/browser/ui/colorPicker/colorPicker.js';
@@ -95,6 +95,11 @@ export class ThemeEditor extends EditorPane {
 	private colorPanel: HTMLElement | undefined;
 	private jsonPanel: HTMLElement | undefined;
 	private readonly rows = new Map<string, ThemeColorRow>();
+	private rowHeight = 0;
+	private selectedColor: string | undefined;
+	private readonly viewportRender = this._register(new MutableDisposable());
+	private readonly rowMeasurement = this._register(new MutableDisposable());
+	private measuredRow: ThemeColorRow | undefined;
 	private readonly inputLifetime = this._register(new DisposableStore());
 	private readonly nameDialog = this._register(new MutableDisposable<DisposableStore>());
 	private picker: ColorPicker | undefined;
@@ -209,7 +214,10 @@ export class ThemeEditor extends EditorPane {
 			placeholder: localize('themeEditor.search', 'Search colors'),
 			ariaLabel: localize('themeEditor.search', 'Search colors'),
 		}));
-		this._register(this.search.onDidChange(() => this.renderRows()));
+		this._register(this.search.onDidChange(() => {
+			this.scrollable?.scrollTo(0, 0);
+			this.renderRows();
+		}));
 		const scrollHost = h(doc, 'div');
 		scrollHost.className = 'ash-theme-editor-scroll';
 		panel.append(scrollHost);
@@ -218,6 +226,9 @@ export class ThemeEditor extends EditorPane {
 		this.list.className = 'ash-theme-editor-list';
 		this.scrollable.append(this.list);
 		scrollHost.append(this.scrollable.element);
+		this._register(this.scrollable.onDidScroll(() => this.scheduleViewport()));
+		this._register(addDisposableListener<KeyboardEvent>(this.list, 'keydown', event => this.navigateRows(event)));
+		this._register(addDisposableListener(this.list, 'focusout', () => this.scheduleViewport()));
 		const groups = [
 			{ id: 'surface', label: localize('themeEditor.group.surface', 'Surface'), pattern: /^(?:background$|workbench\.|widget\.|titleBar\.|commandCenter\.|window\.)/u },
 			{ id: 'text', label: localize('themeEditor.group.text', 'Text and borders'), pattern: /^(?:foreground$|description\.|muted\.|disabled|accent\.|error\.|warning\.|success\.|focusBorder$|contrast|border$|icon\.|selection\.|text)/u },
@@ -237,7 +248,7 @@ export class ThemeEditor extends EditorPane {
 		for (const group of groups) {
 			this.groups.push(this._register(new ThemeColorGroup(this.list, group.id, group.label, group.pattern, group.id === 'surface', () => {
 				this.picker?.cancel();
-				this.scrollable?.layout();
+				this.renderRows();
 			})));
 		}
 		this.empty = h(doc, 'p', { className: 'ash-theme-editor-empty', attributes: { role: 'status' } }, localize('themeEditor.noColors', 'No matching colors'));
@@ -259,7 +270,8 @@ export class ThemeEditor extends EditorPane {
 		}, this.configuration));
 		this._register(this.preview.onDidChangeColors(() => this.renderRows()));
 		this.split = this._register(new SplitView(this.body, 'horizontal'));
-		this.split.addView({ element: settings, minimumSize: 300, maximumSize: 440, onDidChange: Event.None, layout: (width, _offset, height) => { this.scrollable?.layout(); this.textEditor.layout({ width, height: Math.max(0, height - tabsHost.offsetHeight) }); } }, 360);
+		// Keep the source model and undo history, without rendering a hidden JSON viewport.
+		this.split.addView({ element: settings, minimumSize: 300, maximumSize: 440, onDidChange: Event.None, layout: (width, _offset, height) => { this.scrollable?.layout(); this.scheduleViewport(); this.textEditor.layout({ width, height: this.jsonPanel?.hidden ? 0 : Math.max(0, height - tabsHost.offsetHeight) }); } }, 360);
 		this.split.addView({ element: preview, minimumSize: 420, maximumSize: Infinity, onDidChange: Event.None, layout: () => { } }, { type: 'distribute' });
 	}
 
@@ -315,14 +327,16 @@ export class ThemeEditor extends EditorPane {
 	public override setVisible(visible: boolean): void {
 		if (!visible) this.picker?.cancel();
 		super.setVisible(visible);
-		this.textEditor.setVisible(visible);
+		this.textEditor.setVisible(visible && !this.jsonPanel?.hidden);
 		this.applyPreview();
 	}
 	public revealRange(range: Range): void { this.textEditor.revealRange(range); }
 	public getAccessibleContent(): string {
 		if (this.root?.ownerDocument.activeElement === this.preview?.element) return this.preview?.getAccessibleContent() ?? '';
 		if (this.picker) return this.pickerRow!.accessibleText + '\n' + this.picker.getAccessibleContent();
-		return [this.message?.textContent ?? '', ...[...this.rows.values()].filter(row => !row.element.closest('[hidden]')).map(row => row.accessibleText)].join('\n');
+		// Accessible View covers the whole result, including rows outside the viewport.
+		return [this.message?.textContent ?? '', ...this.groups.flatMap(group => group.body.hidden ? [] : group.entries.map(entry =>
+			this.rows.get(entry.id)?.accessibleText ?? `${entry.id}: ${entry.authored ?? (entry.effective ? Color.Format.CSS.formatHexA(entry.effective, true) : '')}. ${colorSourceLabel(entry.authored, entry.effective, entry.references)}`))].join('\n');
 	}
 
 	public override getActions(): readonly IAction[] {
@@ -549,6 +563,7 @@ export class ThemeEditor extends EditorPane {
 		if (!this.colorPanel || !this.jsonPanel) return;
 		this.colorPanel.hidden = value !== 'colors';
 		this.jsonPanel.hidden = value !== 'json';
+		this.textEditor.setVisible(value === 'json');
 		this.settingsTabs?.setTabs([
 			{ id: 'colors', value: 'colors', label: localize('themeEditor.colorsTab', 'Colors'), tabId: 'theme-colors-tab' },
 			{ id: 'json', value: 'json', label: localize('themeEditor.json', 'Theme JSON'), tabId: 'theme-json-tab' },
@@ -585,38 +600,136 @@ export class ThemeEditor extends EditorPane {
 			this.filtering = !!query;
 			for (const group of this.groups) group.setFiltering(this.filtering);
 		}
-		const counts = new Map<ThemeColorGroup, number>();
+		for (const group of this.groups) group.entries = [];
 		const current = this.compiled;
 		for (const entry of entries) {
 			const group = this.groups.find(group => group.pattern.test(entry.id))!;
-			let row = this.rows.get(entry.id);
-			if (!row) {
-				row = new ThemeColorRow(this.list.ownerDocument, entry.id, entry.description, this.hoverService,
-					value => this.editColor(entry.id, value), () => this.revealColor(entry.id), row => this.createColorPicker(row), id => this.revealDesignToken(id));
-				this.rows.set(entry.id, row);
-				group.body.append(row.element);
-			}
-			const hidden = !!query && !`${entry.id} ${entry.description} ${group.label}`.toLowerCase().includes(query);
-			if (row.element.hidden !== hidden) row.element.hidden = hidden;
-			if (!row.element.hidden) counts.set(group, (counts.get(group) ?? 0) + 1);
-			const references = 'defaults' in entry ? current && getThemeColorReferences(current, entry) : entry.references;
-			row.update(colors[entry.id], previewColors.get(entry.id)?.value ?? current?.getColor(entry.id), this.valid && !this.input?.readOnly, references);
+			if (query && !`${entry.id} ${entry.description} ${group.label}`.toLowerCase().includes(query)) continue;
+			group.entries.push({
+				id: entry.id, description: entry.description, authored: colors[entry.id],
+				effective: previewColors.get(entry.id)?.value ?? current?.getColor(entry.id),
+				references: 'defaults' in entry ? current && getThemeColorReferences(current, entry) : entry.references,
+			});
 		}
-		for (const group of this.groups) group.setCount(counts.get(group) ?? 0);
-		if (this.empty) this.empty.hidden = counts.size > 0;
-		if (this.pickerRow?.element.closest('[hidden]')) this.picker?.cancel();
-		const identifiers = new Set(entries.map(entry => entry.id));
-		for (const [id, row] of this.rows) if (!identifiers.has(id)) { row.dispose(); this.rows.delete(id); }
-		this.scrollable?.layout();
+		for (const group of this.groups) group.setCount(group.entries.length);
+		if (this.empty) this.empty.hidden = this.groups.some(group => group.entries.length > 0);
+		this.syncSelection();
+		this.renderViewport();
+	}
+
+	private scheduleViewport(): void {
+		if (!this.list || this.viewportRender.value) return;
+		this.viewportRender.value = scheduleAtNextAnimationFrame(getWindow(this.list), () => {
+			this.viewportRender.clear();
+			this.renderViewport();
+		});
+	}
+
+	/** Keep document-derived metadata; allocate controls only for visible or active rows. */
+	private renderViewport(revealId?: string): void {
+		if (!this.list || !this.scrollable) return;
+		const expanded = this.groups.filter(group => group.entries.length && !group.body.hidden);
+		const first = expanded[0]?.entries[0];
+		if (first) {
+			const row = this.renderRow(expanded[0]!, first, 0);
+			if (this.measuredRow !== row) {
+				this.measuredRow = row;
+				const observer = new (getWindow(this.list).ResizeObserver)(() => this.scheduleViewport());
+				observer.observe(row.element);
+				this.rowMeasurement.value = toDisposable(() => observer.disconnect());
+			}
+			// Measure the real control so font scaling and theme density stay accurate.
+			const height = row.element.getBoundingClientRect().height;
+			if (height > 0) this.rowHeight = height;
+		} else {
+			this.rowMeasurement.clear();
+			this.measuredRow = undefined;
+		}
+		for (const group of this.groups) group.body.style.height = `${group.entries.length * this.rowHeight}px`;
+		const viewport = this.scrollable.scrollableElement;
+		const top = viewport.scrollTop;
+		const bottom = top + viewport.clientHeight;
+		const listTop = this.list.getBoundingClientRect().top;
+		const active = this.list.ownerDocument.activeElement;
+		const pinned = new Set([first?.id, this.pickerRow?.id, revealId]);
+		for (const [id, row] of this.rows) if (active && row.element.contains(active)) pinned.add(id);
+		// Native reverse Tab into the inspector must reach its logical final control.
+		const lastGroup = [...this.groups].reverse().find(group => group.entries.length > 0);
+		if (lastGroup && !lastGroup.body.hidden) pinned.add(lastGroup.entries.at(-1)?.id);
+		const rendered = new Set<string>();
+		for (const group of expanded) {
+			const offset = group.body.getBoundingClientRect().top - listTop;
+			const start = this.rowHeight ? Math.max(0, Math.floor((top - offset) / this.rowHeight) - 2) : 0;
+			const end = this.rowHeight ? Math.min(group.entries.length, Math.ceil((bottom - offset) / this.rowHeight) + 2) : 1;
+			for (const [index, entry] of group.entries.entries()) {
+				if ((index < start || index >= end) && !pinned.has(entry.id)) continue;
+				rendered.add(entry.id);
+				this.renderRow(group, entry, index);
+			}
+		}
+		if (this.pickerRow && !rendered.has(this.pickerRow.id)) this.picker?.cancel();
+		for (const [id, row] of this.rows) if (!rendered.has(id)) { row.dispose(); this.rows.delete(id); }
+		this.scrollable.layout();
+	}
+
+	private renderRow(group: ThemeColorGroup, entry: ThemeColorEntry, index: number): ThemeColorRow {
+		let row = this.rows.get(entry.id);
+		if (!row) {
+			row = new ThemeColorRow(this.list!.ownerDocument, entry.id, entry.description, this.hoverService,
+				value => this.editColor(entry.id, value), () => this.revealColor(entry.id), row => this.createColorPicker(row), id => this.revealDesignToken(id));
+			this.rows.set(entry.id, row);
+			// DOM order remains the logical Tab order even when active rows are pinned.
+			let next: HTMLElement | undefined;
+			for (let i = index + 1; i < group.entries.length; i++) {
+				const candidate = this.rows.get(group.entries[i]!.id)?.element;
+				if (candidate?.parentElement === group.body) { next = candidate; break; }
+			}
+			group.body.insertBefore(row.element, next ?? null);
+		}
+		row.element.style.top = `${index * this.rowHeight}px`;
+		row.element.classList.toggle('selected', entry.id === this.selectedColor);
+		row.update(entry.authored, entry.effective, this.valid && !this.input?.readOnly, entry.references);
+		return row;
+	}
+
+	private navigateRows(event: KeyboardEvent): void {
+		if (event.key !== 'Tab' || event.altKey || event.ctrlKey || event.metaKey || !isHTMLElement(event.target)) return;
+		const items = this.groups.flatMap(group => group.entries.length ? [group, ...(group.body.hidden ? [] : group.entries)] : []);
+		const row = [...this.rows.values()].find(row => row.element.contains(event.target as Node));
+		let index: number;
+		if (row) {
+			const controls = row.tabStops;
+			if (event.target !== (event.shiftKey ? controls[0] : controls.at(-1))) return;
+			index = items.findIndex(item => 'id' in item && item.id === row.id);
+		} else {
+			index = items.findIndex(item => item instanceof ThemeColorGroup && item.header === event.target);
+		}
+		if (index < 0) return;
+		const next = items[index + (event.shiftKey ? -1 : 1)];
+		if (!next) return;
+		stopEvent(event);
+		if (next instanceof ThemeColorGroup) {
+			this.scrollable?.reveal(next.header);
+			next.header.focus({ preventScroll: true });
+		} else {
+			this.renderViewport(next.id);
+			const target = this.rows.get(next.id)!;
+			this.scrollable?.reveal(target.element);
+			(event.shiftKey ? target.tabStops.at(-1) : target.tabStops[0])?.focus({ preventScroll: true });
+		}
 	}
 
 	private revealDesignToken(id: string): void {
-		const row = this.rows.get(id);
-		if (!row || !this.search) return;
+		if (!this.search) return;
 		this.search.value = '';
+		// Clearing a search restores expansion first. Materialize the target
+		// category before resolving its row; it may never have been constructed.
 		this.renderRows();
 		this.groups.find(group => group.pattern.test(id))?.setExpanded(true);
-		this.scrollable?.layout();
+		this.renderRows();
+		this.renderViewport(id);
+		const row = this.rows.get(id);
+		if (!row) return;
 		this.scrollable?.reveal(row.element);
 		row.focus();
 	}
@@ -635,6 +748,13 @@ export class ThemeEditor extends EditorPane {
 		this.valid = true;
 		// Picker gestures must read the edited color even while preview compilation is pending.
 		const row = this.rows.get(id);
+		// Scroll can render before the scheduled theme compilation. Keep its derived
+		// metadata in step with this committed document edit, so it cannot restore
+		// the previous color while the user moves from Hex to opacity.
+		for (const group of this.groups) {
+			const index = group.entries.findIndex(entry => entry.id === id);
+			if (index >= 0) group.entries[index] = { ...group.entries[index]!, authored: value };
+		}
 		if (row) row.update(value, row.color, true, undefined);
 		this.revealColor(id, false);
 	}
@@ -650,6 +770,7 @@ export class ThemeEditor extends EditorPane {
 						anchor, content: panel, presentation: 'plain', focusRestore: ContextViewFocusRestore.Previous, onHide: () => {
 							if (this.picker === picker) { this.picker = undefined; this.pickerRow = undefined; }
 							onHide(false);
+							this.scheduleViewport();
 						}
 					});
 					if (visible) { this.picker = picker; this.pickerRow = row; }
@@ -684,6 +805,7 @@ export class ThemeEditor extends EditorPane {
 		const colors = findNodeAtLocation(parseTree(model.getText()), ['colors']);
 		let selected: string | undefined;
 		for (const property of colors?.children ?? []) if (offset >= property.offset && offset <= property.offset + property.length) selected = String(property.children?.[0]?.value);
+		this.selectedColor = selected;
 		for (const [id, row] of this.rows) row.element.classList.toggle('selected', id === selected);
 	}
 
@@ -702,11 +824,29 @@ export class ThemeEditor extends EditorPane {
 	}
 }
 
+interface ThemeColorEntry {
+	readonly id: string;
+	readonly description: string;
+	readonly authored: string | undefined;
+	readonly effective: Color | undefined;
+	readonly references: ThemeColorReferences | undefined;
+}
+
+function colorSourceLabel(authored: string | undefined, effective: Color | undefined, references: ThemeColorReferences | undefined): string {
+	if (authored === undefined && references) return references.kind === 'linked'
+		? localize('themeEditor.linkedTo', 'Linked to {0}', references.tokens.join(', '))
+		: localize('themeEditor.derivedFrom', 'Derived from {0}', references.tokens.join(', '));
+	let label = authored === undefined ? localize('themeEditor.inherited', 'Inherited / default') : localize('themeEditor.explicit', 'Set in this file');
+	if (authored && effective && !Color.fromHex(authored).equals(effective)) label += ' · ' + localize('themeEditor.effective', 'Effective: {0}', Color.Format.CSS.formatHexA(effective, true));
+	return label;
+}
+
 /** Expansion is inspector state; edits continue to be owned by the theme document. */
 class ThemeColorGroup extends Disposable {
 	public readonly body: HTMLElement;
 	private readonly element: HTMLElement;
-	private readonly header: HTMLButtonElement;
+	public readonly header: HTMLButtonElement;
+	public entries: ThemeColorEntry[] = [];
 	private readonly count: HTMLElement;
 	private expandedBeforeSearch = false;
 
@@ -789,6 +929,11 @@ class ThemeColorRow extends Disposable {
 		this._register(toDisposable(() => this.element.remove()));
 	}
 
+	public get tabStops(): HTMLElement[] {
+		return [...this.element.querySelectorAll<HTMLElement>('button, input')].filter(element =>
+			element.tabIndex >= 0 && !element.matches(':disabled') && getWindow(element).getComputedStyle(element).visibility !== 'hidden');
+	}
+
 	public focus(): void { if (this.editable) this.picker.focus(); else this.name.focus({ preventScroll: true }); }
 
 	public update(authored: string | undefined, effective: Color | undefined, enabled: boolean, references: ThemeColorReferences | undefined): void {
@@ -805,9 +950,7 @@ class ThemeColorRow extends Disposable {
 		this.reset.enabled = enabled && authored !== undefined;
 		this.element.classList.toggle('modified', authored !== undefined);
 		const relation = authored === undefined ? references : undefined;
-		const final = effective ? Color.Format.CSS.formatHexA(effective, true) : undefined;
-		let label = authored === undefined ? localize('themeEditor.inherited', 'Inherited / default') : localize('themeEditor.explicit', 'Set in this file');
-		if (authored && final && !Color.fromHex(authored).equals(effective!)) label += ' · ' + localize('themeEditor.effective', 'Effective: {0}', final);
+		const label = colorSourceLabel(authored, effective, references);
 		const key = JSON.stringify(relation ?? label);
 		// Keep focused links and their listeners stable across preview refreshes.
 		if (this.sourceKey === key) return;

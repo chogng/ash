@@ -1,6 +1,6 @@
 import { Schemas } from '../../../../base/common/network.js';
-import { Disposable } from '../../../../base/common/lifecycle.js';
-import { Emitter, Event } from '../../../../base/common/event.js';
+import { Disposable, DisposableStore } from '../../../../base/common/lifecycle.js';
+import { h } from '../../../../base/browser/dom.js';
 import { URI } from '../../../../base/common/uri.js';
 import { localize } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -10,7 +10,7 @@ import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.
 import type { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { LogService } from '../../../../platform/log/common/logServiceImpl.js';
 import { ConsoleLogSink } from '../../../../platform/log/common/consoleLogSink.js';
-import type { ITerminalChildProcess, IProcessReadyEvent } from '../../../../platform/terminal/common/terminal.js';
+import { SyncDescriptor } from '../../../../platform/instantiation/common/descriptors.js';
 import { ICodeEditorService } from '../../../../editor/browser/services/codeEditorService.js';
 import { startWorkbench } from '../../../browser/workbench.js';
 import { BrowserTitleService, createBrowserTitlebarPart } from '../../../browser/parts/titlebar/titlebarPart.js';
@@ -19,8 +19,8 @@ import { createDiffEditorInput } from '../../../common/editor/diffEditorInput.js
 import { IWorkbenchThemeService } from '../../../services/themes/common/workbenchThemeService.js';
 import { InMemoryWorkingCopyBackupService } from '../../../services/workingCopy/common/workingCopyBackupService.js';
 import { BrowserURLService } from '../../../services/url/browser/urlService.js';
-import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../../terminal/browser/terminal.js';
-import { DisposableStore, toDisposable } from '../../../../base/common/lifecycle.js';
+import { TERMINAL_VIEW_ID } from '../../terminal/common/terminal.js';
+import { ViewPane, type IViewPaneOptions } from '../../../browser/parts/views/viewPane.js';
 import { createThemePreviewHost, connectThemePreview } from './themePreviewHost.js';
 import { IChatSessionNavigationService } from '../../../services/chat/common/chatSessionNavigationService.js';
 
@@ -38,16 +38,46 @@ serviceCollection.set(IChatSessionNavigationService, {
 	openConversation: async () => { throw chatUnavailable(); },
 	startVoiceConversation: async () => { throw chatUnavailable(); },
 });
-await import('../../../workbench.web.main.js');
+// Registration stays behind localization and within this isolated document.
+await import('./themePreview.contribution.js');
+
+// Keep the real panel's layout and theme, without constructing terminal services,
+// profile discovery, a PTY, xterm, or a command interpreter for a color sample.
+class TerminalPreviewPane extends ViewPane {
+	constructor(container: HTMLElement, options: IViewPaneOptions) {
+		super(container, options);
+		this.setHeaderVisible(false);
+		const doc = container.ownerDocument;
+		this.contentElement.classList.add('ash-theme-preview-terminal');
+		const sample = h(doc, 'div', { attributes: { role: 'region', 'aria-label': localize('themeEditor.previewOnly', 'Preview only'), tabindex: '0' } });
+		sample.append(h(doc, 'p', {}, localize('themeEditor.previewTerminalIntro', 'Terminal color preview. Commands are not executed.')));
+		for (const bright of [false, true]) {
+			const line = h(doc, 'p');
+			for (const [index, name] of ['Black', 'Red', 'Green', 'Yellow', 'Blue', 'Magenta', 'Cyan', 'White'].entries()) {
+				const id = `terminal.ansi${bright ? 'Bright' : ''}${name}`;
+				const swatch = h(doc, 'span', { attributes: { 'data-color': id, 'aria-label': id, title: id } }, `${(bright ? 90 : 30) + index} Aa `);
+				swatch.style.color = `var(--ash-${id.replaceAll('.', '-')})`;
+				line.append(swatch);
+			}
+			sample.append(line);
+		}
+		const prompt = h(doc, 'p', {}, '$ ');
+		prompt.append(h(doc, 'span', { className: 'ash-theme-preview-terminal-selection' }, localize('themeEditor.previewOnly', 'Preview only')), ' ', h(doc, 'span', { className: 'ash-theme-preview-terminal-cursor', attributes: { 'aria-hidden': 'true' } }, '▌'));
+		sample.append(prompt);
+		this.contentElement.append(sample);
+	}
+}
+
 let services!: IInstantiationService;
 serviceCollection.set(IFileDialogService, host.fileDialogDescriptor(() => services));
 const workbench = resources.add(await startWorkbench({
 	productName: 'Ash', container: root, api, serviceCollection,
+	viewConstructors: new Map([[TERMINAL_VIEW_ID, new SyncDescriptor(TerminalPreviewPane)]]),
 	extensionHost: api.extensionHost,
 	workspace: { id: 'theme-preview', folders: [{ id: 'theme-preview', name: 'theme-preview', uri: workspaceRoot, index: 0 }] },
 	workspaceFileSystemProvider: workspaceFiles,
-	defaultLayout: { parts: { sidebar: !diffPreview, panel: false, auxiliarybar: false, agentSidebar: false } },
-	// Keep the production Parts and editor/terminal behavior without starting
+	defaultLayout: { parts: { sidebar: !diffPreview, panel: !diffPreview, auxiliarybar: false, agentSidebar: false } },
+	// Keep the production Parts and editor rendering without starting
 	// backend observers, history, account, update or extension contributions.
 	contributionIds: [
 		'workbench.contrib.layoutActionsContext',
@@ -55,18 +85,10 @@ const workbench = resources.add(await startWorkbench({
 		'workbench.contrib.sash',
 		'workbench.contrib.dynamicEditorConfigurations',
 		'workbench.contrib.editorStatus',
-		'workbench.contrib.documentSymbolsOutline',
-		'workbench.contrib.dirtyFilesIndicator',
-		'workbench.contrib.textFileEditorTracker',
-		'workbench.contrib.snippets',
 		'workbench.contrib.folding',
-		'workbench.contrib.output',
 		'editorAccessibilityHelpContribution',
 		'workbench.contrib.accessibilityStatus',
 		'workbench.contrib.unfocusedViewDimming',
-		'workbench.contrib.terminalAccessibilitySignals',
-		'workbench.contrib.saveAccessibilitySignals',
-		'workbench.contrib.editorTextPropertySignals',
 	],
 	initialConfiguration: { "contents": { "workbench": { "startupEditor": "none" } }, "keys": ["workbench.startupEditor"], "overrides": [] },
 	// Webviews are not part of the sample. The disconnected host supplies no remote resources.
@@ -134,60 +156,10 @@ export function withOpacity(color: string): string {
 	}
 }
 
-// The real Terminal UI consumes a renderer-owned process. Its input can only
-// manipulate this sample buffer; no string is ever sent to a shell.
-class PreviewTerminalProcess extends Disposable implements ITerminalChildProcess {
-	readonly shouldPersist = false;
-	private readonly data = this._register(new Emitter<string>());
-	private readonly ready = this._register(new Emitter<IProcessReadyEvent>());
-	readonly onProcessData = this.data.event;
-	readonly onProcessReady = this.ready.event;
-	readonly onDidChangeProperty = Event.None;
-	readonly onProcessExit = Event.None;
-	private line = '';
-	constructor(readonly id: number) { super(); }
-	async start(): Promise<void> {
-		this.ready.fire({ pid: -1, cwd: '/theme-preview' });
-		this.data.fire(localize('themeEditor.previewTerminalIntro', 'Preview terminal. Try help, clear or echo. Commands stay in this preview.') + '\r\n\x1b[31m● \x1b[32m● \x1b[33m● \x1b[34m● \x1b[35m● \x1b[36m●\x1b[0m\r\n$ ');
-	}
-	input(data: string): void {
-		if (data === '\r') {
-			const output = this.line === 'clear' ? '\x1b[2J\x1b[H' : this.line === 'help' ? 'help, clear, echo <text>' : this.line.startsWith('echo ') ? this.line.slice(5) : this.line ? localize('themeEditor.previewCommand', 'This preview supports help, clear and echo.') : '';
-			this.data.fire('\r\n' + output + '\r\n$ ');
-			this.line = '';
-		} else if (data === '\x7f' && this.line) {
-			this.line = this.line.slice(0, -1);
-			this.data.fire('\b \b');
-		} else if (/^[\x20-\x7e]+$/u.test(data) && this.line.length + data.length <= 1024) {
-			this.line += data;
-			this.data.fire(data);
-		}
-	}
-	shutdown(): void { this.dispose(); }
-}
-const terminal = diffPreview ? undefined : await services.get(ITerminalService).createTerminal({
-	dimensions: { cols: 90, rows: 8 },
-	config: { name: localize('themeEditor.previewOnly', 'Preview only'), customPtyImplementation: id => new PreviewTerminalProcess(id) },
-});
-if (terminal) {
-	services.get(ITerminalGroupService).createGroup(terminal);
-	await services.get(ITerminalGroupService).showPanel(false);
-}
-
-let terminalScreen: ITerminalInstance['xterm'];
 const publishContent = connectThemePreview(resources, services.get(IWorkbenchThemeService), services.get(IConfigurationService), () => {
 	const editors = services.get(ICodeEditorService).listCodeEditors();
-	const buffer = terminalScreen?.raw.buffer.active;
-	const output = buffer ? Array.from({ length: buffer.length }, (_, index) => buffer.getLine(index)?.translateToString(true) ?? '').join('\n') : '';
+	const output = root.querySelector('.ash-theme-preview-terminal')?.textContent ?? '';
 	return editors.map(editor => `${editor.getModel()?.uri.path ?? ''}\n${editor.getModel()?.getValue() ?? ''}`).join('\n') + '\n' + output;
-});
-void terminal?.xtermReadyPromise.then(xterm => {
-	if (xterm && !resources.isDisposed) {
-		terminalScreen = xterm;
-		const listener = xterm.raw.onWriteParsed(publishContent);
-		resources.add(toDisposable(() => listener.dispose()));
-		publishContent();
-	}
 });
 resources.add(editorService.onDidActiveEditorChange(publishContent));
 const editorListeners = resources.add(new DisposableStore());

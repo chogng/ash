@@ -128,13 +128,6 @@ console.log(describeTheme(palette));
 		...disconnected,
 		// The fixed preview has no accounts or account-managed settings.
 		github: { ...disconnected.github, listAccounts: async () => [] },
-		language: { ...disconnected.language, servers: async () => ({ servers: [] }) },
-		// Editor overlays have no backend consumer in this host.
-		codebaseSymbols: {
-			...disconnected.codebaseSymbols,
-			synchronize: async () => ({ generation: 0, dirtyDocumentCount: 0 }),
-			close: async () => ({ generation: 0, dirtyDocumentCount: 0 }),
-		},
 	};
 	let clipboardText = '';
 	let findText = '';

@@ -81,6 +81,9 @@ export class Hover extends Disposable {
 	private descriptionApplied = false;
 	private _visible = false;
 	private pointerDown = false;
+	private pointerOver = false;
+	private targetFocused = false;
+	private readonly targetExitListeners = this._register(new MutableDisposable<DisposableStore>());
 	private hoverFocused = false;
 	private readonly trapFocus: boolean;
 
@@ -118,25 +121,19 @@ export class Hover extends Disposable {
 		}));
 
 		this._register(addDisposableListener(target, "pointerenter", () => {
+			this.pointerOver = true;
+			this.bindTargetExitListeners();
 			this.hideTimer.clear();
 			this.scheduleShow("pointer");
 		}));
 		this._register(addDisposableListener(target, "pointerdown", () => {
 			this.pointerDown = true;
+			this.bindTargetExitListeners();
 			this.hide();
 		}, true));
-		this._register(addDisposableListener(target, "pointerup", () => {
-			this.pointerDown = false;
-		}, true));
-		this._register(addDisposableListener(target, "pointercancel", () => {
-			this.pointerDown = false;
-		}, true));
-		this._register(addDisposableListener(target, "pointerleave", (event) => {
-			this.pointerDown = false;
-			if (this.isInsideHover(event.relatedTarget)) return;
-			this.scheduleHide();
-		}));
 		this._register(addDisposableListener(target, "focusin", (event: FocusEvent) => {
+			this.targetFocused = true;
+			this.bindTargetExitListeners();
 			// Focus returning from a dismissed hover or removed overlay must not reopen it.
 			const fromHover = isHTMLElement(event.relatedTarget) &&
 				event.relatedTarget.closest(".ash-hover") !== null;
@@ -144,10 +141,6 @@ export class Hover extends Disposable {
 				return;
 			}
 			this.scheduleShow("focus");
-		}));
-		this._register(addDisposableListener(target, "focusout", (event) => {
-			if (this.isInsideHover(event.relatedTarget)) return;
-			this.scheduleHide();
 		}));
 		if (options.setupKeyboardEvents) {
 			this._register(addDisposableListener(target, "keydown", (event: KeyboardEvent) => {
@@ -159,6 +152,34 @@ export class Hover extends Disposable {
 				}
 			}));
 		}
+	}
+
+	/** Idle targets need only activation listeners; exit tracking belongs to an interaction. */
+	private bindTargetExitListeners(): void {
+		if (this.targetExitListeners.value) return;
+		const listeners = new DisposableStore();
+		this.targetExitListeners.value = listeners;
+		for (const type of ['pointerup', 'pointercancel'] as const) {
+			listeners.add(addDisposableListener(this.element, type, () => {
+				this.pointerDown = false;
+				this.releaseTargetExitListeners();
+			}, true));
+		}
+		listeners.add(addDisposableListener(this.element, 'pointerleave', event => {
+			this.pointerOver = false;
+			this.pointerDown = false;
+			this.releaseTargetExitListeners();
+			if (!this.isInsideHover(event.relatedTarget)) this.scheduleHide();
+		}));
+		listeners.add(addDisposableListener(this.element, 'focusout', event => {
+			this.targetFocused = false;
+			this.releaseTargetExitListeners();
+			if (!this.isInsideHover(event.relatedTarget)) this.scheduleHide();
+		}));
+	}
+
+	private releaseTargetExitListeners(): void {
+		if (!this.pointerOver && !this.pointerDown && !this.targetFocused) this.targetExitListeners.clear();
 	}
 
 	get visible(): boolean {
@@ -189,6 +210,8 @@ export class Hover extends Disposable {
 			return;
 		}
 		const { anchorAxisAlignment, anchorPosition } = this.resolvePosition(hoverOptions?.position?.hoverPosition);
+		// Explicit show() calls also need exit tracking, even without a preceding enter event.
+		this.bindTargetExitListeners();
 		this.bindTooltipListeners(tooltip);
 		this.tooltip = tooltip;
 		this.applyDescription(tooltip.id);
@@ -400,6 +423,7 @@ export class Hover extends Disposable {
 		this._visible = false;
 		this.hoverFocused = false;
 		this.tooltip = undefined;
+		this.releaseTargetExitListeners();
 		if (!this.contentLifetime.isDisposed) this.contentLifetime.clear();
 		if (!this.tooltipListeners.isDisposed) this.tooltipListeners.clear();
 		this.restoreDescription();

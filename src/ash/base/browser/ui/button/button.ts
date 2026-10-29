@@ -52,7 +52,7 @@ export interface IButtonOptions extends Partial<IButtonStyles> {
 export class Button extends Disposable {
 	readonly domNode: HTMLButtonElement;
 	private readonly root: FastDomNode<HTMLButtonElement>;
-	private readonly content: IconLabel;
+	private readonly content = this._register(new MutableDisposable<IconLabel>());
 	private readonly hover = this._register(new MutableDisposable<IManagedHover>());
 	private readonly hoverGroupId: string | undefined;
 	private readonly hoverAnchorPosition: AnchorPosition | undefined;
@@ -100,12 +100,8 @@ export class Button extends Disposable {
 		if (options.ariaLabel || options.iconOnly) {
 			setAriaAttribute(this.domNode, "label", options.ariaLabel ?? options.label);
 		}
-		this.content = this._register(new IconLabel(this.domNode, {
-			label: options.label,
-			icon: options.icon,
-		}));
-		this.content.element.classList.add("ash-button-content");
-		this.content.labelElement.classList.add("ash-button-label");
+		// Swatches and host-supplied content need a semantic button, but no empty label subtree.
+		if (options.label || options.icon) this.getContent(options.label);
 		container.append(this.domNode);
 		this.setTitle(options.title);
 		if (options.checked !== undefined) {
@@ -115,6 +111,17 @@ export class Button extends Disposable {
 		if (options.onClick) {
 			this._register(this.onDidClick(options.onClick));
 		}
+	}
+
+	private getContent(label = ''): IconLabel {
+		if (!this.content.value) {
+			const content = this.content.value = new IconLabel(this.domNode, { label, icon: this.currentIcon });
+			content.element.classList.add('ash-button-content');
+			content.labelElement.classList.add('ash-button-label');
+			// Hosts can append their own swatches or indicators before the first label is assigned.
+			this.domNode.prepend(content.element);
+		}
+		return this.content.value;
 	}
 
 	set enabled(value: boolean) { this.domNode.disabled = !value; }
@@ -127,14 +134,16 @@ export class Button extends Disposable {
 	hasFocus(): boolean { return this.domNode.ownerDocument.activeElement === this.domNode; }
 
 	set label(value: string) {
-		this.content.setLabel(value, undefined, { icon: this.currentIcon });
+		if (!value && !this.currentIcon) this.content.clear();
+		else this.getContent().setLabel(value, undefined, { icon: this.currentIcon });
 		if (this.usesLabelAsAriaLabel) setAriaAttribute(this.domNode, "label", value);
 	}
-	get label(): string { return this.content.labelElement.textContent ?? ""; }
+	get label(): string { return this.content.value?.labelElement.textContent ?? ""; }
 
 	set icon(value: Icon | undefined) {
 		this.currentIcon = value;
-		this.content.setIcon(value);
+		if (!value && !this.label) this.content.clear();
+		else this.getContent().setIcon(value);
 	}
 	get icon(): Icon | undefined { return this.currentIcon; }
 

@@ -177,7 +177,8 @@ test('Theme Editor connects its local file preview and isolates draft colors', {
 		await popup.setViewportSize(size);
 		await preview.getByRole('button', { name: 'Hide Panel', exact: true }).click();
 		await preview.getByRole('button', { name: 'Toggle Panel Visibility', exact: true }).click();
-		await expect(preview.getByRole('textbox', { name: 'Terminal input', exact: true })).toBeVisible();
+		await expect(preview.getByRole('region', { name: 'Preview only', exact: true })).toBeVisible();
+		await expect(preview.locator('.xterm, .ash-terminal-status')).toHaveCount(0);
 	}
 	const previewWindows = popup.getByRole('tablist', { name: 'Preview window', exact: true });
 	await previewWindows.getByRole('tab', { name: 'Agent Window', exact: true }).click();

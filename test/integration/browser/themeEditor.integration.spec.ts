@@ -37,11 +37,13 @@ async function openEditor(page: Page, locale?: string, theme?: string): Promise<
 	await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
 	if (theme) await page.evaluate(id => window.themeEditorTest.selectTheme(id), theme);
 	const [popup] = await Promise.all([page.waitForEvent('popup'), page.locator('#open').click()]);
-	popup.on('pageerror', error => console.error('Theme preview fixture:', error.message));
-	popup.on('console', message => { if (message.type() === 'error') console.error('Theme preview fixture:', message.text()); });
+	const errors: string[] = [];
+	popup.on('pageerror', error => errors.push(error.message));
+	popup.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 	await expect(popup.locator('.ash-theme-editor')).toBeVisible();
 	await expect(popup.locator('.ash-theme-editor-message')).not.toHaveClass(/error/);
 	await expect(popup.frameLocator('.ash-theme-editor-preview').locator('body')).toHaveAttribute('data-ready', 'true');
+	expect(errors, 'The isolated preview must complete startup without missing services or failed contributions').toEqual([]);
 	return popup;
 }
 
@@ -49,6 +51,13 @@ for (const [theme, locale] of [['ash-light', 'en'], ['ash-dark', 'zh-CN'], ['ash
 	test(`diff preview updates real line and word highlights in Theme Editor (${theme}, ${locale})`, async ({ page }, testInfo) => {
 		const popup = await openEditor(page, locale, theme);
 		await saveEditableTheme(popup, locale);
+		const terminal = popup.frameLocator('.ash-theme-editor-preview').locator('.ash-theme-preview-terminal');
+		await expect(terminal).toContainText(locale === 'zh-CN' ? '终端配色预览，不执行命令。' : 'Terminal color preview. Commands are not executed.');
+		await expect(terminal.locator('[data-color]')).toHaveCount(16);
+		await expect(popup.frameLocator('.ash-theme-editor-preview').locator('.xterm, .ash-terminal-status, [data-statusbar-item-id="ash.status.languageServers"]')).toHaveCount(0);
+		await popup.getByRole('searchbox').fill('terminal.ansiRed');
+		await editColor(popup.locator('.ash-theme-color').getByRole('textbox'), '#b51234');
+		await expect(terminal.locator('[data-color="terminal.ansiRed"]')).toHaveCSS('color', 'rgb(181, 18, 52)');
 		const tabs = popup.getByRole('tablist', { name: locale === 'zh-CN' ? '预览窗口' : 'Preview window', exact: true });
 		await tabs.getByRole('tab', { name: locale === 'zh-CN' ? '桌面工作台' : 'Workbench', exact: true }).focus();
 		await popup.keyboard.press('ArrowRight');
@@ -139,6 +148,38 @@ test('diff preview preserves sample edits through theme undo and redo and resets
 	await expect.poll(() => page.evaluate(() => window.themeEditorTest.accessibleContent())).not.toContain('preview_only');
 	await expect(popup.locator('iframe.ash-theme-editor-preview')).toHaveCount(1);
 	expect(await page.evaluate(() => window.themeEditorTest.persisted())).toBe(persisted);
+});
+
+test('hidden Theme JSON releases rendered lines while preserving edits and undo across tab switches', async ({ page }) => {
+	const popup = await openEditor(page);
+	const json = popup.locator('.ash-theme-editor-json');
+	// A zero-height editor may retain its caret line, but must not render a hidden viewport.
+	await expect.poll(() => json.locator('.view-line').count()).toBeLessThanOrEqual(1);
+	await popup.getByRole('searchbox').fill('editor.background');
+	const color = popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
+	await editColor(color, '#223344');
+	const colorSource = await page.evaluate(() => window.themeEditorTest.source());
+	await popup.getByRole('tab', { name: 'Theme JSON', exact: true }).click();
+	const input = json.getByRole('textbox');
+	await expect(input).toBeVisible();
+	await expect(json.locator('.view-line').first()).toBeVisible();
+	const originalInput = await input.elementHandle();
+	await input.focus();
+	await input.press('ControlOrMeta+Home');
+	await input.press('Space');
+	await expect.poll(() => page.evaluate(() => window.themeEditorTest.source())).toBe(' ' + colorSource);
+	await popup.getByRole('tab', { name: 'Colors', exact: true }).click();
+	await expect.poll(() => json.locator('.view-line').count()).toBeLessThanOrEqual(1);
+	await expect(color).toHaveValue('223344');
+	const undo = popup.locator('.ash-auxiliary-titlebar').getByRole('button', { name: 'Undo', exact: true });
+	await undo.click();
+	await expect.poll(() => page.evaluate(() => window.themeEditorTest.source())).toBe(colorSource);
+	await undo.click();
+	await expect(color).toHaveValue('101525');
+	await popup.getByRole('tab', { name: 'Theme JSON', exact: true }).click();
+	await expect(input).toBeVisible();
+	expect(await originalInput!.evaluate(element => element.isConnected)).toBe(true);
+	await originalInput!.dispose();
 });
 
 test('titlebar shares undo and redo history and offers a primary save split button', async ({ page }, testInfo) => {
@@ -614,6 +655,7 @@ test('Chinese labels and keyboard color adjustment work in the auxiliary window'
 	await expect.poll(() => page.evaluate(() => window.themeEditorTest.source())).toContain('#10152580');
 	await rowOpacity.press('Alt+F1');
 	await expect(popup.getByRole('dialog').getByRole('textbox')).toHaveValue(/左侧是色块和十六进制颜色值，右侧是不透明度百分比/u);
+	await expect(popup.getByRole('dialog').getByRole('textbox')).toHaveValue(/包括可见区域之外的颜色/u);
 	await popup.keyboard.press('Escape');
 	await expect(rowOpacity).toBeFocused();
 	const swatch = popup.getByRole('button', { name: '为 editor.background 选择颜色', exact: true });
@@ -802,13 +844,12 @@ test('shared Workbench editors, file tree, split groups and terminal stay in the
 	await expect(frame.getByRole('treeitem', { name: 'src/index.ts', exact: true })).toBeVisible();
 	await frame.getByRole('treeitem', { name: 'src/index.ts', exact: true }).dblclick();
 	await expect(frame.getByRole('textbox', { name: 'index.ts', exact: true })).toBeVisible();
-	const terminal = frame.getByRole('textbox', { name: /^Terminal input(?:\.|$)/u });
+	const terminal = frame.getByRole('region', { name: 'Preview only', exact: true });
+	await expect(frame.locator('.xterm, .ash-terminal-status')).toHaveCount(0);
 	await terminal.focus();
-	await terminal.pressSequentially('echo preview_terminal');
-	await terminal.press('Enter');
-	await expect.poll(() => page.evaluate(() => window.themeEditorTest.accessibleContent())).toContain('preview_terminal');
+	await expect.poll(() => page.evaluate(() => window.themeEditorTest.accessibleContent())).toContain('Terminal color preview. Commands are not executed.');
 	await terminal.press('Alt+F2');
-	await expect(accessible.getByRole('textbox')).toHaveValue(/preview_terminal/u);
+	await expect(accessible.getByRole('textbox')).toHaveValue(/Terminal color preview/u);
 	await popup.keyboard.press('Escape');
 	expect(await page.evaluate(() => window.themeEditorTest.source())).toBe(source);
 	expect(await page.evaluate(() => window.themeEditorTest.persisted())).toBe(source);
@@ -844,6 +885,99 @@ test('Save and closing the editor retain the applied theme until explicit applic
 	await expect(page.locator('#main')).toHaveCSS('background-color', 'rgb(68, 85, 102)');
 });
 
+test('color list virtualizes scrolling and keeps an active edit through recycling', async ({ page }, testInfo) => {
+	const popup = await openEditor(page);
+	const search = popup.getByRole('searchbox');
+	await search.fill('.');
+	const rows = popup.locator('.ash-theme-color');
+	const viewport = popup.locator('.ash-theme-editor-scroll .ash-scrollbar-viewport');
+	const count = await popup.locator('.ash-theme-color-group-count').evaluateAll(nodes => nodes.reduce((sum, node) => sum + Number(node.textContent), 0));
+	expect(count).toBeGreaterThan(200);
+	await expect.poll(() => rows.count()).toBeLessThan(25);
+	const id = await rows.nth(2).getByRole('textbox').getAttribute('aria-label');
+	const first = popup.getByRole('textbox', { name: id!, exact: true });
+	await first.fill('#12');
+	const input = await first.elementHandle();
+	for (const fraction of [0.5, 1, 0]) {
+		await viewport.evaluate((element, fraction) => { element.scrollTop = (element.scrollHeight - element.clientHeight) * fraction; }, fraction);
+		await expect.poll(() => rows.count()).toBeLessThan(25);
+		await expect(first).toBeFocused();
+		await expect(first).toHaveValue('#12');
+		expect(await input!.evaluate(element => element.isConnected)).toBe(true);
+	}
+	await search.focus();
+	await viewport.evaluate(element => { element.scrollTop = (element.scrollHeight - element.clientHeight) / 2; });
+	await expect(first).toHaveCount(0);
+	await expect.poll(() => viewport.evaluate(element => {
+		const view = element.getBoundingClientRect();
+		return [...element.querySelectorAll('.ash-theme-color')].some(row => {
+			const bounds = row.getBoundingClientRect();
+			return bounds.top < view.bottom && bounds.bottom > view.top;
+		});
+	})).toBe(true);
+	const accessible = await page.evaluate(() => window.themeEditorTest.accessibleContent());
+	expect(accessible.match(/^[a-z][\w.]*:/gmu)?.length).toBe(count);
+	expect(accessible).toContain('terminal.ansiRed:');
+	expect(accessible).toContain('editor.background:');
+	await search.fill('terminal.ansiRed');
+	const red = popup.getByRole('textbox', { name: 'Hex color for terminal.ansiRed', exact: true });
+	await expect(red).toBeInViewport();
+	await editColor(red, '#b51234');
+	await expect(popup.frameLocator('.ash-theme-editor-preview').locator('[data-color="terminal.ansiRed"]')).toHaveCSS('color', 'rgb(181, 18, 52)');
+	await search.fill('.');
+	const swatchLabel = await rows.nth(2).locator('.ash-color-picker-input-swatch').getAttribute('aria-label');
+	const swatch = popup.getByRole('button', { name: swatchLabel!, exact: true });
+	await swatch.click();
+	const picker = popup.getByRole('dialog', { name: 'Color picker', exact: true });
+	await expect(picker).toBeVisible();
+	await viewport.evaluate(element => { element.scrollTop = element.scrollHeight; });
+	await expect(picker).toBeVisible();
+	await popup.keyboard.press('Escape');
+	await expect(picker).toBeHidden();
+	await expect(swatch).toBeFocused();
+	await search.focus();
+	await popup.setViewportSize({ width: 1100, height: 580 });
+	await expect.poll(() => rows.count()).toBeLessThan(20);
+	await popup.screenshot({ path: testInfo.outputPath('virtual-colors.png') });
+	await input!.dispose();
+});
+
+test('color list keyboard traversal reaches recycled rows and crosses group boundaries', async ({ page }) => {
+	const popup = await openEditor(page);
+	await popup.getByRole('searchbox').fill('terminal.');
+	const heading = popup.getByRole('button', { name: 'Terminal', exact: true });
+	await heading.focus();
+	const names: string[] = [];
+	for (let step = 0; step < 180; step++) {
+		await popup.keyboard.press('Tab');
+		const active = await popup.evaluate(() => {
+			const element = document.activeElement;
+			return { name: element?.matches('.ash-theme-color-name') ? element.textContent : undefined, inside: !!element?.closest('.ash-theme-editor-list') };
+		});
+		if (!active.inside) break;
+		if (active.name) names.push(active.name);
+	}
+	expect(names.length).toBe(Number(await heading.locator('.ash-theme-color-group-count').textContent()));
+	expect(new Set(names).size).toBe(names.length);
+	expect(names).toContain('terminal.ansiBrightWhite');
+	await popup.keyboard.press('Shift+Tab');
+	await expect.poll(() => popup.evaluate(() => document.activeElement?.closest('.ash-theme-color')?.querySelector('.ash-theme-color-name')?.textContent)).toBe(names.at(-1));
+	for (let step = 0; step < 180; step++) {
+		if (await heading.evaluate(element => element === document.activeElement)) break;
+		await popup.keyboard.press('Shift+Tab');
+	}
+	await expect(heading).toBeFocused();
+	await popup.keyboard.press('Shift+Tab');
+	await expect(popup.getByRole('searchbox')).toBeFocused();
+	await popup.getByRole('searchbox').fill('');
+	const textHeading = popup.getByRole('button', { name: 'Text and borders', exact: true });
+	await textHeading.focus();
+	await popup.keyboard.press('Shift+Tab');
+	await expect.poll(() => popup.evaluate(() => document.activeElement?.closest('.ash-theme-color-group-body')?.id)).toBe('theme-color-group-surface');
+	await popup.keyboard.press('Tab');
+	await expect(textHeading).toBeFocused();
+});
+
 test('color categories use shared color and opacity rows and restore expansion after searching', async ({ page }) => {
 	const popup = await openEditor(page);
 	const surface = popup.getByRole('button', { name: 'Surface', exact: true });
@@ -851,10 +985,12 @@ test('color categories use shared color and opacity rows and restore expansion a
 	const swatch = popup.getByRole('button', { name: 'Choose color for editor.background', exact: true });
 	await expect(surface).toHaveAttribute('aria-expanded', 'true');
 	await expect(editor).toHaveAttribute('aria-expanded', 'false');
-	await expect(swatch).toBeHidden();
+	await expect(swatch).toHaveCount(0);
+	await expect(popup.locator('.ash-theme-color-group-body[hidden] .ash-theme-color')).toHaveCount(0);
 	await surface.focus();
 	await surface.press('Enter');
 	await expect(surface).toHaveAttribute('aria-expanded', 'false');
+	await expect(popup.locator('.ash-theme-color')).toHaveCount(0);
 	await expect(surface).toBeFocused();
 	await expect(surface).toHaveCSS('outline-style', 'solid');
 	const liveRegion = page.locator('.ash-aria-live').first();
@@ -864,6 +1000,7 @@ test('color categories use shared color and opacity rows and restore expansion a
 	await search.fill('editor.background');
 	await expect(editor).toHaveAttribute('aria-expanded', 'true');
 	await expect(swatch).toBeVisible();
+	await expect(popup.locator('.ash-theme-color-group[hidden] .ash-theme-color')).toHaveCount(0);
 	await popup.getByRole('button', { name: 'editor.background', exact: true }).hover();
 	const tooltip = popup.getByRole('tooltip').filter({ hasText: 'editor.background' });
 	await expect(tooltip).toBeVisible();
@@ -885,6 +1022,7 @@ test('color categories use shared color and opacity rows and restore expansion a
 	await expect(alpha).toBeFocused();
 	await editColor(alpha, '40');
 	await expect(hex).toHaveValue('AABBCC');
+	await expect(swatch.locator('.ash-color-picker-input-preview')).toHaveCSS('background-image', /rgba\(170, 187, 204, 0.4\)/);
 	await expect.poll(() => page.evaluate(() => window.themeEditorTest.source())).toContain('#aabbcc66');
 	await row.getByRole('button', { name: 'Remove the override for editor.background', exact: true }).click();
 	await expect.poll(() => page.evaluate(() => window.themeEditorTest.source())).not.toContain('"editor.background"');
@@ -924,7 +1062,7 @@ for (const theme of ['ash-light', 'ash-dark']) {
 		await expect(frame.locator('.ash-workbench-titlebar')).toHaveCSS('height', '35px');
 		await expect(frame.locator('.ash-workbench-statusbar')).toHaveCSS('height', '32px');
 		// With terminal.background unset, the panel terminal follows panel.background.
-		await expect(frame.locator('.xterm-viewport')).toHaveCSS('background-color', theme === 'ash-light' ? 'rgb(248, 248, 248)' : 'rgb(37, 37, 38)');
+		await expect(frame.locator('.ash-theme-preview-terminal')).toHaveCSS('background-color', theme === 'ash-light' ? 'rgb(248, 248, 248)' : 'rgb(37, 37, 38)');
 		await expect(frame.getByRole('tab', { name: 'Explorer', exact: true })).toBeVisible();
 		await frame.getByRole('button', { name: 'Hide Primary Side Bar', exact: true }).click();
 		await expect(frame.getByRole('region', { name: 'Primary sidebar', exact: true })).toBeHidden();
@@ -1018,7 +1156,7 @@ test('resizing the preview and toggling its panel delivers layout without observ
 		await popup.setViewportSize(iteration % 2 ? { width: 1600, height: 1000 } : { width: 1100, height: 760 });
 		await frame.getByRole('button', { name: 'Hide Panel', exact: true }).click();
 		await frame.getByRole('button', { name: 'Toggle Panel Visibility', exact: true }).click();
-		await expect(frame.getByRole('textbox', { name: /^Terminal input(?:\.|$)/u })).toBeVisible();
+		await expect(frame.getByRole('region', { name: 'Preview only', exact: true })).toBeVisible();
 		await expect.poll(() => frame.locator('#app').evaluate(element => {
 			const window = element.ownerDocument.defaultView!;
 			return Math.abs(element.getBoundingClientRect().height - window.innerHeight);

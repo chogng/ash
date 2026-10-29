@@ -1,5 +1,5 @@
-/* The preview has no desktop layout rules. Workbench, Parts and contributions
-   own their DOM and styles exactly as they do in the product window. */
+/* Workbench and Parts own the desktop layout. Only passive preview samples
+   have styles here; they consume the same theme tokens as their product owners. */
 html,
 body,
 #app {
@@ -7,4 +7,36 @@ body,
 	height: 100%;
 	margin: 0;
 	overflow: hidden;
+}
+
+.ash-theme-preview-terminal {
+	color: var(--ash-terminal-foreground);
+	background: var(--ash-terminal-background, var(--ash-panel-background));
+	font-family: var(--ash-font-family-monospace);
+	font-size: var(--ash-fontSize-body2);
+}
+
+.ash-theme-preview-terminal > [role="region"] {
+	box-sizing: border-box;
+	min-height: 100%;
+	padding: var(--ash-spacing-size80) var(--ash-spacing-size120);
+}
+
+.ash-theme-preview-terminal p {
+	margin: 0 0 var(--ash-spacing-size40);
+	white-space: pre-wrap;
+}
+
+.ash-theme-preview-terminal [role="region"]:focus-visible {
+	outline: var(--ash-strokeThickness) solid var(--ash-focusBorder);
+	outline-offset: -1px;
+}
+
+.ash-theme-preview-terminal-selection {
+	color: var(--ash-selection-foreground, var(--ash-terminal-foreground));
+	background: var(--ash-selection-background);
+}
+
+.ash-theme-preview-terminal-cursor {
+	color: var(--ash-terminal-cursorForeground);
 }

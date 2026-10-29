@@ -197,11 +197,15 @@
 }
 
 .ash-theme-color-group-body {
+	position: relative;
+	box-sizing: content-box;
 	padding-bottom: 4px;
 }
 
 .ash-theme-color {
-	position: relative;
+	position: absolute;
+	left: 0;
+	right: 0;
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) var(--ash-toolbar-actionSize);
 	grid-template-rows: auto auto auto;
@@ -269,6 +273,8 @@
 }
 
 .ash-theme-color-source {
+	height: 1.4em;
+	line-height: 1.4;
 	grid-column: 1;
 	grid-row: 2;
 	min-width: 0;

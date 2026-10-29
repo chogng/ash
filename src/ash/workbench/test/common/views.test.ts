@@ -67,6 +67,33 @@ test('moving a container changes routing while retaining its model and independe
 	assert.equal(first.getViewContainerById(container.id), null);
 });
 
+test('host view presentations preserve model identity and leave other windows and registrations intact', () => {
+	using registry = new WorkbenchViewRegistry();
+	registry.registerStaticViewContainer({ id: 'test.preview', title: 'Preview', location: ViewContainerLocation.Panel });
+	using registration = registry.registerViews('test.preview', [testView('test.preview.terminal', 'Terminal')]);
+	const original = registry.getView('test.preview.terminal')!;
+	const replacement = new SyncDescriptor(TestView);
+	using contexts = new ContextKeyService();
+	using otherContexts = new ContextKeyService();
+	using preview = new TestViewDescriptorService({ registry, viewConstructors: new Map([[original.id, replacement]]) }, contexts);
+	using other = new TestViewDescriptorService({ registry }, otherContexts);
+	const projected = preview.getViewDescriptorById(original.id)!;
+	const model = preview.getViewContainerModel('test.preview');
+	assert.equal(projected.ctorDescriptor, replacement);
+	assert.equal(model.visibleViewDescriptors[0], projected);
+	assert.equal(other.getViewDescriptorById(original.id), original);
+	assert.equal(registry.getView(original.id), original);
+	// Registry changes must not remove/recreate a live preview pane or lose its visibility.
+	model.setVisible(original.id, false);
+	using added = registry.registerViews('test.preview', [testView('test.preview.other', 'Other')]);
+	assert.equal(preview.getViewDescriptorById(original.id), projected);
+	assert.equal(model.allViewDescriptors.find(view => view.id === original.id), projected);
+	assert.equal(model.isVisible(original.id), false);
+	registration.dispose();
+	assert.equal(preview.getViewDescriptorById(original.id), null);
+	assert.deepEqual(model.allViewDescriptors.map(view => view.id), ['test.preview.other']);
+});
+
 test("view descriptor models project registry and context visibility", () => {
 	using contextKeys = new ContextKeyService();
 	using registry = new WorkbenchViewRegistry();

@@ -1,9 +1,41 @@
 import assert from "node:assert/strict";
-import { test } from "mocha";
+import { suite, test } from "mocha";
 import { JSDOM } from "jsdom";
 import { Button } from "../../browser/ui/button/button.js";
 import { setHoverDelegate, type IManagedHover } from "../../browser/ui/hover/hoverDelegate.js";
 import { Lxicon } from "../../common/lxicons.js";
+import { ensureNoDisposablesAreLeakedInTestSuite } from '../common/utils.js';
+
+suite('Button deferred content', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+	test('host content stays intact while labels and icons are created and released on demand', () => {
+		const dom = new JSDOM('<!doctype html><body></body>');
+		using cleanup = { [Symbol.dispose]: () => dom.window.close() };
+		let clicks = 0;
+		using button = new Button(dom.window.document.body, { label: '', iconOnly: true, ariaLabel: 'Choose color', onClick: () => clicks++ });
+		assert.equal(button.domNode.childElementCount, 0);
+		const swatch = dom.window.document.createElement('span');
+		button.domNode.append(swatch);
+		for (let visit = 0; visit < 3; visit++) {
+			button.label = 'Color';
+			assert.equal(button.label, 'Color');
+			assert.equal(button.domNode.lastElementChild, swatch);
+			button.icon = Lxicon.menu;
+			button.label = '';
+			assert.ok(button.domNode.querySelector('.ash-icon'));
+			button.icon = undefined;
+			assert.equal(button.domNode.childElementCount, 1);
+			assert.equal(button.domNode.firstElementChild, swatch);
+		}
+		button.icon = Lxicon.menu;
+		assert.ok(button.domNode.querySelector('.ash-icon'));
+		button.icon = undefined;
+		assert.equal(button.domNode.childElementCount, 1);
+		assert.equal(button.domNode.getAttribute('aria-label'), 'Choose color');
+		button.domNode.click();
+		assert.equal(clicks, 1);
+	});
+});
 
 test("Button only installs a Hover for an explicit title", () => {
 	const dom = new JSDOM("<!doctype html><body></body>");

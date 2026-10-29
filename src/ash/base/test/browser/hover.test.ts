@@ -240,3 +240,53 @@ function rectangle(left: number, top: number, width: number, height: number): DO
 async function nextTimer(): Promise<void> {
 	await new Promise<void>((resolve) => environment.window.setTimeout(resolve, 5));
 }
+
+test('Hover releases interaction listeners when a target becomes idle', async () => {
+	const target = h(environment.window.document, 'button');
+	environment.window.document.body.append(target);
+	const active = new Set<EventListenerOrEventListenerObject>();
+	const add = target.addEventListener.bind(target);
+	const remove = target.removeEventListener.bind(target);
+	target.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions) => {
+		active.add(listener);
+		add(type, listener, options);
+	}) as typeof target.addEventListener;
+	target.removeEventListener = ((type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions) => {
+		active.delete(listener);
+		remove(type, listener, options);
+	}) as typeof target.removeEventListener;
+	using contextView = new ContextView(requiredElement<HTMLElement>('main'));
+	const hover = new Hover({ target, content: 'Details', delayMs: 1000, contextViewProvider: contextView });
+	try {
+		const idle = active.size;
+		assert.ok(idle <= 3, 'Idle targets should not retain pointer-release and focus-exit handlers');
+		for (let visit = 0; visit < 3; visit++) {
+			target.dispatchEvent(new environment.window.MouseEvent('pointerenter'));
+			assert.ok(active.size > idle);
+			target.dispatchEvent(new environment.window.MouseEvent('pointerleave'));
+			assert.equal(active.size, idle);
+			assert.equal(hover.visible, false);
+		}
+		const previous = requiredElement<HTMLButtonElement>('#target');
+		target.dispatchEvent(new environment.window.FocusEvent('focusin', { relatedTarget: previous }));
+		target.dispatchEvent(new environment.window.MouseEvent('pointerenter'));
+		target.dispatchEvent(new environment.window.MouseEvent('pointerleave'));
+		assert.ok(active.size > idle, 'Keyboard focus still owns exit tracking');
+		target.dispatchEvent(new environment.window.FocusEvent('focusout', { relatedTarget: previous }));
+		assert.equal(active.size, idle);
+		hover.show();
+		assert.equal(hover.visible, true);
+		target.dispatchEvent(new environment.window.MouseEvent('pointerleave'));
+		await new Promise<void>(resolve => environment.window.setTimeout(resolve, 100));
+		assert.equal(hover.visible, false, 'Programmatic show must still dismiss when leaving the target');
+		assert.equal(active.size, idle);
+		hover.show();
+		hover.hide();
+		assert.equal(active.size, idle, 'Explicit dismissal must release programmatic exit tracking');
+		hover.dispose();
+		assert.equal(active.size, 0);
+	} finally {
+		hover.dispose();
+		target.remove();
+	}
+});

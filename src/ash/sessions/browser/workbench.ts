@@ -576,12 +576,16 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IWorkspaceTrustManagementService, this._register(services.createInstance(WorkspaceTrustManagementService)));
 		const checkWorkspaceTrust = !!options.nativeHostApi;
 		services.registerInstance(ILanguageServerService, options.api.languageServers);
-		const languageLifecycle = this._register(services.createInstance(AppServerLanguageLifecycleService));
-		services.registerInstance(ILanguageServerLifecycleService, languageLifecycle);
+		services.registerSingleton(ILanguageServerLifecycleService, () => services.createInstance(AppServerLanguageLifecycleService));
+		const languageLifecycle = options.api.hasAppServer ? services.get(ILanguageServerLifecycleService) : undefined;
 		const languageProviders = options.api.hasAppServer ? this._register(services.createInstance(AppServerLanguageProviders, options.api.language, { checkWorkspaceTrust })) : undefined;
-		const languageDiagnosticsService = this._register(services.createInstance(AppServerLanguageDiagnosticsService, options.api.language, undefined, checkWorkspaceTrust));
-		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
-		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, services.get(IMarkerService)));
+		// A disconnected preview needs local syntax, not server diagnostics or model sync.
+		const createDiagnostics = () => services.createInstance(AppServerLanguageDiagnosticsService, options.api.language, undefined, checkWorkspaceTrust);
+		const languageDiagnosticsService = options.api.hasAppServer ? this._register(createDiagnostics()) : undefined;
+		if (languageDiagnosticsService) {
+			services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
+			this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, services.get(IMarkerService)));
+		} else services.registerSingleton(ILanguageDiagnosticsService, createDiagnostics);
 		services.registerInstance(IAppServerHookApi, options.api.hooks);
 		services.registerInstance(ISessionPrimaryProviderServices, primaryHostServices.createInstance(SessionProviderServices));
 		const providerScopes = this._register(services.createInstance(SessionProviderScopeService, provider.id));
@@ -612,9 +616,9 @@ export abstract class Workbench extends Disposable {
 		// Match Code startup: server initialization needs the extension defaults as
 		// well as the profile and workspace settings, before any background pull.
 		serviceContributionReady.push(Promise.all([configurationService.initialize(fileService, policies, workingCopies), extensionReady]).then(() => {
-			languageLifecycle.start();
+			languageLifecycle?.start();
 			languageProviders?.start();
-			languageDiagnosticsService.start();
+			languageDiagnosticsService?.start();
 		}));
 		const sessionGitHub = this._register(services.createInstance(SessionsGitHubService));
 		services.registerInstance(ISessionsGitHubService, sessionGitHub);
@@ -918,7 +922,7 @@ export abstract class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(services.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
-		services.get(ILanguageServerStatusService);
+		if (options.api.hasAppServer) services.get(ILanguageServerStatusService);
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });
 		const customViewPart = this._register(services.createInstance(CustomViewGridPart, this.domNode));

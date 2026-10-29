@@ -28,6 +28,7 @@ export class CodeEditorContributions extends Disposable {
 	private readonly configurations = new Map<string, DisposableStore>();
 	private readonly pending = new Map<string, PendingCodeEditorContribution>();
 	private readonly completedInstantiation = new Set<EditorContributionInstantiation>();
+	private readonly interactionListeners = this._register(new DisposableStore());
 	private onError: (error: unknown) => void = reportContributionError;
 
 	constructor(@IInstantiationService private readonly instantiationService: IInstantiationService) {
@@ -166,10 +167,10 @@ export class CodeEditorContributions extends Disposable {
 		const domNode = editor.getDomNode();
 		if (!domNode) throw new ReferenceError('Code editor contributions require an editor DOM node');
 		for (const type of ['pointerdown', 'wheel', 'contextmenu', 'dragover', 'drop', 'keydown', 'beforeinput', 'compositionstart', 'paste', 'cut'] as const) {
-			this._register(addDisposableListener(domNode, type, () => this.onBeforeInteractionEvent(), true));
+			this.interactionListeners.add(addDisposableListener(domNode, type, () => this.onBeforeInteractionEvent(), true));
 		}
 		const targetWindow = getWindow(domNode);
-		this._register(runWhenWindowIdle(targetWindow, () => this.instantiateSome(EditorContributionInstantiation.BeforeFirstInteraction)));
+		this.interactionListeners.add(runWhenWindowIdle(targetWindow, () => this.instantiateSome(EditorContributionInstantiation.BeforeFirstInteraction)));
 		this._register(runWhenWindowIdle(targetWindow, () => this.instantiateSome(EditorContributionInstantiation.Eventually), 5_000));
 	}
 
@@ -213,6 +214,9 @@ export class CodeEditorContributions extends Disposable {
 	private instantiateSome(instantiation: EditorContributionInstantiation): void {
 		if (this.isDisposed || this.completedInstantiation.has(instantiation)) return;
 		this.completedInstantiation.add(instantiation);
+		// The idle callback and first interaction race to initialize this phase.
+		// Once either wins, later input and newly admitted providers use the completed phase.
+		if (instantiation === EditorContributionInstantiation.BeforeFirstInteraction) this.interactionListeners.clear();
 		const pending = [...this.pending.values()].filter(value => value.instantiation === instantiation);
 		for (const value of pending) this.instantiateById(value.id);
 	}

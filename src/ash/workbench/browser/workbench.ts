@@ -176,6 +176,7 @@ import { FileDialogService as BrowserFileDialogService } from '../services/dialo
 import { IUserThemeService, type IUserThemeService as IUserThemeServiceContract, UnavailableUserThemeService } from "../common/userThemes.js";
 import {
 	ViewContainerLocation,
+	type IView,
 } from "../common/views.js";
 import { IStatusbarService } from "../services/statusbar/browser/statusbar.js";
 import type { IWebWorkspaceClient } from '../services/workspaces/browser/appServerWebWorkspaceClient.js';
@@ -343,6 +344,8 @@ export interface IStartWorkbenchOptions {
 	readonly defaultLayout?: WorkbenchDefaultLayout;
 	/** An embedded host may initialize only the contributions used by its UI. */
 	readonly contributionIds?: readonly string[];
+	/** Host-specific presentations share the registered views' identity, commands and layout. */
+	readonly viewConstructors?: ReadonlyMap<string, SyncDescriptor<IView>>;
 	readonly api: IRendererHost;
 	/** Optional host-owned execution boundary; declarative extension assets remain available. */
 	readonly extensionHost?: IExtensionHostApi;
@@ -382,6 +385,7 @@ export async function startWorkbench({
 	environmentService,
 	defaultLayout,
 	contributionIds,
+	viewConstructors,
 	api,
 	extensionHost,
 	browserFileSystemProvider,
@@ -476,6 +480,7 @@ export async function startWorkbench({
 			environmentService,
 			serviceCollection,
 			contributionIds,
+			viewConstructors,
 		);
 		await themesReady;
 		return workbench;
@@ -552,6 +557,7 @@ export class Workbench extends Disposable {
 		environmentService: IWorkbenchEnvironmentService,
 		serviceCollection = new ServiceCollection(),
 		contributionIds?: readonly string[],
+		viewConstructors?: IStartWorkbenchOptions['viewConstructors'],
 	) {
 		super();
 		performance.mark('ash.workbench.constructor-start');
@@ -793,19 +799,21 @@ export class Workbench extends Disposable {
 		// are authorized by the server for the authenticated workspace.
 		const checkWorkspaceTrust = !!nativeHostApi;
 		services.registerInstance(ILanguageServerService, api.languageServers);
-		const languageLifecycle = this._register(services.createInstance(AppServerLanguageLifecycleService));
-		services.registerInstance(ILanguageServerLifecycleService, languageLifecycle);
+		services.registerSingleton(ILanguageServerLifecycleService, () => services.createInstance(AppServerLanguageLifecycleService));
+		const languageLifecycle = api.hasAppServer ? services.get(ILanguageServerLifecycleService) : undefined;
 		const languageProviders = api.hasAppServer ? this._register(services.createInstance(AppServerLanguageProviders, api.language, { checkWorkspaceTrust })) : undefined;
 		const diffService = services.createInstance(DiffService);
 		services.registerInstance(IDiffService, diffService);
-		const codeIntelligenceDocuments = new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols);
-		services.registerInstance(ICodeIntelligenceDocumentService, codeIntelligenceDocuments);
-		const languageDiagnosticsService = this._register(services.createInstance(AppServerLanguageDiagnosticsService, api.language, codeIntelligenceDocuments, checkWorkspaceTrust));
-		services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
+		services.registerSingleton(ICodeIntelligenceDocumentService, () => new AppServerCodeIntelligenceDocumentService(api.codebaseSymbols));
+		// Disconnected hosts render local syntax without backend document synchronization.
+		const createDiagnostics = () => services.createInstance(AppServerLanguageDiagnosticsService, api.language, services.get(ICodeIntelligenceDocumentService), checkWorkspaceTrust);
+		const languageDiagnosticsService = api.hasAppServer ? this._register(createDiagnostics()) : undefined;
+		if (languageDiagnosticsService) services.registerInstance(ILanguageDiagnosticsService, languageDiagnosticsService);
+		else services.registerSingleton(ILanguageDiagnosticsService, createDiagnostics);
 		const markerService = this._register(new MarkerService());
 		services.registerInstance(IMarkerService, markerService);
 		services.registerSingleton(IMarkerDecorationsService, () => services.createInstance(MarkerDecorationsService));
-		this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
+		if (languageDiagnosticsService) this._register(new LanguageDiagnosticsMarkerBridge(languageDiagnosticsService, markerService));
 		const extensionService = this._register(services.createInstance(AppServerExtensionService, { api: enabledExtensions, eventApi: api.events, languageService, languageConfigurationService }));
 		services.registerInstance(IExtensionService, extensionService);
 		services.get(ISnippetsService);
@@ -1006,9 +1014,9 @@ export class Workbench extends Disposable {
 		// Language-server initialization consumes extension-contributed defaults too.
 		// Starting earlier can launch expensive server work with upstream defaults.
 		serviceContributionReady.push(Promise.all([configuration.initialize(fileService, policies, workingCopyService), extensionReady]).then(() => {
-			languageLifecycle.start();
+			languageLifecycle?.start();
 			languageProviders?.start();
-			languageDiagnosticsService.start();
+			languageDiagnosticsService?.start();
 		}));
 		const accessibilityService = this._register(nativeHostApi
 			? services.createInstance(NativeAccessibilityService, workbenchRoot)
@@ -1032,7 +1040,7 @@ export class Workbench extends Disposable {
 			}
 			return parsed as Record<string, ViewContainerLocation>;
 		};
-		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { viewContainerLocations: readViewContainerLocations() }));
+		const viewDescriptors = this._register(services.createInstance(ViewDescriptorService, { viewConstructors, viewContainerLocations: readViewContainerLocations() }));
 		let restoringViewContainerLocations = false;
 		this._register(viewDescriptors.onDidChangeContainerLocation(({ viewContainer, to }) => {
 			if (restoringViewContainerLocations) return;
@@ -1277,7 +1285,7 @@ export class Workbench extends Disposable {
 		services.registerInstance(IPaneCompositePartService, panes);
 		const views = this._register(instantiationService.createInstance(ViewsService));
 		services.registerInstance(IViewsService, views);
-		services.get(ILanguageServerStatusService);
+		if (api.hasAppServer) services.get(ILanguageServerStatusService);
 		this._register(services.createInstance(ViewDragAndDropController, workbenchRoot));
 		// Extension adapters require the completed editor and view service graph.
 		installWorkbenchServiceContributions({ container: services, register: value => this._register(value), blockRestorationUntil: operation => serviceContributionReady.push(operation) });

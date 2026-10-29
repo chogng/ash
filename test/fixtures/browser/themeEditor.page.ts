@@ -32,8 +32,6 @@ import { DisposableStore, toDisposable } from '../../../src/ash/base/common/life
 import { FileKind, IFileService, FileRevisionConflictError, type IFileChangeEvent, type IFileSystemProvider, type IFileWriteOptions, type FileExistingTargetBehavior, type FileMissingTargetBehavior, type FileDeleteMode } from '../../../src/ash/platform/files/common/files.js';
 import { IThemeService } from '../../../src/ash/platform/theme/common/themeService.js';
 import { IWorkbenchThemeService } from '../../../src/ash/workbench/services/themes/common/workbenchThemeService.js';
-import { ITelemetryService } from '../../../src/ash/platform/telemetry/common/telemetry.js';
-import { NullTelemetryService } from '../../../src/ash/platform/telemetry/common/telemetryUtils.js';
 import { IHostColorSchemeService } from '../../../src/ash/workbench/services/themes/common/hostColorSchemeService.js';
 import { BrowserHostColorSchemeService } from '../../../src/ash/workbench/services/themes/browser/browserHostColorSchemeService.js';
 import { WorkbenchThemeService, loadUserThemes } from '../../../src/ash/workbench/services/themes/browser/workbenchThemeService.js';
@@ -173,7 +171,6 @@ resources.add(new WorkingCopyBackupTracker(services.get(IWorkingCopyService), ba
 const root = document.querySelector<HTMLElement>('#main')!;
 services.registerInstance(ILayoutService, resources.add(new BrowserLayoutService({ root })));
 services.registerInstance(IHostColorSchemeService, resources.add(new BrowserHostColorSchemeService(window)));
-services.registerInstance(ITelemetryService, NullTelemetryService);
 const themes = resources.add(services.createInstance(WorkbenchThemeService, root));
 services.registerInstance(IThemeService, themes);
 services.registerInstance(IWorkbenchThemeService, themes);
