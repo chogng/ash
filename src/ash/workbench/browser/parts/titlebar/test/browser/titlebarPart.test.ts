@@ -211,9 +211,10 @@ test('title service shares the resolved title with its registered part and relea
 	const popup = new JSDOM('<!doctype html><body></body>');
 	const popupChanged = resources.add(new Emitter<void>());
 	let popupInput = { resource: URI.file('/detached.ts') };
+	let popupTitleControl: HTMLElement | undefined;
 	const popupGroups: IEditorGroupsContainer = {
 		activeGroup: {
-			createEditorActions: () => ({ actions: { primary: [], secondary: [] }, onDidChange: Event.None }),
+			createEditorActions: () => ({ get titleControl() { return popupTitleControl; }, actions: { primary: [], secondary: [] }, onDidChange: Event.None }),
 			get activeInput() { return popupInput; },
 			onDidChangeEditors: (listener: Parameters<IEditorGroup['onDidChangeEditors']>[0]) => popupChanged.event(() => listener({ kind: 'activeEditorChanged', editor: undefined })),
 		} as unknown as IEditorGroup,
@@ -245,7 +246,15 @@ test('title service shares the resolved title with its registered part and relea
 	assert.equal(compactTitle.textContent, '🔴 feature — renamed.ts — Ash Code');
 	assert.equal(compactTitle.title, popup.window.document.title);
 	assert.equal(shared.windowTitle.value, '🔴 feature — draft.ts — Ash Code');
+	popupTitleControl = popup.window.document.createElement('button');
+	popupTitleControl.textContent = 'Pane-owned theme picker';
+	popupChanged.fire();
+	assert.equal(auxiliary.container.querySelector('.ash-titlebar-editor-control')?.firstElementChild, popupTitleControl);
+	assert.equal(auxiliary.container.querySelector('.ash-titlebar-center')?.classList.contains('ash-titlebar-center-custom'), true);
+	popupChanged.fire();
+	assert.equal(popupTitleControl.isConnected, true);
 	auxiliary.updateOptions({ compact: false });
+	assert.equal(popupTitleControl.parentElement, null, 'Leaving compact mode detaches the borrowed pane control');
 	assert.deepEqual(visibility, [false, true]);
 	auxiliary.dispose();
 	assert.equal(auxiliary.container.isConnected, false);

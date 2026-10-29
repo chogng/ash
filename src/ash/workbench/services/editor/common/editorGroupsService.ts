@@ -15,6 +15,8 @@ export interface IFindGroupScope {
 
 /** Actions provided by the active pane and its editor menu, scoped to one group. */
 export interface IActiveEditorActions {
+	/** A pane-owned control borrowed by compact window chrome while the pane is active. */
+	readonly titleControl?: HTMLElement;
 	readonly actions: {
 		readonly primary: readonly IAction[];
 		readonly secondary: readonly IAction[];

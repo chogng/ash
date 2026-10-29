@@ -41,28 +41,41 @@ registerAction2(class OpenThemeEditorAction extends Action2 {
 	constructor() {
 		super({ id: 'workbench.action.openThemeEditor', title: localize2('themeEditor.open', 'Open Theme Editor'), f1: true });
 	}
-	public override async run(accessor: ServicesAccessor): Promise<void> {
+	public override async run(accessor: ServicesAccessor, options?: unknown): Promise<void> {
+		if (options !== undefined && (!options || typeof options !== 'object'
+			|| !('themeId' in options) || typeof options.themeId !== 'string' || !options.themeId
+			|| !('groupId' in options) || typeof options.groupId !== 'number' || !Number.isSafeInteger(options.groupId))) {
+			throw new TypeError(localize('themeEditor.invalidSelection', 'A theme selection requires a theme ID and an editor group ID.'));
+		}
+		const selection = options as { readonly themeId: string; readonly groupId: number; } | undefined;
 		const users = accessor.get(IUserThemeService);
 		if (!users.available) throw new Error(localize('themeEditor.unavailable', 'User theme files are unavailable in this window.'));
 		const theme = accessor.get(IWorkbenchThemeService).getColorTheme();
-		const source = users.sourceFor(theme.id);
+		const themeId = selection?.themeId ?? theme.id;
+		const source = users.sourceFor(themeId);
 		const extensions = accessor.get(IExtensionService);
-		const extension = source ? undefined : getThemeEditorSource(extensions, theme.id);
-		if (!source && !extension) throw new Error(localize('themeEditor.sourceUnavailable', 'The source file for theme {0} is unavailable.', theme.label));
+		const extension = source ? undefined : getThemeEditorSource(extensions, themeId);
+		if (!source && !extension) throw new Error(localize('themeEditor.sourceUnavailable', 'The source file for theme {0} is unavailable.', selection ? themeId : theme.label));
 		const resource = source ? URI.joinPath(users.directory!, source.file) : extension!.resource;
 		const parts = accessor.get(IEditorPartsService);
+		const targetGroup = selection && parts.parts.flatMap(part => part.groups).find(group => group.id === selection.groupId);
+		if (selection && (!targetGroup || targetGroup.activePane?.id !== ThemeEditorId)) {
+			throw new Error(localize('themeEditor.groupUnavailable', 'The Theme Editor group is no longer available.'));
+		}
 		let pending = opening.get(parts);
 		if (!pending) opening.set(parts, pending = new Map());
-		const key = resource.with({ query: '' }).toString();
+		const resourceKey = resource.with({ query: '' }).toString();
+		const key = targetGroup ? `group:${targetGroup.id}` : resourceKey;
 		const current = pending.get(key);
 		if (current) return current;
 		const resources = accessor.get(IExtensionResourceLoaderService);
 		const files = accessor.get(IFileService);
 		const operation = (async () => {
 			const matches = ({ input }: { input: IResourceEditorInput; }): boolean => input.editorId === ThemeEditorId && (source
-				? input.resource.with({ query: '' }).toString() === key
+				? input.resource.with({ query: '' }).toString() === resourceKey
 				: getThemeEditorSource(extensions, input.resource)?.id === extension!.id);
-			const existing = parts.parts.find(part => part.editorsMru.some(matches));
+			if (targetGroup?.activeInput && matches({ input: targetGroup.activeInput })) return;
+			const existing = !targetGroup && parts.parts.find(part => part.editorsMru.some(matches));
 			if (existing) {
 				const editor = existing.editorsMru.find(matches)!;
 				const target = existing === parts.mainPart ? await parts.openEditorsInNewWindow([editor], 'move') : existing;
@@ -81,6 +94,20 @@ registerAction2(class OpenThemeEditorAction extends Action2 {
 				resource: editorResource, label: source?.file ?? resource.path.split('/').at(-1),
 				...(packaged ? { initialText: await resources.readExtensionResource(editorResource), readOnly: true } : stat?.readonly ? { readOnly: true } : {}),
 			});
+			if (targetGroup) {
+				if (targetGroup.activePane?.id !== ThemeEditorId) return;
+				const previous = targetGroup.activeInput;
+				if (!previous || !await targetGroup.confirmCloseEditor(previous)) return;
+				// Saving may replace the source with a user copy. Keep it until the new source opens.
+				const replaced = targetGroup.activeInput;
+				await targetGroup.openEditor(input, { preferredEditorId: ThemeEditorId, pinned: true });
+				if (replaced && !await targetGroup.closeEditor(replaced, { reason: 'replace' })) {
+					// Recheck through the group owner in case the old source changed while loading.
+					targetGroup.activateEditor(replaced);
+					await targetGroup.closeEditor(input, { skipConfirmation: true, reason: 'replace' });
+				}
+				return;
+			}
 			const target = await parts.createAuxiliaryEditorPart();
 			try { await target.openEditor(input, { preferredEditorId: ThemeEditorId, pinned: true }); }
 			catch (error) { await parts.closeAuxiliaryEditorPart(target); throw error; }

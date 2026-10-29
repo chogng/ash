@@ -391,10 +391,11 @@ export class EditorGroupView extends Disposable implements IEditorGroupView {
 		const pane = this.activePane;
 		const menu = this.titleActions ? disposables.add(this.titleActions.menuService.createMenu(menuId, this.scopedContextKeyService)) : undefined;
 		return {
+			get titleControl() { return pane instanceof EditorPane ? pane.getTitleControl() : undefined; },
 			get actions() {
 				const menuActions = getActionBarActions(menu?.getActions() ?? []);
 				return {
-					primary: [...(pane instanceof EditorPane ? pane.getActions() : []), ...menuActions.primary],
+					primary: [...(pane instanceof EditorPane ? pane.getActions(menuId) : []), ...menuActions.primary],
 					secondary: [...(pane instanceof EditorPane ? pane.getSecondaryActions() : []), ...menuActions.secondary],
 				};
 			},

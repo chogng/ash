@@ -20,6 +20,25 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 	const opened = workbench.page.context().waitForEvent('page');
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
 	const popup = await opened;
+	const titlebar = popup.locator('.ash-auxiliary-titlebar');
+	for (const width of [540, 800, 1440]) {
+		await popup.setViewportSize({ width, height: 900 });
+		await expect.poll(() => titlebar.evaluate(element => {
+			const title = element.querySelector<HTMLElement>('.ash-titlebar-command-center-custom')!;
+			const actions = element.querySelector<HTMLElement>('.ash-titlebar-actions')!;
+			const titleBounds = title.getBoundingClientRect();
+			const actionBounds = actions.getBoundingClientRect();
+			const style = getComputedStyle(element);
+			const bounds = element.getBoundingClientRect();
+			return titleBounds.width > 0
+				&& Math.abs(titleBounds.left + titleBounds.width / 2 - (bounds.left + bounds.width / 2)) <= 1
+				&& titleBounds.left >= bounds.left + parseFloat(style.paddingLeft)
+				&& titleBounds.right <= actionBounds.left
+				&& actionBounds.right <= bounds.right - parseFloat(style.paddingRight) + 1;
+		})).toBe(true);
+		await expect(titlebar.getByRole('button', { name: 'Switch theme', exact: true })).toBeVisible();
+		await expect(titlebar.getByRole('button', { name: 'Save and Apply', exact: true })).toBeVisible();
+	}
 	const search = popup.getByRole('searchbox', { name: 'Search colors', exact: true });
 	await search.fill('editor.background');
 	const color = popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
@@ -32,6 +51,7 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 	await dialog.getByRole('textbox', { name: 'Theme name', exact: true }).fill('Shared color picker regression');
 	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(dialog).toBeHidden();
+	await expect(popup.getByRole('status').filter({ hasText: /^Theme saved\.$/ })).toBeVisible();
 	await search.fill('editor.background');
 	await expect(color).toBeEnabled();
 	const trigger = popup.getByRole('button', { name: 'Choose color for editor.background', exact: true });
@@ -61,6 +81,80 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 	const home = await application.evaluate(() => process.env.ASH_HOME!);
 	const saved = JSON.parse(await readFile(join(home, 'themes', 'shared-color-picker-regression.json'), 'utf8'));
 	expect(saved.colors['editor.background']).toBe('#2f6fed66');
+});
+
+test('Theme Editor command center switches only themes and keeps undo beside the picker', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
+	const mainCenterWidth = (await workbench.page.locator('.ash-titlebar-command-center-button').boundingBox())!.width;
+	const original = await workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'));
+	const opened = workbench.page.context().waitForEvent('page');
+	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
+	const popup = await opened;
+	await popup.setViewportSize({ width: 1440, height: 900 });
+	const titlebar = popup.locator('.ash-auxiliary-titlebar');
+	const center = titlebar.getByRole('button', { name: 'Switch theme', exact: true });
+	await expect(center).toHaveText('Ash Light');
+	expect((await center.boundingBox())!.width).toBe(mainCenterWidth);
+	const centerBounds = (await center.boundingBox())!;
+	expect(Math.abs(centerBounds.x + centerBounds.width / 2 - await popup.evaluate(() => innerWidth / 2))).toBeLessThanOrEqual(1);
+	const undo = titlebar.getByRole('button', { name: 'Undo', exact: true });
+	const redo = titlebar.getByRole('button', { name: 'Redo', exact: true });
+	await expect(undo).toBeDisabled();
+	await expect(redo).toBeDisabled();
+	expect((await undo.boundingBox())!.x).toBeLessThan((await redo.boundingBox())!.x);
+	const redoBounds = (await redo.boundingBox())!;
+	expect(redoBounds.x + redoBounds.width).toBeLessThanOrEqual((await center.boundingBox())!.x);
+	await expect(titlebar.locator('.ash-titlebar-actions').getByRole('button', { name: 'Undo', exact: true })).toHaveCount(0);
+	await center.press('Enter');
+	const picker = popup.locator('.ash-quick-pick');
+	const input = picker.getByRole('combobox', { name: 'Switch theme', exact: true });
+	await expect(input).toBeFocused();
+	const pickerBounds = (await picker.boundingBox())!;
+	expect(Math.abs(pickerBounds.x + pickerBounds.width / 2 - centerBounds.x - centerBounds.width / 2)).toBeLessThanOrEqual(1);
+	await input.fill('>');
+	await expect(picker.getByRole('option')).toHaveCount(0);
+	await input.fill('palette.ts');
+	await expect(picker.getByRole('option')).toHaveCount(0);
+	await input.fill('Ash Dark');
+	await picker.getByRole('option').filter({ has: popup.getByText('Ash Dark', { exact: true }) }).click();
+	await expect(center).toHaveText('Ash Dark');
+	await expect(picker).toBeHidden();
+	await expect(popup.locator('.ash-theme-editor')).toHaveCount(1);
+	await expect(popup.locator('.ash-editor-title-control')).toBeHidden();
+	expect(workbench.page.context().pages()).toHaveLength(2);
+	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
+
+	await workbench.menus.select(application, () => titlebar.getByRole('button', { name: 'Theme save actions', exact: true }).click(), ['Save as…']);
+	const saveAs = popup.getByRole('dialog', { name: 'Save as…', exact: true });
+	await saveAs.getByRole('textbox', { name: 'Theme name', exact: true }).fill('Theme switching regression');
+	await saveAs.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(saveAs).toBeHidden();
+	await expect(center).toHaveText('Theme switching regression');
+	await popup.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
+	const preview = popup.frameLocator('.ash-theme-editor-preview').locator('#app');
+	const color = popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
+	const beforeEdit = '#' + (await color.inputValue()).replace(/^#/, '').toLowerCase();
+	await expect(preview).toHaveCSS('--ash-editor-background', beforeEdit);
+	await color.fill('#123456');
+	await color.press('Enter');
+	await expect(preview).toHaveCSS('--ash-editor-background', '#123456');
+	await expect(undo).toBeEnabled();
+	await undo.click();
+	await expect(preview).toHaveCSS('--ash-editor-background', beforeEdit);
+	await expect(redo).toBeEnabled();
+	await redo.click();
+	await expect(preview).toHaveCSS('--ash-editor-background', '#123456');
+	const switchToLight = async () => {
+		await center.click();
+		await input.fill('Ash Light');
+		await picker.getByRole('option').filter({ has: popup.getByText('Ash Light', { exact: true }) }).click();
+	};
+	await workbench.dialogs.confirm(application, 'Save Changes', 'Cancel', switchToLight);
+	await expect(center).toHaveText('Theme switching regression');
+	await expect(preview).toHaveCSS('--ash-editor-background', '#123456');
+	await workbench.dialogs.confirm(application, 'Save Changes', "Don't Save", switchToLight);
+	await expect(center).toHaveText('Ash Light');
+	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
+	expect(workbench.page.context().pages()).toHaveLength(2);
 });
 
 test('Theme Editor window close confirms unsaved changes and allows cancel, save and discard', { tag: ['@electron-ui'] }, async ({ application, workbench }) => {
@@ -114,7 +208,8 @@ test('Theme Editor restores one unsaved draft in its auxiliary window after rest
 	await expect(popup.locator('.ash-editor-title-control')).toBeHidden();
 	await expect(popup.locator('.ash-workbench-statusbar')).toBeHidden();
 	const titlebar = popup.locator('.ash-auxiliary-titlebar');
-	await expect(titlebar.locator('.ash-titlebar-command-center')).toBeHidden();
+	await expect(titlebar.locator('.ash-titlebar-center > .ash-titlebar-command-center')).toBeHidden();
+	await expect(titlebar.getByRole('button', { name: 'Switch theme', exact: true })).toBeVisible();
 	await expect(titlebar.getByRole('button', { name: 'Save and Apply', exact: true })).toBeVisible();
 	await expect(titlebar.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled();
 	await expect(titlebar.getByRole('button', { name: 'Redo', exact: true })).toBeDisabled();

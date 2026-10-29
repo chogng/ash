@@ -6,7 +6,8 @@ import { localize } from '../../../../nls.js';
 import { appendIcon } from '../../../../base/browser/ui/lxicons/lxicon.js';
 import { Lxicon } from '../../../../base/common/lxicons.js';
 import "./media/titlebarpart.css";
-import { addDisposableListener, h, type IDimension } from "../../../../base/browser/dom.js";
+import { addDisposableListener, getWindow, h, type IDimension } from "../../../../base/browser/dom.js";
+import { observeResize } from '../../../../base/browser/observer.js';
 import { Emitter, type Event } from "../../../../base/common/event.js";
 import { CommandsRegistry } from "../../../../platform/commands/common/commands.js";
 import { Disposable, DisposableStore, DisposableMap, MutableDisposable, toDisposable, type IDisposable } from "../../../../base/common/lifecycle.js";
@@ -198,6 +199,9 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 	private readonly menubar: IMenubarControl;
 	private readonly centerAdjacentActions: MenuWorkbenchToolBar;
 	private readonly actions: WorkbenchToolBar;
+	private readonly actionsDomNode: HTMLElement;
+	private readonly centerDomNode: HTMLElement;
+	private readonly editorTitleControlHost: HTMLElement;
 	private readonly editorActionsLifetime = this._register(new DisposableStore());
 	private readonly editorGroupListener = this._register(new MutableDisposable());
 	private editorActions: IActiveEditorActions | undefined;
@@ -236,9 +240,14 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 			this.titleDomNode.append(this.menubar.domNode);
 		}
 		const centerDomNode = h(ownerDocument, "div");
+		this.centerDomNode = centerDomNode;
 		centerDomNode.className = "ash-titlebar-center";
 		this.contentDomNode.before(centerDomNode);
-		this._register(instantiationService.createInstance(CommandCenterControl, centerDomNode, options.windowTitle, localizationService));
+		this._register(instantiationService.createInstance(CommandCenterControl, centerDomNode, options.windowTitle, localizationService, undefined));
+		this.editorTitleControlHost = h(ownerDocument, 'div');
+		this.editorTitleControlHost.className = 'ash-titlebar-editor-control';
+		centerDomNode.append(this.editorTitleControlHost);
+		this._register(toDisposable(() => this.editorTitleControlHost.replaceChildren()));
 		const windowTitleDomNode = h(ownerDocument, 'span');
 		windowTitleDomNode.className = 'ash-titlebar-window-title';
 		centerDomNode.append(windowTitleDomNode);
@@ -261,6 +270,7 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 			),
 		);
 		const actionsDomNode = h(ownerDocument, "div");
+		this.actionsDomNode = actionsDomNode;
 		actionsDomNode.className = "ash-titlebar-actions ash-titlebar-interactive-region";
 		this.contentDomNode.append(actionsDomNode);
 		this.actions = this._register(new WorkbenchToolBar(actionsDomNode, contextMenuService, {
@@ -271,6 +281,7 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 					? createActionViewItem(action, contextMenuService, { ...actionOptions, buttonPresentation: 'primary' })
 					: undefined),
 		}));
+		this._register(observeResize([this.domNode, actionsDomNode, this.editorTitleControlHost], () => this.layoutCommandCenter()));
 		this.layoutMenu = this._register(menuService.createMenu(MenuId.LayoutControlMenu, this.contextKeyService));
 		this.globalMenu = this._register(menuService.createMenu(MenuId.TitleBar, this.contextKeyService));
 		this._register(this.layoutMenu.onDidChange(() => this.updateToolbarActions()));
@@ -326,6 +337,12 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 	}
 
 	private updateToolbarActions(): void {
+		// The pane retains ownership; window chrome only mounts its current title control.
+		const titleControl = this.editorActions?.titleControl;
+		if (this.editorTitleControlHost.firstElementChild !== (titleControl ?? null)) {
+			this.editorTitleControlHost.replaceChildren(...(titleControl ? [titleControl] : []));
+		}
+		this.centerDomNode.classList.toggle('ash-titlebar-center-custom', titleControl !== undefined);
 		const layout = getActionBarActions(this.layoutMenu.getActions(), 'navigation');
 		const global = getActionBarActions(this.isCompact ? [] : this.globalMenu.getActions());
 		const editor = this.editorActions?.actions;
@@ -334,6 +351,31 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 			[...(editor?.secondary ?? []), ...layout.secondary, ...global.secondary],
 			this.isCompact ? [] : this.activityActions?.bar.getActions() ?? [],
 		);
+		this.layoutCommandCenter();
+	}
+
+	private layoutCommandCenter(): void {
+		if (!this.isCompact || !this.editorTitleControlHost.firstElementChild) {
+			this.centerDomNode.style.removeProperty('max-width');
+			return;
+		}
+		const bounds = this.domNode.getBoundingClientRect();
+		if (!bounds.width) return;
+		const style = getWindow(this.domNode).getComputedStyle(this.domNode);
+		const center = bounds.left + bounds.width / 2;
+		const navigation = this.editorTitleControlHost.querySelector<HTMLElement>('.ash-titlebar-command-center-navigation');
+		const leadingWidth = navigation?.getClientRects().length
+			? this.centerDomNode.getBoundingClientRect().left - navigation.getBoundingClientRect().left
+			: 0;
+		const gap = parseFloat(style.getPropertyValue('--ash-spacing-size80')) || 0;
+		// Keep both edges equally far from the window center. The narrower side
+		// limits the search width, including native controls and editor navigation.
+		const available = Math.min(
+			center - bounds.left - parseFloat(style.paddingLeft) - leadingWidth,
+			this.actionsDomNode.getBoundingClientRect().left - gap - center,
+		);
+		const maxWidth = `${Math.max(0, Math.floor(2 * available))}px`;
+		if (this.centerDomNode.style.maxWidth !== maxWidth) this.centerDomNode.style.maxWidth = maxWidth;
 	}
 
 }

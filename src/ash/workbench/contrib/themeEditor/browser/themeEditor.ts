@@ -47,6 +47,11 @@ import { parseJsonc } from '../../../../base/common/jsonc.js';
 import { IExtensionService, type ExtensionThemeContribution } from '../../../services/extensions/common/extensionService.js';
 import { createExtensionWorkbenchColorTheme, extensionWorkbenchThemeId, loadExtensionTheme, parseExtensionTheme } from '../../../services/extensions/common/extensionTheme.js';
 import { IExtensionResourceLoaderService, toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
+import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
+import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
+import { CommandCenterControl } from '../../../browser/parts/titlebar/commandCenterControl.js';
+import { WorkbenchThemesRegistry } from '../../../common/theme.js';
 
 export const ThemeEditorId = 'workbench.editor.themeEditor';
 export const ThemeEditorFocused = new RawContextKey<boolean>('themeEditorFocused', false);
@@ -115,6 +120,8 @@ export class ThemeEditor extends EditorPane {
 	private valid = false;
 	private operation = 0;
 	private saving = false;
+	private titleControl: CommandCenterControl | undefined;
+	private readonly themePicker = this._register(new MutableDisposable<DisposableStore>());
 	private dimension: IDimension = { width: 0, height: 0 };
 	private initialSplitLayout = true;
 
@@ -133,6 +140,9 @@ export class ThemeEditor extends EditorPane {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IExtensionService private readonly extensions: IExtensionService,
 		@IExtensionResourceLoaderService private readonly extensionResources: IExtensionResourceLoaderService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@IQuickInputService private readonly quickInput: IQuickInputService,
+		@ICommandService private readonly commands: ICommandService,
 	) {
 		super(ThemeEditorId, themeService, storageService);
 		this._register(toDisposable(() => this.clearInput()));
@@ -296,6 +306,7 @@ export class ThemeEditor extends EditorPane {
 	}
 
 	public override clearInput(): void {
+		this.themePicker.clear();
 		this.picker?.cancel();
 		this.operation++;
 		this.refresh.cancel();
@@ -339,7 +350,53 @@ export class ThemeEditor extends EditorPane {
 			this.rows.get(entry.id)?.accessibleText ?? `${entry.id}: ${entry.authored ?? (entry.effective ? Color.Format.CSS.formatHexA(entry.effective, true) : '')}. ${colorSourceLabel(entry.authored, entry.effective, entry.references)}`))].join('\n');
 	}
 
-	public override getActions(): readonly IAction[] {
+	public override getTitleControl(): HTMLElement | undefined {
+		if (!this.root) return undefined;
+		if (!this.titleControl) {
+			const editor = this;
+			this.titleControl = this._register(this.instantiationService.createInstance(CommandCenterControl, h(this.root.ownerDocument, 'div'), {
+				get value() { return editor.compiled?.label ?? editor.input?.label ?? localize('themeEditor.selectTheme', 'Switch theme'); },
+				onDidChange: this.onTitleAreaUpdate,
+			}, undefined, {
+				showTitle: true,
+				ariaLabel: localize('themeEditor.selectTheme', 'Switch theme'),
+				navigationActions: () => this.getHistoryActions(),
+				onClick: () => this.showThemePicker(),
+			}));
+		}
+		return this.titleControl.domNode;
+	}
+
+	private showThemePicker(): void {
+		if (!this.input || !this.group) return;
+		this.themePicker.clear();
+		const lifetime = new DisposableStore();
+		this.themePicker.value = lifetime;
+		const picker = lifetime.add(this.quickInput.createQuickPick<IQuickPickItem & { readonly themeId: string; }>());
+		picker.placeholder = localize('themeEditor.searchThemes', 'Search themes');
+		picker.ariaLabel = localize('themeEditor.selectTheme', 'Switch theme');
+		const current = this.themeIdForResource(this.input.resource);
+		const items = WorkbenchThemesRegistry.getColorThemes()
+			.filter(theme => this.userThemes.sourceFor(theme.id) || getThemeEditorSource(this.extensions, theme.id))
+			.map(theme => ({ label: theme.label, themeId: theme.id, picked: theme.id === current }));
+		picker.items = items;
+		picker.activeItems = items.filter(item => item.picked);
+		lifetime.add(picker.onDidAccept(() => {
+			const selected = picker.selectedItems[0];
+			const groupId = this.group?.id;
+			if (!selected || groupId === undefined) return;
+			picker.hide();
+			void this.commands.executeCommand('workbench.action.openThemeEditor', { themeId: selected.themeId, groupId }).catch(error => {
+				if (!this.isDisposed) this.showMessage(localize('themeEditor.switchError', 'Could not switch the theme. {0}', error instanceof Error ? error.message : String(error)), true);
+			});
+		}));
+		lifetime.add(Event.once(picker.onDidHide)(() => {
+			if (this.themePicker.value === lifetime) this.themePicker.clear();
+		}));
+		picker.show();
+	}
+
+	private getHistoryActions(): readonly IAction[] {
 		const model = this.getControl()?.getModel();
 		const historyAction = (redo: boolean): IAction => ({
 			id: redo ? 'themeEditor.redo' : 'themeEditor.undo',
@@ -349,6 +406,10 @@ export class ThemeEditor extends EditorPane {
 			enabled: !this.saving && !this.input?.readOnly && (redo ? model?.canRedo() : model?.canUndo()) === true,
 			run: () => { if (redo) model?.redo(); else model?.undo(); },
 		});
+		return [historyAction(false), historyAction(true)];
+	}
+
+	public override getActions(menuId?: MenuId): readonly IAction[] {
 		const saveAction = (id: string, label: string, run: () => Promise<void>): IAction => ({
 			id,
 			label,
@@ -358,8 +419,7 @@ export class ThemeEditor extends EditorPane {
 			run: () => this.runAction(run),
 		});
 		return [
-			historyAction(false),
-			historyAction(true),
+			...(menuId === MenuId.CompactWindowEditorTitle ? [] : this.getHistoryActions()),
 			new SubmenuItemAction({
 				title: localize('themeEditor.saveActions', 'Theme save actions'),
 				submenu: MenuId.for('ThemeEditorSaveActions'),
@@ -533,6 +593,7 @@ export class ThemeEditor extends EditorPane {
 			this.compiled = theme;
 			this.compiledSource = source;
 			this.valid = true;
+			this.updateTitleArea();
 			this.applyPreview();
 			this.renderRows();
 			this.showMessage(this.input.readOnly

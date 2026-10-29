@@ -112,18 +112,48 @@
 }
 
 .ash-auxiliary-titlebar-compact > .ash-workbench-part-title,
-.ash-auxiliary-titlebar-compact .ash-titlebar-command-center,
+.ash-auxiliary-titlebar-compact
+	.ash-titlebar-center
+	> .ash-titlebar-command-center,
 .ash-auxiliary-titlebar-compact .ash-titlebar-center-adjacent-actions {
 	display: none;
 }
 
 .ash-auxiliary-titlebar-compact .ash-titlebar-center {
-	width: 40%;
-	max-width: 400px;
+	/* Share the row with editor actions so long titles cannot paint beneath them. */
+	position: static;
+	flex: 0 1 auto;
+	margin-inline: var(--ash-spacing-size80);
+	transform: none;
 }
 
 .ash-auxiliary-titlebar-compact .ash-titlebar-window-title {
 	display: block;
+}
+
+.ash-titlebar-editor-control {
+	display: none;
+	min-width: 0;
+}
+
+.ash-titlebar-center-custom > .ash-titlebar-editor-control {
+	display: flex;
+	justify-content: center;
+}
+
+.ash-auxiliary-titlebar-compact .ash-titlebar-center-custom {
+	/* Share the default Quick Access overlay's center line, independent of side actions. */
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	margin-inline: 0;
+	transform: translate(-50%, -50%);
+}
+
+.ash-auxiliary-titlebar-compact
+	.ash-titlebar-center-custom
+	> .ash-titlebar-window-title {
+	display: none;
 }
 
 .ash-auxiliary-titlebar-compact > .ash-workbench-part-content {

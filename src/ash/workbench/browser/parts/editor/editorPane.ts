@@ -20,6 +20,8 @@ import type { IContextMenuProvider } from "../../../../base/browser/contextmenu.
 import type { IMenuService } from "../../../../platform/actions/common/actions.js";
 import type { IAccessibilityService } from "../../../../platform/accessibility/common/accessibility.js";
 import type { TextResourceLanguageResolver } from '../../../../platform/language/common/textResourceLanguage.js';
+import type { IAction } from '../../../../base/common/actions.js';
+import type { MenuId } from '../../../../platform/actions/common/actions.js';
 
 /**
  * One editor implementation hosted by the central Editor Part.
@@ -32,8 +34,10 @@ import type { TextResourceLanguageResolver } from '../../../../platform/language
 export abstract class EditorPane extends Composite implements IEditorPane {
 	/** Assigned by the group host before the pane creates its content. Modal panes have no document group. */
 	public group: IEditorGroup | undefined;
-	/** Pane-owned controls that the modal host mounts beside its title and detaches on close. */
+	/** Pane-owned controls borrowed by modal or compact window chrome while this pane is active. */
 	public getTitleControl(): HTMLElement | undefined { return undefined; }
+	/** Lets a pane omit actions already hosted by its compact window title control. */
+	public override getActions(_menuId?: MenuId): readonly IAction[] { return super.getActions(); }
 	public abstract setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void>;
 	public abstract clearInput(): void;
 	public abstract layout(dimension: IDimension): void;
