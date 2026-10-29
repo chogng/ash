@@ -674,7 +674,8 @@
 }
 
 .ash-scm-commit-dropdown.ash-button {
-	flex: 0 0 var(--ash-toolbar-actionSize);
+	flex: 0 0 auto;
+	aspect-ratio: 1;
 	padding: 0;
 	border-left-color: currentColor;
 	border-top-left-radius: 0;
