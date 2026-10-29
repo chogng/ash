@@ -677,8 +677,18 @@
       "rendering": "symbolic"
     },
     {
+      "id": "git-branch-changes",
+      "file": "git-branch-changes.svg",
+      "rendering": "symbolic"
+    },
+    {
       "id": "git-commit",
       "file": "git-commit.svg",
+      "rendering": "symbolic"
+    },
+    {
+      "id": "git-compare",
+      "file": "git-compare.svg",
       "rendering": "symbolic"
     },
     {

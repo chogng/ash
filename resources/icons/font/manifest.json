@@ -313,7 +313,9 @@
     "folder-opened": "E136",
     "diff-added": "E137",
     "diff-changes": "E138",
-    "debug-disconnect": "E139"
+    "debug-disconnect": "E139",
+    "git-branch-changes": "E13A",
+    "git-compare": "E13B"
   },
   "sources": {
     "account": "886e09861c7a58d0d84964c90eacd5f6f49f9d736974b1ee36b1600a5f304408",
@@ -449,8 +451,10 @@
     "fork": "c30de80f3b7a4e19755889a0aa897fd2b644ed4b6d64f7bfe8e36749ebc24a63",
     "frame": "8bca307ca4fd327ea57bd6ea7ab47e60179a69dbfb269f7dc8a9d59f0366da97",
     "gear": "17973f7afcfa59fe1592288effdbeff2b7e3535d54efac1673e9ab2f5c148f17",
+    "git-branch-changes": "389ac80a32de2becf2841957b9a792765faadd09ab10cb5e987d444257ced977",
     "git-branch": "a465ba6646be63269f318da5187edd12420bf83528ca55db96f9cf730ef64822",
     "git-commit": "0865f04d5673007ca9f265a7b5d40f9dc5b2d0b98dcf7c3b15dfe0e9d207e1a8",
+    "git-compare": "478afc507e996a3244a69ea0c0216394ff3e2fa70d80ead9ced53ec05178ae98",
     "git-pull-request-closed": "f8e75a5d30489abffb4d79777edaabd849c51c3ab811d5ec89a322458aca8aee",
     "git-pull-request-comment": "6b8635ed9166c630df7c6c0af889e47c18f6da9dd77852c7701820a0b65cba46",
     "git-pull-request-done": "45bea1c9fd42166dcbb0ede3d897c5c5e90a3d4427bcce212b33b7474ece412d",
