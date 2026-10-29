@@ -468,3 +468,33 @@ fn initialization_reads_cannot_select_another_window_or_inject_facts() {
         assert!(serde_json::from_value::<ExtensionClientOperation>(invalid).is_err());
     }
 }
+
+#[test]
+fn terminal_requests_validate_identity_and_process_boundaries() {
+    for operation in [
+        json!({"operation":"createTerminal","name":"Debug","cwd":"/workspace","env":{"REMOVED":null},"command":"pnpm dev"}),
+        json!({"operation":"createTerminal","name":"Debug","cwd":null,"env":{},"appendEnv":{"NODE_OPTIONS":" --require=debug.cjs"},"command":null}),
+        json!({"operation":"readTerminal","terminalId":"owned","afterSequence":0}),
+        json!({"operation":"disposeTerminal","terminalId":"owned"}),
+    ] {
+        let request = ExtensionClientRequest {
+            context: RequestContext::new(1, 1, 1),
+            call_id: 1,
+            operation: serde_json::from_value(operation).unwrap(),
+        };
+        request.validate(&ProtocolLimits::default()).unwrap();
+    }
+    for operation in [
+        json!({"operation":"createTerminal","name":"Debug","cwd":null,"env":{"INVALID=KEY":"value"},"command":null}),
+        json!({"operation":"createTerminal","name":"Debug","cwd":null,"env":{"MODE":"bad\u{0}value"},"command":null}),
+        json!({"operation":"createTerminal","name":"Debug","cwd":null,"env":{},"appendEnv":{"INVALID=KEY":"value"},"command":null}),
+        json!({"operation":"disposeTerminal","terminalId":""}),
+    ] {
+        let request = ExtensionClientRequest {
+            context: RequestContext::new(1, 1, 1),
+            call_id: 1,
+            operation: serde_json::from_value(operation).unwrap(),
+        };
+        assert!(request.validate(&ProtocolLimits::default()).is_err());
+    }
+}

@@ -3,11 +3,9 @@
 	"configurations": [
 		{
 			"name": "Ash",
-			"type": "node",
+			"type": "node-terminal",
 			"request": "launch",
-			"runtimeExecutable": "pnpm",
-			"runtimeArgs": ["dev"],
-			"console": "integratedTerminal",
+			"command": "pnpm dev",
 			"autoAttachChildProcesses": true,
 			"cwd": "${workspaceFolder}",
 			"presentation": {
@@ -17,11 +15,9 @@
 		},
 		{
 			"name": "Ash Agents",
-			"type": "node",
+			"type": "node-terminal",
 			"request": "launch",
-			"runtimeExecutable": "pnpm",
-			"runtimeArgs": ["dev:agents"],
-			"console": "integratedTerminal",
+			"command": "pnpm dev:agents",
 			"autoAttachChildProcesses": true,
 			"cwd": "${workspaceFolder}",
 			"presentation": {
@@ -31,11 +27,9 @@
 		},
 		{
 			"name": "Ash (Hot Reload)",
-			"type": "node",
+			"type": "node-terminal",
 			"request": "launch",
-			"runtimeExecutable": "pnpm",
-			"runtimeArgs": ["dev:ui:connected"],
-			"console": "integratedTerminal",
+			"command": "pnpm dev:ui:connected",
 			"autoAttachChildProcesses": true,
 			"cwd": "${workspaceFolder}",
 			"presentation": {

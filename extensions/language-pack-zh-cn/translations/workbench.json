@@ -2742,7 +2742,8 @@
     "languageServer.retry": "重试",
     "editor.selection.invalid": "新建文档的默认编辑器必须为 buildMode、code 或 academy；收到 {0}。",
     "editor.selection.title": "新建文档的默认编辑器",
-    "editor.selection.description": "使用默认编辑器，或优先使用 Code 或 Academy 打开新的未命名文档。"
+    "editor.selection.description": "使用默认编辑器，或优先使用 Code 或 Academy 打开新的未命名文档。",
+    "debug.terminalWorkflowHelp": "使用 node-terminal 启动配置在 JavaScript 调试终端中运行命令。该终端启动的 Node.js 程序会自动附加，准备脚本退出后仍然有效。关闭终端或停止其父调试会话会结束终端及其附加会话。"
   },
   "ash.menu": {
     "file": "文件",

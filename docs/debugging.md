@@ -177,6 +177,8 @@ Ash 预装两个独立 Rust provider。`debug-javascript` 复用 MIT 许可的�
 
 适配器固定为 `v1.140.0`，大小和 SHA-256 由 [runtime.json](../extensions/debug-javascript/runtime.json) 单独管理；构建通过现有下载校验器获取 standalone tar 包，拒绝越界／链接／重复成员并保留 LICENSE。随 Desktop 资源分发，运行时复用 Ash 管理的 Node 或开发时 Electron 的 Node 模式；最终用户不需要安装 Rust、Cargo 或 VS Code 扩展宿主。调试 Node 程序可指定 `runtimeExecutable`；Chrome／Edge 仍需对应浏览器。
 
+`node-terminal` 的 launch 配置通过 `command` 运行集成终端命令，也可省略命令后手动输入。终端独立拥有自动附加租约，不修改全局 Auto Attach 设置；准备脚本退出或多个 Node 程序先后运行不会结束父会话。关闭终端或停止父会话会释放终端及所属子会话，扩展退役撤销租约并回收其终端。终端由 Workbench Terminal owner 创建、读取和关闭，Debug manager 继续拥有会话图。
+
 Node 启动配置使用 `type: "node"`、`request: "launch"` 和 `program`，附加使用 `request: "attach"`。provider 同时接纳 `pwa-node`、`chrome`／`pwa-chrome`、`msedge`／`pwa-msedge`。TS 仍需编译后的 JS 与 source map；配置 `outFiles` 指向输出目录。入口脚本的 source map 绑定会先暂停，避免短脚本越过已有 TS 断点。
 
 自动附加默认关闭。运行“调试: 切换自动附加”（`ash.debug-javascript.toggleAutoAttach`）选择 `always`、`smart` 或 `onlyWithFlag`，然后新建集成终端；也可直接修改 `debug.javascript.autoAttachFilter`。选择器默认使用已有工作区覆盖所在层，否则使用用户设置，并可显式切换写入范围。启用后状态栏显示当前模式；点击可切换模式、临时禁用或恢复。临时禁用只暂停新程序的附加，保留设置、已有会话和终端环境，因此恢复后同一终端以及暂停期间新建的终端均可继续自动附加。更改自动附加设置或重新激活扩展会清除临时禁用状态；选择 Disabled 会关闭能力并隐藏状态栏项。

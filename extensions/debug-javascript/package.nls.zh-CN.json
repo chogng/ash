@@ -4,6 +4,7 @@
   "error.configuration": "JavaScript 调试配置无效。",
   "error.runtime": "JavaScript 调试运行时不可用。请重新构建或安装 Ash。",
   "configuration.launch": "启动 JavaScript 文件",
+  "configuration.terminal": "JavaScript 调试终端",
   "setting.autoAttach": "自动附加到新 Ash 终端中启动的 Node.js 进程。修改此设置后请重新创建终端。",
   "setting.smartPattern": "智能自动附加排除的路径（glob 模式）。",
   "configuration.title": "JavaScript 调试",

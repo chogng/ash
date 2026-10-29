@@ -53,7 +53,7 @@ export function createAppServerExtensionHostApi(connection: AppServerProtocolCli
 			const value = await handler(request, context.signal, source);
 			// These operations use the protocol's generic JSON result in both Rust and browser hosts.
 			if (value && typeof value === 'object' && 'result' in value && value.result === 'value'
-				&& !['editorOperation', 'backendRequest', 'backendState'].includes(operation.operation)) {
+				&& !['editorOperation', 'backendRequest', 'backendState', 'createTerminal', 'readTerminal'].includes(operation.operation)) {
 				throw new TypeError('Browser extension results cannot be returned over the App Server protocol');
 			}
 			let response = value;

@@ -500,18 +500,35 @@ suite('Terminal configuration and interactive profiles', () => {
 		assert.equal(await result, undefined);
 	});
 
-	test('workspace transitions withdraw a pending catalogue and refresh the next folder', async () => {
+	test('workspace transitions refresh empty-window profiles and discard their late catalogue', async () => {
 		using owner = new DisposableStore();
-		const { profiles, workspace, calls, setRead } = createServices(owner);
+		const { profiles, workspace, processes, setRead } = createServices(owner);
+		const directories: (string | undefined)[] = [];
+		const listProfiles = processes.listProfiles.bind(processes);
+		processes.listProfiles = async dirId => {
+			directories.push(dirId);
+			return listProfiles(dirId);
+		};
+		const initialDirectory = workspace.getWorkspace().folders[0]!.id;
 		await profiles.refreshAvailableProfiles();
+		assert.deepEqual(directories, [initialDirectory]);
+		const emptyProfiles = new DeferredPromise<readonly ITerminalProfile[]>();
+		setRead(() => emptyProfiles.p);
 		workspace.updateWorkspace({ id: 'empty-window' });
 		assert.equal(profiles.availableProfiles.length, 0);
-		assert.equal(calls(), 1);
+		assert.deepEqual(directories, [initialDirectory, undefined]);
+		const retiredRequest = assert.rejects(profiles.refreshAvailableProfiles(), isCancellationError);
 		setRead(async () => [{ profileId: 'other', title: 'Other shell', isDefault: true }]);
 		workspace.updateWorkspace({ id: 'other-folder', uri: URI.file('/other') });
-		await waitFor(() => profiles.availableProfiles.length === 1);
+		assert.equal(profiles.availableProfiles.length, 0);
+		await profiles.profilesReady;
+		assert.deepEqual(directories, [initialDirectory, undefined, workspace.getWorkspace().folders[0]!.id]);
+		assert.deepEqual(profiles.availableProfiles.map(profile => profile.profileId), ['other']);
 		assert.equal(profiles.getDefaultProfile()?.profileId, 'other');
-		assert.equal(calls(), 2);
+		await emptyProfiles.complete(shells);
+		await retiredRequest;
+		assert.deepEqual(profiles.availableProfiles.map(profile => profile.profileId), ['other']);
+		assert.equal(profiles.getDefaultProfile()?.profileId, 'other');
 	});
 
 	for (const transition of ['workspace', 'reconnect'] as const) {
@@ -1437,6 +1454,55 @@ suite('Terminal configuration and interactive profiles', () => {
 
 });
 
+
+suite('Extension terminal ownership', () => {
+	ensureNoDisposablesAreLeakedInTestSuite();
+
+	test('output is bounded and handles cannot cross activation fences', async () => {
+		using owner = new DisposableStore();
+		const parent = createServices(owner).services;
+		const services = owner.add(parent.createChild());
+		const output = owner.add(new Emitter<{ data: string; }>());
+		const exit = owner.add(new Emitter<number | undefined>());
+		let closes = 0;
+		let createdEnvironment: unknown;
+		const terminal = { state: 'running', onDidWriteData: output.event, onDidExit: exit.event } as unknown as ITerminalInstance;
+		services.registerInstance(ITerminalService, { createTerminal: async (options: { env?: unknown; }) => { createdEnvironment = options.env; return terminal; }, setActiveInstance: () => { }, onDidDisposeInstance: Event.None, closeTerminal: async () => { closes++; } } as unknown as ITerminalService);
+		services.registerInstance(ITerminalGroupService, { showPanel: async () => { } } as unknown as import('../../browser/terminal.js').ITerminalGroupService);
+		const bridge = owner.add(services.createInstance(MainThreadTerminalService));
+		const source = { extensionId: 'acme.debug', activationGeneration: 1, incarnation: 2 };
+		const signal = new AbortController().signal;
+		const created = await bridge.handle({ operation: 'createTerminal', name: 'Debug', cwd: null, env: { NODE_OPTIONS: '--no-warnings' }, appendEnv: { NODE_OPTIONS: ' --require=debug.cjs' }, command: null }, signal, source);
+		assert.equal(created.result, 'value');
+		assert.equal((createdEnvironment as Record<string, string>).NODE_OPTIONS, '--no-warnings --require=debug.cjs');
+		const id = (created as unknown as { value: { id: string; }; }).value.id;
+		output.fire({ data: 'x'.repeat(100_000) });
+		const result = await bridge.handle({ operation: 'readTerminal', terminalId: id, afterSequence: 0 }, signal, source);
+		assert.equal(result.result, 'value');
+		const value = (result as unknown as { value: { output: string; outputGap: boolean; closed: boolean; }; }).value;
+		assert.ok(value.output.length <= 65536);
+		assert.equal(value.outputGap, true);
+		assert.equal(value.closed, false);
+		for (const foreign of [{ ...source, incarnation: 3 }, { ...source, extensionId: 'other' }]) {
+			await assert.rejects(bridge.handle({ operation: 'disposeTerminal', terminalId: id }, signal, foreign));
+		}
+		exit.fire(0);
+		const closed = await bridge.handle({ operation: 'readTerminal', terminalId: id, afterSequence: 0 }, signal, source);
+		assert.equal((closed as unknown as { value: { closed: boolean; }; }).value.closed, true);
+		bridge.clearOwnedTerminals();
+		assert.equal(closes, 1);
+		await assert.rejects(bridge.handle({ operation: 'readTerminal', terminalId: id, afterSequence: 0 }, signal, source));
+		const delayed = new DeferredPromise<ITerminalInstance>();
+		const creating = new DeferredPromise<void>();
+		Object.assign(services.get(ITerminalService), { createTerminal: async () => { await creating.complete(); return delayed.p; } });
+		const pending = bridge.handle({ operation: 'createTerminal', name: 'Late debug', cwd: null, env: {}, command: null }, signal, source);
+		await creating.p;
+		bridge.clearOwnedTerminals();
+		await delayed.complete(terminal);
+		await assert.rejects(pending, isCancellationError);
+		assert.equal(closes, 2);
+	});
+});
 
 suite('Terminal creation owner', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();

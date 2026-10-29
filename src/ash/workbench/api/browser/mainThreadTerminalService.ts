@@ -11,12 +11,12 @@ import { CancellationError } from '../../../base/common/errors.js';
 import { Disposable, DisposableMap, DisposableStore, toDisposable, type IDisposable } from '../../../base/common/lifecycle.js';
 import { ThemeIcon } from '../../../base/common/themables.js';
 import { localize } from '../../../nls.js';
-import { GeneralShellType, PosixShellType, WindowsShellType, type IShellLaunchConfig, type TerminalArguments } from '../../../platform/terminal/common/terminal.js';
+import { GeneralShellType, PosixShellType, WindowsShellType, ITerminalProcessService, type IShellLaunchConfig, type TerminalArguments } from '../../../platform/terminal/common/terminal.js';
 import { escapeNonWindowsPath } from '../../../platform/terminal/common/terminalEnvironment.js';
 import { IWorkspaceContextService } from '../../../platform/workspace/common/workspace.js';
 import { IExtensionService } from '../../services/extensions/common/extensionService.js';
-import { ITerminalService, type ITerminalInstance } from '../../contrib/terminal/browser/terminal.js';
-import { ITerminalProfileService } from '../../contrib/terminal/common/terminal.js';
+import { ITerminalService, ITerminalGroupService, type ITerminalInstance } from '../../contrib/terminal/browser/terminal.js';
+import { ITerminalProfileService, ITerminalProfileResolverService } from '../../contrib/terminal/common/terminal.js';
 import type { ExtensionHostProviderInvoker } from './extensionHostLanguageBridge.js';
 import type { JsonValue } from '../../../platform/agentHost/common/extensionHostApi.js';
 import { IInstantiationService } from '../../../platform/instantiation/common/instantiation.js';
@@ -24,6 +24,13 @@ import { ILogService } from '../../../platform/log/common/log.js';
 import { RequestStore } from '../../../platform/terminal/common/requestStore.js';
 import { addDisposableListener } from '../../../base/browser/dom.js';
 import { ITerminalLinkProviderService } from '../../contrib/terminalContrib/links/browser/links.js';
+import type { ExtensionClientSource, ExtensionHostFleetSnapshot } from '../../../platform/agentHost/common/extensionHostApi.js';
+import type { ExtensionClientOperation, ExtensionClientResult } from '../common/extHost.protocol.js';
+import { Event } from '../../../base/common/event.js';
+import { generateUuid } from '../../../base/common/uuid.js';
+import { OperatingSystem } from '../../../base/common/platform.js';
+import { mergeEnvironments } from '../../contrib/terminal/common/terminalEnvironment.js';
+import { getRemoteAuthority } from '../../../platform/remote/common/remoteHosts.js';
 
 type ProfileReply = { value: JsonValue; } | { error: unknown; };
 
@@ -60,6 +67,8 @@ export interface ExtensionTerminalQuickFixRegistration extends ExtensionTerminal
 
 /** Binds incarnation-owned callbacks to the existing terminal profile and instance owners. */
 export class MainThreadTerminalService extends Disposable {
+	private readonly pendingTerminals = new Map<AbortController, ExtensionClientSource>();
+	private readonly ownedTerminals = new Map<string, { source: ExtensionClientSource; terminal: ITerminalInstance; listeners: DisposableStore; chunks: { sequence: number; data: string; }[]; next: number; size: number; closed: boolean; }>();
 	private readonly processes = this._register(new DisposableStore());
 	private readonly registrations = this._register(new DisposableMap<string, DisposableStore>());
 	private readonly descriptors = new Map<string, ExtensionTerminalProfileRegistration>();
@@ -85,9 +94,129 @@ export class MainThreadTerminalService extends Disposable {
 		@ITerminalCompletionService private readonly completions: ITerminalCompletionService,
 		@ITerminalQuickFixService private readonly quickFixes: ITerminalQuickFixService,
 		@IFileService private readonly files: IFileService,
+		@ITerminalGroupService private readonly terminalGroups: ITerminalGroupService,
+		@ITerminalProfileResolverService private readonly profileResolver: ITerminalProfileResolverService,
+		@ITerminalProcessService private readonly terminalProcesses: ITerminalProcessService,
 	) {
 		super();
-		this._register(workspace.onDidChangeWorkspace(() => this.workspaceGeneration++));
+		this._register(workspace.onDidChangeWorkspace(() => { this.workspaceGeneration++; this.clearOwnedTerminals(); }));
+		this._register(toDisposable(() => this.clearOwnedTerminals()));
+	}
+
+	/** Extension handles are scoped to an exact activation; the terminal service owns the shell. */
+	async handle(operation: Extract<ExtensionClientOperation, { operation: 'createTerminal' | 'readTerminal' | 'disposeTerminal'; }>, signal: AbortSignal, source: ExtensionClientSource): Promise<ExtensionClientResult> {
+		signal.throwIfAborted();
+		if (operation.operation === 'createTerminal') {
+			const name = text(operation.name, 256);
+			const cwd = operation.cwd === null ? undefined : text(operation.cwd, 8192);
+			const command = operation.command === null ? undefined : text(operation.command, 32768, true);
+			if (command?.includes('\0')) throw invalid();
+			if (!operation.env || typeof operation.env !== 'object' || Array.isArray(operation.env) || Object.keys(operation.env).length > 128) throw invalid();
+			const env: Record<string, string | null> = {};
+			for (const [key, value] of Object.entries(operation.env)) {
+				if (!key || key.length > 256 || /[=\0]/.test(key)) throw invalid();
+				env[key] = value === null ? null : text(value, 32768, true);
+				if (env[key]?.includes('\0')) throw invalid();
+			}
+			if (this.ownedTerminals.size + this.pendingTerminals.size >= 64) throw invalid();
+			const cancellation = new AbortController();
+			this.pendingTerminals.set(cancellation, source);
+			signal = AbortSignal.any([signal, cancellation.signal]);
+			try {
+				const generation = this.workspaceGeneration;
+				const folder = cwd === undefined ? this.workspace.getWorkspace().folders[0] : this.workspace.getWorkspaceFolder(URI.file(cwd)) ?? undefined;
+				const os = this.terminalProcesses.operatingSystem;
+				if (os === undefined) throw new CancellationError();
+				const options = { os, workspaceFolder: folder, remoteAuthority: folder && getRemoteAuthority(folder.uri), allowAutomationShell: false };
+				const profile = await this.profileResolver.getDefaultProfile(options);
+				const shell: IShellLaunchConfig = { executable: profile.path, args: profile.args, env: profile.env };
+				await this.profileResolver.resolveShellLaunchConfig(shell, options);
+				signal.throwIfAborted();
+				if (this.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
+				// Resolve the user's shell first, then apply literal SDK values. A debug
+				// terminal's lease must supersede global Auto Attach credentials. Explicit
+				// process launches have no revival intent, so these credentials stay transient.
+				const environment: Record<string, string | null> = {};
+				mergeEnvironments(environment, shell.env, os !== OperatingSystem.Windows);
+				mergeEnvironments(environment, env, os !== OperatingSystem.Windows);
+				if (operation.appendEnv !== undefined) {
+					if (!operation.appendEnv || typeof operation.appendEnv !== 'object' || Array.isArray(operation.appendEnv) || Object.keys(operation.appendEnv).length + Object.keys(env).length > 128) throw invalid();
+					const inherited = await this.terminalProcesses.getEnvironment(undefined, folder?.id);
+					for (const [key, value] of Object.entries(operation.appendEnv)) {
+						if (!key || key.length > 256 || /[=\0]/.test(key)) throw invalid();
+						const suffix = text(value, 32768, true);
+						if (suffix.includes('\0')) throw invalid();
+						const same = (candidate: string): boolean => os === OperatingSystem.Windows ? candidate.toLowerCase() === key.toLowerCase() : candidate === key;
+						const existing = Object.keys(environment).find(same);
+						const valueBeforeAppend = existing === undefined ? inherited[Object.keys(inherited).find(same) ?? key] : environment[existing];
+						environment[existing ?? key] = `${valueBeforeAppend ?? ''}${suffix}`;
+					}
+				}
+				signal.throwIfAborted();
+				const executable = typeof shell.executable === 'string' ? shell.executable : shell.executable![0]!;
+				const terminal = await this.terminals.createTerminal({ title: name, cwd: cwd ?? shell.cwd, env: environment, profile: { type: 'custom', name: profile.profileName, path: [executable], args: shell.args ?? [] }, environmentVariableCollectionsPersistable: false });
+				try {
+					if (this.isDisposed || generation !== this.workspaceGeneration) throw new CancellationError();
+					signal.throwIfAborted();
+					const id = generateUuid();
+					const entry = { source, terminal, listeners: new DisposableStore(), chunks: [] as { sequence: number; data: string; }[], next: 0, size: 0, closed: false };
+					this.ownedTerminals.set(id, entry);
+					entry.listeners.add(terminal.onDidWriteData(event => {
+						for (let offset = 0; offset < event.data.length; offset += 8192) {
+							const data = event.data.slice(offset, offset + 8192);
+							entry.chunks.push({ sequence: entry.next++, data }); entry.size += data.length;
+							while (entry.size > 65536) entry.size -= entry.chunks.shift()!.data.length;
+						}
+					}));
+					const closed = (): void => { entry.closed = true; entry.listeners.dispose(); };
+					entry.listeners.add(Event.once(terminal.onDidExit)(closed));
+					entry.listeners.add(this.terminals.onDidDisposeInstance(instance => { if (instance === terminal) closed(); }));
+					this.terminals.setActiveInstance(terminal);
+					await this.terminalGroups.showPanel(true);
+					signal.throwIfAborted();
+					if (command !== undefined) await terminal.sendText(command, true);
+					signal.throwIfAborted();
+					return { result: 'value', value: { id } };
+				} catch (error) {
+					for (const [id, entry] of this.ownedTerminals) if (entry.terminal === terminal) { entry.listeners.dispose(); this.ownedTerminals.delete(id); }
+					await this.terminals.closeTerminal(terminal).catch(() => { });
+					throw error;
+				}
+			}
+			finally { this.pendingTerminals.delete(cancellation); }
+		}
+
+		const id = text(operation.terminalId, 256);
+		const entry = this.ownedTerminals.get(id);
+		if (!entry || entry.source.extensionId !== source.extensionId || entry.source.incarnation !== source.incarnation || entry.source.activationGeneration !== source.activationGeneration) throw invalid();
+		if (operation.operation === 'disposeTerminal') {
+			entry.listeners.dispose(); this.ownedTerminals.delete(id);
+			await this.terminals.closeTerminal(entry.terminal);
+			return { result: 'done' };
+		}
+		if (!Number.isSafeInteger(operation.afterSequence) || operation.afterSequence < 0 || operation.afterSequence > entry.next) throw invalid();
+		return { result: 'value', value: { output: entry.chunks.filter(chunk => chunk.sequence >= operation.afterSequence).map(chunk => chunk.data).join(''), nextSequence: entry.next, outputGap: operation.afterSequence < (entry.chunks[0]?.sequence ?? entry.next), closed: entry.closed } };
+	}
+
+	update(snapshot: ExtensionHostFleetSnapshot): void {
+		for (const [cancellation, source] of this.pendingTerminals) {
+			if (!snapshot.extensions.some(runtime => runtime.id === source.extensionId && runtime.incarnation === source.incarnation && runtime.activationGeneration === source.activationGeneration && ['ready', 'starting', 'handshaking'].includes(runtime.lifecycle))) cancellation.abort(new CancellationError());
+		}
+		for (const [id, entry] of this.ownedTerminals) {
+			const source = entry.source;
+			if (snapshot.extensions.some(runtime => runtime.id === source.extensionId && runtime.incarnation === source.incarnation && runtime.activationGeneration === source.activationGeneration && ['ready', 'starting', 'handshaking'].includes(runtime.lifecycle))) continue;
+			entry.listeners.dispose(); this.ownedTerminals.delete(id);
+			void this.terminals.closeTerminal(entry.terminal).catch(error => this.log.error(error));
+		}
+	}
+
+	clearOwnedTerminals(): void {
+		for (const cancellation of this.pendingTerminals.keys()) cancellation.abort(new CancellationError());
+		for (const entry of this.ownedTerminals.values()) {
+			entry.listeners.dispose();
+			void this.terminals.closeTerminal(entry.terminal).catch(error => this.log.error(error));
+		}
+		this.ownedTerminals.clear();
 	}
 
 	replaceCompletionProviders(next: readonly ExtensionTerminalCompletionRegistration[]): void {

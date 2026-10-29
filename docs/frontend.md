@@ -20,7 +20,7 @@
 
 `Ash (Hot Reload)` 专用于前端热更新和 Electron 宿主监听，仍连接 Rust 后端，但不监听后端源码变化；`Ash` 和 `Ash Agents` 同时监听前后端，也支持前端热更新。Web 模式可通过浏览器授权直接打开本地文件夹，使用 Explorer、编辑器、新建文件和保存；聊天、Git、终端、后端搜索及语言服务需要 App Server。Electron 仅 UI 模式的文件操作也需要后端。
 
-这三个 Desktop F5 配置通过 `node` 调试器在集成终端启动对应的 `pnpm` 脚本，并附加其 Node 子进程。真实 Ash 已在隔离工作区验证 `Ash` 配置的包管理器子进程调试与停止回收。Electron Main 构建生成 source map，映射回当前 checkout 的 `src/`。Rust 开发运行包使用剥离符号的 `dev-small` profile；调试 Rust 源码须使用带调试信息的独立目标。
+这三个 Desktop F5 配置使用 `node-terminal` 在 JavaScript 调试终端运行对应的 `pnpm` 脚本，Ash 与 VS Code 共用同一配置。终端保持父调试会话，准备脚本退出后仍可附加后续 Node 子进程；关闭终端或停止父会话会回收终端及其附加会话。Electron Main 构建生成 source map，映射回当前 checkout 的 `src/`。Rust 开发运行包使用剥离符号的 `dev-small` profile；调试 Rust 源码须使用带调试信息的独立目标。
 
 `Ash Code (TUI)` 通过 CodeLLDB 调试 `.build/cargo/ci-test/ash`（Windows 为 `.exe`），在集成终端运行。其 `Prepare Ash Code Debug` 前置任务为 CLI 和 TUI 构建完整调试符号，准备匹配的后端程序和完整的 Node 扩展运行资源，并将 `ASH_DEV_RUNTIME_ROOT` 及校验锁定的 ripgrep／tgrep 路径写入 `.build/code/debug.env`。单独准备可执行 `node build/python.ts -B build/code/debug.py`；直接运行 TUI 仍用 `just ash-code`，也会先准备这些运行资源。
 

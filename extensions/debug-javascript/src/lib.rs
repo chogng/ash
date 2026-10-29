@@ -30,12 +30,14 @@ use std::time::Instant;
 
 mod auto_attach;
 mod auto_attach_controls;
+mod terminal;
 pub use auto_attach::helper as auto_attach_helper;
 
 #[derive(Default)]
 pub struct Extension {
     runtime: Option<Arc<Runtime>>,
     broker: Option<auto_attach::Broker>,
+    terminals: Option<Arc<terminal::Terminals>>,
 }
 impl external_ext_sdk::Extension for Extension {
     fn id(&self) -> &str {
@@ -135,11 +137,29 @@ impl external_ext_sdk::Extension for Extension {
                 .unwrap_or_default(),
         )?;
         auto_attach_controls::register(context, broker.environment(), &messages)?;
+        let terminals = Arc::new(terminal::Terminals::new(
+            BackgroundClient::new(context.services.clone()),
+            broker.environment(),
+            messages["error.configuration"]
+                .as_str()
+                .unwrap_or_default()
+                .into(),
+        ));
+        let adapters = Arc::clone(&terminals);
+        context.debug.register_connection_factory(
+            "node-terminal.adapter",
+            "node-terminal",
+            move |request, token| adapters.connection(request, token),
+        )?;
+        self.terminals = Some(terminals);
         broker.start()?;
         self.broker = Some(broker);
         Ok(())
     }
     fn deactivate(&mut self) -> Result<(), ExtensionError> {
+        if let Some(terminals) = self.terminals.take() {
+            terminals.stop();
+        }
         if let Some(mut broker) = self.broker.take() {
             broker.stop();
         }

@@ -214,6 +214,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.assertNotDisposed();
 		throwIfCancelled(signal);
 		switch (operation.operation) {
+			case 'createTerminal': case 'readTerminal': case 'disposeTerminal': return this.terminalApi.handle(operation, signal, source);
 			case 'scmUpdate': this.scmApi.set(source, operation.registrationId, operation.revision, operation.providers); return { result: 'done' };
 			case 'backendRequest': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, operation.method, operation.params, 0, signal, operation.progress) };
 			case 'backendState': return { result: 'value', value: await this.backendApi.handle(source, operation.capability, undefined, {}, operation.after, signal, undefined, operation.waitForChange === true) };
@@ -389,6 +390,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.configurationApi.update(snapshot);
 		this.workspaceApi.update(snapshot);
 		this.taskApi.update(snapshot);
+		this.terminalApi.update(snapshot);
 		this.debugApi.update(snapshot);
 		this.statusbar.update(snapshot);
 		this.scmApi.update(snapshot);
@@ -412,6 +414,7 @@ export class MainThreadExtensionApi extends Disposable {
 		this.configurationApi.clear();
 		this.workspaceApi.clear();
 		this.taskApi.clear();
+		this.terminalApi.clearOwnedTerminals();
 		this.terminalApi.replaceProfiles([]);
 		this.terminalApi.clearPtys();
 		this.terminalApi.replaceEnvironmentProviders([]);

@@ -1160,6 +1160,8 @@ test('extension backend routes validate generated parameters before dispatch', a
 });
 
 for (const operation of [
+	{ operation: 'createTerminal', name: 'Debug', cwd: '/workspace', env: {}, command: null },
+	{ operation: 'readTerminal', terminalId: 'owned-terminal', afterSequence: 0 },
 	{ operation: 'editorOperation', payload: { method: 'openEditorResources' } },
 	{ operation: 'backendRequest', capability: 'git.repository', method: 'repositories', params: {} },
 	{ operation: 'backendState', capability: 'git.repository', after: 0 },

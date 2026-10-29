@@ -1349,6 +1349,7 @@ dependencies = [
 name = "ash-debug-javascript"
 version = "0.1.0"
 dependencies = [
+ "ash-debug-adapter",
  "ash-external-ext-sdk",
  "ash-sandboxing",
  "globset",
@@ -1356,6 +1357,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tempfile",
+ "tokio",
  "tokio-tungstenite 0.28.0",
  "url",
 ]

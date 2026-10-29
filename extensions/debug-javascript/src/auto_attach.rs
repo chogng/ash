@@ -3,6 +3,7 @@
 use crate::invalid;
 use external_ext_sdk::ExtensionError;
 use external_ext_sdk::client::BackgroundClient;
+use external_ext_sdk::client::DebugSessionOptions;
 use globset::Glob;
 use globset::GlobSet;
 use globset::GlobSetBuilder;
@@ -10,6 +11,7 @@ use rand::RngCore;
 use serde::Deserialize;
 use serde_json::Value;
 use serde_json::json;
+use std::collections::BTreeMap;
 use std::io::Read;
 use std::io::Write;
 use std::net::SocketAddr;
@@ -65,8 +67,84 @@ pub(super) struct Environment {
     resources: PathBuf,
     policy: Arc<Mutex<Policy>>,
     error: String,
+    terminals: Arc<Mutex<BTreeMap<String, TerminalScope>>>,
+}
+
+#[derive(Clone)]
+struct TerminalScope {
+    parent: String,
+    folder: String,
+    properties: BTreeMap<String, Value>,
+}
+
+struct Admission {
+    folder: String,
+    parent: Option<String>,
+    properties: BTreeMap<String, Value>,
 }
 impl Environment {
+    /// A terminal lease is independent of global Auto Attach mode and suspension.
+    pub fn terminal_scope(
+        &self,
+        parent: String,
+        folder: String,
+        properties: BTreeMap<String, Value>,
+    ) -> Result<(String, BTreeMap<String, Option<String>>), ExtensionError> {
+        let mut random = [0u8; 32];
+        rand::rng().fill_bytes(&mut random);
+        let secret: String = random.iter().map(|byte| format!("{byte:02x}")).collect();
+        let mut terminals = self.terminals.lock().map_err(|_| invalid(&self.error))?;
+        if terminals.len() >= 64 {
+            return Err(invalid(&self.error));
+        }
+        let children = properties.get("autoAttachChildProcesses") != Some(&json!(false));
+        terminals.insert(
+            secret.clone(),
+            TerminalScope {
+                parent,
+                folder,
+                properties,
+            },
+        );
+        let bootstrap = self.resources.join("src/auto-attach.cjs");
+        let option = format!(
+            " --require={} ",
+            serde_json::to_string(&bootstrap.to_string_lossy())
+                .map_err(|_| invalid(&self.error))?
+        );
+        Ok((
+            secret.clone(),
+            BTreeMap::from([
+                ("NODE_OPTIONS".into(), Some(option)),
+                ("VSCODE_INSPECTOR_OPTIONS".into(), None),
+                (
+                    "ASH_JS_DEBUG_ADDRESS".into(),
+                    Some(self.address.to_string()),
+                ),
+                ("ASH_JS_DEBUG_TOKEN".into(), Some(secret)),
+                (
+                    "ASH_JS_DEBUG_HELPER".into(),
+                    Some(
+                        std::env::current_exe()
+                            .map_err(|_| invalid(&self.error))?
+                            .to_string_lossy()
+                            .into_owned(),
+                    ),
+                ),
+                ("ASH_JS_DEBUG_MODE".into(), Some("enabled".into())),
+                (
+                    "ASH_JS_DEBUG_CHILDREN".into(),
+                    Some(if children { "1" } else { "0" }.into()),
+                ),
+            ]),
+        ))
+    }
+
+    pub fn retire_terminal(&self, secret: &str) {
+        if let Ok(mut terminals) = self.terminals.lock() {
+            terminals.remove(secret);
+        }
+    }
     pub fn collection(&self, settings: &Value) -> Result<Value, ExtensionError> {
         let mut policy = self.policy.lock().map_err(|_| invalid(&self.error))?;
         // A malformed edit must retire the previous attach policy, including
@@ -156,13 +234,27 @@ impl Environment {
             .folders = folders;
         Ok(())
     }
-    fn admit(&self, request: &Attach) -> Option<String> {
-        if request.token != self.secret
-            || request.address != self.address.to_string()
+    fn admit(&self, request: &Attach) -> Option<Admission> {
+        if request.address != self.address.to_string()
             || request.pid == 0
             || request.script.len() > 32768
             || inspector_address(&request.inspector).is_none()
         {
+            return None;
+        }
+        if let Some(scope) = self.terminals.lock().ok()?.get(&request.token).cloned() {
+            let cwd = Path::new(&request.cwd).canonicalize().ok()?;
+            let root = folder_path(&scope.folder)?.canonicalize().ok()?;
+            if !cwd.starts_with(root) {
+                return None;
+            }
+            return Some(Admission {
+                folder: scope.folder,
+                parent: Some(scope.parent),
+                properties: scope.properties,
+            });
+        }
+        if request.token != self.secret {
             return None;
         }
         let policy = self.policy.lock().ok()?;
@@ -194,9 +286,14 @@ impl Environment {
                 path.canonicalize().is_ok_and(|root| cwd.starts_with(root))
             })
             .cloned()
+            .map(|folder| Admission {
+                folder,
+                parent: None,
+                properties: BTreeMap::new(),
+            })
     }
 }
-fn folder_path(uri: &str) -> Option<PathBuf> {
+pub(super) fn folder_path(uri: &str) -> Option<PathBuf> {
     let url = url::Url::parse(uri).ok()?;
     if url.scheme() == "file" {
         url.to_file_path().ok()
@@ -251,6 +348,7 @@ impl Broker {
                     ..Policy::default()
                 })),
                 error,
+                terminals: Arc::default(),
             },
             listener: Some(listener),
             client,
@@ -291,15 +389,21 @@ impl Broker {
                             let mut payload = Vec::new();
                             let request = Read::by_ref(&mut stream).take(65536).read_to_end(&mut payload).ok().and_then(|_| serde_json::from_slice::<Attach>(&payload).ok());
                             let started = request.and_then(|request| {
-                                let folder = environment.admit(&request)?;
+                                let admission = environment.admit(&request)?;
                                 if stopped.load(Ordering::Acquire) { return None; }
                                 let (_, port) = inspector_address(&request.inspector)?;
-                                client.start_debugging(Some(folder), json!({
+                                let mut configuration = admission.properties;
+                                configuration.entry("sourceMaps".into()).or_insert(json!(true));
+                                configuration.entry("skipFiles".into()).or_insert(json!(["<node_internals>/**"]));
+                                for key in ["command", "cwd", "env", "envFile", "preLaunchTask", "postDebugTask", "serverReadyAction"] { configuration.remove(key); }
+                                configuration.extend(serde_json::from_value::<BTreeMap<String, Value>>(json!({
                                     "type":"node", "name":Path::new(&request.script).file_name().unwrap_or_default().to_string_lossy(),
                                     "request":"attach", "address":"127.0.0.1", "port":port,
-                                    "continueOnAttach":true, "restart":false, "sourceMaps":true,
-                                    "autoAttachChildProcesses":true, "skipFiles":["<node_internals>/**"]
-                                }), None).ok()
+                                    "continueOnAttach":true, "restart":false,
+                                    "autoAttachChildProcesses":admission.parent.is_none()
+                                })).ok()?);
+                                let options = admission.parent.map(|parent_session_id| DebugSessionOptions { parent_session_id: Some(parent_session_id), lifecycle_managed_by_parent: Some(true), console_mode: Some(1), no_debug: None, suppress_save_before_start: Some(true) });
+                                client.start_debugging(Some(admission.folder), json!(configuration), options).ok()
                             }).unwrap_or(false);
                             let _ = stream.write_all(if started { b"1" } else { b"0" });
                         }));

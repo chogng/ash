@@ -10,6 +10,7 @@ fn fixture(root: &Path) -> Environment {
             ..Policy::default()
         })),
         error: "invalid".into(),
+        terminals: Arc::default(),
     }
 }
 fn request(root: &Path) -> Attach {
@@ -149,4 +150,36 @@ fn auto_attach_configuration_changes_clear_temporary_pause() {
         .collection(&json!({"autoAttachFilter":"smart"}))
         .unwrap();
     assert!(fresh.admit(&request(root.path())).is_some());
+}
+
+#[test]
+fn terminal_leases_survive_disabled_global_policy_and_revoke_independently() {
+    let root = tempfile::tempdir().unwrap();
+    let other = tempfile::tempdir().unwrap();
+    let environment = fixture(root.path());
+    let folder = url::Url::from_directory_path(root.path())
+        .unwrap()
+        .to_string();
+    let (secret, _) = environment
+        .terminal_scope(
+            "parent".into(),
+            folder.clone(),
+            BTreeMap::from([("sourceMaps".into(), json!(false))]),
+        )
+        .unwrap();
+    let mut input = request(root.path());
+    input.token = secret.clone();
+    environment
+        .collection(&json!({"autoAttachFilter":"disabled"}))
+        .unwrap();
+    environment.suspend(Suspension::Paused).unwrap();
+    let admission = environment.admit(&input).unwrap();
+    assert_eq!(admission.parent.as_deref(), Some("parent"));
+    assert_eq!(admission.folder, folder);
+    assert_eq!(admission.properties["sourceMaps"], false);
+    input.cwd = other.path().to_string_lossy().into();
+    assert!(environment.admit(&input).is_none());
+    input.cwd = root.path().to_string_lossy().into();
+    environment.retire_terminal(&secret);
+    assert!(environment.admit(&input).is_none());
 }
