@@ -235,7 +235,7 @@ suite('banner browser component', () => {
 			const zh = locale === 'zh';
 			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
 			const banner = page.locator('[data-part="banner"]');
-			await banner.getByRole('button', { name: zh ? '管理权限' : 'Manage permissions', exact: true }).click();
+			await banner.getByRole('button', { name: zh ? '管理' : 'Manage', exact: true }).click();
 			const editor = page.locator('.ash-workspace-trust-editor');
 			const heading = editor.getByRole('heading', { level: 2 });
 			const trust = editor.getByRole('button', { name: zh ? '信任工作区' : 'Trust workspace', exact: true });
@@ -313,7 +313,7 @@ suite('banner browser component', () => {
 			const zh = locale === 'zh';
 			await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
 			const banner = page.locator('[data-part="banner"]');
-			await banner.getByRole('button', { name: zh ? '管理权限' : 'Manage permissions', exact: true }).click();
+			await banner.getByRole('button', { name: zh ? '管理' : 'Manage', exact: true }).click();
 			const editor = page.locator('.ash-workspace-trust-editor');
 			await editor.locator('summary').click();
 			const write = editor.getByRole('switch', { name: zh ? '写入文件' : 'Write files', exact: true });
@@ -383,7 +383,7 @@ suite('banner browser component', () => {
 		await page.goto('/banner.html');
 		await page.waitForFunction(() => !!window.ashBannerIntegration);
 		await page.evaluate(() => window.ashBannerIntegration.setPermissions('readonly'));
-		await page.locator('[data-part="banner"]').getByRole('button', { name: 'Manage permissions', exact: true }).click();
+		await page.locator('[data-part="banner"]').getByRole('button', { name: 'Manage', exact: true }).click();
 		const editor = page.locator('.ash-workspace-trust-editor');
 		await editor.locator('summary').click();
 		const write = editor.getByRole('switch', { name: 'Write files', exact: true });

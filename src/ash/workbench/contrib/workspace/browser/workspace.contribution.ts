@@ -126,7 +126,7 @@ class WorkspacePermissionStatus extends Disposable implements IWorkbenchContribu
 		this.banners.show({
 			id: bannerId,
 			icon: Lxicon.lock,
-			actions: [{ label: localize('workspaceTrust.manage', 'Manage permissions'), href: `command:${MANAGE_TRUST_COMMAND_ID}` }],
+			actions: [{ label: localize('workspaceTrust.manage', 'Manage'), href: `command:${MANAGE_TRUST_COMMAND_ID}` }],
 			message: this.trustInfo.isReadOnly
 				? localize('workspaceTrust.readOnlyBanner', 'This workspace is read-only. Editing files and running commands are unavailable.')
 				: localize('workspaceTrust.restrictedBanner', 'This workspace has limited directory permissions. Some features are unavailable.'),
@@ -173,7 +173,7 @@ class WorkspaceTrustRequestHandler extends Disposable implements IWorkbenchContr
 			if (!current()) return;
 			const buttons = options?.buttons ?? [
 				{ label: localize('workspaceTrust.enableDevelopment', 'Trust workspace'), type: 'ContinueWithTrust' },
-				{ label: localize('workspaceTrust.manage', 'Manage permissions'), type: 'Manage' },
+				{ label: localize('workspaceTrust.manage', 'Manage'), type: 'Manage' },
 			] as const;
 			const actions = buttons.filter(button => button.type !== 'Cancel');
 			const dialog = this.dialog = this.dialogs.show({
