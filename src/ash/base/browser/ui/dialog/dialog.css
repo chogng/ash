@@ -39,9 +39,17 @@
 }
 
 .ash-dialog-close {
+	--ash-toolbar-actionSize: var(--ash-spacing-size280);
 	flex-shrink: 0;
-	width: var(--ash-spacing-size280);
-	height: var(--ash-spacing-size280);
+	width: var(--ash-toolbar-actionSize);
+	height: var(--ash-toolbar-actionSize);
+}
+
+.ash-dialog-close .ash-action-label {
+	box-sizing: border-box;
+	width: var(--ash-toolbar-actionSize);
+	padding: 0;
+	color: inherit;
 }
 
 .ash-dialog-icon {

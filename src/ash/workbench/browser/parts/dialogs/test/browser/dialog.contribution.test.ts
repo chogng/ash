@@ -254,13 +254,35 @@ suite('dialog browser component', () => {
 	test('base Dialog updates its accessible message and uses cancelId for Escape and close', async function () {
 		const { page } = browserTests;
 		await page.goto('/dialog.html');
-		for (const close of ['Escape', 'button']) {
+		for (const close of ['Escape', 'button', 'keyboard']) {
 			await page.evaluate(() => window.ashDialogIntegration.showCore('standard'));
 			await page.evaluate(() => window.ashDialogIntegration.updateCoreMessage('Updated message'));
 			const dialog = page.getByRole('dialog', { name: 'Updated message' });
 			await expect(dialog.locator('.ash-dialog-title')).toHaveText('Updated message');
+			const toolbar = dialog.getByRole('toolbar', { name: 'Close Dialog' });
+			await expect(toolbar).toHaveClass(/ash-action-bar/);
+			await expect(toolbar.locator('[data-action-id="dialog.close"]')).toHaveCount(1);
+			const closeButton = toolbar.getByRole('button', { name: 'Close Dialog' });
+			await expect(closeButton).toHaveText('');
+			const geometry = await closeButton.evaluate(button => {
+				const bounds = button.getBoundingClientRect();
+				const icon = button.querySelector('.ash-icon')!.getBoundingClientRect();
+				return {
+					width: bounds.width, height: bounds.height, iconWidth: icon.width,
+					centerX: bounds.x + bounds.width / 2 - icon.x - icon.width / 2,
+					centerY: bounds.y + bounds.height / 2 - icon.y - icon.height / 2,
+				};
+			});
+			expect(geometry).toEqual({ width: 28, height: 28, iconWidth: 16, centerX: 0, centerY: 0 });
 			if (close === 'Escape') await page.keyboard.press('Escape');
-			else await dialog.getByRole('button', { name: 'Close Dialog' }).click();
+			else if (close === 'button') await closeButton.click();
+			else {
+				await closeButton.focus();
+				await closeButton.press('ArrowLeft');
+				await expect(closeButton).toBeFocused();
+				await expect(closeButton).not.toHaveCSS('outline-style', 'none');
+				await closeButton.press('Enter');
+			}
 			await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastCoreResult?.button)).toBe(1);
 			await expect(dialog).toHaveCount(0);
 		}
@@ -408,6 +430,7 @@ suite('dialog browser component', () => {
 		await expect(detail).toHaveAttribute('tabindex', '0');
 		expect(await detail.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true);
 		const confirm = page.getByRole('button', { name: 'Confirm' });
+		await expect(confirm).toBeFocused();
 		await confirm.focus();
 		await page.keyboard.press('Shift+Tab');
 		await expect(detail).toBeFocused();
@@ -566,7 +589,11 @@ suite('dialog browser component', () => {
 		const dialog = page.getByRole('dialog', { name: 'Connect' });
 		const input = dialog.getByRole('textbox', { name: 'Server address' });
 		await expect(input).toBeFocused();
-		await input.fill('https://example.test');
+		expect(await input.evaluate(element => {
+			const input = element as HTMLInputElement;
+			return [input.selectionStart, input.selectionEnd];
+		})).toEqual([0, 'https://'.length]);
+		await input.pressSequentially('https://example.test');
 		await dialog.getByRole('checkbox', { name: 'Remember server' }).check();
 		await input.press('Enter');
 		await expect(dialog).toHaveCount(0);
@@ -583,6 +610,7 @@ suite('dialog browser component', () => {
 		await page.goto('/dialog.html');
 		await page.evaluate(() => window.ashDialogIntegration.showCheckboxConfirmation());
 		const dialog = page.getByRole('dialog', { name: 'Remove server' });
+		await expect(dialog.getByRole('button', { name: 'Confirm' })).toBeFocused();
 		await dialog.getByRole('checkbox', { name: 'Also remove credentials' }).check();
 		await dialog.getByRole('button', { name: 'Confirm' }).click();
 		await expect(dialog).toHaveCount(0);
@@ -590,6 +618,85 @@ suite('dialog browser component', () => {
 			button: 'primary', checkboxChecked: true, values: undefined,
 		});
 	});
+
+	test('modified Enter and IME composition do not accept an input dialog', async function () {
+		const { page } = browserTests;
+		await page.goto('/dialog.html');
+		await page.evaluate(() => window.ashDialogIntegration.showInput());
+		const dialog = page.getByRole('dialog', { name: 'Connect' });
+		const input = dialog.getByRole('textbox', { name: 'Server address' });
+		for (const key of ['Shift+Enter', 'Control+Enter', 'Meta+Enter', 'Alt+Enter']) {
+			await input.press(key);
+			await expect(dialog).toBeVisible();
+		}
+		const composing = await input.evaluate(element => {
+			const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true, isComposing: true });
+			element.dispatchEvent(event);
+			return event.defaultPrevented;
+		});
+		expect(composing).toBe(false);
+		await expect(dialog).toBeVisible();
+		await input.press('Enter');
+		await expect(dialog).toHaveCount(0);
+		await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome)).toEqual({
+			button: 'primary', checkboxChecked: false, values: ['https://'],
+		});
+	});
+
+	for (const platform of [
+		{ name: 'macOS', userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)', secondaryShortcut: true },
+		{ name: 'Windows', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', secondaryShortcut: false },
+		{ name: 'Linux', userAgent: 'Mozilla/5.0 (X11; Linux x86_64)', secondaryShortcut: false },
+	]) {
+		suite(platform.name, () => {
+			browserTests.use({ userAgent: platform.userAgent });
+
+			test('Command+D chooses the secondary action only on macOS', async function () {
+				const { page } = browserTests;
+				await page.goto('/dialog.html');
+				await page.evaluate(() => window.ashDialogIntegration.showChoice());
+				const dialog = page.getByRole('dialog', { name: 'Choose action' });
+				await dialog.getByRole('checkbox', { name: 'Remember choice' }).check();
+				await page.keyboard.press('Meta+d');
+				if (platform.secondaryShortcut) {
+					await expect(dialog).toHaveCount(0);
+					await expect.poll(() => page.evaluate(() => window.ashDialogIntegration.lastOutcome)).toEqual({
+						button: 'primary', buttonIndex: 1, checkboxChecked: true, values: undefined,
+					});
+				} else {
+					await expect(dialog).toBeVisible();
+					await page.keyboard.press('Escape');
+					await expect(dialog).toHaveCount(0);
+				}
+			});
+
+			if (platform.secondaryShortcut) {
+				test('Command+D respects disabled and cancel actions and extra modifiers', async function () {
+					const { page } = browserTests;
+					await page.goto('/dialog.html');
+					await page.evaluate(() => window.ashDialogIntegration.showPrompt());
+					const prompt = page.getByRole('dialog', { name: 'Save changes' });
+					for (const key of ['Meta+Shift+d', 'Meta+Alt+d', 'Meta+Control+d']) {
+						await page.keyboard.press(key);
+						await expect(prompt).toBeVisible();
+					}
+					await prompt.getByRole('button', { name: 'Discard' }).evaluate(element => { (element as HTMLButtonElement).disabled = true; });
+					await page.keyboard.press('Meta+d');
+					await expect(prompt).toBeVisible();
+					await page.keyboard.press('Escape');
+					await expect(prompt).toHaveCount(0);
+
+					await page.evaluate(() => window.ashDialogIntegration.showCore('custom'));
+					const core = page.getByRole('dialog', { name: 'Core dialog' });
+					await expect(core.getByRole('textbox', { name: 'Custom text' })).toBeFocused();
+					await page.keyboard.press('Meta+d');
+					await expect(core).toBeVisible();
+					await page.keyboard.press('Escape');
+					await expect(core).toHaveCount(0);
+				});
+			}
+		});
+	}
 
 	test('a failed Command Palette action opens an error dialog', async function () {
 		const { page } = browserTests;

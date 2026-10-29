@@ -2,16 +2,19 @@ import './dialog.css';
 import { addDisposableListener, getActiveElement, getWindow, h, isHTMLElement } from "../../dom.js";
 import { StandardKeyboardEvent } from "../../keyboardEvent.js";
 import { Disposable, toDisposable } from "../../../common/lifecycle.js";
-import { focusFirst, isTabbable, restoreFocus, trapTabFocus } from "../../focus.js";
+import { focusFirst, getTabbableElements, isTabbable, restoreFocus, trapTabFocus } from "../../focus.js";
 import { observeResize } from "../../observer.js";
 import { setAriaAttribute } from "../aria/aria.js";
 import { Button, type IButtonStyles } from "../button/button.js";
+import { ActionBar } from "../actionbar/actionbar.js";
+import { LabelActionViewItem } from "../actionbar/actionViewItems.js";
 import { InputBox, type IInputBoxStyles } from "../inputbox/inputbox.js";
 import { Checkbox, type ICheckboxStyles } from "../toggle/toggle.js";
 import { appendIcon } from "../lxicons/lxicon.js";
 import { Lxicon } from "../../../common/lxicons.js";
 import type { ThemeIcon } from "../../../common/themables.js";
 import { localize } from "../../../../nls.js";
+import { isMacintosh } from "../../../common/platform.js";
 
 let nextDialogId = 1;
 
@@ -75,6 +78,7 @@ export class Dialog extends Disposable {
 	private readonly element: HTMLDialogElement;
 	private readonly headingDomNode: HTMLHeadingElement;
 	private readonly bodyDomNode: HTMLElement;
+	private readonly customBodyRoots: readonly HTMLElement[];
 	private readonly inputs: InputBox[] = [];
 	private readonly buttons: Button[] = [];
 	private readonly checkbox: Checkbox | undefined;
@@ -117,18 +121,24 @@ export class Dialog extends Disposable {
 		setAriaAttribute(element, "labelledby", this.headingDomNode.id);
 		header.append(this.headingDomNode);
 		if (!options.disableCloseAction && !options.disableCloseButton) {
-			const close = this._register(new Button(header, {
-				...options.buttonStyles,
-				label: localize('dialogClose', 'Close Dialog'),
-				icon: Lxicon.dialogClose,
-				iconOnly: true,
-				onClick: () => this.finish(options.cancelId ?? 0),
+			const label = localize('dialogClose', 'Close Dialog');
+			const close = this._register(new ActionBar(header, {
+				ariaLabel: label,
+				actions: [{
+					id: 'dialog.close', label, tooltip: label, icon: Lxicon.dialogClose, enabled: true,
+					run: () => this.finish(options.cancelId ?? 0),
+				}],
+				actionViewItemProvider: (action, actionOptions) => new LabelActionViewItem(action, {
+					...actionOptions, label: '', ariaLabel: action.label,
+				}),
 			}));
-			close.domNode.classList.add("ash-dialog-close");
+			close.element.classList.add("ash-dialog-close");
 		}
 		const body = h(ownerDocument, "div", { className: "ash-dialog-body" });
 		this.bodyDomNode = body;
 		options.renderBody?.(body);
+		// Preserve custom forms' entry controls without letting details or checkboxes take the default action's focus.
+		this.customBodyRoots = Array.from(body.children).filter(isHTMLElement);
 		if (options.detailElement || options.detail) {
 			const detail = h(ownerDocument, "div", { className: "ash-dialog-detail" });
 			detail.id = this.headingDomNode.id + "-detail";
@@ -204,6 +214,13 @@ export class Dialog extends Disposable {
 				if (!options.disableCloseAction) this.finish(options.cancelId ?? 0);
 				return;
 			}
+			if (isMacintosh && event.metaKey && !event.altKey && !event.ctrlKey && !event.shiftKey && event.key.toLowerCase() === 'd') {
+				event.preventDefault();
+				event.stopPropagation();
+				const secondary = this.buttons[1];
+				if (options.cancelId !== 1 && secondary && isTabbable(secondary.domNode)) this.finish(1);
+				return;
+			}
 			if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
 				const focused = getActiveElement(ownerDocument);
 				if (!this.buttons.some(button => button.domNode.contains(focused))) return;
@@ -219,7 +236,7 @@ export class Dialog extends Disposable {
 				}
 				return;
 			}
-			if (event.key !== "Enter" || options.disableDefaultAction) return;
+			if (event.key !== "Enter" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || options.disableDefaultAction) return;
 			const target = event.target;
 			if (isHTMLElement(target) && (target.closest("button, textarea, select, [contenteditable], [role=combobox]"))) return;
 			const primary = this.buttons[0];
@@ -256,8 +273,19 @@ export class Dialog extends Disposable {
 			this.element.showModal();
 			this.visible = true;
 			this.options.onVisibilityChange?.(getWindow(this.element), true);
-			if (this.inputs.length) this.inputs[0].focus();
-			else if (!focusFirst(this.bodyDomNode)) this.element.focus();
+			const input = this.inputs[0];
+			if (input) {
+				input.focus();
+				input.select();
+			} else {
+				const custom = this.customBodyRoots
+					.map(root => isTabbable(root) ? root : getTabbableElements(root)[0])
+					.find(target => target !== undefined);
+				const action = this.buttons.find(button => isTabbable(button.domNode));
+				if (custom) custom.focus();
+				else if (action) action.focus();
+				else if (!focusFirst(this.bodyDomNode)) this.element.focus();
+			}
 		} catch (error) {
 			this.finish(this.options.cancelId ?? 0);
 			throw error;
