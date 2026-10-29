@@ -184,6 +184,16 @@
 	--scm-graph-lane-color: var(--scm-graph-lane-7);
 }
 
+.ash-scm-graph-path[data-lane-color="8"],
+.ash-scm-graph-node[data-lane-color="8"] {
+	--scm-graph-lane-color: var(--ash-scmGraph-historyItemRefColor);
+}
+
+.ash-scm-graph-path[data-lane-color="9"],
+.ash-scm-graph-node[data-lane-color="9"] {
+	--scm-graph-lane-color: var(--ash-scmGraph-historyItemRemoteRefColor);
+}
+
 .ash-scm-graph-row:hover .ash-scm-graph-node:is(.outer, .single),
 .ash-scm-graph-commit.focused.selected .ash-scm-graph-node:is(.outer, .single) {
 	stroke: transparent;

@@ -87,6 +87,8 @@ export interface ISCMHistoryItemGraphNode {
 
 export interface ISCMHistoryItemViewModel {
 	readonly historyItem: ISCMHistoryItem;
+	/** Reference color at the node, including commits with no outgoing lane. */
+	readonly color?: number;
 	readonly inputSwimlanes: readonly ISCMHistoryItemGraphNode[];
 	readonly outputSwimlanes: readonly ISCMHistoryItemGraphNode[];
 	readonly kind: 'HEAD' | 'node' | 'incoming-changes' | 'outgoing-changes';

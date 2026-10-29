@@ -32,6 +32,61 @@ async function expectSelectionColor(row: Locator, token: string): Promise<void> 
 }
 
 suite('SCM history graph', () => {
+	for (const remoteIsRoot of [false, true]) test(`changes color at the upstream reference in a linear history${remoteIsRoot ? ' ending at that reference' : ''}`, () => {
+		const remote = { id: 'refs/remotes/origin/main', name: 'origin/main', revision: 'remote', category: 'remoteBranch' };
+		const history: ISCMHistoryItem[] = [
+			{ id: 'local', parentIds: ['remote'], subject: 'Local change', message: '' },
+			{ id: 'remote', parentIds: remoteIsRoot ? [] : ['root'], subject: 'Pushed change', message: '', references: [remote] },
+			...remoteIsRoot ? [] : [{ id: 'root', parentIds: [], subject: 'Shared root', message: '' }],
+		];
+		const rows = toISCMHistoryItemViewModelArray(history, new Map(), { id: 'refs/heads/main', name: 'main', revision: 'local' });
+		const localColor = rows[0].color;
+		const remoteColor = rows[1].color;
+		assert.notEqual(localColor, undefined);
+		assert.notEqual(remoteColor, undefined);
+		assert.notEqual(localColor, remoteColor);
+		assert.equal(rows[0].outputSwimlanes[0].color, localColor);
+		assert.equal(rows[1].inputSwimlanes[0].color, localColor);
+		const environment = new JSDOM();
+		try {
+			const graph = renderSCMHistoryItemGraph(rows[1], 22, environment.window.document);
+			assert.equal(graph.querySelector('path[d="M 11 0 V 11"]')?.getAttribute('data-lane-color'), String(localColor));
+			assert.equal(graph.querySelector('circle')?.getAttribute('data-lane-color'), String(remoteColor));
+			if (!remoteIsRoot) {
+				assert.equal(graph.querySelector('path[d="M 11 11 V 22"]')?.getAttribute('data-lane-color'), String(remoteColor));
+				const child = renderSCMHistoryGraphPlaceholder(rows[1].outputSwimlanes, environment.window.document);
+				assert.equal(child.querySelector('path')?.getAttribute('data-lane-color'), String(remoteColor));
+				assert.equal(rows[2].inputSwimlanes[0].color, remoteColor);
+			}
+		} finally { environment.window.close(); }
+	});
+
+	test('keeps the current reference color when local and upstream point to the same commit', () => {
+		const current = { id: 'refs/heads/main', name: 'main', revision: 'tip', category: 'localBranch' };
+		const remote = { id: 'refs/remotes/origin/main', name: 'origin/main', revision: 'tip', category: 'remoteBranch' };
+		const history = [
+			{ id: 'tip', parentIds: ['root'], subject: 'Synced change', message: '', references: [remote, current] },
+			{ id: 'root', parentIds: [], subject: 'Shared root', message: '' },
+		];
+		const synced = toISCMHistoryItemViewModelArray(history, new Map(), current);
+		const local = toISCMHistoryItemViewModelArray([{ ...history[0], references: [current] }, history[1]], new Map(), current);
+		assert.equal(synced[0].kind, 'HEAD');
+		assert.equal(synced[0].color, local[0].color);
+		assert.deepEqual(synced[0].outputSwimlanes, local[0].outputSwimlanes);
+		assert.equal(synced[1].inputSwimlanes[0].color, synced[0].color);
+	});
+
+	test('preserves explicit reference colors supplied by the caller', () => {
+		const current = { id: 'refs/heads/main', name: 'main', revision: 'tip', category: 'localBranch' };
+		const rows = toISCMHistoryItemViewModelArray([
+			{ id: 'tip', parentIds: [], subject: 'Root', message: '', references: [current] },
+		], new Map([[current.id, 3]]), current);
+		const environment = new JSDOM();
+		try {
+			assert.equal(renderSCMHistoryItemGraph(rows[0], 22, environment.window.document).querySelector('circle')?.getAttribute('data-lane-color'), '3');
+		} finally { environment.window.close(); }
+	});
+
 	test('child rows continue both outgoing merge lanes without drawing another commit', () => {
 		const environment = new JSDOM();
 		try {
@@ -118,6 +173,9 @@ test('summary nodes compare captured branch revisions without changing commit pa
 	assert.deepEqual(rows.map(row => row.kind), ['outgoing-changes', 'HEAD', 'node', 'incoming-changes', 'node']);
 	assert.deepEqual(rows[0].historyItem.comparison, { revision: 'local', baseRevision: 'base' });
 	assert.deepEqual(rows[3].historyItem.comparison, { revision: 'remote', baseRevision: 'base' });
+	assert.equal(rows[0].color, rows[1].color, 'Outgoing changes share the local reference color.');
+	assert.equal(rows[2].color, rows[3].color, 'Incoming changes share the upstream reference color.');
+	assert.notEqual(rows[1].color, rows[2].color, 'Diverged local and upstream lanes have distinct reference colors.');
 	assert.deepEqual(rows[2].historyItem.parentIds, ['base']);
 	assert.deepEqual(history[1].parentIds, ['base']);
 	assert.equal(toISCMHistoryItemViewModelArray(history, new Map(), { id: 'main', name: 'main', revision: 'local' }, {

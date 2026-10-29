@@ -39,6 +39,9 @@ const LaneHeight = 22;
 const LaneWidth = 11;
 const CurveRadius = 5;
 const ColorCount = 8;
+// Reference colors must not be allocated to unrelated branch lanes.
+const HistoryItemRefColor = ColorCount;
+const HistoryItemRemoteRefColor = ColorCount + 1;
 
 interface Lane {
 	readonly id: string;
@@ -47,6 +50,7 @@ interface Lane {
 
 interface GraphRow {
 	readonly historyItem: ISCMHistoryItem;
+	readonly color?: number;
 	readonly inputSwimlanes: readonly Lane[];
 	readonly outputSwimlanes: readonly Lane[];
 }
@@ -87,24 +91,33 @@ export function toISCMHistoryItemViewModelArray(historyItems: readonly ISCMHisto
 			if (localIndex >= 0) { items.splice(localIndex, 0, { id: SCMOutgoingHistoryItemId, subject: localize('scm.history.outgoing', 'Outgoing Changes'), message: '', parentIds: [local], comparison: { revision: local, baseRevision: base } }); }
 		}
 	}
-	const rows = createRows(items, colorMap, parentOverrides);
+	const rows = createRows(items, colorMap, parentOverrides, currentHistoryItemRef, comparison?.remote);
 	return rows.map(row => ({
 		historyItem: row.historyItem,
+		color: row.color,
 		inputSwimlanes: row.inputSwimlanes.map(lane => ({ id: lane.id, color: lane.colorIndex })),
 		outputSwimlanes: row.outputSwimlanes.map(lane => ({ id: lane.id, color: lane.colorIndex })),
 		kind: row.historyItem.id === SCMIncomingHistoryItemId ? 'incoming-changes' : row.historyItem.id === SCMOutgoingHistoryItemId ? 'outgoing-changes' : row.historyItem.id === currentHistoryItemRef?.revision ? 'HEAD' : 'node',
 	}));
 }
 
-function createRows(historyItems: readonly ISCMHistoryItem[], colorMap: ReadonlyMap<string, number>, parentOverrides: ReadonlyMap<string, readonly string[]>): GraphRow[] {
+function createRows(historyItems: readonly ISCMHistoryItem[], colorMap: ReadonlyMap<string, number>, parentOverrides: ReadonlyMap<string, readonly string[]>, currentHistoryItemRef?: ISCMHistoryItemRef, currentHistoryItemRemoteRef?: ISCMHistoryItemRef): GraphRow[] {
 	const rows: GraphRow[] = [];
 	const historyById = new Map(historyItems.map(item => [item.id, item]));
 	let lanes: readonly Lane[] = [];
 	let nextColorIndex = 0;
 	const referenceColor = (item: ISCMHistoryItem): number | undefined => {
+		if (item.id === SCMIncomingHistoryItemId) return HistoryItemRemoteRefColor;
+		if (item.id === SCMOutgoingHistoryItemId) return HistoryItemRefColor;
 		for (const reference of item.references ?? []) {
 			const color = colorMap.get(reference.id) ?? reference.color;
 			if (color !== undefined) return color;
+		}
+		if (item.id === currentHistoryItemRef?.revision || item.references?.some(reference => reference.id === currentHistoryItemRef?.id)) {
+			return HistoryItemRefColor;
+		}
+		if (item.id === currentHistoryItemRemoteRef?.revision || item.references?.some(reference => reference.category === 'remoteBranch')) {
+			return HistoryItemRemoteRefColor;
 		}
 		return undefined;
 	};
@@ -136,7 +149,7 @@ function createRows(historyItems: readonly ISCMHistoryItem[], colorMap: Readonly
 			const colorIndex = index === 0 ? referenceColor(historyItem) : parent ? referenceColor(parent) : undefined;
 			outputSwimlanes.push({ id: parentIds[index], colorIndex: colorIndex ?? allocateColor() });
 		}
-		rows.push({ historyItem, inputSwimlanes, outputSwimlanes });
+		rows.push({ historyItem, color: referenceColor(historyItem), inputSwimlanes, outputSwimlanes });
 		lanes = outputSwimlanes;
 	}
 	return rows;
@@ -151,7 +164,7 @@ export function renderSCMHistoryItemGraph(historyItemViewModel: ISCMHistoryItemV
 	svg.setAttribute("aria-hidden", "true");
 	const inputIndex = row.inputSwimlanes.findIndex((lane) => lane.id === row.historyItem.id);
 	const circleIndex = inputIndex === -1 ? row.inputSwimlanes.length : inputIndex;
-	const circleColorIndex = row.historyItem.parentIds.length > 0 ? row.outputSwimlanes[circleIndex]?.color ?? 0 : row.inputSwimlanes[circleIndex]?.color ?? 0;
+	const circleColorIndex = row.color ?? (row.historyItem.parentIds.length > 0 ? row.outputSwimlanes[circleIndex]?.color ?? 0 : row.inputSwimlanes[circleIndex]?.color ?? 0);
 	let outputSwimlaneIndex = 0;
 
 	for (let index = 0; index < row.inputSwimlanes.length; index += 1) {

@@ -1217,7 +1217,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	private updateCommitRow(row: HistoryItemRow, model: ISCMHistoryItemViewModel): void {
 		const previous = row.historyItemViewModel;
 		const sameLane = (left: ISCMHistoryItemViewModel['inputSwimlanes'][number], right: ISCMHistoryItemViewModel['inputSwimlanes'][number]): boolean => left.id === right.id && left.color === right.color;
-		if (previous.kind !== model.kind || !equals(previous.inputSwimlanes, model.inputSwimlanes, sameLane) || !equals(previous.outputSwimlanes, model.outputSwimlanes, sameLane)) {
+		if (previous.kind !== model.kind || previous.color !== model.color || !equals(previous.inputSwimlanes, model.inputSwimlanes, sameLane) || !equals(previous.outputSwimlanes, model.outputSwimlanes, sameLane)) {
 			const graph = renderSCMHistoryItemGraph(model, SWIMLANE_HEIGHT, this.graphElement.ownerDocument);
 			row.graph.replaceWith(graph);
 			row.graph = graph;
