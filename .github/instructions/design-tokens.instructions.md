@@ -107,14 +107,15 @@ The generic ramp uses two weights — there are no others. Pair every text style
 
 ## Lxicon size — icon `font-size`
 
-Lxicons default to **16px or 12px** in both windows. Other sizes require an explicit component assignment; Agent Window-only exceptions are defined in [Sessions style](../../src/ash/sessions/STYLE.md#图标与点击区域). Pick the base or the compact token unless such an exception applies:
+Lxicons use **16px (base)**, **12px (compact)** or **18px (large)**. Agent Window primary actions and navigation explicitly select the large token; compact icons remain 12px. Keep the base token at 16px instead of overriding it on a window root. Other sizes require an explicit component assignment:
 
 | px | Variable | Use |
 |----|----------|-----|
 | 16 | `--ash-lxiconFontSize` (base) | default icon size |
 | 12 | `--ash-lxiconFontSize-compact` | dense/inline chrome |
+| 18 | `--ash-lxiconFontSize-large` | large actions and navigation |
 
-If a design or existing CSS sizes a lxicon at 14px, treat it as a bug: snap it to 16 (default) or 12 (compact) and flag it.
+If a design or existing CSS sizes a lxicon at 14px, treat it as a bug: choose 16 (base), 12 (compact) or 18 (large) for its role and flag it.
 
 When sizing an icon at the **compact** 12px size, also swap the registered glyph to its `*Compact` variant (e.g. `Lxicon.close` → `Lxicon.closeCompact`) so the icon is visually optimized for the small size. CSS `font-size` alone only scales the icon — it does not change to the compact glyph. Only swap the glyph when no CSS selector targets the original glyph class (e.g. `.lxicon-close`), otherwise update that selector too. Some icons (agent, vm, info, lock) have no compact variant — keep the regular glyph at the compact size.
 

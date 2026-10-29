@@ -47,6 +47,7 @@
     "size.cornerRadius.circle": "圆形按钮、圆点和胶囊形元素的圆角半径。",
     "size.lxiconFontSize": "标准 Lxicon 字形大小。",
     "size.lxiconFontSize.compact": "紧凑 Lxicon 字形大小。",
+    "size.lxiconFontSize.large": "大号 Lxicon 字形大小。",
     "size.fontSize.heading1": "最大标题字号。",
     "size.fontSize.heading2": "标题字号。",
     "size.fontSize.heading3": "副标题字号。",

@@ -208,14 +208,16 @@ test('design suggestions respect roles, on-scale spacing, computed geometry, and
 .b { padding: 0 5px; font-weight: 500; font-size: 13px; border-radius: 14px; border: 1px solid currentColor; }
 .lxicon-close { font-size: 14px; }
 .lxicon { font-size: 12px; }
+.lxicon { font-size: 18px; }
 .c { width: 5px; border-radius: 50%; margin: -3px; font-size: var(--ash-fontSize-label1); font-weight: inherit; }
 `;
 	const suggestions = validateDesignTokens(css);
-	assert.deepEqual(suggestions.map(({ category }) => category), ['spacing', 'weight', 'font-size', 'radius', 'stroke', 'icon', 'icon']);
+	assert.deepEqual(suggestions.map(({ category }) => category), ['spacing', 'weight', 'font-size', 'radius', 'stroke', 'icon', 'icon', 'icon']);
 	assert.match(suggestions[1]!.message, /fontWeight-semiBold/);
 	assert.match(suggestions[3]!.message, /circle token for pills/);
 	assert.match(suggestions[5]!.message, /var\(--ash-lxiconFontSize\)/);
 	assert.match(suggestions[6]!.message, /var\(--ash-lxiconFontSize-compact\)/);
+	assert.match(suggestions[7]!.message, /var\(--ash-lxiconFontSize-large\)/);
 	assert.equal(css.slice(suggestions[0]!.offset, suggestions[0]!.offset + 7), 'padding');
 });
 

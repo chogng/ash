@@ -1,15 +1,10 @@
 .ash-sessions-activity-content {
-	--ash-sessions-activity-bar-icon-size: var(--ash-spacing-size160);
 	display: flex;
 	min-height: 0;
 	flex-direction: column;
 	justify-content: space-between;
 	align-items: center;
 	padding: var(--ash-spacing-size80) 0;
-}
-
-.ash-sessions-activity-content.horizontal {
-	--ash-sessions-activity-bar-icon-size: 16px;
 }
 
 .ash-sessions-activity-top,
@@ -66,9 +61,9 @@
 }
 
 .ash-sessions-activity-item .ash-icon {
-	width: var(--ash-sessions-activity-bar-icon-size);
-	height: var(--ash-sessions-activity-bar-icon-size);
-	font-size: var(--ash-sessions-activity-bar-icon-size);
+	width: var(--ash-lxiconFontSize-large);
+	height: var(--ash-lxiconFontSize-large);
+	font-size: var(--ash-lxiconFontSize-large);
 }
 
 .ash-workbench:is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])
@@ -100,7 +95,6 @@
 }
 
 .ash-sessions-activity-bottom.labeled {
-	--ash-sessions-activity-bar-icon-size: var(--ash-spacing-size160);
 	padding: var(--ash-spacing-size80);
 }
 

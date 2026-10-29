@@ -295,7 +295,7 @@
 	font-size: var(--ash-fontSize-heading2, 18px);
 }
 .ash-chatgpt-rich-icon {
-	font-size: var(--ash-lxiconFontSize, 16px);
+	font-size: var(--ash-lxiconFontSize-large);
 }
 .ash-chatgpt-rich-fallback {
 	display: inline-block;

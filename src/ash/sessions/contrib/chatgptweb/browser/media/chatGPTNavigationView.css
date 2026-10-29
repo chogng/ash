@@ -56,10 +56,14 @@
 
 .ash-chatgpt-navigation .ash-pane-view-header-twisty-container {
 	order: 1;
-	width: var(--ash-lxiconFontSize);
-	height: var(--ash-lxiconFontSize);
-	flex: 0 0 var(--ash-lxiconFontSize);
+	width: var(--ash-lxiconFontSize-large);
+	height: var(--ash-lxiconFontSize-large);
+	flex: 0 0 var(--ash-lxiconFontSize-large);
 	margin: 0;
+}
+
+.ash-chatgpt-navigation .ash-pane-view-header-twisty-container .ash-icon {
+	font-size: var(--ash-lxiconFontSize-large);
 }
 
 /* These content-sized groups scroll together; they do not need pane separators. */

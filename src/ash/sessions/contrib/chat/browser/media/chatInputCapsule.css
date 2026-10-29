@@ -42,8 +42,9 @@
 }
 
 .ash-chat-input-capsule-button .ash-icon {
-	width: var(--ash-lxiconFontSize);
-	height: var(--ash-lxiconFontSize);
+	font-size: var(--ash-lxiconFontSize-large);
+	width: var(--ash-lxiconFontSize-large);
+	height: var(--ash-lxiconFontSize-large);
 }
 
 :is([data-color-scheme="hcDark"], [data-color-scheme="hcLight"])

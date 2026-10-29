@@ -19,6 +19,8 @@ test('theme CSS applies registered colors, sizes and scheme, masks missing color
 			assert.equal(computed.getPropertyValue('--ash-fontWeight-semiBold'), '600');
 			assert.equal(computed.getPropertyValue('--ash-spacing-size80'), '8px');
 			assert.equal(computed.getPropertyValue('--ash-lxiconFontSize-compact'), '12px');
+			assert.equal(computed.getPropertyValue('--ash-lxiconFontSize'), '16px');
+			assert.equal(computed.getPropertyValue('--ash-lxiconFontSize-large'), '18px');
 			const highContrast = theme === highContrastDarkColorTheme || theme === highContrastLightColorTheme;
 			assert.equal(computed.getPropertyValue('--ash-shadow-lg'), highContrast ? 'none' : '0 0 12px rgba(0,0,0,0.14)');
 			assert.equal(computed.getPropertyValue('color-scheme'), theme === darkColorTheme || theme === highContrastDarkColorTheme ? 'dark' : 'light');

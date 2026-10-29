@@ -107,8 +107,8 @@
 
 .ash-sessions-update-spinner {
 	flex: 0 0 auto;
-	width: var(--ash-lxiconFontSize);
-	height: var(--ash-lxiconFontSize);
+	width: var(--ash-lxiconFontSize-large);
+	height: var(--ash-lxiconFontSize-large);
 	box-sizing: border-box;
 	border: var(--ash-strokeThickness) solid currentColor;
 	border-right-color: transparent;

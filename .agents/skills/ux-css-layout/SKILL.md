@@ -39,7 +39,7 @@ Workbench-level global styles live in `src/ash/workbench/browser/media/`.
 
 ## 3. Standard Sizes
 
-These are IDE Workbench defaults. Agent Window role assignments and values follow [Sessions style](../../../src/ash/sessions/STYLE.md); the CSS organization, layout mechanisms and overflow guidance in this skill remain shared.
+These are IDE Workbench defaults. Agent Window overrides stay scoped to its window or component; the CSS organization, layout mechanisms and overflow guidance in this skill remain shared.
 
 Follow the [row and toolbar sizing rules](../../../.github/instructions/design-tokens.instructions.md#rows-and-toolbar-actions).
 
@@ -54,8 +54,7 @@ Follow the [row and toolbar sizing rules](../../../.github/instructions/design-t
 | Line height | 1.4em |
 | Validation message font-size | 12px (line-height: 17px) |
 
-> For `padding`/`margin`/`gap`, `border-radius`, `font-size`/`font-weight`, lxicon size and border width, prefer the design-system **size tokens** over raw px — see [§10 Design-System Size Tokens](#10-design-system-size-tokens-spacing-radius-font-lxicon-stroke). Canonical reference: `.github/instructions/design-tokens.instructions.md` (auto-injected for `src/ash/**/*.css`).
-
+> For `padding`/`margin`/`gap`, `border-radius`, `font-size`/`font-weight`, lxicon size and border width, prefer the design-system **size tokens** over raw px — see [§10 Design-System Size Tokens](#10-design-system-size-tokens-spacing-radius-font-lxicon-stroke).
 
 ## 4. CSS Selector Quality
 
@@ -229,8 +228,6 @@ When a row has both fixed-size elements (icons, action buttons) and flexible tex
 
 This is the standard pattern for tree rows, list items, tab labels, and view pane headers.
 
-For temporary row actions, follow the shared [hover overlay and edge fade guidance](../design-philosophy/SKILL.md#hover-overlays).
-
 ### Hover for Full Text
 
 When text is truncated with ellipsis, the **full text must be accessible** via hover tooltip. Use `IHoverService.setupDelayedHover()` with the full untruncated text so users can read it:
@@ -257,7 +254,7 @@ For `IconLabel` and list/tree renderers, this is handled automatically. For cust
 
 The registration mechanism is shared; the mappings below are IDE defaults. Apply the owning window's visual rules when choosing a token, and keep product-specific overrides in its scope.
 
-Ash ships a design-system **size** ramp, registered in `src/ash/platform/theme/common/sizes/baseSizes.ts` and emitted as `--ash-*` CSS variables. When writing or editing CSS, prefer the token var over a raw px value wherever a token exists. The full tables + rationale live in the auto-injected `.github/instructions/design-tokens.instructions.md` (canonical source — keep this section in sync with it). This section captures the **decision logic** for deeper styling tasks.
+Ash ships a design-system **size** ramp, registered in `src/ash/platform/theme/common/sizes/baseSizes.ts` and emitted as `--ash-*` CSS variables. When writing or editing CSS, prefer the token var over a raw px value wherever a token exists. The full tables and shared constraints live in [design-tokens.instructions.md](../../../.github/instructions/design-tokens.instructions.md). This section covers their application in CSS.
 
 > Every `--ash-*` size var you reference must already exist in `build/lib/stylelint/ash-known-variables.json` (`"sizes"` array, alphabetically sorted) or stylelint/hygiene fails. Adding a *new* token means adding it both in `baseSizes.ts` and that JSON file.
 
@@ -311,12 +308,13 @@ The legacy Agents-specific `--ash-agents-fontSize-*` and `--ash-agents-fontWeigh
 
 ### Lxicon size — icon `font-size`
 
-Lxicons are **only ever 16px or 12px** — never `14px` or any in-between value.
+Lxicons use **16px (base)**, **12px (compact)** or **18px (large)**. Agent Window primary actions, navigation, menus and resource items explicitly use large; inline metadata and auxiliary indicators use compact. Keep the base token at 16px in every window; choose a size at the consumer instead of overriding the base token on a window root.
 
 | px | Variable | Use |
 |----|----------|-----|
 | 16 | `--ash-lxiconFontSize` (base) | default icon size |
 | 12 | `--ash-lxiconFontSize-compact` | dense/inline chrome |
+| 18 | `--ash-lxiconFontSize-large` | large actions and navigation |
 
 **Compact-glyph convention:** when sizing an icon at the compact 12px size, also swap the registered glyph to its `*Compact` variant (e.g. `Lxicon.close` → `Lxicon.closeCompact`, `Lxicon.add` → `Lxicon.addCompact`). CSS `font-size` alone only scales the icon — it does **not** change to the visually-optimized compact glyph; that requires changing the registered icon (Action2 `icon:` / `renderIcon`). **Only swap the glyph when no CSS selector targets the original glyph class** (e.g. `.lxicon-close`); selectors keyed on the glyph class (`.lxicon-add`, `.lxicon-chevron-down`) break when the class becomes `-compact`, so update those selectors too (or size via a glyph-independent wrapper class like `.stanza-button`). Some icons (settings/sliders, agent, vm, info, lock, plus) have **no** compact variant — keep the regular glyph at 12px.
 
