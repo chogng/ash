@@ -5,6 +5,35 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('terminal browser component', () => {
 	const browserTests = useBrowserTests();
 
+	for (const locale of ['en', 'zh-CN']) {
+		test(`task command markers retain their header and final status across hidden output and process reuse in ${locale}`, async () => {
+			const { page } = browserTests;
+			await page.goto(`/terminal.html?stream&task&deferred&reuseCommands&locale=${locale}`);
+			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration?.status().state)).toBe('exited');
+			await page.evaluate(() => window.ashTerminalStreamIntegration.start());
+			const marker = page.locator('.ash-terminal-command-status');
+			await expect(marker).toHaveCount(1);
+			await expect(marker).toHaveClass(/succeeded/);
+			await expect(marker).toHaveAttribute('aria-label', locale === 'zh-CN' ? '命令已成功完成' : 'Command completed successfully');
+			const first = await marker.boundingBox();
+			const header = await page.locator('.xterm-rows > div').filter({ hasText: 'Executing task: fixture' }).boundingBox();
+			expect(first).not.toBeNull();
+			expect(header).not.toBeNull();
+			expect(Math.abs(first!.y - header!.y)).toBeLessThan(header!.height);
+			await page.evaluate(() => window.ashTerminalStreamIntegration.reuse());
+			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().state)).toBe('exited');
+			await expect(marker).toHaveCount(2);
+			await expect(marker.first()).toHaveClass(/succeeded/);
+			await expect(marker.last()).toHaveClass(/failed/);
+			await expect(marker.last()).toHaveAttribute('aria-label', locale === 'zh-CN' ? '命令失败，退出代码为 11' : 'Command failed with exit code 11');
+			await page.evaluate(() => window.ashTerminalStreamIntegration.reuse(true));
+			await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.status().state)).toBe('exited');
+			await expect(marker).toHaveCount(1);
+			await expect(marker).toHaveClass(/failed/);
+			await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+		});
+	}
+
 	test('terminal restored in a hidden host opens its contributions when revealed without observer errors', async function () {
 		const { page } = browserTests;
 		await page.goto('/terminal.html?stream&reviveHistory&deferred&browser');
@@ -1782,15 +1811,15 @@ suite('terminal browser component', () => {
 		await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.scroll(12));
 		const header = page.locator('.ash-terminal-sticky-scroll');
 		await expect(header).toBeVisible();
-		await expect(header.locator('span')).toHaveCount(2);
-		await expect(header.locator('span').last()).toContainText('END');
+		await expect(header.locator(':scope > span')).toHaveCount(2);
+		await expect(header.locator(':scope > span').last()).toContainText('END');
 		await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.configure('maxLineCount', 10));
 		await page.evaluate(() => {
 			window.ashTerminalStreamIntegration.stickyScroll.resize(40, 12);
 			window.ashTerminalStreamIntegration.stickyScroll.scroll(12);
 		});
 		const rows = await page.evaluate(() => window.ashTerminalStreamIntegration.stickyScroll.position().rows);
-		await expect(header.locator('span')).toHaveCount(Math.floor(rows * 0.4));
+		await expect(header.locator(':scope > span')).toHaveCount(Math.floor(rows * 0.4));
 		await page.evaluate(() => window.ashTerminalStreamIntegration.feedModel('trim-output\r\n'.repeat(1200)));
 		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.observed())).toContain('trim-output');
 		await expect(header).toBeHidden();

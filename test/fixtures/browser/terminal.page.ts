@@ -934,6 +934,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 	const reportHistory = new URLSearchParams(location.search).has('history');
 	const reuseCommands = new URLSearchParams(location.search).has('reuseCommands');
 	const commandModel = new URLSearchParams(location.search).has('commandModel');
+	const taskPresentation = new URLSearchParams(location.search).has('task');
 	const reviveHistory = new URLSearchParams(location.search).has('reviveHistory');
 	let modelSequence = 0;
 	const modelOutput: import('../../../src/ash/platform/terminal/common/terminal.js').ITerminalProcessOutputChunk[] = [];
@@ -983,6 +984,18 @@ if (new URLSearchParams(location.search).has('stream')) {
 		onConnectionState: Event.None,
 		read: async options => {
 			reads.push(options.afterSequence);
+			if (taskPresentation) {
+				const first = options.afterSequence === 0;
+				return {
+					terminalId: options.terminalId,
+					chunks: first ? [
+						{ sequence: 1, data: new Uint8Array(), shellIntegration: { type: 'processReady' as const, isWindowsPty: false } },
+						{ sequence: 2, data: bytes },
+					] : [],
+					nextSequence: 2, outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false,
+					exited: !first, exitCode: !first ? launch > 1 ? 11 : 0 : undefined,
+				};
+			}
 			if (commandModel) {
 				const chunks = modelOutput.filter(chunk => chunk.sequence > options.afterSequence).slice(0, options.maxChunks);
 				return { terminalId: options.terminalId, chunks, nextSequence: chunks.at(-1)?.sequence ?? options.afterSequence, outputGap: false, commandEvents: [], nextCommandSequence: 0, commandEventGap: false, exited: false, exitCode: undefined };
@@ -1044,12 +1057,13 @@ if (new URLSearchParams(location.search).has('stream')) {
 		store.add(instance.onDidChangeCommandStatus(event => events.push(event.status)));
 		store.add(instance.onDidExit(() => events.push('exit')));
 	}));
-	const terminal = reviveHistory ? (await terminals.whenConnected, terminals.instances[0]!) : await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' } });
+	const taskConfig = taskPresentation ? { type: 'Task' as const, initialText: { text: '\r\n * Executing task: fixture\r\n', trailingNewLine: false } } : {};
+	const terminal = reviveHistory ? (await terminals.whenConnected, terminals.instances[0]!) : await terminals.createTerminal({ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, ...taskConfig });
 	if (reviveHistory) terminal.start();
 	const streamInstances = terminals.instances;
 	window.ashTerminalStreamIntegration = {
 		status: () => ({ reads, events, closes, state: terminal.state, remaining: streamInstances.length, ...(reportCwd ? { cwd: terminal.cwd } : {}), ...(reportHistory ? { shellIntegration: terminal.shellIntegration } : {}) }),
-		reuse: async () => { await terminal.reuseTerminal({ executable: '/bin/sh', args: [], deferStart: true }); terminal.start(); },
+		reuse: async clear => { if (clear) terminal.clearBuffer(); await terminal.reuseTerminal({ executable: '/bin/sh', args: [], deferStart: true, ...taskConfig }); terminal.start(); },
 		start: async () => {
 			terminal.attachToElement(document.querySelector<HTMLElement>('#terminal')!);
 			screen = terminal.xterm!;
@@ -1090,7 +1104,7 @@ if (new URLSearchParams(location.search).has('stream')) {
 declare global {
 	interface Window {
 		ashTerminalStreamIntegration: {
-			reuse(): Promise<void>;
+			reuse(clear?: boolean): Promise<void>;
 			status(): { reads: number[]; events: string[]; closes: number; state: string; remaining: number; cwd?: string; shellIntegration?: import('../../../src/ash/workbench/contrib/terminal/browser/terminal.js').ITerminalShellIntegration; };
 			feedModel(text: string): void;
 			environmentFrame(event: import('../../../src/ash/platform/terminal/common/terminal.js').TerminalShellIntegrationEvent): void;

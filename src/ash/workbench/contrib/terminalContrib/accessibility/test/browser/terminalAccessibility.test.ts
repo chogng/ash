@@ -27,6 +27,7 @@ suite('Terminal accessibility owners', () => {
 				using provider = new TerminalAccessibilityHelpProvider({} as ITerminalInstance, true);
 				const content = provider.provideContent();
 				assert.ok(content.includes(folderHelp));
+				assert.ok(content.includes(locale === 'zh-CN' ? '任务终端也会在任务输出标题行显示状态标记' : 'Task terminals also show a status marker on the task output header'));
 				assert.ok(content.includes(locale === 'zh-CN' ? '建议列表保持终端输入焦点' : 'The suggestion list keeps terminal input focused'));
 				assert.ok(content.includes('<keybinding:workbench.action.terminal.openDetectedLink>'));
 				assert.ok(content.includes('<keybinding:workbench.action.terminal.selectAll>'));

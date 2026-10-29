@@ -202,7 +202,7 @@ export class TerminalService extends Disposable implements ITerminalService {
 				title: profile?.overrideName ? profile.profileName : shell.name,
 				profile: profile?.isAutoDetected ? { type: 'profile', profileId: profile.profileId } : { type: 'custom', name: profileName, path: typeof shell.executable === 'string' ? [shell.executable] : shell.executable!, args: shell.args ?? [] },
 				env: shell.env, strictEnv: shell.strictEnv, cwd: shell.cwd, icon: shell.icon, color: shell.color,
-				initialText: shell.initialText, waitOnExit: shell.waitOnExit, environmentVariableCollections: shell.environmentVariableCollections, environmentVariableCollectionsPersistable: shell.environmentVariableCollectionsPersistable,
+				type: shell.type, initialText: shell.initialText, waitOnExit: shell.waitOnExit, environmentVariableCollections: shell.environmentVariableCollections, environmentVariableCollectionsPersistable: shell.environmentVariableCollectionsPersistable,
 			};
 			launch = {
 				...launch, revivalLaunch: options.revivalLaunch ?? (inheritsResolvedEnvironment ? parent.revivalLaunch : {

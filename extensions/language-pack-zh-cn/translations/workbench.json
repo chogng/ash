@@ -2413,6 +2413,7 @@
     "terminal.command.confirmRerun": "要再次运行此命令吗？",
     "terminal.command.confirmRun": "运行",
     "terminal.accessibility.commandActions": "检测到命令文本的命令标记是按钮。按 Tab 聚焦标记，再按 Enter、空格或 Shift+F10 打开菜单。“复制命令”“复制输出”和“复制命令及输出”使用该命令保留的范围；输出端点缺失时无法复制输出。“选择命令”选择从命令输入起点到执行位置的文本。“重新运行命令”会在原活动终端明确重跑命令，文本未经信任时先要求确认。按 Escape 关闭菜单。",
+    "terminal.accessibility.taskMarkers": "任务终端也会在任务输出标题行显示状态标记，表示任务正在运行、已成功或已失败。使用“重新运行上一个任务”可再次运行任务。",
     "terminal.accessibility.commandMarkers": "Shell 集成会标记每条命令的提示符。空心圆表示等待输入或正在执行命令；实心圆表示成功，错误图标表示失败。悬停标记可查看状态和退出代码。概览尺也显示命令状态，失败命令标记位于右侧。普通输出行没有命令标记。",
     "collaboration.connect": "连接频道",
     "collaboration.updated": "频道和成员已更新。",

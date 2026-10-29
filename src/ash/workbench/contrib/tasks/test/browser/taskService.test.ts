@@ -1002,7 +1002,7 @@ test('TaskService selects the execution host platform before resolving command, 
 	const task = (await service.refresh())[0];
 	assert.equal(terminals.instances.length, 0);
 	const run = await service.run(task);
-	assert.deepEqual(creates, [{ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, title: 'Task: Platform', dirId: 'workspace', env: { INHERITED: 'base', REMOVED: null, PLATFORM: '/execution/home' }, cwd: '/workspace/linux', execution: { type: 'process', program: '/workspace/linux-adapter', args: ['', '/execution/home', '$HOME'] }, initialText: { text: formatMessageForTerminal('Executing task: "/workspace/linux-adapter" "" "/execution/home" "$HOME"'), trailingNewLine: false }, waitOnExit: 'Terminal will be reused by tasks, press any key to close it.', deferStart: true }]);
+	assert.deepEqual(creates, [{ dimensions: { rows: 24, cols: 80 }, profile: { type: 'default' }, title: 'Task: Platform', type: 'Task', dirId: 'workspace', env: { INHERITED: 'base', REMOVED: null, PLATFORM: '/execution/home' }, cwd: '/workspace/linux', execution: { type: 'process', program: '/workspace/linux-adapter', args: ['', '/execution/home', '$HOME'] }, initialText: { text: formatMessageForTerminal('Executing task: "/workspace/linux-adapter" "" "/execution/home" "$HOME"'), trailingNewLine: false }, waitOnExit: 'Terminal will be reused by tasks, press any key to close it.', deferStart: true }]);
 	assert.deepEqual(terminals.instances[0].writes, []);
 	await service.terminate(run);
 });
@@ -1222,6 +1222,67 @@ suite('Task terminal reuse policies', () => {
 		};
 		return { tasks, terminals, finish, created, environments, closed, closing };
 	}
+
+	test('closing a running task terminal settles cancellation after process release and frees its instance', async () => {
+		using owner = new DisposableStore();
+		const { tasks, terminals, closing } = assemble(owner, 'dedicated', { reveal: 'never' });
+		const task = (await tasks.refresh())[0]!;
+		const run = await tasks.run(task);
+		const requested = new DeferredPromise<void>();
+		const released = new DeferredPromise<void>();
+		closing.wait = async () => { void requested.complete(); await released.p; };
+		let completed = false;
+		void run.completion!.then(() => { completed = true; });
+		const close = terminals.closeTerminal(terminals.instances[0]!);
+		try {
+			await requested.p;
+			assert.deepEqual({ status: run.status, completed, active: tasks.activeRuns.length }, { status: 'running', completed: false, active: 1 });
+		} finally {
+			void released.complete();
+			await close;
+		}
+		await run.completion;
+		assert.deepEqual({ status: run.status, completed, active: tasks.activeRuns.length, terminals: terminals.instances.length }, { status: 'canceled', completed: true, active: 0, terminals: 0 });
+		const next = await tasks.run(task);
+		assert.notEqual(next.runId, run.runId);
+		await tasks.terminate(next);
+	});
+
+	test('closing a custom task terminal cancels its run and waits for producer release', async () => {
+		using owner = new DisposableStore();
+		const { tasks, terminals } = assemble(owner, 'dedicated', { reveal: 'never' });
+		const writes = owner.add(new Emitter<string>());
+		const released = new DeferredPromise<void>();
+		let closes = 0;
+		owner.add(tasks.registerTaskProvider({
+			id: 'custom-close', provideTasks: () => [{
+				id: 'watch', label: 'Custom watch', group: 'build', presentation: { reveal: 'never' },
+				execution: { type: 'custom', callback: () => ({ onDidWrite: writes.event, releaseCompletion: released.p, open() { }, close() { closes++; } }) },
+			}]
+		}));
+		const task = (await tasks.refresh()).find(task => task.label === 'Custom watch')!;
+		const run = await tasks.run(task);
+		let completed = false;
+		void run.completion!.then(() => { completed = true; });
+		try {
+			await terminals.closeTerminal(terminals.instances[0]!);
+			assert.deepEqual({ status: run.status, completed, closes, active: tasks.activeRuns.length }, { status: 'canceled', completed: false, closes: 1, active: 0 });
+		} finally { void released.complete(); }
+		await run.completion;
+		assert.equal(completed, true);
+	});
+
+	test('disposing a task screen retains release failures on its completion', async () => {
+		using owner = new DisposableStore();
+		const { tasks, terminals, closing } = assemble(owner, 'dedicated', { reveal: 'never' });
+		const run = await tasks.run((await tasks.refresh())[0]!);
+		const failure = new Error('Task process release failed');
+		closing.wait = async () => { throw failure; };
+		const completion = assert.rejects(run.completion!, error => error === failure);
+		await assert.rejects(terminals.closeTerminal(terminals.instances[0]!), error => error === failure);
+		await completion;
+		assert.deepEqual({ status: run.status, active: tasks.activeRuns.length }, { status: 'canceled', active: 0 });
+	});
 
 	for (const panel of [undefined, 'shared', 'dedicated', 'new'] as const) {
 		test(`${panel ?? 'default'} task panels preserve instance policy while replacing the complete child environment`, async () => {

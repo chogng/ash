@@ -301,6 +301,8 @@ export type WaitOnExitValue = boolean | string | ((exitCode: number) => string);
 
 /** Launch information shared with providers that supply their own terminal output. */
 export interface IShellLaunchConfig {
+	/** Presentation owner; task screens project their process lifecycle as one command. */
+	readonly type?: 'Task' | 'Local';
 	/** Extension mutations captured with this resolved launch, separate from inherited host values. */
 	environmentVariableCollections?: import('./environmentVariable.js').ISerializableEnvironmentVariableCollections;
 	/** False for snapshots containing transient extension values; never persist them. */

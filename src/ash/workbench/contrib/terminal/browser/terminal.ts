@@ -94,6 +94,7 @@ export type ITerminalProfileSelection = TerminalProcessProfileSelection;
 
 /** Complete caller-facing input for creating one terminal. */
 export type ITerminalCreateOptions = {
+	readonly type?: IShellLaunchConfig['type'];
 	/** UI-resolved launch metadata; native profile selection still belongs to the execution host. */
 	readonly resolvedShellLaunchConfig?: Readonly<Pick<IShellLaunchConfig, 'executable' | 'args'>>;
 	readonly environmentVariableCollections?: import('../../../../platform/terminal/common/environmentVariable.js').ISerializableEnvironmentVariableCollections;
