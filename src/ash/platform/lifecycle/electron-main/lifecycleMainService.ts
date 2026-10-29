@@ -27,9 +27,9 @@ interface ILifecycleWindow {
 	close(): void;
 	readonly webContents: {
 		on(event: 'render-process-gone', listener: () => void): unknown;
-		on(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
+		on(event: 'did-navigate', listener: () => void): unknown;
 		off(event: 'render-process-gone', listener: () => void): unknown;
-		off(event: 'did-start-navigation', listener: (event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void): unknown;
+		off(event: 'did-navigate', listener: () => void): unknown;
 		send(channel: string, token: number): void;
 	};
 }
@@ -125,19 +125,17 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 			window.webContents.send(reason === 'quit' ? WINDOW_PREPARE_QUIT_CHANNEL : WINDOW_PREPARE_CLOSE_CHANNEL, token);
 		};
 		const onRendererLoading = (): void => { state.ready = false; clearPending(); };
-		const onNavigation = (_event: unknown, _url: string, inPlace: boolean, mainFrame: boolean): void => {
-			// Webviews navigate independently of the Workbench document and its shutdown participants.
-			if (mainFrame && !inPlace) { onRendererLoading(); }
-		};
 		window.on('close', onClose);
-		window.webContents.on('did-start-navigation', onNavigation);
+		// A navigation attempt can be prevented while the old document still owns
+		// shutdown participants. Retire them only when a new main document commits.
+		window.webContents.on('did-navigate', onRendererLoading);
 		window.webContents.on('render-process-gone', onRendererLoading);
 		this.windowRegistrations.set(window, toDisposable(() => {
 			clearPending();
 			this.closeStates.delete(window);
 			window.off('close', onClose);
 			if (!window.isDestroyed()) {
-				window.webContents.off('did-start-navigation', onNavigation);
+				window.webContents.off('did-navigate', onRendererLoading);
 				window.webContents.off('render-process-gone', onRendererLoading);
 			}
 		}));
@@ -148,9 +146,8 @@ export class LifecycleMainService<TWindow extends ILifecycleWindow> extends Disp
 	public unload(window: TWindow, reason: 'load' | 'reload' = 'load'): Promise<boolean> {
 		const state = this.closeStates.get(window);
 		if (!state || window.isDestroyed() || !state.ready && reason !== 'reload') throw new Error('Workbench window is not ready to unload');
-		// A prevented navigation can emit did-start-loading before beforeunload.
-		// Main observed the live product document prevent it, so its participant remains available.
-		if (reason === 'reload') state.ready = true;
+		// Startup failures have no renderer shutdown participants to acknowledge Retry.
+		if (!state.ready) return Promise.resolve(true);
 		if (state.pendingToken !== undefined) throw new Error('Workbench window already has a shutdown request');
 		return new Promise<boolean>(resolve => {
 			const token = ++this.nextCloseToken;

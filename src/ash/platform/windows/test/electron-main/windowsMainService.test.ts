@@ -98,7 +98,7 @@ test('window restoration selection respects the setting, explicit target, and up
 	assert.deepEqual(service.selectWindowsToRestore(session, 'none', true, true), { windows: [folder, empty], active: empty });
 });
 
-type RendererEvent = 'zoom-changed' | 'did-start-loading' | 'render-process-gone' | 'did-start-navigation' | 'will-prevent-unload' | 'did-fail-load';
+type RendererEvent = 'zoom-changed' | 'did-start-loading' | 'render-process-gone' | 'did-start-navigation' | 'did-navigate' | 'will-prevent-unload' | 'did-fail-load';
 type RendererListener = (() => void)
 	| ((event: unknown, details: Electron.RenderProcessGoneDetails) => void)
 	| ((event: unknown, url: string, inPlace: boolean, mainFrame: boolean) => void)

@@ -29,9 +29,11 @@ class TestWindow {
 		for (const listener of this.closeListeners) listener({ preventDefault: () => { prevented = true; } });
 		if (!prevented) this.destroyed = true;
 	}
-	emitRendererLoading(mainFrame = true, inPlace = false): void {
+	startNavigation(mainFrame = true, inPlace = false): void {
 		this.rendererEvents.emit('did-start-navigation', {}, 'file:///workbench.html', inPlace, mainFrame);
 	}
+	commitNavigation(): void { this.rendererEvents.emit('did-navigate'); }
+	rendererGone(): void { this.rendererEvents.emit('render-process-gone'); }
 }
 
 function createStateService(): IStateService {
@@ -137,7 +139,7 @@ suite('LifecycleMainService', () => {
 		using registration = service.registerWindow(window);
 		const route = windowCloseResponseIpcRoute(service, window);
 		route.invoke(route.validate({ kind: 'ready' }));
-		window.emitRendererLoading();
+		window.startNavigation();
 		const reloading = service.unload(window, 'reload');
 		assert.deepEqual(window.messages, [{ channel: WINDOW_PREPARE_RELOAD_CHANNEL, token: 1 }]);
 		route.invoke(route.validate({ kind: 'vetoed', token: 1 }));
@@ -153,12 +155,12 @@ suite('LifecycleMainService', () => {
 		using service = new LifecycleMainService<TestWindow>(() => { }, () => { }, createStateService(), 'test');
 		using registration = service.registerWindow(window);
 		service.respondToClose(window, { kind: 'ready' });
-		window.emitRendererLoading(false);
-		window.emitRendererLoading(true, true);
+		window.startNavigation(false);
+		window.startNavigation(true, true);
 		window.close();
 		assert.equal(window.destroyed, false);
 		assert.deepEqual(window.messages, [{ channel: WINDOW_PREPARE_CLOSE_CHANNEL, token: 1 }]);
-		window.emitRendererLoading(false);
+		window.startNavigation(false);
 		service.respondToClose(window, { kind: 'complete', token: 1 });
 		assert.equal(window.destroyed, true);
 	});
@@ -177,7 +179,7 @@ suite('LifecycleMainService', () => {
 		route.invoke(route.validate({ kind: 'complete', token: 2 }));
 		assert.equal(await accepted, true);
 		assert.equal(window.destroyed, false);
-		window.emitRendererLoading();
+		window.commitNavigation();
 		route.invoke(route.validate({ kind: 'ready' }));
 		window.close();
 		assert.deepEqual(window.messages.at(-1), { channel: WINDOW_PREPARE_CLOSE_CHANNEL, token: 3 });
@@ -215,10 +217,27 @@ suite('LifecycleMainService', () => {
 		using service = new LifecycleMainService<TestWindow>(() => { }, () => { }, createStateService(), '1.0.0');
 		using registration = service.registerWindow(window);
 		service.respondToClose(window, { kind: 'ready' });
-		window.emitRendererLoading();
+		window.commitNavigation();
 		window.close();
 		assert.deepEqual({ destroyed: window.destroyed, messages: window.messages }, { destroyed: true, messages: [] });
 	});
+
+	for (const phase of ['startup', 'navigation', 'crash'] as const) {
+		test(`Retry during ${phase} does not wait for an unavailable renderer or block closing`, async () => {
+			const window = new TestWindow();
+			using service = new LifecycleMainService<TestWindow>(() => { }, () => { }, createStateService(), 'test');
+			using registration = service.registerWindow(window);
+			if (phase !== 'startup') {
+				service.respondToClose(window, { kind: 'ready' });
+				if (phase === 'navigation') window.commitNavigation();
+				else window.rendererGone();
+			}
+			const reloading = service.unload(window, 'reload');
+			window.close();
+			assert.deepEqual({ destroyed: window.destroyed, messages: window.messages }, { destroyed: true, messages: [] });
+			assert.equal(await reloading, true);
+		});
+	}
 
 	test('main lifecycle releases window listeners when its owner is disposed', () => {
 		const window = new TestWindow();
