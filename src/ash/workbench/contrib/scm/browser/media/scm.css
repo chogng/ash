@@ -254,10 +254,13 @@
 	outline-color: var(--ash-focusBorder);
 }
 
-.ash-scm-graph-label > .ash-icon {
-	width: var(--ash-lxiconFontSize-compact);
-	height: var(--ash-lxiconFontSize-compact);
-	flex: 0 0 auto;
+.ash-scm-graph-label.icon-only {
+	width: 18px;
+	justify-content: center;
+	padding: 0;
+}
+
+.ash-scm-graph-label > .ash-icon-git-branch {
 	font-size: var(--ash-lxiconFontSize-compact);
 }
 
@@ -269,7 +272,15 @@
 }
 
 .ash-scm-graph-label.head {
+	gap: 0;
+	padding-inline-start: 0;
 	background: var(--ash-scmGraph-historyItemRefColor);
+}
+
+.ash-scm-graph-label.head > .ash-icon {
+	/* Center the rings in the capsule's square end cap to follow its curve. */
+	width: 18px;
+	height: 18px;
 }
 
 .ash-scm-graph-label.remote {

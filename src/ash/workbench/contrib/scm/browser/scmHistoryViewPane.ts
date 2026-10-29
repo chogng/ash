@@ -1299,6 +1299,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			let kind = 'local';
 			if (isCurrent) {
 				kind = 'head';
+				icon = Lxicon.target;
 			} else if (category === 'remoteBranch') {
 				kind = 'remote';
 				icon = Lxicon.cloud;
@@ -1308,6 +1309,7 @@ export class SCMHistoryViewPane extends ViewPane {
 			const names = group.map(reference => reference.name).join(', ');
 			const label = h(document, "span");
 			label.className = `ash-scm-graph-label ${kind}`;
+			label.classList.toggle('icon-only', !isCurrent && group.length === 1);
 			label.dataset.icon = icon.id;
 			label.setAttribute('role', 'button');
 			label.tabIndex = 0;
