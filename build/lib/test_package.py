@@ -338,7 +338,9 @@ class PackageTests(unittest.TestCase):
         "java",
         "javascript",
         "json",
+        "json-language-features",
         "julia",
+        "keymap-sublime",
         "language-pack-zh-cn",
         "log",
         "lua",
@@ -353,9 +355,11 @@ class PackageTests(unittest.TestCase):
         "python",
         "r",
         "remote-ssh",
+        "remote-workspace",
         "ruby",
         "rust",
         "shellscript",
+        "snapshot",
         "sql",
         "swift",
         "theme-defaults",
@@ -919,7 +923,7 @@ class PackageTests(unittest.TestCase):
                 for path in extensions.iterdir()
                 if path.is_dir()
                 and (path / "package.json").is_file()
-                and not json.loads((path / "package.json").read_text())
+                and not json.loads((path / "package.json").read_text(encoding="utf-8"))
                 .get("ashRuntime", {})
                 .get("client")
             ),

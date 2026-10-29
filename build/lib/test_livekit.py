@@ -104,7 +104,10 @@ class LivekitTests(unittest.TestCase):
                 built_bytes = b"updated server"
                 resolve_livekit("aarch64-apple-darwin", root=root)
                 self.assertEqual(built_bytes, binary.read_bytes())
-                self.assertEqual(0o755, binary.stat().st_mode & 0o777)
+                # Windows exposes only the read-only attribute through chmod/stat.
+                self.assertEqual(
+                    0o666 if os.name == "nt" else 0o755, binary.stat().st_mode & 0o777
+                )
                 self.assertEqual(b"compact server", seeded_outputs[-1])
 
                 binary.write_bytes(b"damaged server")
