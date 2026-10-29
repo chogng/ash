@@ -257,7 +257,6 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 
 	private async prepareAuxiliaryClose(part: IEditorPart): Promise<boolean> {
 		if (!this.auxiliary.has(part)) return false;
-		if (part.activePane?.prefersWindowCloseConfirmation && !await part.confirmCloseAllEditors()) return false;
 		const target = this.getReturnGroup();
 		const editors = part.groups.flatMap(group => group.editors.map(editor => ({ group, editor })));
 		for (const { group, editor } of editors) {
@@ -407,7 +406,7 @@ export class EditorParts extends Disposable implements IEditorPartsService {
 		}
 		if (auxiliaryWindow) listeners.add(addDisposableListener(auxiliaryWindow.container, 'focusin', () => this.setActivePart(part)));
 		if (auxiliaryWindow) listeners.add(auxiliaryWindow.onBeforeUnload(event => {
-			if (this.isDisposed || part.activePane?.prefersWindowCloseConfirmation) return;
+			if (this.isDisposed) return;
 			const target = this.getReturnGroup();
 			for (const group of part.groups) for (const editor of group.editors) {
 				const veto = editor.input.canMove?.(group.id, target.id);

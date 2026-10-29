@@ -36,8 +36,6 @@ export interface IEditorPane extends IComposite, IDisposable {
 	readonly prefersStatusbarHidden?: boolean;
 	/** Dedicated tools can replace auxiliary workbench actions with compact window controls. */
 	readonly prefersCompactTitlebar?: boolean;
-	/** Dedicated tools settle their draft before their window closes instead of returning it to the main editor. */
-	readonly prefersWindowCloseConfirmation?: boolean;
 	readonly workingCopy?: IWorkingCopy;
 	/** File-owned copies retained by an editor that displays multiple resources. */
 	getWorkingCopies?(): readonly IWorkingCopy[];

@@ -2,61 +2,70 @@ import { readUserSettings, writeUserSettings } from '../../../automation/setting
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, test } from '../../../automation/test.js';
-import type { Page } from '@playwright/test';
-
-function handleElectronUnloadDialog(page: Page): void {
-	page.on('dialog', async dialog => {
-		expect(dialog.type()).toBe('beforeunload');
-		// Electron already cancels the unload while the product's save dialog is
-		// pending, but CDP may still report a JavaScript dialog that no longer exists.
-		await dialog.dismiss().catch(error => {
-			if (!(error instanceof Error) || !error.message.includes('No dialog is showing')) throw error;
-		});
-	});
-}
+import { Editor } from '../../../automation/editor.js';
 
 test('Theme Editor opens an installed source outside the workspace and applies a saved user copy', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
 	const original = await workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'));
-	const opened = workbench.page.context().waitForEvent('page');
+	const popup = workbench.page;
+	const originalPages = popup.context().pages().length;
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
-	const popup = await opened;
-	const titlebar = popup.locator('.ash-auxiliary-titlebar');
-	for (const width of [540, 800, 1440]) {
+	const titlebar = workbench.editors.groupAt(0).title;
+	await expect(popup.locator('.ash-theme-editor')).toBeVisible();
+	await expect(titlebar).toBeVisible();
+	await expect(popup.locator('.ash-workbench-statusbar')).toBeVisible();
+	for (const width of [800, 1100, 1440]) {
 		await popup.setViewportSize({ width, height: 900 });
-		await expect.poll(() => titlebar.evaluate(element => {
-			const title = element.querySelector<HTMLElement>('.ash-titlebar-command-center-custom')!;
-			const actions = element.querySelector<HTMLElement>('.ash-titlebar-actions')!;
-			const titleBounds = title.getBoundingClientRect();
-			const actionBounds = actions.getBoundingClientRect();
-			const style = getComputedStyle(element);
-			const bounds = element.getBoundingClientRect();
-			return titleBounds.width > 0
-				&& Math.abs(titleBounds.left + titleBounds.width / 2 - (bounds.left + bounds.width / 2)) <= 1
-				&& titleBounds.left >= bounds.left + parseFloat(style.paddingLeft)
-				&& titleBounds.right <= actionBounds.left
-				&& actionBounds.right <= bounds.right - parseFloat(style.paddingRight) + 1;
-		})).toBe(true);
-		await expect(titlebar.getByRole('button', { name: 'Switch theme', exact: true })).toBeVisible();
+		await expect(titlebar.getByRole('button', { name: 'Open Theme…', exact: true })).toBeVisible();
 		await expect(titlebar.getByRole('button', { name: 'Save and Apply', exact: true })).toBeVisible();
+		await expect.poll(() => titlebar.locator('.ash-dropdown-with-primary-action-view-item').evaluate(element => {
+			const main = element.querySelector('.ash-dropdown-with-primary-primary button')!.getBoundingClientRect();
+			const arrow = element.querySelector('.ash-dropdown-with-primary-dropdown button')!.getBoundingClientRect();
+			const actionSize = parseFloat(getComputedStyle(element).getPropertyValue('--ash-toolbar-actionSize'));
+			return {
+				mainHeight: main.height,
+				arrowHeight: arrow.height,
+				arrowWidth: arrow.width,
+				actionSize,
+				mainHasSize: main.height >= actionSize,
+				matchingHeight: Math.abs(main.height - arrow.height) < 0.5,
+				squareArrow: Math.abs(arrow.width - arrow.height) < 0.5,
+			};
+		})).toMatchObject({ mainHasSize: true, matchingHeight: true, squareArrow: true });
+		await expect(titlebar.getByRole('button', { name: 'Open Theme (JSON)', exact: true })).toBeVisible();
 	}
 	const search = popup.getByRole('searchbox', { name: 'Search colors', exact: true });
 	await search.fill('editor.background');
 	const color = popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
 	await expect(color).toBeDisabled();
 	await expect(popup.locator('.ash-theme-editor-message')).toHaveText('This theme source is read-only. Use Save as to create an editable user theme.');
+	const source = new Editor(popup.locator('.ash-theme-editor-json'));
+	await titlebar.getByRole('button', { name: 'Open Theme (JSON)', exact: true }).press('Enter');
+	await expect(source.input).toBeFocused();
+	await source.waitForEditorContents(text => text.includes('editor.background'));
+	await expect(search).toBeHidden();
+	await titlebar.getByRole('button', { name: 'Open Theme (UI)', exact: true }).press('Space');
+	await expect(search).toBeFocused();
+	await expect(search).toHaveValue('editor.background');
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
-	expect(workbench.page.context().pages()).toHaveLength(2);
-	await workbench.menus.select(application, () => popup.locator('.ash-auxiliary-titlebar').getByRole('button', { name: 'Theme save actions', exact: true }).click(), ['Save as…']);
+	expect(popup.context().pages()).toHaveLength(originalPages);
+	await expect(popup.locator('.ash-theme-editor')).toHaveCount(1);
+	await workbench.menus.select(application, () => titlebar.getByRole('button', { name: 'Theme save actions', exact: true }).click(), ['Save as…']);
 	const dialog = popup.getByRole('dialog', { name: 'Save as…', exact: true });
 	await dialog.getByRole('textbox', { name: 'Theme name', exact: true }).fill('Shared color picker regression');
 	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(dialog).toBeHidden();
 	await expect(popup.getByRole('status').filter({ hasText: /^Theme saved\.$/ })).toBeVisible();
+	const savedTab = workbench.editors.groupAt(0).tabs.filter({ hasText: 'shared-color-picker-regression.json' });
+	await expect(savedTab).toHaveAttribute('aria-selected', 'true');
 	await search.fill('editor.background');
 	await expect(color).toBeEnabled();
 	await color.fill('315BC9');
 	await color.press('Enter');
 	await expect(popup.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#315bc9');
+	await expect(savedTab).toHaveAttribute('aria-label', /unsaved/i);
+	await workbench.menus.select(application, () => titlebar.getByRole('button', { name: 'Theme save actions', exact: true }).click(), ['Save']);
+	await expect(savedTab).not.toHaveAttribute('aria-label', /unsaved/i);
+	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
 	const trigger = popup.getByRole('button', { name: 'Choose color for editor.background', exact: true });
 	await trigger.press('Enter');
 	const picker = popup.getByRole('dialog', { name: 'Color picker', exact: true });
@@ -69,14 +78,27 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 	await picker.getByRole('button', { name: 'Close', exact: true }).click();
 	await expect(picker).toBeHidden();
 	await expect(trigger).toBeFocused();
+	await titlebar.getByRole('button', { name: 'Open Theme (JSON)', exact: true }).press('Enter');
+	await expect(source.input).toBeFocused();
+	await source.input.press('ControlOrMeta+a');
+	await popup.keyboard.insertText(JSON.stringify({
+		name: 'Shared color picker regression',
+		type: 'light',
+		colors: { 'editor.background': '#123456' },
+	}, null, 2));
+	await expect(popup.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#123456');
+	await titlebar.getByRole('button', { name: 'Open Theme (UI)', exact: true }).click();
+	await expect(color).toHaveValue('123456');
+	await titlebar.getByRole('button', { name: 'Undo', exact: true }).click();
+	await expect(color).toHaveValue('2F6FED');
+	await expect(popup.getByRole('spinbutton', { name: 'Opacity for editor.background (%)', exact: true })).toHaveValue('40');
 	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
-	await popup.locator('.ash-auxiliary-titlebar').getByRole('button', { name: 'Save and Apply', exact: true }).click();
+	await titlebar.getByRole('button', { name: 'Save and Apply', exact: true }).click();
 	await expect(workbench.element).toHaveCSS('--ash-editor-background', 'rgba(47, 111, 237, 0.4)');
-	await popup.close({ runBeforeUnload: true });
-	await expect.poll(() => popup.isClosed()).toBe(true);
-	const reopening = workbench.page.context().waitForEvent('page');
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await expect(popup.locator('.ash-theme-editor')).toHaveCount(0);
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
-	const restored = await reopening;
+	const restored = popup;
 	await restored.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
 	await expect(restored.getByRole('textbox', { name: 'Hex color for editor.background', exact: true })).toBeEnabled();
 	await expect(restored.getByRole('textbox', { name: 'Hex color for editor.background', exact: true })).toHaveValue('2F6FED');
@@ -87,189 +109,150 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 	expect(saved.colors['editor.background']).toBe('#2f6fed66');
 });
 
-test('Theme Editor command center switches only themes and keeps undo beside the picker', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
-	const mainCenterWidth = (await workbench.page.locator('.ash-titlebar-command-center-button').boundingBox())!.width;
+test('Theme Editor opens themes in workspace tabs and preserves edits while switching', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
+	const page = workbench.page;
+	const originalPages = page.context().pages().length;
 	const original = await workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'));
-	const opened = workbench.page.context().waitForEvent('page');
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
-	const popup = await opened;
-	await popup.setViewportSize({ width: 1440, height: 900 });
-	const titlebar = popup.locator('.ash-auxiliary-titlebar');
-	const center = titlebar.getByRole('button', { name: 'Switch theme', exact: true });
-	await expect(center).toHaveText('Ash Light');
-	expect((await center.boundingBox())!.width).toBe(mainCenterWidth);
-	const centerBounds = (await center.boundingBox())!;
-	expect(Math.abs(centerBounds.x + centerBounds.width / 2 - await popup.evaluate(() => innerWidth / 2))).toBeLessThanOrEqual(1);
-	const undo = titlebar.getByRole('button', { name: 'Undo', exact: true });
-	const redo = titlebar.getByRole('button', { name: 'Redo', exact: true });
-	await expect(undo).toBeDisabled();
-	await expect(redo).toBeDisabled();
-	expect((await undo.boundingBox())!.x).toBeLessThan((await redo.boundingBox())!.x);
-	const redoBounds = (await redo.boundingBox())!;
-	expect(redoBounds.x + redoBounds.width).toBeLessThanOrEqual((await center.boundingBox())!.x);
-	await expect(titlebar.locator('.ash-titlebar-actions').getByRole('button', { name: 'Undo', exact: true })).toHaveCount(0);
-	await center.press('Enter');
-	const picker = popup.locator('.ash-quick-pick');
-	const input = picker.getByRole('combobox', { name: 'Switch theme', exact: true });
+	const titlebar = workbench.editors.groupAt(0).title;
+	const open = titlebar.getByRole('button', { name: 'Open Theme…', exact: true });
+	await open.press('Enter');
+	const picker = page.locator('.ash-quick-pick');
+	const input = picker.getByRole('combobox', { name: 'Open Theme…', exact: true });
 	await expect(input).toBeFocused();
-	const pickerBounds = (await picker.boundingBox())!;
-	expect(Math.abs(pickerBounds.x + pickerBounds.width / 2 - centerBounds.x - centerBounds.width / 2)).toBeLessThanOrEqual(1);
 	await input.fill('>');
 	await expect(picker.getByRole('option')).toHaveCount(0);
 	await input.fill('palette.ts');
 	await expect(picker.getByRole('option')).toHaveCount(0);
 	await input.fill('Ash Dark');
-	await picker.getByRole('option').filter({ has: popup.getByText('Ash Dark', { exact: true }) }).click();
-	await expect(center).toHaveText('Ash Dark');
+	await picker.getByRole('option').filter({ has: page.getByText('Ash Dark', { exact: true }) }).click();
 	await expect(picker).toBeHidden();
-	await expect(popup.locator('.ash-theme-editor')).toHaveCount(1);
-	await expect(popup.locator('.ash-editor-title-control')).toBeHidden();
-	expect(workbench.page.context().pages()).toHaveLength(2);
-	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
-
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'light.json' })).toHaveCount(1);
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'dark.json' })).toHaveCount(1);
 	await workbench.menus.select(application, () => titlebar.getByRole('button', { name: 'Theme save actions', exact: true }).click(), ['Save as…']);
-	const saveAs = popup.getByRole('dialog', { name: 'Save as…', exact: true });
+	const saveAs = page.getByRole('dialog', { name: 'Save as…', exact: true });
 	await saveAs.getByRole('textbox', { name: 'Theme name', exact: true }).fill('Theme switching regression');
 	await saveAs.getByRole('button', { name: 'Save', exact: true }).click();
 	await expect(saveAs).toBeHidden();
-	await expect(center).toHaveText('Theme switching regression');
-	await popup.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
-	const preview = popup.frameLocator('.ash-theme-editor-preview').locator('#app');
-	const color = popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
+	await expect(page.getByRole('status').filter({ hasText: /^Theme saved\.$/ })).toBeVisible();
+	const search = page.getByRole('searchbox', { name: 'Search colors', exact: true });
+	await search.fill('editor.background');
+	const color = page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
+	const preview = page.locator('.ash-theme-editor:visible').frameLocator('.ash-theme-editor-preview').locator('#app');
 	const beforeEdit = '#' + (await color.inputValue()).replace(/^#/, '').toLowerCase();
-	await expect(preview).toHaveCSS('--ash-editor-background', beforeEdit);
 	await color.fill('#123456');
 	await color.press('Enter');
 	await expect(preview).toHaveCSS('--ash-editor-background', '#123456');
-	await expect(undo).toBeEnabled();
-	await undo.click();
+	await titlebar.getByRole('button', { name: 'Undo', exact: true }).click();
 	await expect(preview).toHaveCSS('--ash-editor-background', beforeEdit);
-	await expect(redo).toBeEnabled();
-	await redo.click();
+	await titlebar.getByRole('button', { name: 'Redo', exact: true }).click();
 	await expect(preview).toHaveCSS('--ash-editor-background', '#123456');
-	const switchToLight = async () => {
-		await center.click();
-		await input.fill('Ash Light');
-		await picker.getByRole('option').filter({ has: popup.getByText('Ash Light', { exact: true }) }).click();
-	};
-	await workbench.dialogs.confirm(application, 'Save Changes', 'Cancel', switchToLight);
-	await expect(center).toHaveText('Theme switching regression');
+	const draft = workbench.editors.groupAt(0).tabs.filter({ hasText: 'theme-switching-regression.json' });
+	await expect(draft).toHaveAttribute('aria-label', /unsaved/i);
+	await open.click();
+	await input.fill('Ash Light');
+	await picker.getByRole('option').filter({ has: page.getByText('Ash Light', { exact: true }) }).click();
+	await expect(workbench.editors.groupAt(0).tabs.filter({ hasText: 'light.json' })).toHaveAttribute('aria-selected', 'true');
+	await expect(draft).toHaveAttribute('aria-label', /unsaved/i);
+	await draft.click();
+	await expect(color).toHaveValue('123456');
 	await expect(preview).toHaveCSS('--ash-editor-background', '#123456');
-	await workbench.dialogs.confirm(application, 'Save Changes', "Don't Save", switchToLight);
-	await expect(center).toHaveText('Ash Light');
 	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
-	expect(workbench.page.context().pages()).toHaveLength(2);
+	expect(page.context().pages()).toHaveLength(originalPages);
 });
 
-test('Theme Editor window close confirms unsaved changes and allows cancel, save and discard', { tag: ['@electron-ui'] }, async ({ application, workbench }) => {
-	if (!('windows' in application)) throw new Error('Window close regression requires Electron');
-	const opened = workbench.page.context().waitForEvent('page');
+test('Theme Editor tab close confirms unsaved changes and allows cancel, save and discard', { tag: ['@electron-app-server'] }, async ({ application, workbench }) => {
+	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
-	const popup = await opened;
-	handleElectronUnloadDialog(popup);
-	await popup.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
-	const color = popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
-	await color.fill('#234567');
-	const windowName = await popup.evaluate(() => window.name);
-	const requestClose = () => application.evaluate(({ BrowserWindow }, name) => {
-		BrowserWindow.getAllWindows().find(window => window.webContents.mainFrame.name === name)!.close();
-	}, windowName);
-
-	await workbench.dialogs.confirm(application, 'Save Changes', 'Cancel', requestClose);
-	await expect(color).toHaveValue('#234567');
-	expect(popup.isClosed()).toBe(false);
-
-	// Give the draft a theme file so saving on close exercises the existing file.
-	await color.press('ControlOrMeta+S');
-	const saveAs = popup.getByRole('dialog');
-	await saveAs.getByRole('textbox', { name: 'Theme name', exact: true }).fill('Window close regression');
+	const titlebar = workbench.editors.groupAt(0).title;
+	await workbench.menus.select(application, () => titlebar.getByRole('button', { name: 'Theme save actions', exact: true }).click(), ['Save as…']);
+	const saveAs = page.getByRole('dialog', { name: 'Save as…', exact: true });
+	await saveAs.getByRole('textbox', { name: 'Theme name', exact: true }).fill('Tab close regression');
 	await saveAs.getByRole('button', { name: 'Save', exact: true }).click();
-	await expect(popup.getByRole('status').filter({ hasText: /^Theme saved\.$/ })).toBeVisible();
-	await popup.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
-	await color.fill('#345678');
-	await workbench.dialogs.confirm(application, 'Save Changes', 'Save', requestClose);
-	await expect.poll(() => popup.isClosed()).toBe(true);
+	await expect(saveAs).toBeHidden();
+	await expect(page.getByRole('status').filter({ hasText: /^Theme saved\.$/ })).toBeVisible();
+	const search = page.getByRole('searchbox', { name: 'Search colors', exact: true });
+	await search.fill('editor.background');
+	const color = page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true });
+	await color.fill('#234567');
+	const close = () => workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
+	await workbench.dialogs.confirm(application, 'Save Changes', 'Cancel', close);
+	await expect(color).toHaveValue('234567');
+	await workbench.dialogs.confirm(application, 'Save Changes', 'Save', close);
+	await expect(page.locator('.ash-theme-editor')).toHaveCount(0);
+	if (!('windows' in application)) throw new Error('Theme file verification requires Desktop');
 	const home = await application.evaluate(() => process.env.ASH_HOME!);
-	const saved = JSON.parse(await readFile(join(home, 'themes', 'window-close-regression.json'), 'utf8'));
-	expect(saved.colors['editor.background']).toBe('#345678');
-
-	const reopened = workbench.page.context().waitForEvent('page');
+	const path = join(home, 'themes', 'tab-close-regression.json');
+	const saved = JSON.parse(await readFile(path, 'utf8'));
+	expect(saved.colors['editor.background']).toBe('#234567');
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
-	const draft = await reopened;
-	handleElectronUnloadDialog(draft);
-	await draft.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
-	await draft.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#456789');
-	await workbench.dialogs.confirm(application, 'Save Changes', "Don't Save", () => draft.close({ runBeforeUnload: true }));
-	await expect.poll(() => draft.isClosed()).toBe(true);
+	await titlebar.getByRole('button', { name: 'Open Theme…', exact: true }).click();
+	const picker = page.locator('.ash-quick-pick');
+	await picker.getByRole('combobox', { name: 'Open Theme…', exact: true }).fill('Tab close regression');
+	await picker.getByRole('option').filter({ has: page.getByText('Tab close regression', { exact: true }) }).click();
+	await page.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
+	await page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#456789');
+	await workbench.dialogs.confirm(application, 'Save Changes', "Don't Save", close);
+	expect(JSON.parse(await readFile(path, 'utf8')).colors['editor.background']).toBe('#234567');
 });
 
-test('Theme Editor restores one unsaved draft in its auxiliary window after restart', { tag: ['@electron-ui'] }, async ({ application, workbench, reloadWorkbench }, testInfo) => {
-	const mainTabs = workbench.page.getByRole('tablist', { name: 'Open editors', exact: true }).getByRole('tab');
-	const originalTabCount = await mainTabs.count();
-	const opened = workbench.page.context().waitForEvent('page');
+test('Theme Editor restores a workspace draft and can move it to another window', { tag: ['@electron-app-server'] }, async ({ application, workbench, reloadWorkbench }, testInfo) => {
+	const page = workbench.page;
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
-	const popup = await opened;
-	await expect(popup.locator('.ash-editor-title-control')).toBeHidden();
-	await expect(popup.locator('.ash-workbench-statusbar')).toBeHidden();
-	const titlebar = popup.locator('.ash-auxiliary-titlebar');
-	await expect(titlebar.locator('.ash-titlebar-center > .ash-titlebar-command-center')).toBeHidden();
-	await expect(titlebar.getByRole('button', { name: 'Switch theme', exact: true })).toBeVisible();
-	await expect(titlebar.getByRole('button', { name: 'Save and Apply', exact: true })).toBeVisible();
-	await expect(titlebar.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled();
-	await expect(titlebar.getByRole('button', { name: 'Redo', exact: true })).toBeDisabled();
-	const pin = titlebar.getByRole('button', { name: 'Turn On Always on Top', exact: true });
-	await expect(pin).toBeEnabled();
-	await expect(titlebar.locator('.ash-titlebar-actions')).toHaveCSS('-webkit-app-region', 'no-drag');
-	const pinBounds = await pin.boundingBox();
-	const titlebarBounds = await titlebar.boundingBox();
-	expect(pinBounds && titlebarBounds && pinBounds.x > titlebarBounds.x + titlebarBounds.width * 0.75).toBe(true);
-	await pin.click();
-	const unpin = titlebar.getByRole('button', { name: 'Turn Off Always on Top', exact: true });
-	await expect(unpin).toBeVisible();
-	await expect(titlebar.locator('.ash-titlebar-actions [role="toolbar"]')).toBeVisible();
-	if (!('windows' in application)) throw new Error('The pin test requires Electron');
-	const windowName = await popup.evaluate(() => window.name);
-	const readPinState = () => application.evaluate(({ BrowserWindow }, name) => {
-		const windows = BrowserWindow.getAllWindows();
-		return { pinned: windows.find(window => window.webContents.mainFrame.name === name)?.isAlwaysOnTop(), others: windows.filter(window => window.webContents.mainFrame.name !== name).map(window => window.isAlwaysOnTop()) };
-	}, windowName);
-	await expect.poll(readPinState).toEqual({ pinned: true, others: [false] });
-	await unpin.press('Space');
-	await expect(pin).toBeVisible();
-	await expect.poll(readPinState).toEqual({ pinned: false, others: [false] });
-	await popup.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
-	await popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#234567');
-	await expect(popup.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#234567');
-	const title = await popup.title();
+	const titlebar = workbench.editors.groupAt(0).title;
+	await workbench.menus.select(application, () => titlebar.getByRole('button', { name: 'Theme save actions', exact: true }).click(), ['Save as…']);
+	const saveAs = page.getByRole('dialog', { name: 'Save as…', exact: true });
+	await saveAs.getByRole('textbox', { name: 'Theme name', exact: true }).fill('Restored theme draft');
+	await saveAs.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(saveAs).toBeHidden();
+	await expect(page.getByRole('status').filter({ hasText: /^Theme saved\.$/ })).toBeVisible();
+	await page.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
+	await page.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#234567');
 	const { workbench: restored } = await reloadWorkbench();
-	await expect.poll(() => restored.page.context().pages().length).toBe(2);
-	const auxiliary = restored.page.context().pages().find(page => page !== restored.page)!;
+	const theme = restored.page.locator('.ash-theme-editor');
+	await expect(theme).toHaveCount(1);
+	await expect(theme.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#234567');
+	await expect(restored.editors.groupAt(0).tabs.filter({ hasText: 'restored-theme-draft.json' })).toHaveCount(1);
+	expect(restored.page.context().pages()).toHaveLength(1);
+	const opened = restored.page.context().waitForEvent('page');
+	await restored.quickaccess.runCommand('workbench.action.moveEditorToNewWindow');
+	const auxiliary = await opened;
 	await expect(auxiliary.locator('.ash-theme-editor')).toHaveCount(1);
-	await expect(auxiliary.locator('.ash-editor-title-control')).toBeHidden();
-	await expect(auxiliary.locator('.ash-workbench-statusbar')).toBeHidden();
-	await expect(auxiliary.locator('.ash-auxiliary-titlebar').getByRole('button', { name: 'Turn On Always on Top', exact: true })).toBeVisible();
-	await expect.poll(() => auxiliary.locator('.ash-theme-editor').evaluate(element => Math.abs(element.getBoundingClientRect().bottom - window.innerHeight))).toBeLessThanOrEqual(1);
-	await expect(auxiliary).toHaveTitle(title);
+	await expect(auxiliary.locator('.ash-editor-title-control')).toBeVisible();
 	await expect(auxiliary.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#234567');
-	await expect(auxiliary.frameLocator('.ash-theme-editor-preview').locator('.ash-workbench-statusbar')).toBeVisible();
-	await expect(restored.page.getByRole('tablist', { name: 'Open editors', exact: true }).getByRole('tab')).toHaveCount(originalTabCount);
-	await auxiliary.screenshot({ path: testInfo.outputPath('restored-theme-draft.png') });
+	await expect(theme).toHaveCount(0);
+	await auxiliary.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
+	await auxiliary.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#345678');
+	await auxiliary.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).press('Enter');
+	await expect(auxiliary.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#345678');
+	await auxiliary.evaluate(() => window.close());
+	await expect.poll(() => auxiliary.isClosed()).toBe(true);
+	await expect(theme).toHaveCount(1);
+	await expect(theme.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#345678');
+	await restored.page.screenshot({ path: testInfo.outputPath('restored-workspace-theme-draft.png') });
 });
 
-test('Theme Editor connects its local file preview and isolates draft colors', { tag: ['@electron-app-server'] }, async ({ workbench }, testInfo) => {
+test('Theme Editor connects its local file preview and isolates draft colors', { tag: ['@electron-app-server'] }, async ({ application, workbench }, testInfo) => {
 	const page = workbench.page;
 	const original = await workbench.element.evaluate(element => getComputedStyle(element).getPropertyValue('--ash-editor-background'));
-	const opened = page.context().waitForEvent('page');
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
-	const popup = await opened;
+	const popup = page;
+	await workbench.menus.select(application, () => workbench.editors.groupAt(0).title.getByRole('button', { name: 'Theme save actions', exact: true }).click(), ['Save as…']);
+	const saveAs = page.getByRole('dialog', { name: 'Save as…', exact: true });
+	await saveAs.getByRole('textbox', { name: 'Theme name', exact: true }).fill('Desktop preview regression');
+	await saveAs.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(saveAs).toBeHidden();
+	await expect(page.getByRole('status').filter({ hasText: /^Theme saved\.$/ })).toBeVisible();
 	const errors: string[] = [];
 	popup.on('pageerror', error => errors.push(error.message));
 	popup.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-	const preview = popup.frameLocator('.ash-theme-editor-preview');
+	const editor = popup.locator('.ash-theme-editor:visible');
+	const preview = editor.frameLocator('.ash-theme-editor-preview');
 	await expect(preview.locator('body')).toHaveAttribute('data-ready', 'true');
 	await expect(preview.getByRole('textbox', { name: 'palette.ts', exact: true })).toBeVisible();
 	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
 	await popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#234567');
+	await popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).press('Enter');
 	await expect(preview.locator('#app')).toHaveCSS('--ash-editor-background', '#234567');
 	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
 	for (const size of [{ width: 1100, height: 760 }, { width: 1440, height: 900 }]) {
@@ -285,38 +268,33 @@ test('Theme Editor connects its local file preview and isolates draft colors', {
 	await expect(preview.locator('body')).toHaveAttribute('data-ready', 'true');
 	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('sessions.activityBar.foreground');
 	await popup.getByRole('textbox', { name: 'Hex color for sessions.activityBar.foreground', exact: true }).fill('#cc6600');
+	await popup.getByRole('textbox', { name: 'Hex color for sessions.activityBar.foreground', exact: true }).press('Enter');
 	await expect(preview.locator('#app')).toHaveCSS('--ash-sessions-activityBar-foreground', '#cc6600');
 	await popup.screenshot({ path: testInfo.outputPath('desktop-agent-window-theme-preview.png') });
-	const navigation = preview.locator('.ash-sessions-activity-content');
-	await page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true }).click();
-	await expect(page.locator('.ash-window-mode-control').getByRole('button', { name: 'Code', exact: true })).toHaveAttribute('aria-pressed', 'true');
 	await previewWindows.getByRole('tab', { name: 'Workbench', exact: true }).click();
 	await expect(preview.getByRole('textbox', { name: 'palette.ts', exact: true })).toBeVisible();
 	await expect(preview.locator('#app')).toHaveCSS('--ash-editor-background', '#234567');
-	await expect(popup.locator('iframe.ash-theme-editor-preview')).toHaveCount(1);
-	await popup.getByRole('button', { name: 'Save', exact: true }).click();
-	const dialog = popup.getByRole('dialog');
-	await dialog.getByRole('textbox', { name: 'Theme name', exact: true }).fill('Desktop preview regression');
-	await dialog.getByRole('button', { name: 'Save', exact: true }).click();
+	await expect(editor.locator('iframe.ash-theme-editor-preview')).toHaveCount(1);
+	await workbench.quickaccess.runCommand('workbench.action.files.save');
 	await expect(popup.getByRole('tab', { name: / Copy(?:,|$)/u })).toHaveCount(0);
-	await expect(popup.locator('.ash-theme-editor-message')).toHaveText('Theme saved.');
+	await expect(editor.locator('.ash-theme-editor-message')).toHaveText('Theme saved.');
 	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
 	await popup.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
 	await popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).fill('#345678');
-	await popup.getByRole('button', { name: 'Save', exact: true }).click();
-	await expect(popup.locator('.ash-theme-editor-message')).toHaveText('Theme saved.');
+	await popup.getByRole('textbox', { name: 'Hex color for editor.background', exact: true }).press('Enter');
+	await workbench.quickaccess.runCommand('workbench.action.files.save');
+	await expect(editor.locator('.ash-theme-editor-message')).toHaveText('Theme saved.');
 	await expect(workbench.element).toHaveCSS('--ash-editor-background', original);
 	await popup.getByRole('button', { name: 'Save and Apply', exact: true }).click();
 	await expect(workbench.element).toHaveCSS('--ash-editor-background', '#345678');
-	await Promise.all([popup.waitForEvent('close'), popup.close({ runBeforeUnload: true })]);
-	const reopened = page.context().waitForEvent('page');
+	await workbench.quickaccess.runCommand('workbench.action.closeActiveEditor');
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
-	const restored = await reopened;
-	await expect(restored.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#345678');
+	const restored = page;
+	await expect(restored.locator('.ash-theme-editor:visible').frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#345678');
 	await restored.getByRole('searchbox', { name: 'Search colors' }).fill('editor.background');
-	await expect(restored.getByRole('textbox', { name: 'Hex color for editor.background', exact: true })).toHaveValue('#345678');
+	await expect(restored.getByRole('textbox', { name: 'Hex color for editor.background', exact: true })).toHaveValue('345678');
 	await restored.getByRole('tablist', { name: 'Preview window', exact: true }).getByRole('tab', { name: 'Agent Window', exact: true }).click();
-	await expect(restored.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-sessions-activityBar-foreground', '#cc6600');
+	await expect(restored.locator('.ash-theme-editor:visible').frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-sessions-activityBar-foreground', '#cc6600');
 	expect(errors).toEqual([]);
 });
 
@@ -404,15 +382,15 @@ test.describe('Workbench shell colors', () => {
 		await expect.poll(() => selectedActivity.evaluate(element => getComputedStyle(element, '::after').backgroundColor)).toBe('rgb(55, 55, 55)');
 		await expect(statusBar).toHaveCSS('background-color', 'rgb(30, 30, 30)');
 		await welcome.hover();
-		await expect(commandCenter).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
-		await expect(commandCenter).toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+		await expect(commandCenter).toHaveCSS('background-color', 'rgb(43, 43, 43)');
+		await expect(commandCenter).toHaveCSS('border-top-color', 'rgb(69, 69, 69)');
 		await expect(commandCenter).toHaveCSS('color', 'rgb(204, 204, 204)');
 		await expect(statusBar).toHaveCSS('color', 'rgb(204, 204, 204)');
 		await commandCenter.hover();
 		await expect(commandCenter).toHaveCSS('background-color', 'rgb(51, 51, 51)');
-		await expect(commandCenter).toHaveCSS('border-top-color', 'rgb(69, 69, 69)');
+		await expect(commandCenter).toHaveCSS('border-top-color', 'rgb(136, 136, 136)');
 		await welcome.hover();
-		await expect(commandCenter).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(commandCenter).toHaveCSS('background-color', 'rgb(43, 43, 43)');
 		await commandCenter.focus();
 		await commandCenter.press('Tab');
 		await workbench.page.keyboard.press('Shift+Tab');
@@ -428,7 +406,7 @@ test.describe('Workbench shell colors', () => {
 		await expect(commandCenter).toHaveCSS('background-color', 'rgb(30, 30, 30)');
 		await workbench.page.keyboard.press('Escape');
 		await expect(commandCenter).toHaveAttribute('aria-expanded', 'false');
-		await expect(commandCenter).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(commandCenter).toHaveCSS('background-color', 'rgb(43, 43, 43)');
 		await commandCenter.press('Tab');
 		await expect(commandCenter).not.toBeFocused();
 		await workbench.element.screenshot({ path: testInfo.outputPath('dark-command-center.png') });
@@ -441,10 +419,11 @@ test.describe('Workbench shell colors', () => {
 		await expect(selectedActivity).toHaveCSS('color', 'rgb(31, 31, 31)');
 		await expect(statusBar).toHaveCSS('background-color', 'rgb(255, 255, 255)');
 		await welcome.hover();
-		await expect(commandCenter).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+		await expect(commandCenter).toHaveCSS('background-color', 'rgb(246, 246, 246)');
+		await expect(commandCenter).toHaveCSS('border-top-color', 'rgb(208, 208, 208)');
 		await commandCenter.hover();
 		await expect(commandCenter).toHaveCSS('background-color', 'rgb(235, 235, 235)');
-		await expect(commandCenter).toHaveCSS('border-top-color', 'rgb(208, 208, 208)');
+		await expect(commandCenter).toHaveCSS('border-top-color', 'rgb(136, 136, 136)');
 		await workbench.element.screenshot({ path: testInfo.outputPath('light-command-center-hover.png') });
 	});
 });

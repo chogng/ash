@@ -11,10 +11,9 @@ import { StatusbarPart, StatusbarService } from "../statusbar/statusbarPart.js";
 import type { IAuxiliaryTitlebarPart } from "../titlebar/titlebarPart.js";
 import type { IEditorPart } from "./editorPart.js";
 import { EditorStatusContribution } from "./editorStatus.js";
-import { localize, localize2 } from '../../../../nls.js';
+import { localize2 } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { WorkbenchConfiguration } from '../../../common/configuration.js';
-import { onUnexpectedError } from '../../../../base/common/errors.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IsAuxiliaryWindowContext, IsCompactTitleBarContext } from '../../../common/contextkeys.js';
@@ -114,27 +113,6 @@ export class AuxiliaryEditorPart extends Disposable {
 				updateWindowChrome();
 			}));
 			this._register(configuration.onDidChangeConfiguration(event => { if (event.affectsConfiguration(WorkbenchConfiguration.statusBarVisible)) updateWindowChrome(); }));
-			let isConfirmingClose = false;
-			const confirmClose = async (): Promise<void> => {
-				isConfirmingClose = true;
-				try {
-					// beforeunload cannot await the editor's save dialog. Keep the window
-					// alive until it settles, then retry through the normal unload path.
-					if (await creation.part.confirmCloseAllEditors() && !this.isDisposed) {
-						window.window.close();
-					}
-				} finally {
-					isConfirmingClose = false;
-				}
-			};
-			this._register(window.onBeforeUnload(event => {
-				if (creation.part.activePane?.prefersWindowCloseConfirmation && creation.part.getEditorState().groups.some(group => group.editors.some(editor => editor.isDirty))) {
-					event.veto(localize({ bundle: 'ash', key: 'auxiliaryWindow.unsavedChanges' }, 'The auxiliary editor window contains unsaved changes.'));
-					if (!isConfirmingClose) {
-						void confirmClose().catch(onUnexpectedError);
-					}
-				}
-			}));
 			this._register(window.onDidLayout(dimension => {
 				const statusbarHeight = statusbarPart.domNode.hidden ? 0 : StatusbarHeight;
 				creation.part.layout(new Dimension(

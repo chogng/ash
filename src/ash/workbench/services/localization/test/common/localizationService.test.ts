@@ -49,9 +49,16 @@ suite('Workbench localization', () => {
 		assert.equal(error.message, `Ash 前后端协议指纹不匹配：客户端要求 ${expected}，后端返回 ${received}。请重新构建并启动对应的后端。`);
 	});
 
-	test('auxiliary window labels and close warnings use the selected Chinese catalog', () => {
+	test('auxiliary window labels and document return notices use the selected Chinese catalog', () => {
 		initializeTestLocalization('zh-CN');
-		assert.deepEqual([localize('auxiliaryWindow.editor', ''), localize('auxiliaryWindow.unsavedChanges', '')], ['编辑器', '辅助编辑器窗口中有未保存的更改。']);
+		assert.deepEqual([localize('auxiliaryWindow.editor', ''), localize('auxiliaryWindow.returningEditors', '')], ['编辑器', '正在将未保存的编辑器移回主窗口。']);
+	});
+
+	test('theme editor actions and workspace help use the selected Chinese catalog', () => {
+		initializeTestLocalization('zh-CN');
+		assert.deepEqual([localize('themeEditor.selectTheme', ''), localize('themeEditor.openJSON', ''), localize('themeEditor.openUI', '')], ['打开主题…', '打开主题（JSON）', '打开主题（界面）']);
+		assert.ok(localize('themeEditor.help', '').includes('默认在当前窗口的标签页中打开'));
+		assert.ok(localize('themeEditor.sourceHelp', '').includes('编辑器工具栏'));
 	});
 
 	test('Panel commands and navigation help use the selected Chinese catalog', () => {

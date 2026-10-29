@@ -11,7 +11,6 @@ import { InputBox } from '../../../../base/browser/ui/inputbox/inputbox.js';
 import { appendLabelIcon } from '../../../../base/browser/ui/iconlabel/iconLabels.js';
 import { status } from '../../../../base/browser/ui/aria/aria.js';
 import { ScrollableElement } from '../../../../base/browser/ui/scrollbar/scrollableElement.js';
-import { TabList } from '../../../../base/browser/ui/tablist/tabList.js';
 import { getThemeColorReferences, ThemePreview, type ThemeColorReferences } from './themePreview.js';
 import { SplitView } from '../../../../base/browser/ui/splitview/splitview.js';
 import { Emitter, Event } from '../../../../base/common/event.js';
@@ -47,10 +46,8 @@ import { parseJsonc } from '../../../../base/common/jsonc.js';
 import { IExtensionService, type ExtensionThemeContribution } from '../../../services/extensions/common/extensionService.js';
 import { createExtensionWorkbenchColorTheme, extensionWorkbenchThemeId, loadExtensionTheme, parseExtensionTheme } from '../../../services/extensions/common/extensionTheme.js';
 import { IExtensionResourceLoaderService, toExtensionResourceURI } from '../../../../platform/extensionResourceLoader/common/extensionResourceLoader.js';
-import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IQuickInputService, type IQuickPickItem } from '../../../../platform/quickinput/common/quickInput.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
-import { CommandCenterControl } from '../../../browser/parts/titlebar/commandCenterControl.js';
 import { WorkbenchThemesRegistry } from '../../../common/theme.js';
 
 export const ThemeEditorId = 'workbench.editor.themeEditor';
@@ -81,10 +78,6 @@ export function getThemeEditorSource(extensions: IExtensionService, target: stri
 /** The embedded text pane owns the document, history, working copy and file revision. */
 export class ThemeEditor extends EditorPane {
 	public readonly id = ThemeEditorId;
-	public readonly prefersEditorTitleHidden = true;
-	public readonly prefersStatusbarHidden = true;
-	public readonly prefersCompactTitlebar = true;
-	readonly prefersWindowCloseConfirmation = true;
 	private root: HTMLElement | undefined;
 	private body: HTMLElement | undefined;
 	private list: HTMLElement | undefined;
@@ -96,7 +89,6 @@ export class ThemeEditor extends EditorPane {
 	private scrollable: ScrollableElement | undefined;
 	private split: SplitView | undefined;
 	private preview: ThemePreview | undefined;
-	private settingsTabs: TabList<'colors' | 'json'> | undefined;
 	private colorPanel: HTMLElement | undefined;
 	private jsonPanel: HTMLElement | undefined;
 	private readonly rows = new Map<string, ThemeColorRow>();
@@ -120,7 +112,6 @@ export class ThemeEditor extends EditorPane {
 	private valid = false;
 	private operation = 0;
 	private saving = false;
-	private titleControl: CommandCenterControl | undefined;
 	private readonly themePicker = this._register(new MutableDisposable<DisposableStore>());
 	private dimension: IDimension = { width: 0, height: 0 };
 	private initialSplitLayout = true;
@@ -140,7 +131,6 @@ export class ThemeEditor extends EditorPane {
 		@IConfigurationService private readonly configuration: IConfigurationService,
 		@IExtensionService private readonly extensions: IExtensionService,
 		@IExtensionResourceLoaderService private readonly extensionResources: IExtensionResourceLoaderService,
-		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@ICommandService private readonly commands: ICommandService,
 	) {
@@ -194,24 +184,15 @@ export class ThemeEditor extends EditorPane {
 				void this.runAction(() => event.shiftKey ? this.saveThemeAs() : this.save());
 			}
 		}, { capture: true }));
-		const toolbar = h(doc, 'div');
-		toolbar.className = 'ash-theme-editor-toolbar';
-		const title = h(doc, 'h1');
-		title.textContent = localize('themeEditor.title', 'Theme Editor');
-		toolbar.append(title);
-
 		this.message = h(doc, 'p');
 		this.message.className = 'ash-theme-editor-message';
 		this.message.setAttribute('role', 'status');
-		this.message.textContent = localize('themeEditor.description', 'Draft changes are saved automatically and appear only in the preview. Save and Apply updates the theme and the main window.');
+		this.message.hidden = true;
 		this.body = h(doc, 'div');
 		this.body.className = 'ash-theme-editor-body';
-		root.append(toolbar, this.message, this.body);
+		root.append(this.message, this.body);
 		const settings = h(doc, 'section', { className: 'ash-theme-editor-settings' });
 		this.body.append(settings);
-		const tabsHost = h(doc, 'div', { className: 'ash-theme-editor-settings-tabs' });
-		settings.append(tabsHost);
-		this.settingsTabs = this._register(new TabList(tabsHost, { presentation: 'inset', ariaLabel: localize('themeEditor.settingsTabs', 'Theme editing controls'), onActivate: value => this.selectSettings(value) }));
 		const panel = h(doc, 'section');
 		this.colorPanel = panel;
 		panel.className = 'ash-theme-editor-colors';
@@ -280,9 +261,21 @@ export class ThemeEditor extends EditorPane {
 		}, this.configuration));
 		this._register(this.preview.onDidChangeColors(() => this.renderRows()));
 		this.split = this._register(new SplitView(this.body, 'horizontal'));
+		const editor = this;
 		// Keep the source model and undo history, without rendering a hidden JSON viewport.
-		this.split.addView({ element: settings, minimumSize: 300, maximumSize: 440, onDidChange: Event.None, layout: (width, _offset, height) => { this.scrollable?.layout(); this.scheduleViewport(); this.textEditor.layout({ width, height: this.jsonPanel?.hidden ? 0 : Math.max(0, height - tabsHost.offsetHeight) }); } }, 360);
-		this.split.addView({ element: preview, minimumSize: 420, maximumSize: Infinity, onDidChange: Event.None, layout: () => { } }, { type: 'distribute' });
+		this.split.addView({
+			element: settings,
+			get minimumSize() { return Math.min(300, editor.dimension.width); },
+			maximumSize: 440,
+			onDidChange: Event.None,
+			layout: (width, _offset, height) => {
+				this.scrollable?.layout();
+				this.scheduleViewport();
+				this.textEditor.layout({ width, height: this.jsonPanel?.hidden ? 0 : height });
+			},
+		}, 360);
+		// The embedded preview scales to the space left by an ordinary editor group.
+		this.split.addView({ element: preview, minimumSize: 0, maximumSize: Infinity, onDidChange: Event.None, layout: () => { } }, { type: 'distribute' });
 	}
 
 	public override async setInput(input: IResourceEditorInput, signal: AbortSignal): Promise<void> {
@@ -324,7 +317,10 @@ export class ThemeEditor extends EditorPane {
 
 	public get workingCopy() { return this.textEditor.workingCopy; }
 	public override getControl() { return this.textEditor.getControl(); }
-	public override focus(): void { this.search?.focus(); }
+	public override focus(): void {
+		if (this.jsonPanel?.hidden === false) this.textEditor.focus();
+		else this.search?.focus();
+	}
 	public override layout(dimension: IDimension): void {
 		this.dimension = dimension;
 		if (this.body) {
@@ -345,26 +341,10 @@ export class ThemeEditor extends EditorPane {
 	public getAccessibleContent(): string {
 		if (this.root?.ownerDocument.activeElement === this.preview?.element) return this.preview?.getAccessibleContent() ?? '';
 		if (this.picker) return this.pickerRow!.accessibleText + '\n' + this.picker.getAccessibleContent();
+		if (this.jsonPanel?.hidden === false) return this.textEditor.getValue();
 		// Accessible View covers the whole result, including rows outside the viewport.
 		return [this.message?.textContent ?? '', ...this.groups.flatMap(group => group.body.hidden ? [] : group.entries.map(entry =>
 			this.rows.get(entry.id)?.accessibleText ?? `${entry.id}: ${entry.authored ?? (entry.effective ? Color.Format.CSS.formatHexA(entry.effective, true) : '')}. ${colorSourceLabel(entry.authored, entry.effective, entry.references)}`))].join('\n');
-	}
-
-	public override getTitleControl(): HTMLElement | undefined {
-		if (!this.root) return undefined;
-		if (!this.titleControl) {
-			const editor = this;
-			this.titleControl = this._register(this.instantiationService.createInstance(CommandCenterControl, h(this.root.ownerDocument, 'div'), {
-				get value() { return editor.compiled?.label ?? editor.input?.label ?? localize('themeEditor.selectTheme', 'Switch theme'); },
-				onDidChange: this.onTitleAreaUpdate,
-			}, undefined, {
-				showTitle: true,
-				ariaLabel: localize('themeEditor.selectTheme', 'Switch theme'),
-				navigationActions: () => this.getHistoryActions(),
-				onClick: () => this.showThemePicker(),
-			}));
-		}
-		return this.titleControl.domNode;
 	}
 
 	private showThemePicker(): void {
@@ -374,7 +354,7 @@ export class ThemeEditor extends EditorPane {
 		this.themePicker.value = lifetime;
 		const picker = lifetime.add(this.quickInput.createQuickPick<IQuickPickItem & { readonly themeId: string; }>());
 		picker.placeholder = localize('themeEditor.searchThemes', 'Search themes');
-		picker.ariaLabel = localize('themeEditor.selectTheme', 'Switch theme');
+		picker.ariaLabel = localize('themeEditor.selectTheme', 'Open Theme…');
 		const current = this.themeIdForResource(this.input.resource);
 		const items = WorkbenchThemesRegistry.getColorThemes()
 			.filter(theme => this.userThemes.sourceFor(theme.id) || getThemeEditorSource(this.extensions, theme.id))
@@ -409,7 +389,9 @@ export class ThemeEditor extends EditorPane {
 		return [historyAction(false), historyAction(true)];
 	}
 
-	public override getActions(menuId?: MenuId): readonly IAction[] {
+	public override getActions(): readonly IAction[] {
+		const showColors = this.jsonPanel?.hidden === false;
+		const sourceLabel = showColors ? localize('themeEditor.openUI', 'Open Theme (UI)') : localize('themeEditor.openJSON', 'Open Theme (JSON)');
 		const saveAction = (id: string, label: string, run: () => Promise<void>): IAction => ({
 			id,
 			label,
@@ -419,7 +401,15 @@ export class ThemeEditor extends EditorPane {
 			run: () => this.runAction(run),
 		});
 		return [
-			...(menuId === MenuId.CompactWindowEditorTitle ? [] : this.getHistoryActions()),
+			...this.getHistoryActions(),
+			{
+				id: 'themeEditor.selectTheme',
+				label: localize('themeEditor.selectTheme', 'Open Theme…'),
+				tooltip: localize('themeEditor.selectTheme', 'Open Theme…'),
+				icon: Lxicon.symbolColor,
+				enabled: !!this.input,
+				run: () => this.showThemePicker(),
+			},
 			new SubmenuItemAction({
 				title: localize('themeEditor.saveActions', 'Theme save actions'),
 				submenu: MenuId.for('ThemeEditorSaveActions'),
@@ -429,6 +419,14 @@ export class ThemeEditor extends EditorPane {
 				saveAction('themeEditor.saveAs', localize('themeEditor.saveAs', 'Save as…'), () => this.saveThemeAs()),
 				saveAction('themeEditor.save', localize('themeEditor.save', 'Save'), () => this.save()),
 			]),
+			{
+				id: showColors ? 'themeEditor.switchToUI' : 'themeEditor.switchToJSON',
+				label: sourceLabel,
+				tooltip: sourceLabel,
+				icon: showColors ? Lxicon.settings : Lxicon.goToFile,
+				enabled: !!this.input,
+				run: () => { this.selectSettings(showColors ? 'colors' : 'json'); this.focus(); },
+			},
 		];
 	}
 
@@ -515,7 +513,7 @@ export class ThemeEditor extends EditorPane {
 			this.showMessage(localize('themeEditor.copySaved', 'Saved {0}. Newer edits remain in this editor.', saved.file));
 			return;
 		}
-		// Revealing an existing tab can replace its input object while retaining this pane.
+		// Resource navigation may normalize the input; replacement follows the pane's owning group.
 		const group = this.editorParts.groups.find(group => group.id === this.group?.id);
 		let savedEditor: ThemeEditor | undefined = this;
 		if (group) {
@@ -599,7 +597,7 @@ export class ThemeEditor extends EditorPane {
 			this.renderRows();
 			this.showMessage(this.input.readOnly
 				? localize('themeEditor.readOnlySource', 'This theme source is read-only. Use Save as to create an editable user theme.')
-				: localize('themeEditor.description', 'Draft changes are saved automatically and appear only in the preview. Save and Apply updates the theme and the main window.'));
+				: '');
 		} catch (error) {
 			if (operation !== this.operation || this.textEditor.getValue() !== source) return;
 			this.valid = false;
@@ -623,14 +621,12 @@ export class ThemeEditor extends EditorPane {
 
 	private selectSettings(value: 'colors' | 'json'): void {
 		if (!this.colorPanel || !this.jsonPanel) return;
+		this.picker?.cancel();
 		this.colorPanel.hidden = value !== 'colors';
 		this.jsonPanel.hidden = value !== 'json';
 		this.textEditor.setVisible(value === 'json');
-		this.settingsTabs?.setTabs([
-			{ id: 'colors', value: 'colors', label: localize('themeEditor.colorsTab', 'Colors'), tabId: 'theme-colors-tab' },
-			{ id: 'json', value: 'json', label: localize('themeEditor.json', 'Theme JSON'), tabId: 'theme-json-tab' },
-		], value);
 		this.layout(this.dimension);
+		this.updateTitleArea();
 	}
 
 	private async saveAndApply(): Promise<void> {
@@ -881,6 +877,7 @@ export class ThemeEditor extends EditorPane {
 		if (!this.message) return;
 		if (this.message.textContent === message && this.message.classList.contains('error') === error) return;
 		this.message.textContent = message;
+		this.message.hidden = !message;
 		this.message.classList.toggle('error', error);
 		this.layout(this.dimension);
 	}
