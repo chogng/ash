@@ -515,7 +515,8 @@ export class ThemeEditor extends EditorPane {
 			this.showMessage(localize('themeEditor.copySaved', 'Saved {0}. Newer edits remain in this editor.', saved.file));
 			return;
 		}
-		const group = this.editorParts.groups.find(group => group.inputs.some(candidate => candidate === input));
+		// Revealing an existing tab can replace its input object while retaining this pane.
+		const group = this.editorParts.groups.find(group => group.id === this.group?.id);
 		let savedEditor: ThemeEditor | undefined = this;
 		if (group) {
 			const replacement = createThemeEditorInput({ resource: URI.joinPath(this.userThemes.directory!, saved.file), label: saved.file });

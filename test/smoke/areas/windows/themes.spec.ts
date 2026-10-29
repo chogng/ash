@@ -54,6 +54,9 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 	await expect(popup.getByRole('status').filter({ hasText: /^Theme saved\.$/ })).toBeVisible();
 	await search.fill('editor.background');
 	await expect(color).toBeEnabled();
+	await color.fill('315BC9');
+	await color.press('Enter');
+	await expect(popup.frameLocator('.ash-theme-editor-preview').locator('#app')).toHaveCSS('--ash-editor-background', '#315bc9');
 	const trigger = popup.getByRole('button', { name: 'Choose color for editor.background', exact: true });
 	await trigger.press('Enter');
 	const picker = popup.getByRole('dialog', { name: 'Color picker', exact: true });
@@ -75,6 +78,7 @@ test('Theme Editor opens an installed source outside the workspace and applies a
 	await workbench.quickaccess.runCommand('workbench.action.openThemeEditor');
 	const restored = await reopening;
 	await restored.getByRole('searchbox', { name: 'Search colors', exact: true }).fill('editor.background');
+	await expect(restored.getByRole('textbox', { name: 'Hex color for editor.background', exact: true })).toBeEnabled();
 	await expect(restored.getByRole('textbox', { name: 'Hex color for editor.background', exact: true })).toHaveValue('2F6FED');
 	await expect(restored.getByRole('spinbutton', { name: 'Opacity for editor.background (%)', exact: true })).toHaveValue('40');
 	if (!('windows' in application)) throw new Error('This scenario requires Desktop');
