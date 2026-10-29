@@ -60,7 +60,7 @@ jobs:
           # Keep the verified input archives used to restore pruned native outputs.
           cache-directories: third_party/.cache/v8
           shared-key: desktop-runtime-${{ matrix.runner }}
-          save-if: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' }}
           cache-on-failure: true
       - name: Sync locked tools and dependencies
         run: |
@@ -90,10 +90,15 @@ jobs:
         run: pnpm run prepare:backend:web
       - name: Build Desktop backend with bundled media
         run: pnpm run prepare:backend
-      - name: Select headless and Desktop runtime packages
+      - name: Select Desktop runtime package
         shell: bash
         run: |
-          node --input-type=module -e "import {appendFileSync} from 'node:fs'; import {developmentAshPackagePath} from './build/desktop/runtimeStore.ts'; appendFileSync(process.env.GITHUB_ENV, 'ASH_ACCEPTANCE_RUNTIME_PACKAGE=' + developmentAshPackagePath(process.cwd(), 'packaged-node') + '\nASH_ACCEPTANCE_DESKTOP_BACKEND_PACKAGE=' + developmentAshPackagePath(process.cwd(), 'host-provided-node') + '\n');"
+          node --input-type=module -e "import {appendFileSync} from 'node:fs'; import {developmentAshPackagePath} from './build/desktop/runtimeStore.ts'; appendFileSync(process.env.GITHUB_ENV, 'ASH_ACCEPTANCE_DESKTOP_BACKEND_PACKAGE=' + developmentAshPackagePath(process.cwd(), 'host-provided-node') + '\n');"
+      - name: Select headless runtime package
+        if: inputs.suite != 'installation'
+        shell: bash
+        run: |
+          node --input-type=module -e "import {appendFileSync} from 'node:fs'; import {developmentAshPackagePath} from './build/desktop/runtimeStore.ts'; appendFileSync(process.env.GITHUB_ENV, 'ASH_ACCEPTANCE_RUNTIME_PACKAGE=' + developmentAshPackagePath(process.cwd(), 'packaged-node') + '\n');"
       - name: Build delivered Desktop bundle without standalone Node
         shell: bash
         run: |
@@ -106,7 +111,7 @@ jobs:
           fi
           node --input-type=module -e "import {appendFileSync,readFileSync} from 'node:fs'; import {resolve,join} from 'node:path'; const mac=process.platform==='darwin'; const bundle=resolve('.build/desktop-runtime-ci', mac ? 'Ash-darwin-'+process.arch+'/Ash.app' : 'Ash-win32-x64'); const electron=mac ? join(bundle,'Contents/MacOS/Ash') : join(bundle,'Ash.exe'); const version=JSON.parse(readFileSync('node_modules/electron/package.json','utf8')).version; appendFileSync(process.env.GITHUB_ENV, 'ASH_PACKAGED_BUNDLE='+bundle+'\nASH_TEST_ELECTRON_PATH='+electron+'\nASH_TEST_ELECTRON_VERSION='+version+'\n');"
       - name: Save verified desktop addon artifacts
-        if: github.ref == 'refs/heads/main' && steps.desktop-addons.outputs.cache-hit != 'true'
+        if: (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') && steps.desktop-addons.outputs.cache-hit != 'true'
         uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4
         with:
           path: .build/desktop-addons
