@@ -356,9 +356,14 @@ export class SessionChangesEditor extends EditorPane implements IEditorPaneWithV
 			pane.setVisible(true);
 		} catch (error) {
 			if (!this.isDisposed && revision === this.revision && !controller.signal.aborted) {
+				const hadFocus = this.domNode.contains(this.domNode.ownerDocument.activeElement);
+				// A failed capture cannot keep the previous comparison available for review.
+				this.comparisonInput = undefined;
+				this.comparison.clear();
 				this.changesService.setChangesCount(input.resource, undefined);
 				this.messageDomNode.textContent = localize('sessions.changes.error', 'Could not load changes: {0}', String(error));
 				this.messageDomNode.hidden = false;
+				if (hadFocus) { this.domNode.focus(); }
 			}
 		} finally {
 			// The caller's open operation ends here; the child pane retains its own controller until hidden or cleared.

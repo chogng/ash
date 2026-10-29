@@ -338,7 +338,7 @@ export class BrowserTitlebarPart extends WebTitlebarPart implements ITitlebarPar
 
 	private updateToolbarActions(): void {
 		// The pane retains ownership; window chrome only mounts its current title control.
-		const titleControl = this.editorActions?.titleControl;
+		const titleControl = this.editorActions?.titleControl as HTMLElement | undefined;
 		if (this.editorTitleControlHost.firstElementChild !== (titleControl ?? null)) {
 			this.editorTitleControlHost.replaceChildren(...(titleControl ? [titleControl] : []));
 		}

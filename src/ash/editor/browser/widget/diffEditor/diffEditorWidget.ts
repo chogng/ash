@@ -582,8 +582,10 @@ export class DiffEditorWidget extends DelegatingEditor implements IDiffEditor {
 			this.diffDecorations.update(this.model.diff?.rows ?? LineDiffRows.empty, this.showInlineChanges, this.diffOptions.renderIndicators);
 			this.overviewRuler.setRows(this.model.diff?.rows ?? LineDiffRows.empty);
 		}
-		this.gutter.update(this.diffOptions.renderGutterMenu && !this.movedTextToCompare, { renderRevert: this.diffOptions.renderMarginRevertIcon && !this.inlineView });
-		const marginEnabled = this.diffOptions.renderMarginRevertIcon && this.gutter.width === 0 && !this.movedTextToCompare;
+		this.gutter.update(this.diffOptions.renderGutterMenu && !this.movedTextToCompare, this.inlineView);
+		// Legacy margin arrows only apply to side-by-side comparisons with the
+		// gutter menu disabled; menu actions are independent of the margin setting.
+		const marginEnabled = this.diffOptions.renderMarginRevertIcon && !this.diffOptions.renderGutterMenu && !this.inlineView && !this.movedTextToCompare;
 		this.revertButtons.update(marginEnabled);
 		this.modifiedEditor.updateOptions({ glyphMargin: this.configuredGlyphMargin || this.hiddenRegions.isEnabled || (marginEnabled && !this.modifiedEditor.getOption(EditorOption.readOnly)) });
 		this.movedBlocks.update(this.diffOptions.showMoves && !this.inlineView, this.movedTextToCompare);

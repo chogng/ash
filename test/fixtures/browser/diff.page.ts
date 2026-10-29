@@ -824,6 +824,10 @@ const harness = {
 		await sessionServices!.get(ICommandService).executeCommand('changeset.review', { resource });
 	},
 	sessionReviewState(): readonly string[] { return [...sessionServices!.get(IChangesViewService).reviewedFilesObs.get()]; },
+	readSessionComparisonState(): { hasControl: boolean; accessibleContent: string; } {
+		const pane = sessionPane.value!;
+		return { hasControl: pane.getControl() !== undefined, accessibleContent: pane.getAccessibleContent() };
+	},
 	sessionTheme(name: 'dark' | 'light' | 'contrast'): void { sessionTheme!.setColorTheme(name === 'light' ? lightColorTheme : name === 'contrast' ? highContrastDarkColorTheme : darkColorTheme); },
 	advanceSessionRevision(): void { sessionRevision++; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
 	changeSessionCaptureDuringRead(): void { changeSessionRevisionOnRead = true; sessionChanges.fire({ sessionId: 'review', threadId: 'review-thread' }); },
