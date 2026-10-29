@@ -23,6 +23,10 @@ fn populate(profile: &Path) {
     fs::create_dir_all(profile.join("cache")).unwrap();
     fs::write(profile.join("cache/download"), "cached bytes").unwrap();
     fs::write(profile.join("settings.json"), "settings").unwrap();
+    fs::create_dir_all(profile.join("state/cloud-codebase")).unwrap();
+    fs::write(profile.join("state/cloud-codebase/record"), "cloud state").unwrap();
+    fs::create_dir_all(profile.join("ash-code/themes")).unwrap();
+    fs::write(profile.join("ash-code/themes/custom.json"), "custom theme").unwrap();
     fs::write(profile.join("notes.md"), "user notes").unwrap();
 }
 
@@ -34,6 +38,9 @@ fn both_modes_preserve_worktrees_and_unknown_files() {
             .register(Product::Desktop, &desktop, None, Some((&profile, None)))
             .unwrap();
         populate(&profile);
+        for parent in ["state", "ash-code"] {
+            fs::write(profile.join(parent).join("notes.md"), "user notes").unwrap();
+        }
         for name in [
             "configuration.json",
             "keybindings.json",
@@ -55,6 +62,16 @@ fn both_modes_preserve_worktrees_and_unknown_files() {
             profile.join("settings.json").exists(),
             mode == RemovalMode::KeepData
         );
+        for (path, contents) in [
+            ("state/cloud-codebase/record", "cloud state"),
+            ("ash-code/themes/custom.json", "custom theme"),
+        ] {
+            if mode == RemovalMode::KeepData {
+                assert_eq!(fs::read_to_string(profile.join(path)).unwrap(), contents);
+            } else {
+                assert!(!profile.join(path).exists());
+            }
+        }
         for name in [
             "configuration.json",
             "keybindings.json",
@@ -76,6 +93,42 @@ fn both_modes_preserve_worktrees_and_unknown_files() {
         assert_eq!(
             fs::read_to_string(profile.join("notes.md")).unwrap(),
             "user notes"
+        );
+        for parent in ["state", "ash-code"] {
+            assert_eq!(
+                fs::read_to_string(profile.join(parent).join("notes.md")).unwrap(),
+                "user notes"
+            );
+        }
+    }
+}
+
+#[test]
+fn profile_repository_protects_nested_domain_data() {
+    for repository in [".git", ".hg", ".svn", "bare"] {
+        let (_temporary, mut registry, desktop, _cli, profile) = setup();
+        registry
+            .register(Product::Desktop, &desktop, None, Some((&profile, None)))
+            .unwrap();
+        populate(&profile);
+        if repository == "bare" {
+            fs::write(profile.join("HEAD"), "ref: refs/heads/main").unwrap();
+            fs::create_dir(profile.join("objects")).unwrap();
+            fs::create_dir(profile.join("refs")).unwrap();
+        } else {
+            fs::create_dir(profile.join(repository)).unwrap();
+        }
+        let report = registry
+            .remove(Product::Desktop, &desktop, RemovalMode::Purge, |_| Ok(()))
+            .unwrap();
+        assert_eq!(report.retained, vec![profile.clone()]);
+        assert_eq!(
+            fs::read_to_string(profile.join("state/cloud-codebase/record")).unwrap(),
+            "cloud state"
+        );
+        assert_eq!(
+            fs::read_to_string(profile.join("ash-code/themes/custom.json")).unwrap(),
+            "custom theme"
         );
     }
 }
@@ -105,6 +158,14 @@ fn uninstalling_either_product_preserves_a_shared_profile() {
         assert_eq!(report.retained, vec![profile.clone()]);
         assert!(profile.join("settings.json").exists());
         assert!(profile.join("cache/download").exists());
+        assert_eq!(
+            fs::read_to_string(profile.join("state/cloud-codebase/record")).unwrap(),
+            "cloud state"
+        );
+        assert_eq!(
+            fs::read_to_string(profile.join("ash-code/themes/custom.json")).unwrap(),
+            "custom theme"
+        );
         drop(registry);
         let mut registry = Registry::open(&_temporary.path().join("registry")).unwrap();
         let (second, root) = if first == Product::Desktop {

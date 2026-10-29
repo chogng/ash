@@ -131,8 +131,7 @@ pub(crate) fn eligible(path: &Path) -> io::Result<bool> {
     if !metadata.is_dir() {
         return Ok(false);
     }
-    // A bare Git repository has no .git entry, but is equally user-owned.
-    if path.join("HEAD").is_file() && path.join("objects").is_dir() && path.join("refs").is_dir() {
+    if repository_root(path) {
         return Ok(false);
     }
     for entry in fs::read_dir(path)? {
@@ -156,11 +155,39 @@ pub(crate) fn eligible(path: &Path) -> io::Result<bool> {
     Ok(true)
 }
 
+fn repository_root(path: &Path) -> bool {
+    [".git", ".hg", ".svn"].iter().any(|name| path.join(name).exists())
+        // A bare Git repository has no .git entry, but is equally user-owned.
+        || (path.join("HEAD").is_file() && path.join("objects").is_dir() && path.join("refs").is_dir())
+}
+
 pub(crate) fn clean_profile(
     root: &Path,
     mode: RemovalMode,
     report: &mut RemovalReport,
 ) -> io::Result<()> {
+    if repository_root(root) {
+        report.retained.push(root.to_owned());
+        return Ok(());
+    }
+    // These parent directories can contain unrelated user files. Reclaim only
+    // the subdirectories owned by their respective Ash domains.
+    for (name, cache, data) in [
+        ("state", &[][..], &["cloud-codebase"][..]),
+        ("ash-code", &["mermaid-previews"][..], &["themes"][..]),
+    ] {
+        let path = root.join(name);
+        match fs::symlink_metadata(&path) {
+            Ok(metadata) if metadata.is_dir() && !redirected(&metadata) => {
+                if eligible(&path)? {
+                    clean_selected(&path, mode, cache, data, report)?;
+                }
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error),
+        }
+    }
     clean_selected(
         root,
         mode,
@@ -243,7 +270,7 @@ fn clean_selected(
     }
     absolute_path(root)?;
     real_directory(root)?;
-    if root.join(".git").exists() {
+    if repository_root(root) {
         report.retained.push(root.to_owned());
         return Ok(());
     }

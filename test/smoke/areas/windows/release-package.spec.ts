@@ -25,6 +25,10 @@ test('release installation runs its bundled backend, upgrades with retained data
 	const workspace = join(directory, 'workspace');
 	const settingsPath = join(userData, 'profile', 'settings.json');
 	const keybindingsPath = join(userData, 'profile', 'keybindings.json');
+	const retainedData = [
+		[join(userData, 'profile', 'state', 'cloud-codebase', 'acceptance.txt'), 'cloud state'],
+		[join(userData, 'profile', 'ash-code', 'themes', 'acceptance.txt'), 'terminal appearance'],
+	] as const;
 	const file = join(workspace, 'main.ts');
 	let installed = false;
 	try {
@@ -35,6 +39,10 @@ test('release installation runs its bundled backend, upgrades with retained data
 		await mkdir(join(userData, 'profile'), { recursive: true });
 		await writeFile(settingsPath, JSON.stringify({ 'update.policy': 'never', 'editor.fontSize': 17 }));
 		await writeFile(keybindingsPath, '[]');
+		for (const [path, contents] of retainedData) {
+			await mkdir(dirname(path), { recursive: true });
+			await writeFile(path, contents);
+		}
 		await writeFile(file, 'const release = 1;\n');
 		if (previousArchive) {
 			await exercisePackagedWorkbench(installation, previousVersion!, userData, workspace, 'const release = 2;', testInfo, 'previous', installationEnvironment(userData));
@@ -58,6 +66,7 @@ test('release installation runs its bundled backend, upgrades with retained data
 		assert.equal(await readFile(file, 'utf8'), 'const release = 4;');
 		assert.equal(JSON.parse(await readFile(settingsPath, 'utf8'))['editor.fontSize'], 17);
 		if (process.platform === 'win32') {
+			for (const [path, contents] of retainedData) assert.equal(await readFile(path, 'utf8'), contents);
 			assert.equal(await readFile(keybindingsPath, 'utf8'), '[]');
 			await attachRemovalReport(userData, testInfo, 'keep-data-report');
 			await assertNoNativeResidue(installation);
@@ -107,14 +116,15 @@ async function install(archive: string, installation: string, userData: string):
 
 async function uninstall(installation: string, directory: string, userData: string, mode = 'keep-data'): Promise<void> {
 	if (process.platform === 'win32') {
-		await run(join(installation, 'unins000.exe'), ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', `/ASHDATAMODE=${mode}`, '/ASHLANG=zh'], { windowsHide: true, timeout: 120_000, env: installationEnvironment(userData) });
-		// Inno's first process can exit before its temporary worker finishes the
-		// post-uninstall hook. The persisted report is the completion boundary.
-		await expect.poll(async () => {
-			const registry = installationRegistry(userData);
-			const report = (await readdir(registry)).find(name => name.startsWith('removal-') && name.endsWith('.json'));
-			return report ? JSON.parse(await readFile(join(registry, report), 'utf8')).status : 'missing';
-		}, { timeout: 60_000 }).toBe('complete');
+		try {
+			await run(join(installation, 'unins000.exe'), ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', `/ASHDATAMODE=${mode}`, '/ASHLANG=zh'], { windowsHide: true, timeout: 120_000, env: installationEnvironment(userData) });
+			// Inno's first process can exit before its temporary worker finishes the
+			// post-uninstall hook. The persisted report is the completion boundary.
+			await expect.poll(async () => (await readRemovalReport(userData))?.status ?? 'missing', { timeout: 60_000 }).toBe('complete');
+		} catch (error) {
+			const report = await readRemovalReport(userData);
+			throw new Error(`Native uninstall failed: ${JSON.stringify({ status: report?.status, report: report?.report })}`, { cause: error });
+		}
 	}
 	else await removeInstallation(installation, await realpath(directory), 'installed');
 }
@@ -132,12 +142,18 @@ async function registerProfile(installation: string, userData: string): Promise<
 }
 
 async function attachRemovalReport(userData: string, testInfo: import('@playwright/test').TestInfo, name: string): Promise<void> {
-	const registry = installationRegistry(userData);
-	const reports = await readdir(registry);
-	const report = JSON.parse(await readFile(join(registry, reports.find(name => name.startsWith('removal-'))!), 'utf8'));
+	const report = await readRemovalReport(userData);
+	assert(report, 'The native uninstaller must publish a removal report');
 	assert.equal(report.status, 'complete');
 	assert.deepEqual(report.report.failures, []);
 	await testInfo.attach(name, { body: JSON.stringify(report, null, 2), contentType: 'application/json' });
+}
+
+async function readRemovalReport(userData: string) {
+	const registry = installationRegistry(userData);
+	const reports = await readdir(registry);
+	const name = reports.find(name => name.startsWith('removal-') && name.endsWith('.json'));
+	return name ? JSON.parse(await readFile(join(registry, name), 'utf8')) : undefined;
 }
 
 async function assertNoNativeResidue(installation: string): Promise<void> {
