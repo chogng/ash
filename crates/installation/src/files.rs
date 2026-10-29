@@ -175,6 +175,9 @@ pub(crate) fn clean_profile(
         &[
             "config.toml",
             "settings.json",
+            "configuration.json",
+            "keybindings.json",
+            "keyboard-layout.json",
             "state.sqlite3",
             "state.sqlite3-wal",
             "state.sqlite3-shm",

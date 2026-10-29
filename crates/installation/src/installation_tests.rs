@@ -34,6 +34,13 @@ fn both_modes_preserve_worktrees_and_unknown_files() {
             .register(Product::Desktop, &desktop, None, Some((&profile, None)))
             .unwrap();
         populate(&profile);
+        for name in [
+            "configuration.json",
+            "keybindings.json",
+            "keyboard-layout.json",
+        ] {
+            fs::write(profile.join(name), "custom configuration").unwrap();
+        }
         let mut stopped = Vec::new();
         let report = registry
             .remove(Product::Desktop, &desktop, mode, |path| {
@@ -48,6 +55,20 @@ fn both_modes_preserve_worktrees_and_unknown_files() {
             profile.join("settings.json").exists(),
             mode == RemovalMode::KeepData
         );
+        for name in [
+            "configuration.json",
+            "keybindings.json",
+            "keyboard-layout.json",
+        ] {
+            if mode == RemovalMode::KeepData {
+                assert_eq!(
+                    fs::read_to_string(profile.join(name)).unwrap(),
+                    "custom configuration"
+                );
+            } else {
+                assert!(!profile.join(name).exists());
+            }
+        }
         assert_eq!(
             fs::read_to_string(profile.join("worktrees/my-project/uncommitted.txt")).unwrap(),
             "user work"

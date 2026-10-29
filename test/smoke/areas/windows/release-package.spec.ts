@@ -24,6 +24,7 @@ test('release installation runs its bundled backend, upgrades with retained data
 	const userData = join(directory, 'data');
 	const workspace = join(directory, 'workspace');
 	const settingsPath = join(userData, 'profile', 'settings.json');
+	const keybindingsPath = join(userData, 'profile', 'keybindings.json');
 	const file = join(workspace, 'main.ts');
 	let installed = false;
 	try {
@@ -33,17 +34,20 @@ test('release installation runs its bundled backend, upgrades with retained data
 		if (process.platform === 'win32') await registerProfile(installation, userData);
 		await mkdir(join(userData, 'profile'), { recursive: true });
 		await writeFile(settingsPath, JSON.stringify({ 'update.policy': 'never', 'editor.fontSize': 17 }));
+		await writeFile(keybindingsPath, '[]');
 		await writeFile(file, 'const release = 1;\n');
 		if (previousArchive) {
 			await exercisePackagedWorkbench(installation, previousVersion!, userData, workspace, 'const release = 2;', testInfo, 'previous', installationEnvironment(userData));
 			await expect.poll(async () => JSON.parse(await readFile(settingsPath, 'utf8'))['editor.fontSize']).toBe(17);
 			assert.equal(await readFile(file, 'utf8'), 'const release = 2;');
+			if (process.platform === 'win32' && previousVersion === '0.0.0') assert(await exists(join(installation, 'upgrade-retired.txt')));
 		}
 		await install(archive, installation, userData);
 		installed = true;
 		assert(!await exists(join(installation, 'upgrade-retired.txt')));
 		assert.equal(await readFile(file, 'utf8'), previousArchive ? 'const release = 2;' : 'const release = 1;\n');
 		assert.equal(JSON.parse(await readFile(settingsPath, 'utf8'))['editor.fontSize'], 17);
+		assert.equal(await readFile(keybindingsPath, 'utf8'), '[]');
 		await exercisePackagedWorkbench(installation, version, userData, workspace, 'const release = 3;', testInfo, 'candidate', installationEnvironment(userData));
 		// Reopen the delivered executable with the same state after the upgrade.
 		await exercisePackagedWorkbench(installation, version, userData, workspace, 'const release = 4;', testInfo, 'restart', installationEnvironment(userData));
@@ -54,6 +58,9 @@ test('release installation runs its bundled backend, upgrades with retained data
 		assert.equal(await readFile(file, 'utf8'), 'const release = 4;');
 		assert.equal(JSON.parse(await readFile(settingsPath, 'utf8'))['editor.fontSize'], 17);
 		if (process.platform === 'win32') {
+			assert.equal(await readFile(keybindingsPath, 'utf8'), '[]');
+			await attachRemovalReport(userData, testInfo, 'keep-data-report');
+			await assertNoNativeResidue(installation);
 			await install(archive, installation, userData);
 			installed = true;
 			await exercisePackagedWorkbench(installation, version, userData, workspace, 'const release = 6;', testInfo, 'reinstall', installationEnvironment(userData));
@@ -64,6 +71,7 @@ test('release installation runs its bundled backend, upgrades with retained data
 			assert.equal(await readFile(file, 'utf8'), 'const release = 6;');
 			await expect.poll(() => exists(installation)).toBe(false);
 			await attachRemovalReport(userData, testInfo, 'reinstall-purge-report');
+			assert(!await exists(userData), 'An exclusively owned profile must leave no application data after purge');
 			await assertNoNativeResidue(installation);
 		}
 	} finally {
@@ -216,6 +224,10 @@ test('Windows upgrade and purge protect worktrees, junctions and another product
 			const inventory = await shell("$ErrorActionPreference='Stop'; $registered=@(Get-ChildItem 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall' | Get-ItemProperty | Where-Object { $_.InstallLocation -and $_.InstallLocation.TrimEnd('\\') -eq $env:ASH_TEST_INSTALL }); @{owned=@(Get-NetFirewallRule -Name $env:ASH_TEST_OWNED_RULE -ErrorAction SilentlyContinue).Count;shared=@(Get-NetFirewallRule -Name $env:ASH_TEST_SHARED_RULE -ErrorAction SilentlyContinue).Count;registered=$registered.Count} | ConvertTo-Json -Compress");
 			assert.deepEqual(JSON.parse(inventory.stdout), { owned: 0, shared: 1, registered: 0 });
 			await attachRemovalReport(userData, testInfo, shared ? 'shared-removal-report' : 'purge-removal-report');
+			if (!shared) {
+				assert.deepEqual(await readdir(userData), ['profile']);
+				assert.deepEqual((await readdir(profile)).sort(), ['logs', 'worktrees']);
+			}
 			await assertNoNativeResidue(installation);
 		} finally {
 			if (installed) await uninstall(installation, directory, userData);
