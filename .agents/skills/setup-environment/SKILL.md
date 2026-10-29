@@ -70,7 +70,7 @@ Within one CI job, prepare generated inputs once before the dependent checks. Fo
 
 ## Select and verify the scope
 
-If no target is specified for a headless worker, use the Frontend/Web tier. On a fresh checkout, frontend `pre*` hooks may compile Rust protocol generators. Reuse a verified protocol cache/package when available; do not fabricate generated files or symlink outputs from another dirty checkout.
+On a fresh checkout, frontend `pre*` hooks may compile Rust protocol generators. Reuse a verified protocol cache/package when available; do not fabricate generated files or symlink outputs from another dirty checkout.
 
 | Tier | Preparation and acceptance |
 | --- | --- |

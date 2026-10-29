@@ -38,8 +38,8 @@ The regular commands run their matching `pretest:smoke:*` preparation first. The
 | `--max-failures=1`                       | Stop after the first failed test.              |
 
 ```bash
-# Prepare and run the Browser UI suite
-pnpm run test:smoke:browser
+# Prepare and run one Desktop startup scenario with App Server
+pnpm run smoketest test/smoke/areas/windows/home.spec.ts --grep 'Desktop development startup opens Agents with prepared runtime resources'
 
 # Select a spec and check its tests before running
 pnpm run test:smoke:ui:no-compile test/smoke/areas/windows/home.spec.ts --list
