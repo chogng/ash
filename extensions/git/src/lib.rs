@@ -794,15 +794,7 @@ impl GitRuntime {
                 self.publish()?;
                 Ok(Value::Null)
             }
-            "refresh" => {
-                self.accept_status(self.api.status(&repository, Some(token))?);
-                let catalog = api::decode(json!(self.api.catalog(&repository, Some(token))?))?;
-                if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
-                    current.catalog = Some(catalog);
-                }
-                self.publish()?;
-                Ok(Value::Null)
-            }
+            "refresh" => self.command("git.refresh", &[json!(repository.descriptor.id)], token),
             "acceptInput" => {
                 let operation = scm::primary_action(&repository);
                 self.command(

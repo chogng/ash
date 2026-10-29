@@ -520,6 +520,99 @@ fn rust_git_registers_scm_and_commits_through_public_client_without_a_js_host() 
             &client,
             invocation("ash.scm", "scm", json!({"method":"initialize"})),
         );
+        // Both public refresh entries must publish busy state before reading disk.
+        // Holding the status response here makes progress observable without timing Git.
+        for (request, fail) in [
+            (
+                invocation("git.refresh", "execute", json!({"arguments":["root"]})),
+                false,
+            ),
+            (
+                invocation(
+                    "ash.scm",
+                    "scm",
+                    json!({"method":"refresh","providerId":"root"}),
+                ),
+                false,
+            ),
+            (
+                invocation("git.refresh", "execute", json!({"arguments":["root"]})),
+                true,
+            ),
+        ] {
+            client.snapshots.lock().unwrap().clear();
+            client.requests.lock().unwrap().clear();
+            let mut reads = 0;
+            let result = supervisor
+                .begin_invoke(request)
+                .unwrap()
+                .wait_with_client(|operation, _, _| {
+                    if matches!(&operation, Operation::BackendRequest { method, .. } if method == "status")
+                    {
+                        reads += 1;
+                        let deadline = std::time::Instant::now() + Duration::from_secs(5);
+                        loop {
+                            if client
+                                .snapshots
+                                .lock()
+                                .unwrap()
+                                .last()
+                                .is_some_and(|providers| providers[0]["isBusy"] == true)
+                            {
+                                break;
+                            }
+                            assert!(
+                                std::time::Instant::now() < deadline,
+                                "refresh must report busy state while status is pending"
+                            );
+                            std::thread::sleep(Duration::from_millis(10));
+                        }
+                        if fail {
+                            return Ok(ResultValue::Value {
+                                value: json!({"backendError":{"name":"GitOperationFailed","message":"Synthetic refresh failure"}}),
+                            });
+                        }
+                    }
+                    client.request(operation)
+                });
+            if fail {
+                assert!(
+                    result
+                        .unwrap_err()
+                        .to_string()
+                        .contains("Synthetic refresh failure")
+                );
+            } else {
+                result.unwrap();
+            }
+            assert_eq!(reads, 1, "refresh reads only the selected repository once");
+            assert!(
+                client
+                    .requests
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .all(|(method, _)| method != "repositories"),
+                "refresh must not force repository discovery"
+            );
+            let deadline = std::time::Instant::now() + Duration::from_secs(5);
+            loop {
+                if client
+                    .snapshots
+                    .lock()
+                    .unwrap()
+                    .last()
+                    .is_some_and(|providers| providers[0]["isBusy"] == false)
+                {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "refresh must clear busy state after completing"
+                );
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        }
         for arguments in [json!([]), json!(["root"])] {
             client.cancel_clone_input.store(true, Ordering::Release);
             assert_eq!(

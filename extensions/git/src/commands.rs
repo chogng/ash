@@ -118,9 +118,6 @@ impl GitRuntime {
             }
             _ => {}
         }
-        if command == "git.refresh" {
-            self.lock().discovery_signature = None;
-        }
         // Commands observe the current scoped policy immediately, even between background polls.
         self.refresh(Some(token))?;
         let context = arguments.first().unwrap_or(&Value::Null);
@@ -129,15 +126,6 @@ impl GitRuntime {
             .or_else(|| context["repositoryId"].as_str())
             .or_else(|| context["repository"]["provider"]["id"].as_str());
         let repository = self.repository(id)?;
-        if command == "git.refresh" {
-            self.accept_status(self.api.status(&repository, Some(token))?);
-            let catalog = decode(json!(self.api.catalog(&repository, Some(token))?))?;
-            if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
-                current.catalog = Some(catalog);
-            }
-            self.publish()?;
-            return Ok(Value::Null);
-        }
         if command == "git.openChangesSource" {
             let scope = arguments
                 .get(1)
@@ -183,7 +171,9 @@ impl GitRuntime {
         ) {
             return self.select_index_change(&repository, command, token);
         }
-        // Serialize mutations per repository while leaving draft updates and other repositories live.
+        // Explicit refresh shares the operation lifetime so pending reads show progress
+        // and completing a refresh invalidates comparisons even when paths/statuses match.
+        // Serialize repository operations while leaving drafts and other repositories live.
         let gate = {
             let mut operations = self
                 .operations
@@ -261,6 +251,14 @@ impl GitRuntime {
         token: &CancellationToken,
     ) -> Result<Value, ExtensionError> {
         match command {
+            "git.refresh" => {
+                self.accept_status(self.api.status(repository, Some(token))?);
+                let catalog = decode(json!(self.api.catalog(repository, Some(token))?))?;
+                if let Some(current) = self.lock().repositories.get_mut(&repository.descriptor.id) {
+                    current.catalog = Some(catalog);
+                }
+                Ok(Value::Null)
+            }
             id if id.starts_with("git.commit") => self.commit(repository, id, token),
             "git.stageAll" | "git.unstageAll" | "git.cleanAll" | "git.stageFile"
             | "git.unstageFile" | "git.discardFile" => self.mutate_paths(
