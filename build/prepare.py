@@ -392,6 +392,7 @@ def prepare_development_package(args: argparse.Namespace, *, root: Path = ROOT) 
         cargo="cargo",
         cargo_profile=PROFILE,
         host_build=True,
+        protocol_prepared=True,
     )
     from build.lib.media_package import assemble_capability_package
 

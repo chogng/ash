@@ -11,7 +11,14 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from build.download.artifacts import download_and_verify, extract_member, sha256
+from build.download.artifacts import (
+    download_and_verify,
+    extract_member,
+    publish,
+    sha256,
+    temporary_file,
+)
+from build.lib.file_lock import exclusive_lock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -56,10 +63,29 @@ def resolve_livekit(target: str, *, root: Path = ROOT) -> Path:
     locked = SimpleNamespace(url=source["url"], sha256=source["sha256"], size=None)
     if not archive.is_file() or sha256(archive) != locked.sha256:
         download_and_verify(locked, archive, max_bytes=10 * 1024 * 1024)
-    with tempfile.TemporaryDirectory(prefix=f"{target}-", dir=cache) as temporary:
+    executable.parent.mkdir(parents=True, exist_ok=True)
+    receipt = executable.with_suffix(".sha256")
+    with (
+        exclusive_lock(executable.parent / ".build.lock", create=True),
+        tempfile.TemporaryDirectory(prefix=f"{target}-", dir=cache) as temporary,
+    ):
         directory = Path(temporary)
         subprocess.run(["tar", "-xzf", str(archive), "-C", str(directory)], check=True)
         output = directory / name
+        try:
+            previous_digest = receipt.read_text(encoding="ascii").strip()
+        except (FileNotFoundError, UnicodeError):
+            previous_digest = None
+        # Go reuses a linked executable only when its output already exists.
+        # Seed a private copy after checking its full contents: Go's build ID
+        # check alone would not detect damage elsewhere in the binary. Go still
+        # owns source, target, toolchain and build-option invalidation.
+        if (
+            previous_digest is not None
+            and executable.is_file()
+            and sha256(executable) == previous_digest
+        ):
+            shutil.copyfile(executable, output)
         environment = {
             **os.environ,
             "GOTOOLCHAIN": "local",
@@ -85,9 +111,16 @@ def resolve_livekit(target: str, *, root: Path = ROOT) -> Path:
             env=environment,
             check=True,
         )
-        output.chmod(0o755)
-        executable.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(output, executable)
+        # Package receipts include mtime: replacing identical Go output would
+        # invalidate a reusable development package on every source scan miss.
+        digest = sha256(output)
+        publish(output, executable, digest)
+        executable.chmod(0o755)
+        # Publish after the executable under the same lock. An interrupted
+        # publication leaves a mismatch and therefore takes the full build path.
+        with temporary_file(receipt) as temporary_receipt:
+            temporary_receipt.write_text(digest + "\n", encoding="ascii")
+            publish(temporary_receipt, receipt, sha256(temporary_receipt))
     return executable
 
 
