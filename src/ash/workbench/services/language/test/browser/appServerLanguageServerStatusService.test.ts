@@ -608,10 +608,7 @@ test('management groups identical server and folder names by directory identity 
 			actions = delegate.getActions();
 		},
 	});
-	assert.equal(
-		services.get(IStatusbarService).getEntries(StatusbarAlignment.Left)[0]?.entry.text,
-		'Language Services',
-	);
+	assert.equal(services.get(IStatusbarService).getEntries(StatusbarAlignment.Left)[0]?.entry.text, '');
 	await service.open();
 	const rows = actions.filter((action): action is SubmenuAction => action instanceof SubmenuAction);
 	assert.equal(rows.length, 2);

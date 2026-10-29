@@ -504,8 +504,8 @@ export class AppServerLanguageServerStatusService extends Disposable implements 
 		const text = localize('languageServer.services', 'Language Services');
 		const hint = this.accessibleView.getOpenAriaHint(AccessibilityVerbositySettingId.LanguageServers);
 		const entry = {
-			text,
-			icon: issues ? Lxicon.warning : starting ? Lxicon.sync : Lxicon.code,
+			text: '',
+			icon: issues ? Lxicon.warning : starting ? Lxicon.sync : Lxicon.languageServer,
 			showProgress: starting && !issues,
 			ariaLabel: `${text}${hint ? `. ${hint}` : ''}`,
 			tooltip: issues
