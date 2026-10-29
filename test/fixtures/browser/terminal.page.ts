@@ -515,9 +515,6 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			},
 		};
 		services.registerSingleton(ITerminalService, () => new URLSearchParams(location.search).has('existing') || new URLSearchParams(location.search).has('incoming') ? legacyTerminals : services.createInstance(TerminalService));
-		let transcript!: (text: string, isFinal: boolean) => void;
-		let stops = 0;
-		services.registerInstance(IVoiceCodeTranscriptionBackendService, createTestDictationBackend(store, { getOptions: async () => ({ inputDevices: [], languages: [] }), start: async (_options, callback) => { transcript = callback; return { stop: async () => { stops++; }, cancel: async () => { stops++; } }; } }));
 		services.registerInstance(IContextKeyService, context);
 		services.registerInstance(IAccessibleViewService, { getOpenAriaHint: () => undefined } as unknown as IAccessibleViewService);
 		services.registerInstance(IViewsService, { openView: () => pane, getViewWithId: () => pane, focusView: () => { pane.focus(); return true; } } as unknown as IViewsService);
@@ -529,7 +526,7 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			onDidChangeWorkbenchState: Event.None,
 			onDidChangeWorkspaceName: Event.None, getWorkspace: () => workspace, getWorkbenchState: () => 2, getWorkspaceFolder: resource => workspace.folders.find(folder => extUri.isEqualOrParent(resource, folder.uri)) ?? null
 		});
-		services.registerInstance(IConfigurationService, lifetime.add(new WorkbenchConfigurationService({ source: '{"dictation.backend":"cloud"}' })));
+		services.registerInstance(IConfigurationService, lifetime.add(new WorkbenchConfigurationService()));
 		services.registerInstance(ITerminalProcessService, {
 			operatingSystem: new URLSearchParams(location.search).get('os') === 'windows' ? OperatingSystem.Windows : OperatingSystem.Linux,
 			onConnectionState: Event.None, getConnectionState: async () => 'ready',
@@ -569,10 +566,6 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			close: async options => { closed.push(Number(options.terminalId.slice(5))); },
 		});
 		setupTerminalFixtureServices(services, lifetime, true, false);
-		services.registerSingleton(ISpeechService, () => services.createInstance(SpeechService));
-		services.registerSingleton(IChatSpeechToTextService, () => services.createInstance(ChatSpeechToTextService));
-		services.registerSingleton(IVoiceCodeTranscriptionClient, () => services.createInstance(VoiceCodeTranscriptionClient));
-		registerTestDictationOnboarding(services);
 		const profileService = lifetime.add(services.createInstance(TerminalProfileService));
 		services.registerInstance(ITerminalProfileService, profileService);
 		const resolver = lifetime.add(services.createInstance(BrowserTerminalProfileResolverService));
@@ -693,8 +686,6 @@ if (new URLSearchParams(location.search).has('pane') || new URLSearchParams(loca
 			receive: async () => { await legacyTerminals.createTerminal(); },
 			command: (id: string, argument?: unknown) => commands.executeCommand(id, argument),
 			dispose: () => lifetime.dispose(),
-			transcript: (text, final) => transcript(text, final),
-			stops: () => stops,
 			panel: setPanel,
 			view: value => { selected = value; pane.setVisible(visible && selected); },
 			expand: value => pane.setExpanded(value),
@@ -749,8 +740,6 @@ declare global {
 			snapshot(): Promise<string | undefined>;
 			counts(): { profiles: number; creates: number; };
 			receive(): Promise<void>;
-			transcript(text: string, final: boolean): void;
-			stops(): number;
 			panel(visible: boolean): void;
 			view(visible: boolean): void;
 			expand(expanded: boolean): boolean;

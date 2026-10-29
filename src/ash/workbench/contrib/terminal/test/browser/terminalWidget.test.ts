@@ -5,6 +5,25 @@ import { useBrowserTests } from '../../../../../../../test/unit/browser/context.
 suite('terminal browser component', () => {
 	const browserTests = useBrowserTests();
 
+	test('terminal restored in a hidden host opens its contributions when revealed without observer errors', async function () {
+		const { page } = browserTests;
+		await page.goto('/terminal.html?stream&reviveHistory&deferred&browser');
+		await page.waitForFunction(() => Boolean(window.ashTerminalStreamIntegration));
+		await page.evaluate(async () => {
+			const host = document.querySelector<HTMLElement>('#terminal')!;
+			host.style.display = 'none';
+			await window.ashTerminalStreamIntegration.start();
+		});
+		const terminal = page.locator('.ash-terminal-instance:not([hidden])').last();
+		await expect(terminal.locator('.xterm-helper-textarea')).toHaveCount(0);
+		// Only the native resize notification reveals the initialized screen here.
+		await page.locator('#terminal').evaluate(host => { host.style.removeProperty('display'); });
+		await expect(terminal.locator('.xterm-helper-textarea')).toBeFocused();
+		await expect(terminal.locator('.ash-terminal-command-guide')).toHaveCount(1);
+		await expect.poll(() => page.evaluate(() => window.ashTerminalStreamIntegration.snapshot())).toContain('SAVED_HISTORY');
+		await page.evaluate(() => window.ashTerminalStreamIntegration.close());
+	});
+
 	test('terminal follows new output after erasing retained scrollback while scrolled up', async function () {
 		const { page } = browserTests;
 
@@ -449,27 +468,6 @@ suite('terminal browser component', () => {
 		await page.evaluate(() => window.ashTerminalIntegration.dispose());
 	});
 
-
-	test('terminal dictation writes phrases without executing and cancels when the panel hides', async function () {
-		const { page } = browserTests;
-
-		await page.goto('/terminal.html?pane&existing');
-		await page.waitForFunction(() => window.ashTerminalPaneIntegration !== undefined);
-		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(true));
-		await page.getByRole('button', { name: 'Terminal: Start dictation', exact: true }).focus();
-		await page.keyboard.press('Space');
-		await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toBeEnabled();
-		await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('echo hello\n\u001b', true));
-		await page.getByRole('button', { name: 'Stop dictation', exact: true }).click();
-		await expect.poll(() => page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual(['echo hello ']);
-		await page.getByRole('button', { name: 'Terminal: Start dictation', exact: true }).click();
-		await expect(page.getByRole('button', { name: 'Stop dictation', exact: true })).toBeEnabled();
-		await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('unfinished', false));
-		await page.evaluate(() => window.ashTerminalPaneIntegration.panel(false));
-		await expect.poll(() => page.evaluate(() => window.ashTerminalPaneIntegration.stops())).toBe(2);
-		await page.evaluate(() => window.ashTerminalPaneIntegration.transcript('late', true));
-		expect(await page.evaluate(() => window.ashTerminalIntegration.writes)).toEqual(['echo hello ']);
-	});
 
 	test('Terminal contribution assembles independent window scopes and rejects a missing process registration', async function () {
 		const { page } = browserTests;

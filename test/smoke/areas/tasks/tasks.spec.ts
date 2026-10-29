@@ -19,7 +19,7 @@ test.beforeEach(async ({ target, testWorkspace }) => {
 	await writeFile(join(testWorkspace.directory, 'smoke-watch.cjs'), "console.log('ASH_TASK_WATCH_READY'); setInterval(() => {}, 1000);\n");
 });
 
-test('task discovery does not execute commands and explicit run and rerun use the workspace terminal', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench, testWorkspace }) => {
+test('task discovery does not execute commands and explicit run and rerun use the workspace terminal', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ workbench, testWorkspace }) => {
 	await workbench.quickaccess.runCommand('workbench.action.tasks.runTask');
 	await expect(workbench.quickaccess.items.filter({ hasText: 'Smoke build' })).toBeVisible();
 	expect(await readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('0');
@@ -29,8 +29,11 @@ test('task discovery does not execute commands and explicit run and rerun use th
 	await workbench.quickaccess.runCommand('workbench.action.tasks.reRunTask');
 	await expect.poll(() => readFile(join(testWorkspace.directory, 'task-runs.txt'), 'utf8')).toBe('2');
 	await expect(workbench.terminal.activeInstance).toContainText('ASH_TASK_RUN_2');
-	await openTasksView(application, workbench);
-	await expect(workbench.page.locator('.ash-task-run')).toContainText('Smoke build — Succeeded (exit code 0)');
+	// Terminal retains the command output; the Tasks output channel owns run
+	// diagnostics now that Tasks no longer contributes a separate panel.
+	await workbench.quickaccess.runCommand('workbench.action.output.showChannels');
+	await workbench.quickaccess.select('Tasks');
+	await expect(workbench.page.locator('[data-view-id="ash.output"] .view-lines')).toContainText("Task 'Smoke build' succeeded (exit code 0).");
 });
 
 test('terminating a running workspace task stops its terminal and records cancellation', { tag: ['@browser-app-server', '@electron-app-server'] }, async ({ application, workbench }) => {
