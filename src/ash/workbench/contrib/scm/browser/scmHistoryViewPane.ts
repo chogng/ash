@@ -11,6 +11,7 @@ import { Lxicon } from "../../../../base/common/lxicons.js";
 import { ThemeIcon } from '../../../../base/common/themables.js';
 
 import { equals } from '../../../../base/common/arrays.js';
+import { RunOnceScheduler } from '../../../../base/common/async.js';
 import { URI } from '../../../../base/common/uri.js';
 import { CancellationToken } from '../../../../base/common/cancellation.js';
 import { ResourceTree, type IResourceNode } from '../../../../base/common/resourceTree.js';
@@ -287,6 +288,7 @@ class HistoryItemRow extends Disposable {
 /** Paged SCM history rendered as a compact graph. */
 export class SCMHistoryViewPane extends ViewPane {
 	private readonly loadingProgress = this._register(new DisposableStore());
+	private readonly refreshScheduler = this._register(new RunOnceScheduler(() => void this.refresh(), 0));
 	private readonly scmViewService: ISCMViewService;
 	private readonly graphLabel: string;
 	private readonly busyContext: IContextKey<boolean>;
@@ -620,6 +622,7 @@ export class SCMHistoryViewPane extends ViewPane {
 	}
 
 	private async refresh(): Promise<void> {
+		this.refreshScheduler.cancel();
 		this.loadingProgress.clear();
 		const generation = ++this.generation;
 		const repository = this.scmViewService.activeRepository;
@@ -647,9 +650,11 @@ export class SCMHistoryViewPane extends ViewPane {
 				updateProgress();
 			}
 			if (provider) {
-				listeners.add(provider.onDidChange(() => void this.refresh()));
-				if (provider.historyItemRemoteRef) { listeners.add(provider.historyItemRemoteRef.onDidChange(() => void this.refresh())); }
-				if (provider.historyItemBaseRef) { listeners.add(provider.historyItemBaseRef.onDidChange(() => void this.refresh())); }
+				// One provider publication can change several observable refs and history.
+				// Reload once after that publication has installed all of its endpoints.
+				listeners.add(provider.onDidChange(() => this.refreshScheduler.schedule()));
+				if (provider.historyItemRemoteRef) { listeners.add(provider.historyItemRemoteRef.onDidChange(() => this.refreshScheduler.schedule())); }
+				if (provider.historyItemBaseRef) { listeners.add(provider.historyItemBaseRef.onDidChange(() => this.refreshScheduler.schedule())); }
 				listeners.add(provider.historyItemRef.onDidChange(head => {
 					this.head = head;
 					if (this.page) this.renderGraph(this.page);
@@ -692,15 +697,22 @@ export class SCMHistoryViewPane extends ViewPane {
 		try {
 			const previousComparison = this.comparison;
 			const previousHead = this.head?.revision;
+			let synchronizedRefs: readonly ISCMHistoryItemRef[] | undefined;
 			if (provider.provideHistoryItemRefs) {
-				const refs = await provider.provideHistoryItemRefs();
+				let filter = this.filters.get(this.filterKey) ?? 'auto';
+				const currentHead = provider.historyItemRef.get();
+				const currentRefs = [currentHead, provider.historyItemRemoteRef?.get(), provider.historyItemBaseRef?.get()]
+					.filter((ref): ref is ISCMHistoryItemRef => !!ref);
+				// Automatic history already has its roots when the provider captures every
+				// endpoint. Custom filters and unresolved refs still need the full catalog.
+				const useCurrentRefs = filter === 'auto' && !!currentHead?.revision && currentRefs.every(ref => !!ref.revision);
+				const refs = useCurrentRefs ? currentRefs : await provider.provideHistoryItemRefs();
 				if (this.isDisposed || generation !== this.generation) { return; }
 				this.head = provider.historyItemRef.get();
 				const remoteRef = provider.historyItemRemoteRef?.get();
 				// Provider snapshots may identify the upstream without its commit revision.
 				// Use the freshly queried ref to capture immutable comparison endpoints.
 				const remote = refs.find(ref => ref.id === remoteRef?.id && ref.revision !== undefined) ?? remoteRef;
-				let filter = this.filters.get(this.filterKey) ?? 'auto';
 				let selected = Array.isArray(filter) ? refs.filter(ref => filter.includes(ref.id)) : [];
 				if (Array.isArray(filter) && selected.length === 0) {
 					filter = 'auto';
@@ -726,10 +738,31 @@ export class SCMHistoryViewPane extends ViewPane {
 						};
 					}
 				}
+				const head = this.head;
+				if (previousComparison && head?.revision && remote?.revision === head.revision) {
+					synchronizedRefs = [...refs.filter(ref => ref.id !== head.id && ref.id !== remote.id), head, remote];
+					if (useCurrentRefs && previousPage) {
+						const capturedIds = new Set(synchronizedRefs.map(ref => ref.id));
+						synchronizedRefs = [...previousPage.items.flatMap(item => item.references ?? []).filter(ref => !capturedIds.has(ref.id)), ...synchronizedRefs];
+					}
+				}
 			}
 			if (previousHead !== this.head?.revision || previousComparison?.remote.revision !== this.comparison?.remote.revision || previousComparison?.base !== this.comparison?.base) {
 				this.commitChanges.delete(SCMIncomingHistoryItemId);
 				this.commitChanges.delete(SCMOutgoingHistoryItemId);
+			}
+			if (previousPage && synchronizedRefs) {
+				// Equal captured tips already prove there are no incoming/outgoing commits.
+				// Move their badges with the summary while the complete page is still loading.
+				const referencesByRevision = new Map<string, ISCMHistoryItemRef[]>();
+				for (const ref of synchronizedRefs) {
+					if (!ref.revision) { continue; }
+					const references = referencesByRevision.get(ref.revision) ?? [];
+					references.push(ref);
+					referencesByRevision.set(ref.revision, references);
+				}
+				this.page = { ...previousPage, items: previousPage.items.map(item => ({ ...item, references: referencesByRevision.get(item.id) ?? [] })) };
+				this.renderGraph(this.page);
 			}
 			// One bounded look-ahead page retains the loaded tail when new commits arrive.
 			const pageSize = this.configurationService.getValue<number>('scm.graph.pageSize');

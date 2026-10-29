@@ -67,8 +67,11 @@ impl Head {
     }
 }
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct Upstream {
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub object_id: Option<String>,
     pub ahead: usize,
     pub behind: usize,
 }

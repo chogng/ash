@@ -385,7 +385,7 @@ pub fn snapshot(
         repository.error.clone()
     };
     let history_ref = head.map(|head| json!({"id":branch.map(|name|format!("refs/heads/{name}")).unwrap_or_else(||"HEAD".into()),"name":branch.unwrap_or("HEAD"),"revision":head.object_id(),"category":"localBranch"}));
-    let remote_ref = head.and_then(Head::upstream).map(|upstream|json!({"id":format!("refs/remotes/{}",upstream.name),"name":upstream.name,"category":"remoteBranch"}));
+    let remote_ref = head.and_then(Head::upstream).map(|upstream|json!({"id":format!("refs/remotes/{}",upstream.name),"name":upstream.name,"revision":upstream.object_id,"category":"remoteBranch"}));
     let source_uri = format!(
         "ash-scm://ash.git/{}",
         url::form_urlencoded::byte_serialize(repository.descriptor.id.as_bytes())

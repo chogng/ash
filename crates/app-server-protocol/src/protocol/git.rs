@@ -287,6 +287,10 @@ pub enum GitChangeStatusDto {
 #[serde(rename_all = "camelCase")]
 pub struct GitUpstreamDto {
     pub name: String,
+    /// Commit captured with the reference snapshot; absent when the upstream ref is gone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub object_id: Option<String>,
     pub ahead: usize,
     pub behind: usize,
 }

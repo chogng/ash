@@ -2303,6 +2303,22 @@ impl GitRepositoryRuntime {
         notification: StatusNotification,
         cancellation: &CancellationToken,
     ) -> Result<GitStatusResult, GitRuntimeError> {
+        if let GitHeadDto::Branch {
+            upstream: Some(upstream),
+            ..
+        } = &mut projected.head
+        {
+            // This publication already owns the ref snapshot. Carry its captured tip
+            // so history consumers need no second catalog read to resolve the upstream.
+            upstream.object_id = references
+                .references
+                .iter()
+                .find(|reference| {
+                    reference.kind() == GitReferenceKind::RemoteBranch
+                        && reference.name() == upstream.name
+                })
+                .map(|reference| reference.object_id().to_owned());
+        }
         let mut state = self
             .state
             .lock()
@@ -3552,6 +3568,7 @@ pub(super) fn head(head: &GitHead) -> GitHeadDto {
             object_id: object_id.clone(),
             upstream: upstream.as_ref().map(|upstream| GitUpstreamDto {
                 name: upstream.name().into(),
+                object_id: None,
                 ahead: upstream.ahead(),
                 behind: upstream.behind(),
             }),

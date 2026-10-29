@@ -267,7 +267,7 @@ test('SCM history title operations keep refresh and busy state with their starti
 });
 
 
-for (const revisionSource of ['query', 'snapshot', 'id'] as const) {
+for (const revisionSource of ['query', 'snapshot', 'id', 'current'] as const) {
 	test(`SCM history includes fetched upstream commits with ${revisionSource} references`, async () => {
 		const browser = new JSDOM('<!doctype html><body></body>');
 		const globals = installDomGlobals(browser);
@@ -281,11 +281,13 @@ for (const revisionSource of ['query', 'snapshot', 'id'] as const) {
 			using view = new SCMViewService(scm);
 			using changed = new Emitter<void>();
 			const head = { id: 'refs/heads/main', name: 'main', revision: 'local', category: 'localBranch' };
-			// The real Git extension publishes the upstream identity without a revision.
+			// Providers can publish an upstream identity before its revision is available.
 			const upstream = { id: 'refs/remotes/origin/main', name: 'origin/main', category: 'remoteBranch' };
 			const baseRef = { id: 'refs/heads/develop', name: 'develop', category: 'localBranch' };
+			const retainedTag = { id: 'refs/tags/retained', name: 'retained', revision: 'local', category: 'tag' };
+			const captured = revisionSource === 'snapshot' || revisionSource === 'current';
 			let remote = 'remote';
-			const upstreamRef = observableValue('fetched.upstream', { ...upstream, ...(revisionSource === 'snapshot' ? { revision: remote } : {}) });
+			const upstreamRef = observableValue('fetched.upstream', { ...upstream, ...(captured ? { revision: remote } : {}) });
 			let commits: ISCMHistoryItem[] = [
 				{ id: remote, parentIds: ['base'], subject: 'Fetched upstream commit', message: '' },
 				{ id: 'local', parentIds: ['base'], subject: 'Local outgoing commit', message: '' },
@@ -294,15 +296,23 @@ for (const revisionSource of ['query', 'snapshot', 'id'] as const) {
 			const requests: Parameters<ISCMHistoryProvider['provideHistoryItems']>[0][] = [];
 			const comparisons: (readonly string[])[] = [];
 			const changes: (readonly (string | undefined)[])[] = [];
+			let pauseQueries: DeferredPromise<void> | undefined;
+			let referenceQueries = 0;
 			const provider: ISCMHistoryProvider = {
 				onDidChange: changed.event, historyItemRef: observableValue('fetched.head', head),
 				historyItemRemoteRef: upstreamRef,
-				historyItemBaseRef: observableValue('fetched.base', baseRef), refresh() { },
-				provideHistoryItemRefs: async () => [head, { ...upstream, ...(revisionSource === 'query' ? { revision: remote } : {}) }, { ...baseRef, ...(revisionSource === 'query' ? { revision: 'base' } : {}) }],
+				historyItemBaseRef: observableValue('fetched.base', { ...baseRef, ...(revisionSource === 'current' ? { revision: 'base' } : {}) }), refresh() { },
+				provideHistoryItemRefs: async () => {
+					referenceQueries++;
+					const resolved = revisionSource === 'query' || revisionSource === 'current';
+					return [head, { ...upstream, ...(resolved ? { revision: remote } : {}) }, { ...baseRef, ...(resolved ? { revision: 'base' } : {}) }, retainedTag];
+				},
 				resolveHistoryItemRefsCommonAncestor: async refs => { comparisons.push(refs); return 'base'; },
 				provideHistoryItems: async options => {
 					requests.push(options);
-					return commits.slice(options.skip ?? 0, (options.skip ?? 0) + (options.limit ?? 50));
+					await pauseQueries?.p;
+					const references = [head, { ...upstream, revision: remote }, retainedTag];
+					return commits.slice(options.skip ?? 0, (options.skip ?? 0) + (options.limit ?? 50)).map(item => ({ ...item, references: references.filter(ref => ref.revision === item.id) }));
 				},
 				provideHistoryItemChanges: async (id, parent) => { changes.push([id, parent]); return []; },
 				resolveHistoryItemChangeContents: async () => { throw new Error('Unexpected content read'); },
@@ -313,6 +323,7 @@ for (const revisionSource of ['query', 'snapshot', 'id'] as const) {
 			using configuration = new InMemoryConfigurationService();
 			await configuration.updateValue('scm.graph.pageSize', 2);
 			await configuration.updateValue('scm.graph.pageOnScroll', false);
+			await configuration.updateValue('scm.graph.badges', 'all');
 			using ui = createTestComponentServices(undefined, undefined, browser.window.document);
 			using quickInput = new TestQuickInputService({ container: browser.window.document.body });
 			using pane = new SCMHistoryViewPane(browser.window.document.body, { id: 'history.fetched.test', title: 'Graph' }, view, menus, {} as IContextMenuService, context, {
@@ -322,7 +333,7 @@ for (const revisionSource of ['query', 'snapshot', 'id'] as const) {
 			}, { container: browser.window.document.body, show: () => true, hide() { }, layout() { } }, testHistoryClipboard, testHistoryOpener, configuration, quickInput, ui.get(IStorageService), scm);
 			const row = (id: string): HTMLElement | null => pane.element.querySelector(`[data-history-item-id="${id}"]`);
 			await waitFor(() => row('remote') !== null && pane.element.querySelector('.ash-scm-graph-load-more button') !== null);
-			const roots = (): string[] => ['local', revisionSource === 'id' ? upstream.id : remote, revisionSource === 'query' ? 'base' : baseRef.id];
+			const roots = (): string[] => ['local', revisionSource === 'id' ? upstream.id : remote, revisionSource === 'query' || revisionSource === 'current' ? 'base' : baseRef.id];
 			assert.deepEqual(requests[0].historyItemRefs, roots());
 			assert.equal(row('base'), null, 'The first page remains bounded');
 			assert.equal(context.getValue('scmCurrentHistoryItemRefHasRemote'), true);
@@ -339,7 +350,7 @@ for (const revisionSource of ['query', 'snapshot', 'id'] as const) {
 			}
 			remote = 'new-remote';
 			commits = [{ id: remote, parentIds: ['remote'], subject: 'Newly fetched commit', message: '' }, ...commits];
-			if (revisionSource === 'snapshot') upstreamRef.set({ ...upstream, revision: remote });
+			if (captured) upstreamRef.set({ ...upstream, revision: remote });
 			changed.fire();
 			await waitFor(() => row(remote) !== null);
 			assert.deepEqual(requests.at(-1)?.historyItemRefs, roots(), 'Refresh reads the latest fetched tip');
@@ -350,6 +361,42 @@ for (const revisionSource of ['query', 'snapshot', 'id'] as const) {
 				row('scm-graph-incoming-changes')!.click();
 				await waitFor(() => changes.length === 2);
 				assert.deepEqual(changes[1], ['new-remote', 'base']);
+
+				focusHistoryContent(row('local')!);
+				const focused = browser.window.document.activeElement;
+				const queryCount = requests.length;
+				const pending = new DeferredPromise<void>();
+				using releaseQuery = toDisposable(() => { void pending.complete(); });
+				pauseQueries = pending;
+				remote = 'local';
+				if (captured) upstreamRef.set({ ...upstream, revision: remote });
+				changed.fire();
+				await waitFor(() => requests.length > queryCount);
+				assert.equal(requests.length, queryCount + 1, 'Ref and history notifications from one publication share a refresh');
+				assert.equal(row('scm-graph-outgoing-changes'), null, 'Confirmed synchronized refs remove the outgoing summary before the commit page finishes');
+				assert.equal(row('scm-graph-incoming-changes'), null);
+				assert.ok(row('local')!.querySelector('[aria-label="origin/main"]'), 'The upstream badge moves with the confirmed reference');
+				assert.ok(row('local')!.querySelector('[aria-label="retained"]'), 'A captured endpoint update retains other reference badges');
+				assert.equal(row('new-remote')!.querySelector('[aria-label="origin/main"]'), null, 'The old commit loses the moved badge');
+				assert.equal(pane.element.querySelector('.ash-scm-graph')!.getAttribute('aria-busy'), 'true', 'The complete history refresh remains pending');
+				assert.equal(browser.window.document.activeElement, focused);
+				await pending.complete();
+				await waitFor(() => pane.element.querySelector('.ash-scm-graph')!.getAttribute('aria-busy') === 'false');
+				assert.equal(row('scm-graph-outgoing-changes'), null);
+			}
+			if (revisionSource === 'current') {
+				assert.equal(referenceQueries, 0, 'Complete captured endpoints need no catalog query for automatic history');
+				const picking = pane.pickHistoryItemRef();
+				await waitFor(() => quickInput.currentQuickInput !== undefined);
+				assert.equal(referenceQueries, 1, 'Opening the reference picker still reads the complete current catalog');
+				const picker = quickInput.currentQuickInput as IQuickPick<IQuickPickItem>;
+				const tag = picker.items.find((item): item is IQuickPickItem => !('type' in item) && item.label === retainedTag.name);
+				assert.ok(tag);
+				picker.selectedItems = [tag];
+				await quickInput.accept();
+				await picking;
+				await waitFor(() => referenceQueries === 2 && pane.element.querySelector('.ash-scm-graph')!.getAttribute('aria-busy') === 'false');
+				assert.deepEqual(requests.at(-1)?.historyItemRefs, ['local'], 'Custom filters query and resolve the selected reference instead of reusing automatic roots');
 			}
 		} finally {
 			browser.window.close();
@@ -769,14 +816,16 @@ test('SCM history refresh retains loaded identities and folder focus and bounds 
 		items = Array.from({ length: 200 }, (_, index) => makeItem(`rewritten-${index}`));
 		head.set({ id: 'refs/heads/main', name: 'main', revision: items[0].id, category: 'localBranch' });
 		changed.fire();
-		await waitFor(() => graph.getAttribute('aria-busy') === 'false' && graph.querySelector('.ash-scm-graph-commit')?.closest('[role="treeitem"]')?.getAttribute('aria-setsize') === '111');
+		await waitFor(() => queries.length > beforeRewrite && graph.getAttribute('aria-busy') === 'false' && graph.querySelector('.ash-scm-graph-commit')?.closest('[role="treeitem"]')?.getAttribute('aria-setsize') === '111');
 		assert.equal(queries.length, beforeRewrite + 1, 'Unreachable retained IDs do not trigger an unbounded history search');
 		assert.equal(graph.querySelector('[data-history-item-id="original-4"]'), null);
 		assert.equal(graph.querySelectorAll('[role="treeitem"][aria-selected="true"]').length, 0);
 		assert.equal(focusedHistoryRow(tree)?.querySelector<HTMLElement>('.ash-scm-graph-commit')?.dataset.historyItemId, 'rewritten-104');
 		const deferred = new DeferredPromise<void>();
 		pauseNextQuery = deferred;
+		const beforeDeferred = queries.length;
 		changed.fire();
+		await waitFor(() => queries.length > beforeDeferred && graph.getAttribute('aria-busy') === 'true');
 		const outside = browser.window.document.createElement('input');
 		browser.window.document.body.append(outside);
 		outside.focus();

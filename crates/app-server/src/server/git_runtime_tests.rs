@@ -1746,6 +1746,45 @@ fn worktree_and_index_changes_preserve_history_revision_and_graph_cursor() {
 }
 
 #[test]
+fn status_publications_capture_upstream_commits_and_preserve_missing_refs() {
+    let repository = TestRepository::init();
+    repository.write("file.txt", "first\n");
+    repository.git(&["add", "."]);
+    repository.git(&["commit", "-m", "first"]);
+    let base = repository.git_output(&["rev-parse", "HEAD"]);
+    repository.write("file.txt", "second\n");
+    repository.git(&["commit", "-am", "second"]);
+    let tip = repository.git_output(&["rev-parse", "HEAD"]);
+    repository.git(&["remote", "add", "origin", "/unused-synthetic-remote"]);
+    repository.git(&["update-ref", "refs/remotes/origin/main", &base]);
+    repository.git(&["branch", "--set-upstream-to=origin/main", "main"]);
+    let runtime = GitRuntime::new(
+        mutation_authorization(repository.root()),
+        Arc::new(UpdateBroker::default()),
+    )
+    .unwrap();
+    let mut previous_revision = 0;
+    for expected in [Some(base.as_str()), Some(tip.as_str()), None] {
+        if let Some(object_id) = expected {
+            repository.git(&["update-ref", "refs/remotes/origin/main", object_id]);
+        } else {
+            repository.git(&["update-ref", "-d", "refs/remotes/origin/main"]);
+        }
+        let status = runtime.status().unwrap();
+        let ash_app_server_protocol::protocol::git::GitHeadDto::Branch {
+            upstream: Some(upstream),
+            ..
+        } = status.head
+        else {
+            panic!("Expected a configured upstream, including after its ref is deleted");
+        };
+        assert_eq!(upstream.object_id.as_deref(), expected);
+        assert!(status.history_revision > previous_revision);
+        previous_revision = status.history_revision;
+    }
+}
+
+#[test]
 fn history_refresh_reads_metadata_without_scanning_or_replacing_working_tree_state() {
     let repository = TestRepository::init();
     for message in ["first", "second"] {
