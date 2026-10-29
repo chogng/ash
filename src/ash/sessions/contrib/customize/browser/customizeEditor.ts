@@ -23,6 +23,7 @@ import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextke
 import { IContextMenuService } from '../../../../platform/contextview/browser/contextView.js';
 import { CustomizationMarketplaceMediaType, ICustomizationMarketplaceService, type ICustomizationMarketplaceCursor, type ICustomizationMarketplaceResource } from '../../../../platform/customizationMarketplace/common/customizationMarketplaceService.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IExtensionManagementService } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { IPluginManagementService } from '../../../../platform/extensionManagement/common/pluginManagementService.js';
 import { IHoverService } from '../../../../platform/hover/browser/hoverService.js';
@@ -37,6 +38,7 @@ import { EditorPane } from '../../../../workbench/browser/parts/editor/editorPan
 import type { IResourceEditorInput } from '../../../../workbench/common/editor.js';
 import { IPromptsService } from '../../../../workbench/contrib/chat/common/promptSyntax/service/promptsService.js';
 import { addConnection, describeConnectorState, describeMcpServerState, getSkillSummary } from '../../../../workbench/contrib/extensions/browser/extensionsActions.js';
+import { changeExtensionPackage } from '../../../../workbench/contrib/extensions/browser/extensionEditor.js';
 import { ExtensionsCapabilityInput, ExtensionsInput, ExtensionsInputSource } from '../../../../workbench/contrib/extensions/common/extensionsInput.js';
 import { IChatSessionNavigationService } from '../../../../workbench/services/chat/common/chatSessionNavigationService.js';
 import { IEditorService } from '../../../../workbench/services/editor/common/editorService.js';
@@ -51,6 +53,8 @@ interface Card {
 	readonly name: string;
 	readonly description: string;
 	readonly metadata?: string;
+	readonly installed?: boolean;
+	readonly install?: () => Promise<unknown>;
 	readonly open: () => Promise<void>;
 }
 interface Catalog {
@@ -113,6 +117,7 @@ export class CustomizeEditorPane extends EditorPane {
 		@IHoverService private readonly hover: IHoverService,
 		@IQuickInputService private readonly quickInput: IQuickInputService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@INotificationService private readonly notifications: INotificationService,
 		@IAccessibleViewService private readonly accessible: IAccessibleViewService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IThemeService theme: IThemeService,
@@ -342,11 +347,22 @@ export class CustomizeEditorPane extends EditorPane {
 				note: snapshot.unavailableSources.join(' · '),
 			};
 		}
-		const page = await this.marketplace.query({ query, mediaType: this.category === 'skills' ? CustomizationMarketplaceMediaType.Skill : CustomizationMarketplaceMediaType.McpServer, sourceIds: this.sourceId ? [this.sourceId] : undefined, pageSize: 30, cursor }, request.token);
+		const skills = this.category === 'skills';
+		const [page, installed] = await Promise.all([
+			this.marketplace.query({ query, mediaType: skills ? CustomizationMarketplaceMediaType.Skill : CustomizationMarketplaceMediaType.McpServer, sourceIds: this.sourceId ? [this.sourceId] : undefined, pageSize: 30, cursor }, request.token),
+			skills ? this.extensions.listInstalled() : Promise.resolve([]),
+		]);
 		return {
 			cards: page.items.map(resource => ({
 				id: JSON.stringify([resource.sourceId, resource.identifier, resource.version]), name: resource.displayName, description: resource.description,
 				metadata: `${this.marketplace.allSources.find(source => source.id === resource.sourceId)?.displayName ?? resource.sourceId} · ${resource.version}`,
+				installed: skills && installed.some(item => item.package.id === resource.installation.selectionId && item.package.version === resource.version && item.state === 'installed'),
+				install: skills && !installed.some(item => item.package.id === resource.installation.selectionId) ? async () => {
+					const details = await this.extensions.get(resource.installation.selectionId, resource.version);
+					if (!this.shown || this.isDisposed) return;
+					const result = await changeExtensionPackage(this.extensions, this.dialogs, this.notifications, 'install', details);
+					if (result && this.shown && !this.isDisposed) await this.load();
+				} : undefined,
 				open: () => this.openResource(resource),
 			})),
 			cursor: page.nextCursor,
@@ -454,10 +470,29 @@ export class CustomizeEditorPane extends EditorPane {
 			this.cardResources.add(this.hover.setupDelayedHover(name.domNode, { content: card.name }));
 			article.append(icon, content);
 			const open = this.cardResources.add(new Button(article, {
-				...defaultButtonStyles, label: localize('customize.details', 'View {0}', card.name), icon: Lxicon.arrowRight, iconOnly: true,
-				onClick: () => { void this.run(card.open); },
+				...defaultButtonStyles,
+				label: card.installed ? localize('customize.installedDetails', 'Installed: {0}. View details', card.name)
+					: card.install ? localize('customize.installSkill', 'Install {0}', card.name) : localize('customize.details', 'View {0}', card.name),
+				icon: card.installed ? Lxicon.check : card.install ? Lxicon.add : Lxicon.arrowRight, iconOnly: true,
+				onClick: () => {
+					void this.run(async () => {
+						const document = open.domNode.ownerDocument;
+						const restoreFocus = document.activeElement === open.domNode;
+						open.enabled = false;
+						try { await (card.install ?? card.open)(); }
+						finally {
+							if (open.domNode.isConnected) open.enabled = true;
+							// The review dialog cannot restore focus to the disabled install button.
+							if (restoreFocus && this.shown && document.activeElement === document.body) {
+								const row = [...this.grid.children].find(row => (row as HTMLElement).dataset.resourceId === card.id);
+								row?.querySelector<HTMLButtonElement>('.ash-customize-card-open')?.focus();
+							}
+						}
+					});
+				},
 			}));
 			open.domNode.classList.add('ash-customize-card-open');
+			open.domNode.classList.toggle('installed', !!card.installed);
 			open.setTitle(open.label);
 			this.grid.append(article);
 		}
@@ -547,7 +582,7 @@ export class CustomizeEditorPane extends EditorPane {
 				const focused = this.root.ownerDocument.activeElement as HTMLElement | null;
 				if (!this.shown || !focused || !this.root.contains(focused)) return undefined;
 				return new AccessibleContentProvider(AccessibleViewProviderId.Customize, { type }, () => type === AccessibleViewType.View ? this.panel.innerText
-					: localize('customize.help', 'Customize brings Skills, Connectors and Plugins together. Use Left and Right Arrow on category tabs, then Enter to select. Yours lists current resources; Discover searches catalogs. Use Tab to reach search, the actions toolbar and resource cards. In the toolbar, Left and Right Arrow move between source filtering, sorting and Add; Up or Down Arrow opens the focused menu. Down Arrow in search moves to the first card. Arrow keys, Home and End move between card names; Enter opens the existing detail editor for installation, authorization and enablement. In Skills, Add offers Upload skill (a SKILL.md file or skill folder), Create a skill, and Create with Ash. Upload and Create save a personal skill; Create opens its instructions in the editor. Create with Ash starts a new chat draft using the skill creator without sending it. Other categories offer catalog browsing, connection setup or plugin installation. Load more continues catalog results. Refresh reloads current state, and Retry repeats a failed read. Escape closes menus and restores focus. Global navigation remains available while this page is open.'),
+					: localize('customize.help', 'Customize brings Skills, Connectors and Plugins together. Use Left and Right Arrow on category tabs, then Enter to select. Yours lists current resources; Discover searches catalogs. In Discover, activate Install on a skill card, review and confirm. A green check marks installed skills; activate it to open details. Successful installation shows a notification. Use Tab to reach search, the actions toolbar and resource cards. In the toolbar, Left and Right Arrow move between source filtering, sorting and Add; Up or Down Arrow opens the focused menu. Down Arrow in search moves to the first card. Arrow keys, Home and End move between card names; Enter opens the existing detail editor for installation, authorization and enablement. In Skills, Add offers Upload skill (a SKILL.md file or skill folder), Create a skill, and Create with Ash. Upload and Create save a personal skill; Create opens its instructions in the editor. Create with Ash starts a new chat draft using the skill creator without sending it. Other categories offer catalog browsing, connection setup or plugin installation. Load more continues catalog results. Refresh reloads current state, and Retry repeats a failed read. Escape closes menus and restores focus. Global navigation remains available while this page is open.'),
 					() => { if (focused.isConnected) focused.focus(); else this.focus(); }, AccessibilityVerbositySettingId.Customize);
 			},
 		}));

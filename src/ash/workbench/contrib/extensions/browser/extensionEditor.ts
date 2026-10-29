@@ -13,6 +13,7 @@ import { Disposable, DisposableStore, toDisposable } from '../../../../base/comm
 import { localize } from '../../../../nls.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { IDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IExtensionManagementService, type ExtensionsInstalledPackage, type ExtensionsPackageDetails } from '../../../../platform/extensionManagement/common/extensionManagementService.js';
 import { IStorageService } from '../../../../platform/storage/common/storage.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
@@ -55,7 +56,7 @@ interface DetailInfoSection {
 }
 
 /** Package review and mutations share the same exact-version confirmation in rows and editor. */
-export async function changeExtensionPackage(service: IExtensionManagementService, dialogs: IDialogService, operation: 'install' | 'update' | 'uninstall', details: ExtensionsPackageDetails | undefined, installation?: ExtensionsInstalledPackage): Promise<ExtensionsInstalledPackage | null | undefined> {
+export async function changeExtensionPackage(service: IExtensionManagementService, dialogs: IDialogService, notifications: INotificationService, operation: 'install' | 'update' | 'uninstall', details: ExtensionsPackageDetails | undefined, installation?: ExtensionsInstalledPackage): Promise<ExtensionsInstalledPackage | null | undefined> {
 	if (operation === 'uninstall' && installation) {
 		const review = await dialogs.confirm({
 			title: localize({ bundle: 'ash.extensions', key: 'uninstallTitle' }, 'Uninstall extension'),
@@ -77,7 +78,11 @@ export async function changeExtensionPackage(service: IExtensionManagementServic
 		primaryButton: label,
 	});
 	if (!review.confirmed) { return undefined; }
-	return operation === 'update' && installation ? service.update(installation.installationId, details.package.version) : service.install(details.package.id, details.package.version);
+	const result = await (operation === 'update' && installation ? service.update(installation.installationId, details.package.version) : service.install(details.package.id, details.package.version));
+	if (operation === 'install' && result.state === 'installed' && result.capabilities.some(capability => capability.kind === 'skill')) {
+		notifications.info(localize({ bundle: 'ash.extensions', key: 'skillInstalled' }, '{0} is installed and ready to use.', details.displayName));
+	}
+	return result;
 }
 
 function describeExtensionCapabilities(details: ExtensionsPackageDetails): string {
@@ -157,6 +162,7 @@ export class ExtensionEditor extends EditorPane {
 
 	constructor(@IExtensionManagementService private readonly extensions: IExtensionManagementService,
 		@IDialogService private readonly dialogs: IDialogService,
+		@INotificationService private readonly notifications: INotificationService,
 		@ICommandService private readonly commands: ICommandService,
 		@IGlobalExtensionEnablementService private readonly enablement: IGlobalExtensionEnablementService,
 		@IPluginManagementService private readonly plugins: IPluginManagementService,
@@ -653,7 +659,7 @@ export class ExtensionEditor extends EditorPane {
 		this.header.status.textContent = installation?.state === 'pendingRemoval' ? localize({ bundle: 'ash.extensions', key: 'removalPending' }, 'Removal pending') : hasInstalled ? localize({ bundle: 'ash.extensions', key: 'installed' }, 'Installed · activation is separate') : '';
 
 		const mutate = async (operation: 'install' | 'update' | 'uninstall') => {
-			const result = await changeExtensionPackage(this.extensions, this.dialogs, operation, details, installation);
+			const result = await changeExtensionPackage(this.extensions, this.dialogs, this.notifications, operation, details, installation);
 			if (result !== undefined && !this.isDisposed && version === this.loadVersion) {
 				const nextInput = result ? new ExtensionsInput({ ...input.summary, version: result.package.version }, result.installationId) : input;
 				try { await this.setInput(nextInput, signal); } finally { if (nextInput !== input) { nextInput.dispose(); } }

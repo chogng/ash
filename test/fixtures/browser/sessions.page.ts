@@ -96,6 +96,7 @@ if (new URL(location.href).searchParams.has('customize')) {
 	const summaries = ['Data explorer', 'Document studio', 'Team knowledge', 'Writing companion'].map((displayName, index) => ({
 		id: `fixture.package-${index}`, version: '1.0.0', packageType: 'plugin', displayName, description: `Tools and reusable instructions for ${displayName.toLowerCase()}.`,
 	}));
+	const installed: Awaited<ReturnType<typeof disconnectedApi.extensionManagement.install>>[] = [];
 	globalThis.ashWebWorkbenchHost = { api: {
 		...globalThis.ashWebWorkbenchHost!.api,
 		skills: { ...disconnectedApi.skills, list: async () => catalog, read: async () => ({ revision: 1, catalog, diagnostics: [] }) },
@@ -110,7 +111,18 @@ if (new URL(location.href).searchParams.has('customize')) {
 		}] }) },
 		extensionManagement: {
 			...disconnectedApi.extensionManagement,
-			listInstalled: async () => ({ instanceId: 'fixture', generation: 1, packages: [] }),
+			listInstalled: async () => ({ instanceId: 'fixture', generation: 1 + installed.length, packages: installed }),
+			install: async ({ packageId, version }) => {
+				if (new URL(location.href).searchParams.has('installFails')) throw new Error('Synthetic installation failure');
+				if (installed.some(item => item.package.id === packageId)) throw new Error('Duplicate installation');
+				const result = {
+					installationId: `installed:${packageId}`, package: { id: packageId, version: version!, digest: 'a'.repeat(64) }, state: 'installed' as const,
+					capabilities: [{ reference: { id: `skill:${packageId}` }, kind: 'skill' as const, id: 'fixture-skill', contractVersion: '1', permissions: [], authenticationProvider: null }],
+				};
+				installed.push(result);
+				return result;
+			},
+			editorExtensions: async () => ({ revision: 1, extensions: [] }),
 			sources: async () => ({ revision: 1, sources: [{ id: 'Ash fixtures', kind: 'ash', enabled: true, productOwned: true }] }),
 			search: async ({ query }) => ({ unavailableSources: [], packages: summaries.filter(item => item.displayName.toLowerCase().includes(query.toLowerCase())) }),
 			searchPage: async ({ query, cursor }) => {

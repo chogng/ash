@@ -232,6 +232,29 @@
 	flex-shrink: 0;
 }
 
+.ash-customize-card .ash-customize-card-open.installed {
+	color: var(--ash-success-foreground);
+	background: color-mix(
+		in srgb,
+		var(--ash-success-foreground) 12%,
+		transparent
+	);
+	border-color: var(--ash-contrastBorder, transparent);
+}
+
+.ash-customize-card .ash-customize-card-open.installed:hover {
+	background: color-mix(
+		in srgb,
+		var(--ash-success-foreground) 20%,
+		transparent
+	);
+}
+
+.hc-black .ash-customize-card .ash-customize-card-open.installed,
+.hc-light .ash-customize-card .ash-customize-card-open.installed {
+	background: var(--ash-editor-background);
+}
+
 .ash-customize.narrow {
 	padding: var(--ash-spacing-size200);
 }

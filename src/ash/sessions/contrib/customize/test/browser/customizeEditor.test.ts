@@ -86,7 +86,7 @@ suite('Customize page', () => {
 		for (const control of [root.locator('.ash-customize-search'), root.getByRole('tab', { name: 'Skills', exact: true }), root.getByRole('button', { name: 'Discover', exact: true }), root.getByRole('button', { name: 'Add', exact: true })]) {
 			await expect(control).toHaveCSS('border-radius', '8px');
 		}
-		for (const name of ['Filter sources', 'Sort resources', 'Add', 'Refresh', 'View Data explorer']) {
+		for (const name of ['Filter sources', 'Sort resources', 'Add', 'Refresh', 'Install Data explorer']) {
 			await root.getByRole('button', { name, exact: true }).hover();
 			await expect(page.getByRole('tooltip')).toHaveText(name);
 			await page.keyboard.press('Escape');
@@ -175,4 +175,79 @@ suite('Customize page', () => {
 		await page.keyboard.press('Escape');
 		await expect(add).toBeFocused();
 	});
+	for (const locale of ['en', 'zh-CN']) {
+		test(`installs a skill with a success toast and a persistent green check in ${locale}`, async () => {
+			const { page } = browser;
+			const chinese = locale === 'zh-CN';
+			if (chinese) {
+				await page.goto('/sessions.html?customize&locale=zh-CN');
+				await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+				await page.locator('.ash-sessions-activity-content').getByRole('button', { name: '自定义', exact: true }).click();
+			}
+			const root = page.locator('.ash-customize');
+			await root.getByRole('button', { name: chinese ? '发现' : 'Discover', exact: true }).click();
+			const install = root.getByRole('button', { name: chinese ? '安装 Data explorer' : 'Install Data explorer', exact: true });
+			await expect(install.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'add');
+			await install.focus();
+			await install.press('Enter');
+			const review = page.getByRole('dialog', { name: chinese ? '安装' : 'Install', exact: true });
+			await expect(review).toBeVisible();
+			await expect(root.locator('.ash-customize-card-open.installed')).toHaveCount(0);
+			await expect(page.locator('.ash-notification')).toHaveCount(0);
+			await review.getByRole('button', { name: chinese ? '安装' : 'Install', exact: true }).click();
+			const installed = root.getByRole('button', { name: chinese ? '已安装：Data explorer。查看详情' : 'Installed: Data explorer. View details', exact: true });
+			await expect(installed.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'check');
+			await expect(installed).toBeFocused();
+			const toast = page.locator('.ash-notification');
+			await expect(toast).toHaveCount(1);
+			await expect(toast.locator('.ash-notification-message')).toHaveText(chinese ? 'Data explorer 已安装，可以使用。' : 'Data explorer is installed and ready to use.');
+			await page.evaluate(() => window.ashSessionsIntegration.setTheme('ash-light'));
+			await expect(installed).toHaveCSS('color', 'rgb(16, 124, 16)');
+			await expect(installed).not.toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+			await page.screenshot({ path: browser.info.outputPath(`customize-skill-installed-${locale}.png`) });
+			await toast.locator('.ash-notification-toolbar button').first().click();
+			await expect(toast).toHaveCount(0);
+			await root.getByRole('button', { name: chinese ? '刷新' : 'Refresh', exact: true }).click();
+			await expect(installed).toBeVisible();
+			await expect(install).toHaveCount(0);
+			await expect(toast).toHaveCount(0);
+			for (const theme of ['ash-dark', 'ash-high-contrast-dark', 'ash-high-contrast-light']) {
+				await page.evaluate(theme => window.ashSessionsIntegration.setTheme(theme), theme);
+				await expect(installed.locator('.ash-icon')).toBeVisible();
+				if (theme.includes('high-contrast')) {
+					await expect(installed).not.toHaveCSS('border-top-color', 'rgba(0, 0, 0, 0)');
+					await expect(installed).toHaveCSS('background-color', theme.endsWith('dark') ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)');
+				}
+			}
+			await installed.click();
+			await expect(page.locator('.ash-extension-editor')).toContainText('Data explorer');
+			await expect(toast).toHaveCount(0);
+		});
+	}
+
+	test('cancelled and failed installations keep the install action without success feedback', async () => {
+		const { page } = browser;
+		await page.goto('/sessions.html?customize&installFails');
+		await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
+		await page.locator('.ash-sessions-activity-content').getByRole('button', { name: 'Customize', exact: true }).click();
+		const root = page.locator('.ash-customize');
+		await root.getByRole('button', { name: 'Discover', exact: true }).click();
+		const install = root.getByRole('button', { name: 'Install Data explorer', exact: true });
+		await install.click();
+		const review = page.getByRole('dialog', { name: 'Install', exact: true });
+		await expect(review).toBeVisible();
+		await page.keyboard.press('Escape');
+		await expect(review).toBeHidden();
+		await expect(install).toBeEnabled();
+		await expect(page.locator('.ash-notification')).toHaveCount(0);
+		await install.click();
+		await review.getByRole('button', { name: 'Install', exact: true }).click();
+		await expect(root.getByRole('status')).toContainText('Synthetic installation failure');
+		await expect(install).toBeEnabled();
+		await expect(install.locator('.ash-icon')).toHaveAttribute('data-ash-icon-id', 'add');
+		await expect(root.locator('.ash-customize-card-open.installed')).toHaveCount(0);
+		await expect(page.locator('.ash-notification')).toHaveCount(0);
+	});
+
+
 });
