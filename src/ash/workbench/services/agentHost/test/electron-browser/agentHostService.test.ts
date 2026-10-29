@@ -64,6 +64,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 	let onInitialized: ((channel: string) => void) | undefined;
 	let onLog: ((entry: LogEntry) => void) | undefined;
 	let failDirectoryBinding: boolean;
+	let directoryAuthorized: boolean;
 	let beforeWorkspaceRead: (() => Promise<void>) | undefined;
 	let beforeHostOpen: (() => Promise<void>) | undefined;
 	const hostOpens: { id: string; connection: { name: string; host: string; workspace: string; }; }[] = [];
@@ -101,7 +102,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 						handshakes.push({ channel, params: frame.params });
 						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: createTestInitializeResult() }) + '\n') });
 					} else if (frame.method === 'config/directoryGrants/read') {
-						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: { dir: frame.params.path, permissions: [] } }) + '\n') });
+						pair.port2.postMessage({ data: new TextEncoder().encode(JSON.stringify({ jsonrpc: '2.0', id: frame.id, result: { dir: frame.params.path, permissions: directoryAuthorized ? [] : undefined } }) + '\n') });
 					} else if (frame.method === 'env/dirs/set') {
 						directoryBindings.push({ channel, dirs: frame.params.dirs });
 						const response = failDirectoryBinding
@@ -140,6 +141,7 @@ suite('Desktop Workbench Agent Host selection', () => {
 		directoryBindings.length = 0;
 		onDirectoryBound = onInitialized = onLog = undefined;
 		failDirectoryBinding = false;
+		directoryAuthorized = true;
 		beforeHostOpen = beforeWorkspaceRead = undefined;
 		hostOpens.length = hostCloses.length = 0;
 		windowConnection = { kind: 'ssh', generation: 1, authority: 'ssh+host', host: 'host' };
@@ -308,6 +310,39 @@ suite('Desktop Workbench Agent Host selection', () => {
 			{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }] },
 			{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/next-project', grant: { type: 'config' } }] },
 		]);
+	});
+
+	test('cancelled startup authorization keeps the renderer available and explicit retry shares the ready carrier', async () => {
+		directoryAuthorized = false;
+		let prompts = 0;
+		using renderer = await createRendererApi([], { browser: false }, {
+			requestWorkspaceTrust: async () => { prompts++; return 'cancel'; },
+		}, mainProcess);
+		const recovery = renderer.appServer.recovery!;
+		assert.equal(await renderer.appServer.getConnectionState(), 'ready');
+		assert.equal(recovery.status, 'failed');
+		assert.equal(prompts, 1);
+		assert.deepEqual(directoryBindings, []);
+		const generation = renderer.appServer.connectionGeneration;
+		const acquisitions = acquired.length;
+		await assert.rejects(recovery.reconnect(), { name: 'CancellationError' });
+		assert.equal(prompts, 2);
+		assert.equal(recovery.status, 'failed');
+		assert.deepEqual(directoryBindings, []);
+		directoryAuthorized = true;
+		await recovery.reconnect();
+		assert.equal(recovery.status, 'idle');
+		assert.equal(recovery.error, undefined);
+		assert.equal(renderer.appServer.connectionGeneration, generation);
+		assert.equal(acquired.length, acquisitions);
+		assert.deepEqual(directoryBindings, [{ channel: 'ash:app-server:acquire', dirs: [{ id: 'workspace-folder', path: '/workspace', grant: { type: 'config' } }] }]);
+	});
+
+	test('startup directory failures still reject renderer creation', async () => {
+		failDirectoryBinding = true;
+		await assert.rejects(createRendererApi([], { browser: false }, {
+			requestWorkspaceTrust: async () => { throw new Error('Saved grants need no prompt'); },
+		}, mainProcess), /restore rejected/);
 	});
 
 	test('workspace rebind failure remains failed and concurrent retries restore directories without reconnecting the ready carrier', async () => {

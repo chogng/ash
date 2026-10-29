@@ -52,7 +52,7 @@ export async function initializeWorkspaceDirectories(client: AppServerProtocolCl
 			// The frontend prompt can outlive its connection; retiring setup must not wait for its answer.
 			const choice = await raceCancellationError(workspaceTrust.requestWorkspaceTrust(folder.label ?? path, cancellation.signal), cancellation.signal);
 			assertCurrent();
-			if (choice === 'cancel') { throw new Error('Directory permission selection cancelled'); }
+			if (choice === 'cancel') { throw canceled(); }
 			if (choice !== 'development' && choice !== 'readOnly') { throw new TypeError('Invalid directory permission selection'); }
 			const permissions: PermissionDto[] = [...(choice === 'readOnly' ? READ_DIR_PERMISSIONS : DEVELOPMENT_DIR_PERMISSIONS)];
 			const grant = await trustApi.createGrant(path, permissions);

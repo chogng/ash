@@ -720,13 +720,17 @@ export class Workbench extends Disposable {
 			resourceApi: api.resource,
 			directories: () => workspaceContext.getWorkspace().folders.map(folder => ({ uri: folder.uri, target: { type: 'environment', dirId: folder.id } })),
 			onDidChange: listener => {
+				const subscriptions = new DisposableStore();
 				const subscription = api.events.subscribe(event => {
 					if (event.method === "fs/changed") listener(event.params);
 				});
-				return {
-					dispose: () => subscription.dispose(),
-					[Symbol.dispose]: () => subscription.dispose(),
-				};
+				subscriptions.add(toDisposable(() => subscription.dispose()));
+				const recovery = api.appServer.recovery;
+				if (recovery) subscriptions.add(recovery.onDidChange(() => {
+					// Directory authorization can recover without replacing the file connection.
+					if (recovery.status === 'idle') listener({ type: 'rescanRequired' });
+				}));
+				return subscriptions;
 			},
 		});
 		this._register(workspaceFileService);

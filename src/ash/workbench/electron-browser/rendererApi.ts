@@ -186,7 +186,12 @@ export async function createElectronRendererApi(contributions: readonly Electron
 			backend = { ...backend, terminal: terminals };
 			const replacement = subscribe('ash:terminal:prepareReplacement', () => terminals.prepareForServerReplacement());
 			resources.add(toDisposable(() => replacement.dispose()));
-			await restoreWorkspace();
+			try {
+				await restoreWorkspace();
+			} catch (error) {
+				// Cancellation leaves directory access pending; the Workbench can offer an explicit retry.
+				if (!isCancellationError(error)) throw error;
+			}
 			// The selected execution host needs its roots after a runtime replacement,
 			// including SSH and extension hosts; local device recovery is independent.
 			resources.add(connection.onDidReconnect(() => {

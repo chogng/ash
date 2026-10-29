@@ -195,7 +195,7 @@ suite('workspace trust during directory opening', () => {
 	test('cancelling a trust request does not create or persist a grant', async () => {
 		const grants: WorkspaceTrustPermission[][] = [];
 		const client = { state: 'ready', generation: 1, onStateChange: Event.None, request: async () => { throw new Error('Unexpected environment write'); } } as unknown as AppServerProtocolClient;
-		await assert.rejects(host.initializeWorkspace(client, { requestWorkspaceTrust: async () => 'cancel' }, trustApi(new Map(), grants), workspace(['/new'])), /selection cancelled/);
+		await assert.rejects(host.initializeWorkspace(client, { requestWorkspaceTrust: async () => 'cancel' }, trustApi(new Map(), grants), workspace(['/new'])), isCancellationError);
 		assert.deepEqual(grants, []);
 	});
 

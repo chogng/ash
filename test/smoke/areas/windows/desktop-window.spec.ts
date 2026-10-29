@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { parseWorkspace } from '../../../../src/ash/platform/workspace/common/workspace.js';
 import { URI } from '../../../../src/ash/base/common/uri.js';
 import { waitForElectronWindowState } from '../../../automation/electronDriver.js';
+import { Workbench } from '../../../automation/workbench.js';
 
 const focusTest = test.extend({ electronWindowMode: 'active' });
 const persistedZoomTest = test.extend({ electronWindowMode: 'active', electronUserSettings: { 'window.zoomPerWindow': false } });
@@ -183,6 +184,41 @@ test('keyboard layout stays in commands while the status bar is quiet', async ({
 	await expect(output.locator('.view-line').filter({ hasText: 'Keyboard shortcuts troubleshooting disabled.' })).toBeVisible();
 });
 
+test('cancelling directory authorization during startup keeps the window usable and allows retry', { tag: ['@electron-app-server'] }, async ({ application, testWorkspace }, testInfo) => {
+	if (!('windows' in application)) throw new Error('Expected Electron');
+	const opening = application.waitForEvent('window');
+	await application.evaluate(({ app }, directory) => {
+		app.emit('second-instance', {} as never, [process.execPath, app.getAppPath(), '--folder', directory], process.cwd(), {});
+	}, testWorkspace.directory);
+	const page = await opening;
+	const workbench = new Workbench(page);
+	const prompt = page.getByRole('dialog', { name: 'Ash', exact: true });
+	const reconnect = page.getByRole('button', { name: 'Reconnect', exact: true });
+	await prompt.getByRole('button', { name: 'Cancel', exact: true }).click();
+	await workbench.waitForReady();
+	await expect(page.getByRole('heading', { name: 'Unable to start Ash' })).toHaveCount(0);
+	await expect(prompt).toHaveCount(0);
+	await expect(reconnect).toBeVisible();
+	await page.screenshot({ path: testInfo.outputPath('cancelled-startup-authorization.png') });
+	// Cancellation must not persist a grant: reloading still asks for authorization.
+	await page.reload();
+	await expect(prompt.getByRole('button', { name: 'Open Read-Only', exact: true })).toBeFocused();
+	await page.keyboard.press('Escape');
+	await workbench.waitForReady();
+	await expect(reconnect).toBeVisible();
+	await reconnect.click();
+	await expect(prompt).toBeVisible();
+	await prompt.getByRole('button', { name: 'Open Read-Only', exact: true }).click();
+	await expect(reconnect).toHaveCount(0);
+	await expect(page.locator('.ash-explorer .ash-tree-row').filter({ hasText: 'main.ts' })).toHaveCount(1);
+	await expect(page.locator('.ash-explorer').getByRole('alert')).toHaveCount(0);
+	await workbench.quickaccess.open(join(testWorkspace.directory, 'main.ts'));
+	await workbench.quickaccess.select('main.ts');
+	await workbench.editors.groupAt(0).editor.waitForEditorContents(text => text === 'const value = 1;\n');
+	await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('Read-only');
+	await page.screenshot({ path: testInfo.outputPath('retried-startup-authorization.png') });
+});
+
 test('opening a folder names the target and explains the permission choice in the selected language', { tag: ['@electron-app-server'] }, async ({ application, target, testWorkspace, workbench, restartWorkbench }) => {
 	if (target.kind !== 'electron' || !('windows' in application)) return;
 
@@ -203,8 +239,8 @@ test('opening a folder names the target and explains the permission choice in th
 	const prompt = page.getByRole('dialog', { name: 'Ash' });
 	await expect(prompt).toBeVisible();
 	await expect(prompt.locator('.ash-dialog-message')).toHaveText('是否信任此文件夹中的文件？');
-	await expect(prompt.locator('.ash-dialog-detail')).toContainText(`文件夹：${testWorkspace.directory}`);
-	await expect(prompt.locator('.ash-dialog-detail')).toContainText('Ash 可以修改文件、运行命令');
+	await expect(prompt.locator('.ash-dialog-detail')).toContainText(`文件夹：${URI.file(testWorkspace.directory).fsPath}`);
+	await expect(prompt.locator('.ash-dialog-detail')).toContainText('Ash 可以修改文件和运行命令');
 	const readOnly = prompt.getByRole('button', { name: '以只读模式打开' });
 	await expect(readOnly).toBeFocused();
 	await expect(page.getByText('No Folder Opened')).toHaveCount(1);
@@ -223,6 +259,6 @@ test('opening a folder names the target and explains the permission choice in th
 			return ipc.invoke('ash:workspace:context:read');
 		});
 		return parseWorkspace(value).folders[0]?.uri.fsPath;
-	}).toBe(testWorkspace.directory);
+	}).toBe(URI.file(testWorkspace.directory).fsPath);
 	await expect(page.locator('[data-statusbar-item-id="ash.status.workspacePermissions"]')).toContainText('只读文件夹');
 });
