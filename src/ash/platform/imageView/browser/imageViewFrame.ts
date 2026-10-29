@@ -16,6 +16,7 @@ export function createImageViewFrame(document: Document, title: string, html: st
 	frame.srcdoc = html;
 	let initialized = false;
 	let pending = false;
+	const pendingPermissions = new Set<ImageViewPermissionAction>();
 	lifetime.add(addDisposableListener(document.defaultView!, 'message', rawEvent => {
 		const event = rawEvent as MessageEvent;
 		if (event.source !== frame.contentWindow || !event.data || typeof event.data !== 'object') return;
@@ -25,16 +26,24 @@ export function createImageViewFrame(document: Document, title: string, html: st
 		} else if (event.data.type === 'ready' && initialized) {
 			ready();
 		} else if (event.data.type === 'permission' && initialized && !pending) {
-			pending = true;
+			let action: ImageViewPermissionAction;
+			try { action = validateImageViewPermissionAction(event.data.action); }
+			catch (error) {
+				frame.contentWindow?.postMessage({ type: 'permissionResult', error: String(error) }, '*');
+				return;
+			}
+			if (pendingPermissions.has(action)) return;
+			// Settings can take time to open. Serializing unrelated actions would silently discard a drag.
+			pendingPermissions.add(action);
 			void (async () => {
 				try {
 					// Only a host-created consent window receives this capability. Ordinary image
 					// editors cannot invoke OS actions by posting a permission message themselves.
 					if (!permissionAction) throw new Error('Screen permission actions are unavailable');
-					const accepted = await permissionAction(validateImageViewPermissionAction(event.data.action));
-					frame.contentWindow?.postMessage({ type: 'permissionResult', accepted }, '*');
-				} catch (error) { frame.contentWindow?.postMessage({ type: 'permissionResult', error: String(error) }, '*'); }
-				finally { pending = false; }
+					const accepted = await permissionAction(action);
+					frame.contentWindow?.postMessage({ type: 'permissionResult', action, accepted }, '*');
+				} catch (error) { frame.contentWindow?.postMessage({ type: 'permissionResult', action, error: String(error) }, '*'); }
+				finally { pendingPermissions.delete(action); }
 			})();
 		} else if (event.data.type === 'complete' && initialized && !pending) {
 			pending = true;

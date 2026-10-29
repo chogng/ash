@@ -10,11 +10,9 @@
 .screen-permission-guide {
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
-	padding: 24px;
+	padding: 16px;
 }
 
-.screen-permission-guide h1,
 .screen-permission-help h2 {
 	margin: 0;
 	font-size: var(--snapshot-heading-font-size);
@@ -38,15 +36,9 @@
 }
 
 .screen-permission-guide button:focus-visible,
-.screen-permission-guide summary:focus-visible,
 .screen-permission-help button:focus-visible {
 	outline: var(--snapshot-border-width) solid var(--snapshot-focus-border);
 	outline-offset: 2px;
-}
-
-.screen-permission-guide .primary {
-	background: var(--snapshot-button-background);
-	color: var(--snapshot-button-foreground);
 }
 
 .screen-permission-guide .screen-permission-app {
@@ -79,27 +71,13 @@
 	font-weight: 600;
 }
 
-.screen-permission-guide summary {
-	cursor: pointer;
-}
-
-.screen-permission-guide details p {
-	margin-top: 8px;
-}
-
-.screen-permission-guide footer {
-	display: flex;
-	justify-content: flex-end;
-	flex-wrap: wrap;
-	gap: 8px;
-}
-
-.screen-permission-status:empty {
-	display: none;
-}
-
 .screen-permission-help-hint {
-	font-size: var(--snapshot-label-font-size);
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
 }
 
 .screen-permission-help {

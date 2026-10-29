@@ -156,9 +156,18 @@ only, `{ type: 'permission', action: ImageEditorPermissionAction }` requests ope
 System Settings (`settings`), dragging the running application (`drag`), copying
 its path (`copyPath`), checking consent and resuming capture (`retry`), or cancelling
 (`cancel`). Start `drag` from the view's `dragstart` event after preventing the
-browser's default drag. The host replies with `{ type: 'permissionResult', accepted,
-error }`. Extensions cannot supply paths, grant access or run these actions from a
-normal image editor. `retry` succeeds only when macOS reports permission granted.
+browser's default drag. The host replies with `{ type: 'permissionResult', action,
+accepted, error }`. Different actions can complete out of order; match replies by
+`action` so opening Settings cannot delay a native drag. Extensions cannot supply
+paths, grant access or run these actions from a normal image editor. `retry`
+succeeds only when macOS reports permission granted.
+Returning focus to the guide or its owning Ash window also resumes capture when
+macOS reports permission granted; an explicit continue button is optional.
+The host opens the screen-recording pane automatically before showing the guide
+and keeps the companion near the System Settings window using window metadata.
+When Ash already has Accessibility permission, the companion anchors directly
+below the recording list's add/remove controls. The host never requests this
+additional permission automatically.
 
 `ImageEditorView.html` may contain standalone inline HTML, styles and scripts.
 Optional Blob scripts and styles must be registered with `asWebviewUri`; any
